@@ -1,3 +1,8 @@
+from errors.errors import CapacityError, RangeError
+from models.item_status import ItemStatus
+from models.vehicle_status import VehicleStatus
+from datetime import datetime
+
 class Vehicle:
     def __init__(self, vehicle_id, name, capacity, max_range):
         self.vehicle_id = vehicle_id
@@ -5,6 +10,8 @@ class Vehicle:
         self.capacity = capacity
         self.max_range = max_range
         self.assignments = []
+        self.status = VehicleStatus.AVAILABLE
+        self.current_location = None
 
     @property
     def vehicle_id(self):
@@ -67,12 +74,55 @@ class Vehicle:
                 return False
         return True
     
-    def assign_route(self, route_id, departure_time, arrival_time):
+    def can_take_route(self, route):
+        total_weight = sum(package.weight for package in route._packages)
+        if total_weight > self.capacity:
+            raise CapacityError(f"Over capacity: {total_weight}/{self.capacity} kg")
+        if route.calculate_km > self.max_range:
+            raise RangeError(f"Over max range: {route.calculate_km}/{self.max_range} km")
+        return True
+    
+    def assign_route(self, route, departure_time=None, arrival_time=None):
         if not self.is_available_for(departure_time, arrival_time):
             raise ValueError(f"Truck {self.vehicle_id} is busy during this time.")
-        self.assignments.append((route_id, departure_time, arrival_time))
+        try:
+            self.can_take_route(route)
+        except CapacityError as e:
+            raise ValueError(f"Truck {self.vehicle_id} cannot take this route (capacity issue). {e}")
+        except RangeError as e:
+            raise ValueError(f"Truck {self.vehicle_id} cannot take this route (range issue). {e}")
+        self.assignments.append((route, departure_time, arrival_time))
+        route._truck = self
+        route._status = ItemStatus.IN_PROGRESS
+        route._departure_time = datetime.now()
 
     def unassign_route(self, route_id):
-        self.assignments = [assignment for assignment in self.assignments if assignment[0] != route_id]
+        self.assignments = [(route, departure_time, arrival_time) for (route, departure_time, arrival_time) in self.assignments if route.route_id != route_id]
 
-      
+    def finish_assignment(self, route_id):
+        for (route, _, _) in self.assignments:
+            if route.route_id == route_id:
+                route.status = ItemStatus.DONE
+                for package in route._packages:
+                    package.status = ItemStatus.DONE
+                return
+        raise ValueError(f"Route {route_id} not found in assignments")
+
+    def info(self):
+        for _, departure_time, arrival_time in self.assignments:
+            if departure_time <= datetime.now() <= arrival_time:
+                self.status = VehicleStatus.BUSY
+                break
+
+        assignment_str = "\n".join(
+            f"  - Route {route.route_id}: {departure_time.strftime('%Y-%m-%d %H:%M')} → {arrival_time.strftime('%Y-%m-%d %H:%M')}"
+            for route, departure_time, arrival_time in self.assignments) or "   None"
+            
+        return (
+            f"Truck ID: {self.vehicle_id}\n"
+            f"Name: {self.name}\n"
+            f"Capacity: {self.capacity} kg\n"
+            f"Max Range: {self.max_range} km\n"
+            f"Status: {self.status}\n"
+            f"Assignments:\n{assignment_str}"
+        )
