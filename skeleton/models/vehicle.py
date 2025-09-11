@@ -1,7 +1,7 @@
 from errors.errors import CapacityError, RangeError
 from models.item_status import ItemStatus
 from models.vehicle_status import VehicleStatus
-from datetime import datetime
+from datetime import datetime, timedelta
 
 class Vehicle:
     def __init__(self, vehicle_id, name, capacity, max_range):
@@ -82,7 +82,7 @@ class Vehicle:
             raise RangeError(f"Over max range: {route.calculate_km}/{self.max_range} km")
         return True
     
-    def assign_route(self, route, departure_time=None, arrival_time=None):
+    def assign_route(self, route, route_distance, departure_time=None, arrival_time=None):
         if not self.is_available_for(departure_time, arrival_time):
             raise ValueError(f"Truck {self.vehicle_id} is busy during this time.")
         try:
@@ -91,10 +91,12 @@ class Vehicle:
             raise ValueError(f"Truck {self.vehicle_id} cannot take this route (capacity issue). {e}")
         except RangeError as e:
             raise ValueError(f"Truck {self.vehicle_id} cannot take this route (range issue). {e}")
+        route._departure_time = datetime.now()
+        travel_hours = route.calculate_km / route._average_speed_kmh
+        route._arrival_time = route._departure_time + timedelta(hours=travel_hours)
         self.assignments.append((route, departure_time, arrival_time))
         route._truck = self
         route._status = ItemStatus.IN_PROGRESS
-        route._departure_time = datetime.now()
 
     def unassign_route(self, route_id):
         self.assignments = [(route, departure_time, arrival_time) for (route, departure_time, arrival_time) in self.assignments if route.route_id != route_id]

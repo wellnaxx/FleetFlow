@@ -51,6 +51,7 @@ class DeliveryRoute:
         return self._status
 
     def assign_truck(self, truck: Vehicle, route_distance_km: int):
+        self._departure_time = datetime.now()
         travel_hours = route_distance_km / self._average_speed_kmh
         self._arrival_time = self._departure_time + timedelta(hours=travel_hours)
     
