@@ -29,14 +29,17 @@ class User:
     @phone_number.setter
     def phone_number(self, value):
         # 04xx xxx xxx
-        if not isinstance(value, str) or not value.isdigit():
-            raise ValueError("Phone number must contain only digits")
-        if len(value.strip()) != 10:
-            raise ValueError("Invalid phone number. Phone number must be exactly 10 digits.")
-        if not value.strip().startswith("04"):
-            raise ValueError("Invalid phone number. Australian phone numbers start with '04'.")
-        
-        self._phone_number = value.strip()
+        if not value:
+            self._phone_number = "No phone number provided"
+        else:
+            if not isinstance(value, str) or not value.isdigit():
+                raise ValueError("Phone number must contain only digits")
+            if len(value.strip()) != 10:
+                raise ValueError("Invalid phone number. Phone number must be exactly 10 digits.")
+            if not value.strip().startswith("04"):
+                raise ValueError("Invalid phone number. Australian phone numbers start with '04'.")
+            
+            self._phone_number = value.strip()
 
     @property
     def email(self):
@@ -44,8 +47,11 @@ class User:
     
     @email.setter
     def email(self, value):
-        if not isinstance(value, str):
-            raise ValueError("Email must be a string.")
-        if "@" not in value or "." not in value.split("@")[-1]:
-            raise ValueError("Invalid email address format.")
-        self._email = value.strip()
+        if not value:
+            self._email = "No email provided"
+        else: 
+            if not isinstance(value, str):
+                raise ValueError("Email must be a string.")
+            if "@" not in value or "." not in value.split("@")[-1]:
+                raise ValueError("Invalid email address format.")
+            self._email = value.strip()
