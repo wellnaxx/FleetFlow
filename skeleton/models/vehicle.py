@@ -92,7 +92,7 @@ class Vehicle:
         except RangeError as e:
             raise ValueError(f"Truck {self.vehicle_id} cannot take this route (range issue). {e}")
         route._departure_time = datetime.now()
-        travel_hours = route.calculate_km / route._average_speed_kmh
+        travel_hours = route_distance / route._average_speed_kmh
         route._arrival_time = route._departure_time + timedelta(hours=travel_hours)
         self.assignments.append((route, departure_time, arrival_time))
         route._truck = self

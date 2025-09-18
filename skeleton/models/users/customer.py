@@ -11,7 +11,7 @@ class Customer(User):
         return tuple(self._delivery_packages)
     
     def _existing_package(self, package: DeliveryPackage) -> bool:
-        return any(p.package_id == package.package_id for p in self._delivery_packages)
+        return any(p.package_id == package.package_id for p in self.delivery_packages)
 
 
     def add_package(self, package: DeliveryPackage):

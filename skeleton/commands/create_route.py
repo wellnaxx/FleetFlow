@@ -9,7 +9,7 @@ class CreateRoute(BaseCommand):
         self._app_data = app_data
 
     def execute(self):
-        locations = [location.strip().upper().rstrip(",") for location in self._params[0].split(",")]
+        locations = self._params
         route = self.app_data.create_route(locations)
 
         return f"Route with ID {route.route_id} was created!"

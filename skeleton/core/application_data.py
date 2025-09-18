@@ -22,6 +22,14 @@ class ApplicationData:
     @property
     def routes(self):
         return tuple(self._routes)
+    
+    @property
+    def package(self):
+        return tuple(self._packages)
+
+    @property
+    def trucks(self):
+        return tuple(self._trucks)
 
     def create_route(self, locations: list[str]):
         route = DeliveryRoute(*locations)
@@ -68,6 +76,12 @@ class ApplicationData:
             self._customers.append(customer)
             return customer
         raise ValueError("Customer already exists")
+    
+    # def view_package(self):
+    #     return [package.info() for package in self._packages]
+
+    # def view_trucks(self):
+    #     return [t.info() for t in self._trucks]
     
     # def advance_status(self):
     #     if self._status != ItemStatus.DONE:
