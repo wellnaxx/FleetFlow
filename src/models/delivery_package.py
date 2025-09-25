@@ -11,6 +11,8 @@ class DeliveryPackage:
             raise ValueError(f"Invalid start location: {start_location}")
         if not Map.is_valid_location(end_location):
             raise ValueError(f"Invalid end location: {end_location}")
+        if start_location == end_location:
+            raise ValueError("Start and end locations must be different.")
         if float(weight) <= 0:
             raise ValueError("Weight must be positive.")
         if package_id is None:
