@@ -20,4 +20,4 @@ class BaseCommand(ABC):
 
     @abstractmethod
     def execute(self):
-        raise NotImplementedError
+        raise NotImplementedError # pragma: no cover
