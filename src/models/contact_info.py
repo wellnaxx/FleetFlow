@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import Any
+import re
 
 @dataclass
 class ContactInfo:
@@ -41,14 +42,37 @@ class ContactInfo:
             raise ValueError("Name is too long")
         return v
 
-    def _clean_email(self, v: Any) -> str:
-        if not v:
+    def _clean_email(self, v) -> str:
+        if v is None:
             return ""
         if not isinstance(v, str):
             raise ValueError("Email must be a string.")
         v = v.strip().lower()
-        if "@" not in v or "." not in v.split("@")[-1]:
+        if v == "":
+            return ""
+
+        parts = v.split("@")
+        if len(parts) != 2:
             raise ValueError("Invalid email address format.")
+        local, domain = parts
+        if not local or not domain:
+            raise ValueError("Invalid email address format.")
+
+        if ".." in v:
+            raise ValueError("Invalid email address format.")
+
+        labels = domain.split(".")
+        if len(labels) < 2 or any(label == "" for label in labels):
+            raise ValueError("Invalid email address format.")
+        for label in labels:
+            if not re.fullmatch(r"[a-z0-9-]+", label):
+                raise ValueError("Invalid email address format.")
+            if label.startswith("-") or label.endswith("-"):
+                raise ValueError("Invalid email address format.")
+
+        if not re.fullmatch(r"[a-z0-9.!#$%&'*+/=?^_`{|}~-]+", local):
+            raise ValueError("Invalid email address format.")
+
         return v
 
     def _clean_phone(self, v: Any) -> str:
