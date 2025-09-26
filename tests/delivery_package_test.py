@@ -2,9 +2,6 @@ import unittest
 from src.models.delivery_package import DeliveryPackage
 from src.models.contact_info import ContactInfo
 from src.models.customer import Customer
-from src.models.map import Map
-
-Map._locations = ["SYD", "MEL", "ADL", "ASP", "BRI", "DAR", "PER"]
 
 class TestDeliveryPackage_Should(unittest.TestCase):
     def test_package_init(self):
