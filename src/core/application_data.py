@@ -118,7 +118,7 @@ class ApplicationData:
         self._next_package_id  = int(ctr.get("next_package_id", 1))
         self._next_route_id    = int(ctr.get("next_route_id", 1))
 
-        # rebuild entities (same linking logic you already have)
+        # rebuild entities
         id_to_customer = {}
         from models.contact_info import ContactInfo
         from models.customer import Customer
