@@ -11,10 +11,10 @@ class AuthChangePassword(BaseCommand):
     def execute(self):
         target = self._params[0].strip().lower() if self._params else None
 
-        # Manager override (requires ADMIN_USERS)
+        # Manager override (requires ADMIN_USER)
         if target:
-            if not self._app_data.authz.has(Permission.ADMIN_USERS):
-                raise PermissionError("Missing permission: ADMIN_USERS (manager required).")
+            if not self._app_data.authz.has(Permission.ADMIN_USER):
+                raise PermissionError("Missing permission: ADMIN_USER (manager required).")
             new_pw = getpass.getpass(f"New password for '{target}': ")
             confirm = getpass.getpass("Confirm new password: ")
             if new_pw != confirm:
