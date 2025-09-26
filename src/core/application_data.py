@@ -120,10 +120,10 @@ class ApplicationData:
 
         # rebuild entities
         id_to_customer = {}
-        from models.contact_info import ContactInfo
-        from models.customer import Customer
-        from models.delivery_package import DeliveryPackage
-        from models.delivery_route import DeliveryRoute
+        from src.models.contact_info import ContactInfo
+        from src.models.customer import Customer
+        from src.models.delivery_package import DeliveryPackage
+        from src.models.delivery_route import DeliveryRoute
 
         for c in data.get("customers", []):
             ci = ContactInfo(name=c["name"], email=c.get("email",""), phone_number=c.get("phone",""))
@@ -433,7 +433,7 @@ class ApplicationData:
 
         if name:
             candidates = [c for c in self._customers if self._same_name(c.name, name)]
-            name_only = [c for c in candidates if c.email == "" and c.phone == ""]
+            name_only = [c for c in candidates if c.email == "" and c.phone_number == ""]
             if not email and not phone and len(name_only) == 1 and len(candidates) == 1:
                 return name_only[0]
 
