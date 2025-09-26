@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import Mock, patch
 from datetime import datetime, timedelta
 from src.models.truck_status import TruckStatus
-from src.models.truck import Truck  # replace with actual import path
+from src.models.truck import Truck  
 
 
 class TestTruck(unittest.TestCase):
