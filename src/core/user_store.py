@@ -3,6 +3,7 @@ from typing import Optional, Dict
 import json, os, tempfile
 from src.core.crypto import PasswordHash
 from src.core.paths import resolve_data_path, ensure_data_dir
+from src.models.contact_info import ContactInfo
 
 @dataclass
 class UserRecord:
@@ -89,15 +90,32 @@ class UserStore:
         if norm in self._by_username:
             raise ValueError("Username already exists.")
 
+        role_value = role.value if hasattr(role, "value") else str(role).upper()
+
+        ci = ContactInfo(
+            name=name,
+            email=(email or ""),
+            phone_number=(phone_number or "")
+        )
+        clean_name  = ci.name
+        clean_email = ci.email         
+        clean_phone = ci.phone_number 
+
+        try:
+            pw_serialized = password_hash.serialize()
+        except AttributeError as e:
+            raise TypeError("password_hash must be a PasswordHash") from e
+
         rec = UserRecord(
             user_id=self._next_id,
             username=key,  
-            role=role,
-            name=name,
-            email=email,
-            phone_number=phone_number,
-            password=password_hash.serialize(),
+            role=role_value,
+            name=clean_name,
+            email=clean_email,
+            phone_number=clean_phone,
+            password=pw_serialized,
         )
+        
         self._by_username[norm] = rec
         self._next_id += 1
         self.save()
