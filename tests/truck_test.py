@@ -5,7 +5,7 @@ from src.models.truck_status import TruckStatus
 from src.models.truck import Truck  
 
 
-class TestTruck(unittest.TestCase):
+class TestTruck_Should(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures before each test method."""
