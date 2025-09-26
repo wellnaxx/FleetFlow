@@ -18,9 +18,20 @@ class AuthService:
 
     def register_user(self, username: str, role: Role, name: str, email: str, phone_number: str, password: str) -> UserRecord:
         # Only managers should be allowed to call this — enforce via RBAC higher up.
+        ci = ContactInfo(name=name, email=email or "", phone_number=phone_number)
+        clean_name = ci.name
+        clean_email = ci.email
+        clean_phone = ci.phone_number
         ph = hash_password(password)
-        rec = self._store.create(username=username, role=role.value, name=name, email=email, phone_number=phone_number, password_hash=ph)
-        return rec
+        role_value = getattr(role, "value", role)
+        return self._store.create(
+            username=username,
+            role=role_value,
+            name=clean_name,
+            email=clean_email,
+            phone_number=clean_phone,
+            password_hash=ph,
+        )
     
     def _set_password(self, rec, new_password: str):
         if len(new_password) < 8:
