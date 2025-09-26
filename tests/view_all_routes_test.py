@@ -4,7 +4,7 @@ from unittest.mock import Mock
 from src.commands.view_all_routes import ViewAllRoutes
 
 
-class TestViewAllRoutes(unittest.TestCase):
+class TestViewAllRoutes_Should(unittest.TestCase):
 
     def setUp(self):
         self.mock_app_data = Mock()
