@@ -4,7 +4,7 @@ from unittest.mock import Mock
 from src.commands.view_all_packages import ViewAllPackages
 
 
-class TestViewAllPackages(unittest.TestCase):
+class TestViewAllPackages_Should(unittest.TestCase):
 
     def setUp(self):
         self.mock_app_data = Mock()
