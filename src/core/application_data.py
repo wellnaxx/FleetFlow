@@ -17,7 +17,7 @@ from datetime import datetime
 
 class ApplicationData:
     """Holds domain objects and implements business operations for the app."""
-    AUTOSAVE_PATH = "state.json"
+    AUTOSAVE_PATH = resolve_data_path("state.json")
     def __init__(self, current_user=None):
         self.authz = AuthorizationService(current_user)
         self.vehicle_manager = VehicleManager()
@@ -84,7 +84,7 @@ class ApplicationData:
             The absolute path written.
         """
         data = self._dump_state()
-        path = path or self.AUTOSAVE_PATH
+        path = resolve_data_path(path) or self.AUTOSAVE_PATH
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         fd, tmp = tempfile.mkstemp(prefix=".appstate.", suffix=".json", dir=os.path.dirname(path) or ".")
         try:
@@ -118,7 +118,7 @@ class ApplicationData:
         self._next_package_id  = int(ctr.get("next_package_id", 1))
         self._next_route_id    = int(ctr.get("next_route_id", 1))
 
-        # rebuild entities (same linking logic you already have)
+        # rebuild entities
         id_to_customer = {}
         from models.contact_info import ContactInfo
         from models.customer import Customer
