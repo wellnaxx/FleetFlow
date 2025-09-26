@@ -3,7 +3,7 @@ from unittest.mock import Mock
 from src.commands.view_all_trucks import ViewAllTrucks
 
 
-class TestViewAllTrucks(unittest.TestCase):
+class TestViewAllTrucks_Should(unittest.TestCase):
 
     def setUp(self):
         self.mock_app_data = Mock()
