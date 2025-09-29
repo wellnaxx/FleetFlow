@@ -4,17 +4,24 @@ from src.models.contact_info import ContactInfo
 from src.models.customer import Customer
 
 class TestDeliveryPackage_Should(unittest.TestCase):
-    def test_package_init(self):
+    def test_package_init_and_id_increments(self):
         customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"))
-        package = DeliveryPackage("SYD", "BRI", 500, customer)
 
-        self.assertEqual(package.start_location, "SYD")
-        self.assertEqual(package.end_location, "BRI")
-        self.assertEqual(package.weight, 500)
-        self.assertEqual(package.customer.name, "Dan")
-        self.assertEqual(package.customer.email, "dan@e.com")
-        self.assertEqual(package.customer.phone_number, "0484568777")
-        self.assertEqual(package.package_id, 1)
+        p1 = DeliveryPackage("SYD", "BRI", 500, customer)
+        p2 = DeliveryPackage("MEL", "ADL", 250, customer)
+
+        # Field checks for the first package
+        self.assertEqual(p1.start_location, "SYD")
+        self.assertEqual(p1.end_location, "BRI")
+        self.assertEqual(p1.weight, 500)
+        self.assertEqual(p1.customer.name, "Dan")
+        self.assertEqual(p1.customer.email, "dan@e.com")
+        self.assertEqual(p1.customer.phone_number, "0484568777")
+
+        # ID behavior: integers and sequential within this test
+        self.assertIsInstance(p1.package_id, int)
+        self.assertIsInstance(p2.package_id, int)
+        self.assertEqual(p2.package_id, p1.package_id + 1)
 
     def test_package_wrong_start_loc(self):
         customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"))

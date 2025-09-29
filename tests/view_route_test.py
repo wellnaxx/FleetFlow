@@ -1,53 +1,78 @@
 import unittest
-from unittest.mock import Mock, patch
-from datetime import datetime
+from unittest.mock import patch, MagicMock
 
-from src.commands.view_routes_in_progress import ViewRoutesInProgress
+from src.commands.view_route import ViewRoute
 
 
-class TestViewRoutesInProgress_Should(unittest.TestCase):
+class ViewRoute_Should(unittest.TestCase):
+    def make_cmd(self, params):
+        cmd = ViewRoute.__new__(ViewRoute)
+        cmd._params = params
+        cmd._app_data = MagicMock()
+        return cmd
 
-    def setUp(self):
-        self.mock_app_data = Mock()
-        self.command = ViewRoutesInProgress(params={}, app_data=self.mock_app_data, auth=None)
+    @patch('src.commands.view_route.validate_params_exact')
+    @patch('src.commands.view_route.try_parse_int')
+    def test_success_returns_route_info(self, mock_parse, mock_validate):
+        mock_parse.return_value = 12
+        cmd = self.make_cmd(["12"])
+        route = MagicMock()
+        route.info.return_value = "ROUTE-INFO"
+        cmd._app_data.view_route.return_value = route
 
-    def test_no_routes_in_progress(self):
-        with patch('src.commands.view_routes_in_progress.datetime') as mock_datetime:
-            mock_datetime.now.return_value = datetime(2025, 1, 1, 12, 0, 0)
-            self.mock_app_data.view_routes_in_progress.return_value = []
+        result = cmd.execute()
 
-            result = self.command.execute()
-            self.assertEqual(result, "No routes in progress.")
-            self.mock_app_data.view_routes_in_progress.assert_called_once_with(now=mock_datetime.now())
+        mock_validate.assert_called_once_with(["12"], 1)
+        mock_parse.assert_called_once_with("12")
+        cmd._app_data.view_route.assert_called_once_with(12)
+        route.info.assert_called_once_with()
+        self.assertEqual(result, "ROUTE-INFO")
 
-    def test_routes_in_transit(self):
-        mock_route = Mock()
-        mock_route.info.return_value = "Route 123 Info"
+    @patch('src.commands.view_route.validate_params_exact')
+    @patch('src.commands.view_route.try_parse_int')
+    def test_missing_route_raises(self, mock_parse, mock_validate):
+        mock_parse.return_value = 77
+        cmd = self.make_cmd(["77"])
+        cmd._app_data.view_route.return_value = None
 
-        mock_pos = Mock()
-        mock_pos.kind = "IN_TRANSIT"
-        mock_pos.from_city = "City A"
-        mock_pos.to_city = "City B"
-        mock_pos.next_eta = "14:00"
+        with self.assertRaises(ValueError) as ctx:
+            cmd.execute()
+        self.assertIn("Route with ID 77 not found", str(ctx.exception))
+        cmd._app_data.view_route.assert_called_once_with(77)
 
-        with patch('src.commands.view_routes_in_progress.datetime') as mock_datetime:
-            mock_datetime.now.return_value = datetime(2025, 1, 1, 12, 0, 0)
-            self.mock_app_data.view_routes_in_progress.return_value = [(mock_route, mock_pos)]
+    @patch('src.commands.view_route.validate_params_exact')
+    @patch('src.commands.view_route.try_parse_int')
+    def test_parse_failure_bubbles_and_stops(self, mock_parse, mock_validate):
+        mock_parse.side_effect = ValueError("not an int")
+        cmd = self.make_cmd(["abc"])
 
-            expected_output = "Route 123 Info\n  >> Currently between City A → City B, ETA 14:00\n"
-            result = self.command.execute()
-            self.assertEqual(result, expected_output)
+        with self.assertRaises(ValueError) as ctx:
+            cmd.execute()
 
-    def test_routes_at_stop(self):
-        mock_route = Mock()
-        mock_route.info.return_value = "Route 456 Info"
+        self.assertIn("not an int", str(ctx.exception))
+        cmd._app_data.view_route.assert_not_called()
 
-        mock_pos = Mock()
-        mock_pos.kind = "AT_STOP"
-        mock_pos.stop_city = "City C"
+    def test_validate_params_exact_called_with_one(self):
+        cmd = self.make_cmd(["5"])
+        with patch('src.commands.view_route.validate_params_exact') as mock_validate, \
+             patch('src.commands.view_route.try_parse_int', return_value=5), \
+             patch.object(cmd._app_data, 'view_route', return_value=MagicMock(info=lambda: "ok")):
+            _ = cmd.execute()
+            mock_validate.assert_called_once_with(["5"], 1)
 
-        with patch('src.commands.view_routes_in_progress.datetime') as mock_datetime:
-            mock_datetime.now.return_value = datetime(2025, 1, 1, 12, 0, 0)
-            self.mock_app_data.view_routes_in_progress.return_value = [(mock_route, mock_pos)]
+    def test_no_mutates_flags(self):
+        self.assertFalse(getattr(ViewRoute, "mutates_state", False))
+        self.assertFalse(getattr(ViewRoute, "mutates_session", False))
 
-            expected_output = "Route 456 Info\n  >> Currently at stop: City C\n"
+    @patch('src.commands.view_route.validate_params_exact')
+    @patch('src.commands.view_route.try_parse_int')
+    def test_ignores_extra_params_beyond_first(self, mock_parse, mock_validate):
+        mock_parse.return_value = 1
+        cmd = self.make_cmd(["1", "extra", "ignored"])
+        cmd._app_data.view_route.return_value = MagicMock(info=lambda: "ok")
+
+        _ = cmd.execute()
+
+        mock_parse.assert_called_once_with("1")
+        cmd._app_data.view_route.assert_called_once_with(1)
+
