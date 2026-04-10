@@ -1,148 +1,236 @@
-<h1 align="center">Logistics App</h1>
-<h2>Project Description</h2>
-Design and implement a <b>Logistics</b> console application.
-<br><br>
-The application will be used by employees of a large Australian company aiming to expand its activities to the freight industry. The app will be used to manage the delivery of packages between hubs in major Australian cities. An employee of the company must be able to record the details of a delivery package, create or search for suitable delivery routes, and inspect the current state of delivery packages, transport vehicles and delivery routes.
+# FleetFlow
 
-## Functional Requirements
-The application **<code style="color : red">must</code>**  support the following operations:
- - Creating a **delivery package** – *unique id*, *start location*, *end location*, *weight in kg* and *contact information* for the customer.
- - Creating a delivery route – unique id and a list of locations (at least two).
-    - The first location is the starting location – it has a departure time.
-    - The other locations have expected arrival time.
- - Search for a route based on package’s start and end locations.
- - Updating a delivery route:
-     - Аssign a free truck to it.
-     - Аssign a delivery package.
- - View information about routes, packages and trucks.
+![Python](https://img.shields.io/badge/Python-3.13-blue?logo=python&logoColor=white)
+![Architecture](https://img.shields.io/badge/Architecture-Console%20%2B%20Domain%20Core-6A5ACD)
+![Testing](https://img.shields.io/badge/Tests-unittest-blue)
+![Status](https://img.shields.io/badge/Status-Refactor%20in%20Progress-orange)
 
-\
-The application **should** support the following operations:
- - Save the application state to the file system
-<br><br>
-## The company owns the following transport vehicles:
-<table>
-  <tr>
-    <th style="background-color:green; color:black;"><b>Vehicle IDs</b></th>
-    <th style="background-color:green; color:black;"><b>Name</b></th>
-    <th style="background-color:green; color:black;"><b>Capacity (kg)</b></th>
-    <th style="background-color:green; color:black;"><b>Max range (km)</b></th>
-    <th style="background-color:green; color:black;"><b>Number of vehicles</b></th>
-  </tr>
-  <tr>
-    <td>1001-1010</td>
-    <td>Scania</td>
-    <td>42000</td>
-    <td>8000</td>
-    <td>10</td>
-  </tr>
-  <tr>
-    <td>1011-1025</td>
-    <td>Man</td>
-    <td>37000</td>
-    <td>10000</td>
-    <td>15</td>
-  </tr>
-  <tr>
-    <td>1026-1040</td>
-    <td>Actros</td>
-    <td>26000</td>
-    <td>13000</td>
-    <td>15</td>
-  </tr>
-</table>
+FleetFlow is a logistics management system for handling delivery packages, routes, trucks, and customer records across major Australian hubs. The current codebase is implemented as a console-driven Python application with a modular domain core, authentication and authorization, route scheduling, truck assignment, and persistent application state, and it is being refactored into a larger backend-first platform.
 
+## Overview
 
-<br><br>
-## Use the following distances in km:
+This project currently follows a command-driven layered structure:
 
-<table>
-  <tr>
-    <th style="background-color:green; color:black;"><b></b></th>
-    <th style="background-color:green; color:black;"><b>SYD</b></th>
-    <th style="background-color:green; color:black;"><b>MEL</b></th>
-    <th style="background-color:green; color:black;"><b>ADL</b></th>
-    <th style="background-color:green; color:black;"><b>ASP</b></th>
-    <th style="background-color:green; color:black;"><b>BRI</b></th>
-    <th style="background-color:green; color:black;"><b>DAR</b></th>
-    <th style="background-color:green; color:black;"><b>PER</b></th>
-  </tr>
-  <tr>
-    <th style="background-color:green; color:black;"><b>SYD</b></th>
-    <td></td><td>877</td><td>1376</td><td>2762</td><td>909</td><td>3935</td><td>4016</td>
-  </tr>
-  <tr>
-    <th style="background-color:green; color:black;"><b>MEL</b></th>
-    <td>877</td><td></td><td>725</td><td>2255</td><td>1765</td><td>3752</td><td>3509</td>
-  </tr>
-  <tr>
-    <th style="background-color:green; color:black;"><b>ADL</b></th>
-    <td>1376</td><td>725</td><td></td><td>1530</td><td>1927</td><td>3027</td><td>2785</td>
-  </tr>
-  <tr>
-    <th style="background-color:green; color:black;"><b>ASP</b></th>
-    <td>2762</td><td>2255</td><td>1530</td><td></td><td>2993</td><td>1497</td><td>2481</td>
-  </tr>
-  <tr>
-    <th style="background-color:green; color:black;"><b>BRI</b></th>
-    <td>909</td><td>1765</td><td>1927</td><td>2993</td><td></td><td>3426</td><td>4311</td>
-  </tr>
-  <tr>
-    <th style="background-color:green; color:black;"><b>DAR</b></th>
-    <td>3935</td><td>3752</td><td>3027</td><td>1497</td><td>3426</td><td></td><td>4025</td>
-  </tr>
-  <tr>
-    <th style="background-color:green; color:black;"><b>PER</b></th>
-    <td>4016</td><td>3509</td><td>2785</td><td>2481</td><td>4311</td><td>4025</td><td></td>
-  </tr>
-</table>
-<br><br>
-<p align="center">
-  <img src="images/Map.png" width="613" alt="Map">
-</p>
-<br><br>
+- `commands/` handles interactive user actions and command execution
+- `core/` contains application orchestration, auth, persistence, serialization, and shared services
+- `models/` defines the core logistics domain objects
 
-## Use cases
-### Use case #1
- - A customer visits the company office in Sydney on Oct 8th. They bring a package that needs to be delivered to Melbourne. An employee of the company records the customer’s contact info, weighs the package at 45kg and then checks for a suitable delivery route. The system reports that there are two routes:
-    - *Brisbane* (Oct 10th 06:00h) → *Sydney* (Oct 10th 20:00h) → *Melbourne* (Oct 11th 18:00h)
-    - *Sydney* (Oct 12th 06:00h) → *Melbourne* (Oct 12th 20:00h) → *Adelaide* (Oct 13th 15:00h)
-- Both routes' trucks have free capacity, and the employee suggests the first one, as the package will arrive one day earlier. The customer agrees and the employee uses the system to add the delivery package to the first route and to update the package’s expected arrival time to Oct 11th 18:00h.
+At the moment, the live application focuses on these areas:
 
-### Use case #2
-- Many packages with total weight of 23000kg have gathered in the hub in Alice Springs and an employee of the company uses the system to create a route that leaves on Sep 12th 06:00h with the following stops:
-    - *Alice Springs* → *Adelaide* → *Melbourne* → *Sydney* → *Brisbane*
- - The system determines the route distance to 4041km and calculates estimated arrival times for each of the locations based on a predefined average speed of 87km/h. The employee then finds a free truck that meets the required range and capacity and proceeds to bulk assign the packages to the newly created route by using the route id and the packages’ ids.
+- package creation, lookup, removal, and route assignment
+- route creation, lookup, removal, scheduling, and in-progress tracking
+- truck lookup and truck-to-route assignment
+- customer records linked to delivery packages
+- user authentication, password management, and role-based authorization
+- saving and loading application state from disk
 
-### Use case #3
-- A manager at the company uses the system to find information about all delivery routes in progress. The system responds with information that contains each route’s stops, delivery weight, and the expected current stop based on the time of the day.
+The long-term goal is to evolve this system into a backend-first logistics platform with REST APIs, real-time tracking, event-driven processing, route optimization, simulation, and analytics.
 
-### Use case #4
-- A supervising employee uses the system to view information about each package that is not yet assigned to a delivery route. The system responds with a list of packages containing their IDs and locations.
+## Current Status
 
-### Use case #5
-- A customer contacts the office to request information about their package. The customer provides the id that they received when the package was created, and an employee enters the package id in the system. It responds with detailed information which is then emailed to the customer.
-<br></br>
-## Technical Requirements
- - Follow the **OOP** programming principles:
-    - *Encapsulate* your objects.
-    - Apply *information hiding* where necessary.
-    - Decide between *inheritance* and *composition* properly.
-    - Use *polymorphism* properly.
-- Follow guidelines for writing <a href=https://blog.pragmaticengineer.com/readable-code/> readable code</a>:
-    - Adequate naming of variables, functions, classes, methods, and attributes.
-    - Well-formatted and consistent code.
-    - Well-structured and readable logic.
-- Implement proper user input **validation** and display meaningful user messages.
-- Implement proper **error handling**.
-- Prefer using **list comprehensions** where readability will be improved.
-- **Cover the core functionality with unit tests.**
-- Use **Git** to keep your source code and for team collaboration.
-<br></br>
-## Teamwork Guidelines
-Please see the Teamwork Guidelines document.
+This repository is currently in a refactor-and-expand phase.
 
+- live and working today: console workflows for packages, routes, trucks, customers, auth, authorization, and state persistence
+- already implemented in the domain layer: route scheduling, package-to-route validation, truck capacity/range checks, route progress tracking, and autosave/load state support
+- planned next: API layer, PostgreSQL persistence, real-time package tracking, event-driven notifications, route optimization, simulation, and analytics
 
+## Current Features
 
+- Interactive console menus and command mode
+- Delivery package creation with customer contact information
+- Delivery route creation with scheduled stops and computed arrival times
+- Suitable-route lookup for packages based on start and destination
+- Suitable-truck lookup for routes based on capacity and range
+- Truck assignment to routes
+- Package assignment to routes with validation
+- Route progress tracking based on current time
+- View flows for routes, packages, trucks, customers, and unassigned packages
+- User registration, login, logout, who-am-I, and password change flows
+- Role-based authorization for protected operations
+- Application state save/load support with autosave behavior
+- Extensive automated unit test coverage
 
+## Tech Stack
 
+- Python 3.13
+- unittest
+- Ruff
+- JSON-based local persistence for application state and users
+
+## Project Structure
+
+```text
+FleetFlow/
+|-- data/               # persisted application state and local data files
+|-- images/             # project assets
+|-- src/
+|   |-- commands/       # command handlers for console workflows
+|   |-- core/           # auth, orchestration, persistence, serialization, helpers
+|   `-- models/         # logistics domain models
+|-- tests/              # automated unit tests
+|-- main.py             # application entrypoint
+`-- pyproject.toml      # tooling configuration
+```
+
+## Architecture
+
+The application currently follows this high-level flow:
+
+```text
+Console Input
+  -> Command
+  -> Application/Core Services
+  -> Domain Models
+  -> JSON Persistence
+```
+
+Each layer has a focused responsibility:
+
+- commands parse user input and dispatch actions
+- core services coordinate business operations, authentication, authorization, and persistence
+- models represent packages, routes, trucks, users, customers, and map logic
+- persistence stores users and application state locally
+
+This structure is intended to be refactored into a backend-oriented flow later:
+
+```text
+HTTP Request
+  -> Router
+  -> Service
+  -> Repository
+  -> PostgreSQL
+```
+
+## Domain Model
+
+The current system includes core domain objects for:
+
+- delivery packages
+- delivery routes
+- trucks
+- customers
+- users, employees, and managers
+- contact information
+- map and route-distance logic
+
+The application currently exposes these through the console interface, while the next phase will move them behind backend services and API endpoints.
+
+## Getting Started
+
+### Prerequisites
+
+- Python 3.13+
+- `pip`
+
+### 1. Clone the repository
+
+```bash
+git clone <your-repository-url>
+cd FleetFlow
+```
+
+### 2. Create and activate a virtual environment
+
+```bash
+python -m venv .venv
+```
+
+Windows PowerShell:
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+macOS / Linux:
+
+```bash
+source .venv/bin/activate
+```
+
+### 3. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Run the application
+
+```bash
+python main.py
+```
+
+### 5. Run tests
+```bash
+python -m unittest discover
+```
+
+## Usage Surface
+
+### Packages
+
+- create package
+- remove package
+- assign package to route
+- find suitable routes for a package
+- view package details
+- view all packages
+- view unassigned packages
+
+### Routes
+
+- create route
+- remove route
+- view route details
+- view all routes
+- assign truck to route
+- find suitable trucks for a route
+- view routes in progress
+
+### Trucks
+
+- view all trucks
+
+### Auth
+
+- register user
+- login
+- logout
+- view current user
+- change password
+
+### State Management
+
+- save application state
+- load application state
+
+## Testing
+
+Run tests with:
+
+```bash
+PYTHONPATH=. unittest
+```
+
+## Development Notes
+
+- The current application is console-first with a strong domain core.
+- The domain logic is structured to support a transition into a backend architecture.
+- The existing test suite provides a safety net for refactoring.
+- A key improvement is enabling unittest to run without manually setting PYTHONPATH.
+- The next step is replacing the command layer with an API layer while preserving domain logic.
+
+## Roadmap
+
+- refactor into a FastAPI backend
+- move persistence to PostgreSQL
+- introduce service and repository layers
+- add shipment lifecycle tracking
+- add real-time tracking
+- add event-driven notifications
+- add route optimization
+- add simulation engine
+- add analytics and dashboard
+
+## License
+
+MIT
