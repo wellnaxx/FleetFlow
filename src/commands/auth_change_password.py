@@ -1,6 +1,8 @@
 import getpass
+
 from src.commands.base_command.base_command import BaseCommand
 from src.models.auth import Permission
+
 
 class AuthChangePassword(BaseCommand):
     """
@@ -8,7 +10,8 @@ class AuthChangePassword(BaseCommand):
       changepassword                # self-service: prompts old/new/confirm
       changepassword <username>     # manager override: prompts new/confirm only
     """
-    def execute(self):
+
+    def execute(self) -> str:
         target = self._params[0].strip().lower() if self._params else None
 
         # Manager override (requires ADMIN_USER)

@@ -1,15 +1,18 @@
 from datetime import datetime
+
 from src.commands.base_command.base_command import BaseCommand
+
 
 class ViewRoutesInProgress(BaseCommand):
     """Return a list of human-friendly strings for routes currently in progress."""
-    def execute(self):
+
+    def execute(self) -> str:
         now = datetime.now()
         active = self._app_data.view_routes_in_progress(now=now)
         if not active:
             return "No routes in progress."
 
-        lines = []
+        lines: list[str] = []
         for route, pos in active:
             lines.append(route.info())
             if pos.kind == "IN_TRANSIT":

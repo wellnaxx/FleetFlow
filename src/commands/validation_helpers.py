@@ -1,34 +1,41 @@
+from collections.abc import Sequence
 from datetime import datetime
-from typing import Optional, Sequence
 
-def validate_params_count(params: Sequence[str], min_count: int, max_count: int | None=None) -> None:
+
+def validate_params_count(params: Sequence[str], min_count: int, max_count: int | None = None) -> None:
     count = len(params)
     if max_count is None:
         if count < min_count:
             raise ValueError(f"Invalid number of arguments. Expected at least {min_count}; received: {count}.")
     else:
         if count < min_count or count > max_count:
-            raise ValueError(f"Invalid number of arguments. Expected between {min_count} and {max_count}; received: {count}.")
-        
+            raise ValueError(
+                f"Invalid number of arguments. Expected between {min_count} and {max_count}; received: {count}."
+            )
+
+
 def validate_params_exact(params: Sequence[str], expected_count: int) -> None:
     if len(params) != expected_count:
         raise ValueError(
             f"Invalid number of arguments. Expected exactly {expected_count}; received: {len(params)}."
         )
 
+
 def try_parse_int(s: str) -> int:
     try:
         return int(s)
-    except:
-        raise ValueError("Invalid value for ID. Should be an integer.")
+    except (ValueError, TypeError) as err:
+        raise ValueError("Invalid value for ID. Should be an integer.") from err
+
 
 def try_parse_float(s: str) -> float:
     try:
         return float(s)
-    except:
-        raise ValueError("Invalid value for weight. Should be a number.")
-    
-def parse_departure_from_tail(tokens: list[str]) -> tuple[list[str], Optional[datetime]]:
+    except (ValueError, TypeError) as err:
+        raise ValueError("Invalid value for weight. Should be a number.") from err
+
+
+def parse_departure_from_tail(tokens: list[str]) -> tuple[list[str], datetime | None]:
     """
     If the tail of tokens contains a datetime, return (locations, dt).
     Supports:
