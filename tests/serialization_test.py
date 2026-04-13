@@ -1,7 +1,7 @@
 import unittest
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
-from src.core.serialization import dt_to_str, dt_from_str, ISO_FMT
+from src.core.serialization import dt_from_str, dt_to_str
 
 
 class DateTimeSerialization_Should(unittest.TestCase):
@@ -17,6 +17,7 @@ class DateTimeSerialization_Should(unittest.TestCase):
         # round-trip is naive and equal
         dt2 = dt_from_str(s)
         self.assertEqual(dt2, dt)
+        assert dt2 is not None
         self.assertIsNone(dt2.tzinfo)
 
     def test_aware_datetime_is_converted_to_utc_and_naive(self):
@@ -26,6 +27,7 @@ class DateTimeSerialization_Should(unittest.TestCase):
         self.assertEqual(s, "2025-09-27T13:05:06")  # UTC conversion + drop tz
         dt2 = dt_from_str(s)
         self.assertEqual(dt2, datetime(2025, 9, 27, 13, 5, 6))
+        assert dt2 is not None
         self.assertIsNone(dt2.tzinfo)
 
     def test_microseconds_are_truncated(self):
@@ -44,4 +46,3 @@ class DateTimeSerialization_Should(unittest.TestCase):
             dt_from_str("not-a-datetime")
         with self.assertRaises(ValueError):
             dt_from_str("2025-09-27T13:05:06Z")  # 'Z' not in ISO_FMT
-

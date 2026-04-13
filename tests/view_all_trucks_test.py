@@ -1,13 +1,13 @@
 import unittest
 from unittest.mock import Mock
+
 from src.commands.view_all_trucks import ViewAllTrucks
 
 
 class TestViewAllTrucks_Should(unittest.TestCase):
-
     def setUp(self):
         self.mock_app_data = Mock()
-        self.command = ViewAllTrucks(params={}, app_data=self.mock_app_data, auth=None)
+        self.command = ViewAllTrucks(params={}, app_data=self.mock_app_data, auth=None)  # type: ignore[reportArgumentType]
 
     def test_no_trucks_exist(self):
         self.mock_app_data.view_all_trucks.return_value = []

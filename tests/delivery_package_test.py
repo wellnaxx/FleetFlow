@@ -1,7 +1,9 @@
 import unittest
-from src.models.delivery_package import DeliveryPackage
+
 from src.models.contact_info import ContactInfo
 from src.models.customer import Customer
+from src.models.delivery_package import DeliveryPackage
+
 
 class TestDeliveryPackage_Should(unittest.TestCase):
     def test_package_init_and_id_increments(self):
@@ -14,6 +16,7 @@ class TestDeliveryPackage_Should(unittest.TestCase):
         self.assertEqual(p1.start_location, "SYD")
         self.assertEqual(p1.end_location, "BRI")
         self.assertEqual(p1.weight, 500)
+        assert p1.customer is not None
         self.assertEqual(p1.customer.name, "Dan")
         self.assertEqual(p1.customer.email, "dan@e.com")
         self.assertEqual(p1.customer.phone_number, "0484568777")
@@ -63,8 +66,8 @@ class TestDeliveryPackage_Should(unittest.TestCase):
             Customer(ContactInfo("", "dan@e.com", "0484568777"))
 
     def test_package_customer_int_name(self):
-        with self.assertRaises(ValueError):
-            Customer(ContactInfo(150, "dan@e.com", "0484568777"))
+        with self.assertRaises(TypeError):
+            Customer(ContactInfo(150, "dan@e.com", "0484568777"))  # type: ignore[reportArgumentType]
 
     def test_package_customer_short_name(self):
         with self.assertRaises(ValueError):
@@ -84,7 +87,7 @@ class TestDeliveryPackage_Should(unittest.TestCase):
 
     def test_package_customer_int_phone(self):
         with self.assertRaises(ValueError):
-            Customer(ContactInfo("Dan", "dan@ecom", 484568777))
+            Customer(ContactInfo("Dan", "dan@ecom", 484568777))  # type: ignore[reportArgumentType]
 
     def test_package_customer_len_phone(self):
         with self.assertRaises(ValueError):

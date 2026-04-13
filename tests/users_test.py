@@ -1,23 +1,24 @@
 import unittest
-from types import SimpleNamespace
 
-from src.models.users.user import User
-from src.models.users.manager import Manager
 from src.models.auth import Role
-from src.models.users.employee import Employee
 from src.models.contact_info import ContactInfo
+from src.models.users.employee import Employee
+from src.models.users.manager import Manager
+from src.models.users.user import User
 
 
 class User_Should(unittest.TestCase):
-    def make_contact(self, name="Alice", email="a@x.com", phone="0400123456"):
+    def make_contact(
+        self, name: str = "Alice", email: str = "a@x.com", phone: str = "0400123456"
+    ) -> ContactInfo:
         return ContactInfo(name=name, email=email, phone_number=phone)
 
     def test_user_properties_and_role(self):
         contact = self.make_contact("Bob", "bob@ex.com", "0412345678")
         u = User(contact, Role.EMPLOYEE)
 
-        self.assertIs(u.contact, contact)           # stored object
-        self.assertEqual(u.name, "Bob")             # property proxies
+        self.assertIs(u.contact, contact)  # stored object
+        self.assertEqual(u.name, "Bob")  # property proxies
         self.assertEqual(u.email, "bob@ex.com")
         self.assertEqual(u.phone_number, "0412345678")
         self.assertEqual(u.role, Role.EMPLOYEE)
@@ -35,13 +36,14 @@ class User_Should(unittest.TestCase):
 
     def test_multiple_users_keep_incrementing(self):
         # Create a few to ensure monotonic growth within test scope.
-        ids = []
+        ids: list[int] = []
         for i in range(5):
             u = User(self.make_contact(f"Name{i}"), Role.EMPLOYEE)
             ids.append(u.user_id)
         # strictly increasing
         self.assertEqual(ids, sorted(ids))
         self.assertEqual(len(set(ids)), len(ids))
+
 
 class Manager_Should(unittest.TestCase):
     def test_is_user_and_role_is_manager(self):
@@ -62,6 +64,7 @@ class Manager_Should(unittest.TestCase):
         self.assertIsInstance(m2.user_id, int)
         self.assertEqual(m2.user_id, m1.user_id + 1)
 
+
 class Employee_Should(unittest.TestCase):
     def test_is_user_and_role_is_employee(self):
         e = Employee("Alice", "alice@ex.com", "0412345678")
@@ -80,5 +83,3 @@ class Employee_Should(unittest.TestCase):
         self.assertIsInstance(e1.user_id, int)
         self.assertIsInstance(e2.user_id, int)
         self.assertEqual(e2.user_id, e1.user_id + 1)
-
-

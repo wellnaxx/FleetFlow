@@ -5,10 +5,9 @@ from src.commands.view_all_routes import ViewAllRoutes
 
 
 class TestViewAllRoutes_Should(unittest.TestCase):
-
     def setUp(self):
         self.mock_app_data = Mock()
-        self.command = ViewAllRoutes(params={}, app_data=self.mock_app_data, auth=None)
+        self.command = ViewAllRoutes(params={}, app_data=self.mock_app_data, auth=None)  # type: ignore[reportArgumentType]
 
     def test_no_routes_available(self):
         self.mock_app_data.view_all_routes.return_value = []

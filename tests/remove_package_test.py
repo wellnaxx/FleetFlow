@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import Mock
+
 from src.commands.remove_package import RemovePackage
+
 
 class TestRemovePackage_Should(unittest.TestCase):
     def test_no_params_command(self):

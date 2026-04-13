@@ -17,7 +17,7 @@ class ContactInfo_Should(unittest.TestCase):
             ContactInfo("A" * 31)
 
     def test_name_non_string_raises(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(TypeError):
             ContactInfo(123)  # type: ignore[arg-type]
 
     def test_email_is_lowercased_and_stripped(self):
@@ -34,19 +34,18 @@ class ContactInfo_Should(unittest.TestCase):
             "@domain.com",
             "local@",
             "a..b@c.com",
-            "local@domain",           # missing TLD dot
-            "local@.domain.com",      # empty label
-            "local@domain..com",      # empty label
-            "local@do_main.com",      # underscore not allowed in domain labels
-            "local@-domain.com",      # label starts with hyphen
-            "local@domain-.com",      # label ends with hyphen
-            "loca l@domain.com",      # space in local
-            "local@domain!.com",      # invalid char
+            "local@domain",  # missing TLD dot
+            "local@.domain.com",  # empty label
+            "local@domain..com",  # empty label
+            "local@do_main.com",  # underscore not allowed in domain labels
+            "local@-domain.com",  # label starts with hyphen
+            "local@domain-.com",  # label ends with hyphen
+            "loca l@domain.com",  # space in local
+            "local@domain!.com",  # invalid char
         ]
         for e in bad_emails:
-            with self.subTest(e=e):
-                with self.assertRaises(ValueError):
-                    ContactInfo("Bob", e)
+            with self.subTest(e=e), self.assertRaises(ValueError):
+                ContactInfo("Bob", e)
 
     def test_email_local_charclass_allows_specified_symbols(self):
         # Allowed specials in local part per regex
@@ -59,14 +58,14 @@ class ContactInfo_Should(unittest.TestCase):
         self.assertEqual(ContactInfo("Carl", phone_number=None).phone_number, "")  # type: ignore[arg-type]
 
     def test_phone_must_be_string_of_digits_exactly_10_and_start_04(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(TypeError):
             ContactInfo("Carl", phone_number=412345678)  # type: ignore[arg-type]
         with self.assertRaises(ValueError):
             ContactInfo("Carl", phone_number="04123O5678")  # letter O
         with self.assertRaises(ValueError):
-            ContactInfo("Carl", phone_number="041234567")   # 9 digits
+            ContactInfo("Carl", phone_number="041234567")  # 9 digits
         with self.assertRaises(ValueError):
-            ContactInfo("Carl", phone_number="04123456789")   # 11 digits
+            ContactInfo("Carl", phone_number="04123456789")  # 11 digits
         with self.assertRaises(ValueError):
             ContactInfo("Carl", phone_number="0012345678")  # wrong prefix
 
@@ -103,4 +102,3 @@ class ContactInfo_Should(unittest.TestCase):
             ci.phone_number = "0312345678"  # wrong prefix
         with self.assertRaises(ValueError):
             ci.name = "ab"  # too short
-

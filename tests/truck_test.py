@@ -1,21 +1,16 @@
 import unittest
-from unittest.mock import Mock, patch
 from datetime import datetime, timedelta
+from unittest.mock import Mock
+
+from src.models.truck import Truck
 from src.models.truck_status import TruckStatus
-from src.models.truck import Truck  
 
 
 class TestTruck_Should(unittest.TestCase):
-
     def setUp(self):
         """Set up test fixtures before each test method."""
-        self.valid_truck_data = {
-            "vehicle_id": 1,
-            "name": "Scania",
-            "capacity": 1000,
-            "max_range": 500
-        }
-        self.truck = Truck(**self.valid_truck_data)
+        self.valid_truck_data = {"vehicle_id": 1, "name": "Scania", "capacity": 1000, "max_range": 500}
+        self.truck = Truck(**self.valid_truck_data)  # type: ignore[reportArgumentType]
 
     def test_init_with_valid_data(self):
         """Test initialization with valid data."""
@@ -42,7 +37,7 @@ class TestTruck_Should(unittest.TestCase):
 
     def test_init_capacity_and_range_conversion(self):
         """Test that capacity and max_range are converted to int."""
-        truck = Truck(vehicle_id=1, name="Scania", capacity="1000", max_range="500")
+        truck = Truck(vehicle_id=1, name="Scania", capacity="1000", max_range="500")  # type: ignore[reportArgumentType]
         self.assertEqual(truck.capacity, 1000)
         self.assertEqual(truck.max_range, 500)
         self.assertIsInstance(truck.capacity, int)
@@ -244,5 +239,5 @@ class TestTruck_Should(unittest.TestCase):
         self.assertIn("Location: Unknown", result)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

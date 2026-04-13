@@ -1,29 +1,37 @@
 import unittest
-from unittest.mock import patch
-from types import SimpleNamespace
 from datetime import datetime, timedelta
+from unittest.mock import patch
 
 from src.models.delivery_route import DeliveryRoute
-
 
 LOCATIONS = ["A", "B", "C", "D"]
 # distances between consecutive pairs (A->B, B->C, C->D)
 DIST = {("A", "B"): 100, ("B", "C"): 200, ("C", "D"): 300}
-def get_dist(a, b):
+
+
+def get_dist(a: str, b: str) -> int:
     return DIST[(a, b)]
 
 
 class _Pkg:
-    def __init__(self, package_id, start, end, weight=0.0):
+    def __init__(self, package_id: int, start: str, end: str, weight: float = 0.0) -> None:
         self.package_id = package_id
         self.start_location = start
         self.end_location = end
         self.weight = weight
-        self.route = None
-        self.expected_arrival = None
+        self.route: DeliveryRoute | None = None
+        self.expected_arrival: datetime | None = None
+
 
 class _Truck:
-    def __init__(self, vehicle_id=1, capacity=999999, max_range=999999, current_location=None, route=None):
+    def __init__(
+        self,
+        vehicle_id: int = 1,
+        capacity: int = 999999,
+        max_range: int = 999999,
+        current_location: str | None = None,
+        route: DeliveryRoute | None = None,
+    ) -> None:
         self.vehicle_id = vehicle_id
         self.capacity = capacity
         self.max_range = max_range
@@ -34,7 +42,6 @@ class _Truck:
 @patch("src.models.delivery_route.Map.get_locations", return_value=LOCATIONS)
 @patch("src.models.delivery_route.Map.get_distance", side_effect=get_dist)
 class DeliveryRoute_Should(unittest.TestCase):
-
     def test_init_validates_locations_and_sets_id_or_uses_provided(self, *_):
         r = DeliveryRoute("A", "B", route_id=123)
         self.assertEqual(r.route_id, 123)
@@ -131,27 +138,27 @@ class DeliveryRoute_Should(unittest.TestCase):
         r.schedule(base)
 
         # Truck with limited capacity and range (total route distance: 600 km)
-        r.truck = _Truck(vehicle_id=10, capacity=50, max_range=500, current_location="A")
+        r.truck = _Truck(vehicle_id=10, capacity=50, max_range=500, current_location="A")  # type: ignore[reportAttributeAccessIssue]
 
         # Inclusion failure
         p_bad = _Pkg(1, "A", "Z", 10)
-        self.assertIn("does not include start/end", r.can_accept_package(p_bad))
+        self.assertIn("does not include start/end", r.can_accept_package(p_bad))  # type: ignore[reportArgumentType]
 
         # Order failure
         p_order = _Pkg(2, "C", "B", 10)
-        self.assertIn("does not pass from C to B in order", r.can_accept_package(p_order))
+        self.assertIn("does not pass from C to B in order", r.can_accept_package(p_order))  # type: ignore[reportArgumentType]
 
         # Capacity failure (current total 0 + 60 > 50)
         p_cap = _Pkg(3, "A", "B", 60)
-        self.assertIn("capacity exceeded", r.can_accept_package(p_cap))
+        self.assertIn("capacity exceeded", r.can_accept_package(p_cap))  # type: ignore[reportArgumentType]
 
         # Range failure: make capacity ok but range short
-        r.truck.capacity = 1000
-        self.assertIn("lacks range for 600 km", r.can_accept_package(_Pkg(4, "A", "C", 1)))
+        r.truck.capacity = 1000  # type: ignore[reportOptionalMemberAccess]
+        self.assertIn("lacks range for 600 km", r.can_accept_package(_Pkg(4, "A", "C", 1)))  # type: ignore[reportArgumentType]
 
         # Success when both capacity and range ok
-        r.truck.max_range = 1000
-        ok_err = r.can_accept_package(_Pkg(5, "A", "C", 10))
+        r.truck.max_range = 1000  # type: ignore[reportOptionalMemberAccess]
+        ok_err = r.can_accept_package(_Pkg(5, "A", "C", 10))  # type: ignore[reportArgumentType]
         self.assertIsNone(ok_err)
 
     def test_assign_package_sets_links_and_expected_arrival_when_scheduled(self, *_):
@@ -160,18 +167,18 @@ class DeliveryRoute_Should(unittest.TestCase):
         r.schedule(base)
         p = _Pkg(1, "A", "C", 5)
 
-        r.assign_package(p)
+        r.assign_package(p)  # type: ignore[reportArgumentType]
         self.assertIs(p.route, r)
         self.assertIn(p, r.packages)
         self.assertIsInstance(p.expected_arrival, datetime)
         # assigning the same package twice should be a no-op (no duplicate)
-        r.assign_package(p)
+        r.assign_package(p)  # type: ignore[reportArgumentType]
         self.assertEqual(len(r.packages), 1)
 
     def test_assign_package_unscheduled_sets_no_eta(self, *_):
         r = DeliveryRoute("A", "B")
         p = _Pkg(1, "A", "B", 1)
-        r.assign_package(p)
+        r.assign_package(p)  # type: ignore[reportArgumentType]
         self.assertIs(p.route, r)
         self.assertIsNone(p.expected_arrival)
 
@@ -179,7 +186,7 @@ class DeliveryRoute_Should(unittest.TestCase):
         base = datetime(2025, 1, 1, 6, 0)
         r = DeliveryRoute("A", "B", "C")
         r.schedule(base)
-        r.truck = _Truck(vehicle_id=1, capacity=20, max_range=1000, current_location="A")
+        r.truck = _Truck(vehicle_id=1, capacity=20, max_range=1000, current_location="A")  # type: ignore[reportAttributeAccessIssue]
 
         good1 = _Pkg(1, "A", "B", 5)
         good2 = _Pkg(2, "A", "C", 5)
@@ -187,16 +194,16 @@ class DeliveryRoute_Should(unittest.TestCase):
 
         # Inclusion error in bulk
         with self.assertRaises(ValueError) as ctx:
-            r.assign_packages([good1, bad_inc])
+            r.assign_packages([good1, bad_inc])  # type: ignore[reportArgumentType]
         self.assertIn("Bulk assignment failed:", str(ctx.exception))
 
         # Over-capacity in bulk
         with self.assertRaises(ValueError) as ctx2:
-            r.assign_packages([_Pkg(4, "A", "C", 15), _Pkg(5, "A", "C", 10)])  # 25 > 20
+            r.assign_packages([_Pkg(4, "A", "C", 15), _Pkg(5, "A", "C", 10)])  # type: ignore[reportArgumentType]  # 25 > 20
         self.assertIn("capacity exceeded", str(ctx2.exception))
 
         # Happy path assigns both and sets ETA
-        r.assign_packages([good1, good2])
+        r.assign_packages([good1, good2])  # type: ignore[reportArgumentType]
         self.assertIn(good1, r.packages)
         self.assertIn(good2, r.packages)
         self.assertIsInstance(good1.expected_arrival, datetime)
@@ -207,7 +214,8 @@ class DeliveryRoute_Should(unittest.TestCase):
         r = DeliveryRoute("A", "B", "C")
         r.schedule(base)
         info = r.info()
-        # Must include route id, truck (none), start/end, departure, distance, stops header, status/assigned weight
+        # Must include route id, truck (none), start/end, departure,
+        # distance, stops header, status/assigned weight
         self.assertIn(f"Route ID: {r.route_id}", info)
         self.assertIn("Truck ID: Not assigned", info)
         self.assertIn("Start: A", info)
@@ -216,7 +224,16 @@ class DeliveryRoute_Should(unittest.TestCase):
         self.assertIn("Total Distance: 300 km", info)
         self.assertIn("Stops:", info)
         self.assertIn("Assigned weight: 0.00 kg", info)
-        # Status is one of BEFORE_START/AT_STOP/IN_TRANSIT/AFTER_END (at schedule time it's AT_STOP or IN_TRANSIT per code)
-        self.assertTrue(any(s in info for s in ["Status: AT_STOP", "Status: IN_TRANSIT", "Status: BEFORE_START", "Status: AFTER_END"]))
-
-
+        # Status is one of BEFORE_START/AT_STOP/IN_TRANSIT/AFTER_END
+        # (at schedule time it's AT_STOP or IN_TRANSIT per code)
+        self.assertTrue(
+            any(
+                s in info
+                for s in [
+                    "Status: AT_STOP",
+                    "Status: IN_TRANSIT",
+                    "Status: BEFORE_START",
+                    "Status: AFTER_END",
+                ]
+            )
+        )

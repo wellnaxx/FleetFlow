@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import Mock
+
 from src.commands.remove_route import RemoveRoute
+
 
 class TestRemoveRoute_Should(unittest.TestCase):
     def test_no_params_command(self):

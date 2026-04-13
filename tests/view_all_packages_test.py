@@ -5,10 +5,9 @@ from src.commands.view_all_packages import ViewAllPackages
 
 
 class TestViewAllPackages_Should(unittest.TestCase):
-
     def setUp(self):
         self.mock_app_data = Mock()
-        self.command = ViewAllPackages(params={}, app_data=self.mock_app_data, auth=None)
+        self.command = ViewAllPackages(params={}, app_data=self.mock_app_data, auth=None)  # type: ignore[reportArgumentType]
 
     def test_no_packages_available(self):
         self.mock_app_data.view_all_packages.return_value = []

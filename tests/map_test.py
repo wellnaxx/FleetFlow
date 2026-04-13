@@ -1,16 +1,16 @@
 import unittest
+
 from src.models.map import Map
 
 
 class TestMap_Should(unittest.TestCase):
-
     def test_get_locations(self):
         expected_locations = ["SYD", "MEL", "ADL", "ASP", "BRI", "DAR", "PER"]
         result = Map.get_locations()
 
         self.assertEqual(result, expected_locations)
         self.assertIsInstance(result, list)
-        self.assertIsNot(result, Map._locations)
+        self.assertIsNot(result, Map._locations)  # type: ignore[reportPrivateUsage]
 
     def test_is_valid_location_with_valid_codes(self):
         valid_codes = ["SYD", "MEL", "ADL", "ASP", "BRI", "DAR", "PER"]
@@ -24,7 +24,7 @@ class TestMap_Should(unittest.TestCase):
 
         for code in invalid_codes:
             with self.subTest(code=code):
-                self.assertFalse(Map.is_valid_location(code))
+                self.assertFalse(Map.is_valid_location(code))  # type: ignore[reportArgumentType]
 
     def test_get_distance_same_location(self):
         locations = Map.get_locations()
@@ -71,12 +71,15 @@ class TestMap_Should(unittest.TestCase):
         locations = Map.get_locations()
 
         for i, loc1 in enumerate(locations):
-            for loc2 in locations[i + 1:]:  # Avoid testing same pairs twice
+            for loc2 in locations[i + 1 :]:  # Avoid testing same pairs twice
                 with self.subTest(loc1=loc1, loc2=loc2):
                     distance_ab = Map.get_distance(loc1, loc2)
                     distance_ba = Map.get_distance(loc2, loc1)
-                    self.assertEqual(distance_ab, distance_ba,
-                                     f"Distance {loc1}->{loc2} ({distance_ab}) != {loc2}->{loc1} ({distance_ba})")
+                    self.assertEqual(
+                        distance_ab,
+                        distance_ba,
+                        f"Distance {loc1}->{loc2} ({distance_ab}) != {loc2}->{loc1} ({distance_ba})",
+                    )
 
     def test_all_location_pairs_have_distances(self):
         locations = Map.get_locations()
@@ -87,4 +90,3 @@ class TestMap_Should(unittest.TestCase):
                     distance = Map.get_distance(loc1, loc2)
                     self.assertIsInstance(distance, int)
                     self.assertGreaterEqual(distance, 0)
-

@@ -5,10 +5,9 @@ from src.commands.view_all_customers import ViewAllCustomers
 
 
 class TestViewAllCustomers_Should(unittest.TestCase):
-
     def setUp(self):
         self.mock_app_data = Mock()
-        self.command = ViewAllCustomers(params={}, app_data=self.mock_app_data, auth=None)
+        self.command = ViewAllCustomers(params={}, app_data=self.mock_app_data, auth=None)  # type: ignore[reportArgumentType]
 
     def test_no_customers_available(self):
         self.mock_app_data.view_all_customers.return_value = []
