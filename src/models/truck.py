@@ -1,25 +1,33 @@
-from src.models.truck_status import TruckStatus
+from __future__ import annotations
+
 from datetime import datetime
+from typing import TYPE_CHECKING
+
+from src.models.truck_status import TruckStatus
+
+if TYPE_CHECKING:
+    from src.models.delivery_route import DeliveryRoute
+
 
 class Truck:
-    def __init__(self, vehicle_id: int, name: str, capacity: int, max_range: int):
-        if name not in ("Scania","Man","Actros"):
+    def __init__(self, vehicle_id: int, name: str, capacity: int, max_range: int) -> None:
+        if name not in ("Scania", "Man", "Actros"):
             raise ValueError("Truck name must be Scania, Man or Actros")
-        self.vehicle_id = vehicle_id
-        self.name = name
-        self.capacity = int(capacity)
-        self.max_range = int(max_range)
-        self.status = TruckStatus.FREE
-        self.current_location = None
-        self.route = None
+        self.vehicle_id: int = vehicle_id
+        self.name: str = name
+        self.capacity: int = int(capacity)
+        self.max_range: int = int(max_range)
+        self.status: str = TruckStatus.FREE
+        self.current_location: str | None = None
+        self.route: DeliveryRoute | None = None
         self.busy_from: datetime | None = None
         self.busy_until: datetime | None = None
         self.in_transit_to: str | None = None
 
-    def is_free(self):
+    def is_free(self) -> bool:
         return self.status == TruckStatus.FREE
 
-    def assign(self, route, start_location: str | None = None) -> None:
+    def assign(self, route: DeliveryRoute, start_location: str | None = None) -> None:  # noqa: ARG002
         """Record the assignment window."""
         self.route = route
         self.status = TruckStatus.ON_THE_WAY

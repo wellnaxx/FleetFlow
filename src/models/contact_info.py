@@ -1,13 +1,15 @@
+import re
 from dataclasses import dataclass
 from typing import Any
-import re
+
 
 @dataclass
 class ContactInfo:
     """Encapsulates a user's contact information."""
+
     name: str
     email: str = ""
-    phone_number: str = "" 
+    phone_number: str = ""
 
     def normalized_phone(self) -> str:
         return self.phone_number
@@ -18,7 +20,7 @@ class ContactInfo:
     def display_phone(self) -> str:
         return self.phone_number or "No phone number provided"
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         object.__setattr__(self, "name", self._clean_name(self.name))
         object.__setattr__(self, "email", self._clean_email(self.email))
         object.__setattr__(self, "phone_number", self._clean_phone(self.phone_number))
@@ -34,7 +36,7 @@ class ContactInfo:
 
     def _clean_name(self, v: Any) -> str:
         if not isinstance(v, str):
-            raise ValueError("Name must be a string.")
+            raise TypeError("Name must be a string.")
         v = v.strip()
         if len(v) < 3:
             raise ValueError("Name is too short")
@@ -42,11 +44,11 @@ class ContactInfo:
             raise ValueError("Name is too long")
         return v
 
-    def _clean_email(self, v) -> str:
+    def _clean_email(self, v: Any) -> str:
         if v is None:
             return ""
         if not isinstance(v, str):
-            raise ValueError("Email must be a string.")
+            raise TypeError("Email must be a string.")
         v = v.strip().lower()
         if v == "":
             return ""
@@ -79,7 +81,7 @@ class ContactInfo:
         if not v:
             return ""
         if not isinstance(v, str):
-            raise ValueError("Phone number must be a string")
+            raise TypeError("Phone number must be a string")
         v = v.strip()
         if not v.isdigit():
             raise ValueError("Phone number must contain only digits")

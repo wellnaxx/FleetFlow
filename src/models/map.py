@@ -1,7 +1,10 @@
-class Map:
-    _locations = ["SYD", "MEL", "ADL", "ASP", "BRI", "DAR", "PER"]
+from typing import ClassVar
 
-    _distances = {
+
+class Map:
+    _locations: ClassVar[list[str]] = ["SYD", "MEL", "ADL", "ASP", "BRI", "DAR", "PER"]
+
+    _distances: ClassVar[dict[str, dict[str, int]]] = {
         "SYD": {"MEL": 877, "ADL": 1376, "ASP": 2762, "BRI": 909, "DAR": 3935, "PER": 4016},
         "MEL": {"SYD": 877, "ADL": 725, "ASP": 2255, "BRI": 1765, "DAR": 3752, "PER": 3509},
         "ADL": {"SYD": 1376, "MEL": 725, "ASP": 1530, "BRI": 1927, "DAR": 3027, "PER": 2785},
@@ -12,7 +15,7 @@ class Map:
     }
 
     @classmethod
-    def get_locations(cls):
+    def get_locations(cls) -> list[str]:
         return list(cls._locations)
 
     @classmethod

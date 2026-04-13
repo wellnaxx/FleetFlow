@@ -1,11 +1,14 @@
 from enum import Enum, auto
 
+
 class Role(Enum):
     EMPLOYEE = "EMPLOYEE"
     MANAGER = "MANAGER"
 
+
 class Permission(Enum):
     """Enumerates app capabilities used by RBAC checks."""
+
     PACKAGE_CREATE = auto()
     PACKAGE_VIEW = auto()
     PACKAGE_VIEW_ALL = auto()
@@ -31,11 +34,20 @@ class Permission(Enum):
     APP_SAVE_STATE = auto()
     APP_LOAD_STATE = auto()
 
+
 ROLE_PERMISSIONS = {
     Role.EMPLOYEE: {
-        Permission.PACKAGE_CREATE, Permission.PACKAGE_VIEW, Permission.PACKAGE_ASSIGN, Permission.PACKAGE_FIND_ROUTE_FOR,
-        Permission.ROUTE_VIEW, Permission.ROUTE_CREATE, Permission.ROUTE_ASSIGN_PACKAGE, Permission.ROUTE_FIND_TRUCK_FOR,
-        Permission.ROUTE_ASSIGN_TRUCK, Permission.ROUTE_REMOVE, Permission.PACKAGE_REMOVE
+        Permission.PACKAGE_CREATE,
+        Permission.PACKAGE_VIEW,
+        Permission.PACKAGE_ASSIGN,
+        Permission.PACKAGE_FIND_ROUTE_FOR,
+        Permission.ROUTE_VIEW,
+        Permission.ROUTE_CREATE,
+        Permission.ROUTE_ASSIGN_PACKAGE,
+        Permission.ROUTE_FIND_TRUCK_FOR,
+        Permission.ROUTE_ASSIGN_TRUCK,
+        Permission.ROUTE_REMOVE,
+        Permission.PACKAGE_REMOVE,
     },
     Role.MANAGER: set(Permission),
 }
