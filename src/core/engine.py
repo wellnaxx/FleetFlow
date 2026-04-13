@@ -1,20 +1,24 @@
-from src.core.command_factory import CommandFactory
 from datetime import datetime
 
+from src.core.application_data import ApplicationData
+from src.core.auth_service import AuthService
+from src.core.command_factory import CommandFactory
+
+
 class Engine:
-    def __init__(self, factory: CommandFactory, app, auth):
+    def __init__(self, factory: CommandFactory, app: ApplicationData, auth: AuthService) -> None:
         self._factory = factory
         self.app = app
         self.auth = auth
-        self._running = False
+        self._running: bool = False
 
-    def _rebind_app(self):
+    def _rebind_app(self) -> None:
         if hasattr(self.app, "authz"):
             self.app.authz.current_user = self.auth.current_user
         if hasattr(self._factory, "update_app"):
             self._factory.update_app(self.app)
 
-    def start(self):
+    def start(self) -> None:
         """Main entry: shows main menu and dispatches to sub-menus or command mode."""
         self._running = True
         try:
@@ -24,7 +28,7 @@ class Engine:
                 if choice == "0":
                     print("Goodbye!")
                     break
-                elif choice == "1":
+                if choice == "1":
                     self._menu_packages()
                 elif choice == "2":
                     self._menu_routes()
@@ -33,15 +37,15 @@ class Engine:
                 elif choice == "4":
                     self._menu_state()
                 elif choice == "login":
-                    self._exec_line("login")           
+                    self._exec_line("login")
                 elif choice == "logout":
                     self._exec_line("logout")
                 elif choice == "whoami":
                     self._exec_line("whoami")
                 elif choice == "register":
-                    self._exec_line("registeruser")     
+                    self._exec_line("registeruser")
                 elif choice == "passwd":
-                    self._exec_line("changepassword")    
+                    self._exec_line("changepassword")
                 elif choice.lower() in {"cmd", "command", ":"}:
                     self._command_mode()
                 else:
@@ -51,7 +55,7 @@ class Engine:
         finally:
             self._running = False
 
-    def _menu_packages(self):
+    def _menu_packages(self) -> None:
         while True:
             print("\nLogistics App Packages Menu")
             print("1) Create Package")
@@ -67,7 +71,7 @@ class Engine:
 
             if choice == "0":
                 break
-            elif choice.lower() in {"cmd", "command", ":"}:
+            if choice.lower() in {"cmd", "command", ":"}:
                 self._command_mode()
                 continue
 
@@ -82,7 +86,7 @@ class Engine:
 
                 elif choice == "3":
                     route_id = input("Route ID: ").strip()
-                    pkg_ids  = input("Package IDs (space-separated): ").strip()
+                    pkg_ids = input("Package IDs (space-separated): ").strip()
                     # One command handles 1..N packages
                     self._exec_line(f"assignpackagetoroute {route_id} {pkg_ids}")
 
@@ -95,7 +99,7 @@ class Engine:
                     self._exec_line(f"viewpackage {pid}")
 
                 elif choice == "6":
-                    self._exec_line(f"viewallpackages")
+                    self._exec_line("viewallpackages")
 
                 elif choice == "7":
                     self._exec_line("viewunassignedpackages")
@@ -105,7 +109,7 @@ class Engine:
             except KeyboardInterrupt:
                 print("\n(back to Packages menu)")
 
-    def _menu_routes(self):
+    def _menu_routes(self) -> None:
         while True:
             print("\nLogistics App Routes Menu")
             print("1) Create Route")
@@ -121,7 +125,7 @@ class Engine:
 
             if choice == "0":
                 break
-            elif choice.lower() in {"cmd", "command", ":"}:
+            if choice.lower() in {"cmd", "command", ":"}:
                 self._command_mode()
                 continue
 
@@ -132,7 +136,7 @@ class Engine:
 
                     if dep:
                         try:
-                            dt = datetime.strptime(dep, "%Y-%m-%d %H:%M")
+                            datetime.strptime(dep, "%Y-%m-%d %H:%M")
                             self._exec_line(f"createroute {locs} {dep}")
                         except ValueError:
                             print("Invalid date format, must be YYYY-MM-DD HH:MM")
@@ -158,7 +162,7 @@ class Engine:
                 elif choice == "6":
                     rid = input("Route ID: ").strip()
                     self._exec_line(f"findsuitabletrucksforroute {rid}")
-                
+
                 elif choice == "7":
                     self._exec_line("viewroutesinprogress")
 
@@ -167,7 +171,7 @@ class Engine:
             except KeyboardInterrupt:
                 print("\n(back to Routes menu)")
 
-    def _menu_trucks(self):
+    def _menu_trucks(self) -> None:
         while True:
             print("\nLogistics App Trucks Menu")
             print("1) View All Trucks")
@@ -177,7 +181,7 @@ class Engine:
 
             if choice == "0":
                 break
-            elif choice.lower() in {"cmd", "command", ":"}:
+            if choice.lower() in {"cmd", "command", ":"}:
                 self._command_mode()
                 continue
 
@@ -188,8 +192,8 @@ class Engine:
                     print("Invalid option.")
             except KeyboardInterrupt:
                 print("\n(back to Trucks menu)")
-                
-    def _menu_state(self):
+
+    def _menu_state(self) -> None:
         """Interactive submenu for saving and loading application state files.
 
         Prompts for a filename (defaults to 'state.json').
@@ -223,8 +227,7 @@ class Engine:
             except KeyboardInterrupt:
                 print("\n(back to State menu)")
 
-
-    def _command_mode(self):
+    def _command_mode(self) -> None:
         """
         Raw command input loop (power users).
         - Type 'back' to return to previous menu.
@@ -270,11 +273,11 @@ class Engine:
             if getattr(cmd, "mutates_state", False):
                 try:
                     path = getattr(self.app, "AUTOSAVE_PATH", "state.json")
-                    self.app._persist_to_file(path) 
+                    self.app._persist_to_file(path) # pyright: ignore[reportPrivateUsage]
                 except Exception as se:
                     print(f"Warning: autosave failed: {se}")
 
-            if out is not None:
+            if out:
                 print(out)
 
         except ValueError as e:
@@ -292,7 +295,7 @@ class Engine:
             print(f"Unexpected error: {e}")
 
     @staticmethod
-    def _print_main_menu():
+    def _print_main_menu() -> None:
         print("\n=== Logistics App ===")
         print("1) Packages")
         print("2) Routes")
@@ -307,9 +310,9 @@ class Engine:
         print("0) Exit")
 
     @staticmethod
-    def _print_help():
+    def _print_help() -> None:
         print("Common commands:")
-        print("  createpackage SYD MEL 10 John \"\" 0412345678")
+        print('  createpackage SYD MEL 10 John "" 0412345678')
         print("  createroute SYD MEL 2025-09-12 06:00")
         print("  assignpackagetoroute <route_id> <pkg1> [pkg2] ...")
         print("  assigntrucktoroute <truck_id> <route_id>")

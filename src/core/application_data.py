@@ -1,24 +1,36 @@
-from src.models.delivery_route import DeliveryRoute
-from src.models.delivery_package import DeliveryPackage
-from src.core.vehicle_manager import VehicleManager
-from src.core.serialization import dt_to_str, dt_from_str
-from src.models.map import Map
-from src.models.customer import Customer
-from src.models.item_status import ItemStatus
-from src.models.contact_info import ContactInfo
-from src.core.authz import AuthorizationService, requires, requires_all
-from src.models.auth import Permission, Role
-from src.models.users.employee import Employee
-from src.models.users.manager import Manager
-from src.core.paths import resolve_data_path, ensure_data_dir
-
-import json, os, tempfile
+import contextlib
+import json
+import os
+import tempfile
 from datetime import datetime
+from typing import TYPE_CHECKING, Any
+
+from src.core.auth_service import AuthService
+from src.core.authz import AuthorizationService, requires, requires_all
+from src.core.paths import resolve_data_path
+from src.core.serialization import dt_from_str, dt_to_str
+from src.core.vehicle_manager import VehicleManager
+from src.models.auth import Permission, Role
+from src.models.contact_info import ContactInfo
+from src.models.customer import Customer
+from src.models.delivery_package import DeliveryPackage
+from src.models.delivery_route import DeliveryRoute, RoutePosition
+from src.models.item_status import ItemStatus
+from src.models.map import Map
+from src.models.truck import Truck
+from src.models.users.user import User
+
+if TYPE_CHECKING:
+    from src.models.users.employee import Employee
+    from src.models.users.manager import Manager
+
 
 class ApplicationData:
     """Holds domain objects and implements business operations for the app."""
-    AUTOSAVE_PATH = resolve_data_path("state.json")
-    def __init__(self, current_user=None):
+
+    AUTOSAVE_PATH: str = resolve_data_path("state.json")
+
+    def __init__(self, current_user: User | None = None) -> None:
         self.authz = AuthorizationService(current_user)
         self.vehicle_manager = VehicleManager()
         self._routes: list[DeliveryRoute] = []
@@ -27,17 +39,27 @@ class ApplicationData:
         self._customers: list[Customer] = []
         self._customers_by_email: dict[str, Customer] = {}
         self._customers_by_phone: dict[str, Customer] = {}
-        self._next_customer_id = 1
-        self._next_package_id = 1
-        self._next_route_id = 1
+        self._next_customer_id: int = 1
+        self._next_package_id: int = 1
+        self._next_route_id: int = 1
 
-    def _gen_customer_id(self): i=self._next_customer_id; self._next_customer_id+=1; return i
-    def _gen_package_id(self):  i=self._next_package_id;  self._next_package_id+=1;  return i
-    def _gen_route_id(self):    i=self._next_route_id;    self._next_route_id+=1;    return i
+    def _gen_customer_id(self) -> int:
+        i = self._next_customer_id
+        self._next_customer_id += 1
+        return i
 
+    def _gen_package_id(self) -> int:
+        i = self._next_package_id
+        self._next_package_id += 1
+        return i
+
+    def _gen_route_id(self) -> int:
+        i = self._next_route_id
+        self._next_route_id += 1
+        return i
 
     # --- INTERNAL: serialize current state to a dict (no RBAC) ---
-    def _dump_state(self) -> dict:
+    def _dump_state(self) -> dict[str, Any]:
         """Serialize the current in-memory state into a plain dict."""
         return {
             "schema_version": 1,
@@ -47,7 +69,12 @@ class ApplicationData:
                 "next_route_id": getattr(self, "_next_route_id", 1),
             },
             "customers": [
-                {"customer_id": c.customer_id, "name": c.name, "email": c.email or "", "phone": getattr(c, "phone", "") or ""}
+                {
+                    "customer_id": c.customer_id,
+                    "name": c.name,
+                    "email": c.email or "",
+                    "phone": getattr(c, "phone", "") or "",
+                }
                 for c in self._customers
             ],
             "packages": [
@@ -56,8 +83,8 @@ class ApplicationData:
                     "start": p.start_location,
                     "end": p.end_location,
                     "weight": p.weight,
-                    "customer_id": p.customer.customer_id,
-                    "route_id": (p.route.route_id if getattr(p, "route", None) else None),
+                    "customer_id": p.customer.customer_id if p.customer is not None else None,
+                    "route_id": (p.route.route_id if p.route is not None else None),
                 }
                 for p in self._packages
             ],
@@ -66,7 +93,7 @@ class ApplicationData:
                     "route_id": r.route_id,
                     "locations": list(r.locations),
                     "departure_time": dt_to_str(getattr(r, "departure_time", None)),
-                    "truck_vehicle_id": (r.truck.vehicle_id if getattr(r, "truck", None) else None),
+                    "truck_vehicle_id": (r.truck.vehicle_id if r.truck is not None else None),
                     "package_ids": [p.package_id for p in r.packages],
                 }
                 for r in self._routes
@@ -93,13 +120,14 @@ class ApplicationData:
             os.replace(tmp, path)  # atomic on same filesystem
         finally:
             try:
-                if os.path.exists(tmp): os.remove(tmp)
+                if os.path.exists(tmp):
+                    os.remove(tmp)
             except Exception:
                 pass
         return path
 
     # --- INTERNAL: load dict into current instance (no RBAC) ---
-    def _apply_state(self, data: dict) -> None:
+    def _apply_state(self, data: dict[str, Any]) -> None:
         """Load a previously serialized dict into this instance."""
         ver = data.get("schema_version", 1)
         if ver != 1:
@@ -115,35 +143,37 @@ class ApplicationData:
         # counters
         ctr = data.get("counters", {})
         self._next_customer_id = int(ctr.get("next_customer_id", 1))
-        self._next_package_id  = int(ctr.get("next_package_id", 1))
-        self._next_route_id    = int(ctr.get("next_route_id", 1))
+        self._next_package_id = int(ctr.get("next_package_id", 1))
+        self._next_route_id = int(ctr.get("next_route_id", 1))
 
         # rebuild entities
-        id_to_customer = {}
         from src.models.contact_info import ContactInfo
-        from src.models.customer import Customer
+        from src.models.customer import Customer as Customer_
+
+        id_to_customer: dict[int, Customer_] = {}
         from src.models.delivery_package import DeliveryPackage
         from src.models.delivery_route import DeliveryRoute
 
         for c in data.get("customers", []):
-            ci = ContactInfo(name=c["name"], email=c.get("email",""), phone_number=c.get("phone",""))
+            ci = ContactInfo(name=c["name"], email=c.get("email", ""), phone_number=c.get("phone", ""))
             cust = Customer(customer_id=int(c["customer_id"]), contact=ci)
             self._customers.append(cust)
+            assert cust.customer_id is not None
             id_to_customer[cust.customer_id] = cust
             self._index_customer(cust)
 
-        id_to_package = {}
+        id_to_package: dict[int, DeliveryPackage] = {}
         for p in data.get("packages", []):
             cust = id_to_customer.get(int(p["customer_id"]))
             if not cust:
                 raise ValueError(f"Package {p['package_id']} refers to missing customer {p['customer_id']}")
             pkg = DeliveryPackage(p["start"], p["end"], float(p["weight"]), cust)
-            pkg._set_package_id(int(p["package_id"])) 
+            pkg._set_package_id(int(p["package_id"]))  # pyright: ignore[reportPrivateUsage]
             self._packages.append(pkg)
             id_to_package[pkg.package_id] = pkg
             cust.add_package(pkg)
 
-        id_to_route = {}
+        id_to_route: dict[int, DeliveryRoute] = {}
         for r in data.get("routes", []):
             dep = dt_from_str(r.get("departure_time"))
             route = DeliveryRoute(*r["locations"], departure_time=dep)
@@ -171,10 +201,8 @@ class ApplicationData:
                     pkg.route = route
 
         # refresh derived fields
-        try:
+        with contextlib.suppress(Exception):
             self.heartbeat()
-        except Exception:
-            pass
 
     # --- PUBLIC (manager-only) manual commands remain RBAC-guarded ---
     @requires(Permission.APP_SAVE_STATE)
@@ -188,6 +216,7 @@ class ApplicationData:
         """
         abs_path = self._persist_to_file(path)
         return f"Saved state to {abs_path}"
+
     @requires(Permission.APP_LOAD_STATE)
     def load(self, path: str) -> str:
         """Load application state from a JSON file, replacing current state.
@@ -202,20 +231,32 @@ class ApplicationData:
         abs_path = resolve_data_path(path)
         if not os.path.exists(abs_path):
             raise ValueError(f"State file not found: {abs_path}")
-        with open(abs_path, "r", encoding="utf-8") as f:
+        with open(abs_path, encoding="utf-8") as f:
             data = json.load(f)
         self._apply_state(data)
         return f"Loaded state from {abs_path}"
 
     @requires(Permission.ADMIN_USER)
-    def register_user(self, *, username: str, role: Role, name: str, email: str, phone: str, password: str, auth_service):
+    def register_user(
+        self,
+        *,
+        username: str,
+        role: Role,
+        name: str,
+        email: str,
+        phone: str,
+        password: str,
+        auth_service: AuthService,
+    ) -> Any:
         """
         Manager-only. Delegates to AuthService to create the account in the user store.
         """
         # NB: pass-through to AuthService; keeps RBAC centralized here.
-        return auth_service.register_user(username=username, role=role, name=name, email=email, phone_number=phone, password=password)
+        return auth_service.register_user(
+            username=username, role=role, name=name, email=email, phone_number=phone, password=password
+        )
 
-    def heartbeat(self, now: datetime | None = None) -> dict:
+    def heartbeat(self, now: datetime | None = None) -> dict[str, int]:
         """
         Advance state based on real time:
         - Update implicit route 'status' (attached dynamically)
@@ -232,7 +273,7 @@ class ApplicationData:
         for route in self._routes:
             new_status = self._compute_route_status(route, now)
             if getattr(route, "status", None) != new_status:
-                setattr(route, "status", new_status)
+                route.status = new_status
                 updated_routes += 1
 
         for truck in self.vehicle_manager.vehicles:
@@ -256,9 +297,13 @@ class ApplicationData:
                     truck.current_location = pos.stop_city
                     truck.in_transit_to = None
                     moved_trucks += 1
-                if pos.stop_city == r.end_location and (r.eta_final and now >= r.eta_final):
-                    if truck.release(now=now, force=False):
-                        released_trucks += 1
+                if (
+                    pos.stop_city == r.end_location
+                    and r.eta_final
+                    and now >= r.eta_final
+                    and truck.release(now=now, force=False)
+                ):
+                    released_trucks += 1
 
             elif pos.kind == "IN_TRANSIT":
                 changed = False
@@ -271,10 +316,9 @@ class ApplicationData:
                 if changed:
                     moved_trucks += 1
 
-            elif pos.kind == "AFTER_END":
-                if truck.release(now=now, force=False):
-                    released_trucks += 1
-                    moved_trucks += 1
+            elif pos.kind == "AFTER_END" and truck.release(now=now, force=False):
+                released_trucks += 1
+                moved_trucks += 1
 
             updated_packages += self._update_packages_for_route(r, now)
 
@@ -285,7 +329,7 @@ class ApplicationData:
             "packages_updated": updated_packages,
         }
 
-    def _compute_route_status(self, route, now: datetime) -> str:
+    def _compute_route_status(self, route: DeliveryRoute, now: datetime) -> str:
         dt = getattr(route, "departure_time", None)
         eta = getattr(route, "eta_final", None)
         if dt is None:
@@ -296,17 +340,15 @@ class ApplicationData:
             return "COMPLETED"
         return "IN_PROGRESS"
 
-    def _update_packages_for_route(self, route, now: datetime) -> int:
+    def _update_packages_for_route(self, route: DeliveryRoute, now: datetime) -> int:
         """Update status/current_location for all packages assigned to a route."""
         changed = 0
 
-        stop_times = {}
+        stop_times: dict[str, datetime] = {}
         if route.departure_time is not None:
             for city in route.locations:
-                try:
+                with contextlib.suppress(Exception):
                     stop_times[city] = route.arrival_time_at(city)
-                except Exception:
-                    pass
 
         pos_index = {c: i for i, c in enumerate(route.locations)}
 
@@ -314,7 +356,7 @@ class ApplicationData:
             s, e = p.start_location, p.end_location
 
             if not hasattr(p, "current_location"):
-                setattr(p, "current_location", s)
+                p.current_location = s
 
             if route.departure_time is None:
                 changed += self._set_pkg(p, status=ItemStatus.TODO, current_location=s)
@@ -342,15 +384,13 @@ class ApplicationData:
                 changed += self._set_pkg(p, status=ItemStatus.IN_PROGRESS, current_location=last_city)
 
             if hasattr(p, "expected_arrival"):
-                try:
+                with contextlib.suppress(Exception):
                     p.expected_arrival = route.arrival_time_at(e)
-                except Exception:
-                    pass
 
         return changed
 
     @staticmethod
-    def _set_pkg(p, *, status, current_location) -> int:
+    def _set_pkg(p: DeliveryPackage, *, status: str, current_location: str) -> int:
         delta = 0
         if getattr(p, "status", None) != status:
             p.status = status
@@ -360,7 +400,7 @@ class ApplicationData:
             delta += 1
         return delta
 
-    def _index_customer(self, c: Customer):
+    def _index_customer(self, c: Customer) -> None:
         if c.email:
             existing = self._customers_by_email.get(c.email)
             if existing and existing is not c:
@@ -376,13 +416,13 @@ class ApplicationData:
         cid = self._next_customer_id
         self._next_customer_id += 1
         return cid
-    
+
     @staticmethod
     def _same_name(a: str, b: str) -> bool:
         return (a or "").strip().casefold() == (b or "").strip().casefold()
 
     def _find_or_create_customer(self, name: str, email: str = "", phone: str = "") -> Customer:
-        name  = (name or "").strip()
+        name = (name or "").strip()
         email = (email or "").strip().lower()
         phone = "".join(ch for ch in (phone or "") if ch.isdigit())
 
@@ -408,7 +448,7 @@ class ApplicationData:
                     raise ValueError(
                         f"Email already in use by customer ID {by_email.customer_id} ('{by_email.name}')."
                     )
-                return by_email 
+                return by_email
 
             if by_phone and not by_email:
                 if name and not self._same_name(name, by_phone.name):
@@ -445,17 +485,17 @@ class ApplicationData:
         if phone:
             self._customers_by_phone[phone] = customer
         return customer
-    
+
     @requires(Permission.CUSTOMER_VIEW)
-    def view_all_customers(self):
+    def view_all_customers(self) -> tuple[Customer, ...]:
         return tuple(self._customers)
 
     @property
-    def customers(self):
+    def customers(self) -> tuple[Customer, ...]:
         return tuple(self._customers)
 
     @requires(Permission.ROUTE_CREATE)
-    def create_route(self, locations, departure_time):
+    def create_route(self, locations: list[str], departure_time: datetime | None) -> DeliveryRoute:
         if len(locations) < 2:
             raise ValueError("Invalid number of locations. A route must contain at least 2 locations.")
         for c in locations:
@@ -465,14 +505,14 @@ class ApplicationData:
         self._routes.append(r)
         return r
 
-    def find_route(self, route_id: int):
+    def find_route(self, route_id: int) -> DeliveryRoute | None:
         for r in self._routes:
             if r.route_id == route_id:
                 return r
         return None
 
     @requires(Permission.ROUTE_REMOVE)
-    def remove_route(self, route_id: int):
+    def remove_route(self, route_id: int) -> DeliveryRoute:
         r = self.find_route(route_id)
         if not r:
             raise ValueError(f"Route with ID {route_id} not found")
@@ -482,38 +522,42 @@ class ApplicationData:
         return r
 
     @requires(Permission.ROUTE_VIEW)
-    def view_route(self, route_id: int):
+    def view_route(self, route_id: int) -> DeliveryRoute | None:
         return self.find_route(route_id)
-    
+
     @requires(Permission.ROUTE_VIEW_IN_PROGRESS)
-    def view_routes_in_progress(self, now: datetime | None = None):
+    def view_routes_in_progress(
+        self, now: datetime | None = None
+    ) -> tuple[tuple[DeliveryRoute, RoutePosition], ...]:
         now = now or datetime.now()
-        active: list[tuple[DeliveryRoute, object]] = []
+        active: list[tuple[DeliveryRoute, RoutePosition]] = []
         for r in self._routes:
             pos = r.current_position(now)
             if pos.kind in {"AT_STOP", "IN_TRANSIT"}:
                 active.append((r, pos))
         return tuple(active)
-    
+
     @requires(Permission.ROUTE_VIEW_ALL)
-    def view_all_routes(self):
+    def view_all_routes(self) -> tuple[DeliveryRoute, ...]:
         return tuple(self._routes)
 
     @property
-    def routes(self):
+    def routes(self) -> tuple[DeliveryRoute, ...]:
         return tuple(self._routes)
 
     @requires(Permission.PACKAGE_CREATE)
-    def create_package(self, start, end, weight, name, email=None, phone=None):
+    def create_package(
+        self, start: str, end: str, weight: float, name: str, email: str | None = None, phone: str | None = None
+    ) -> DeliveryPackage:
         customer = self._find_or_create_customer(name, email or "", phone or "")
         p = DeliveryPackage(start, end, float(weight), customer, package_id=self._gen_package_id())
         p.status = ItemStatus.TODO
         self._packages.append(p)
         customer.add_package(p)
         return p
-    
+
     @requires_all(Permission.PACKAGE_REMOVE, Permission.PACKAGE_VIEW)
-    def remove_package(self, package_id: int):
+    def remove_package(self, package_id: int) -> DeliveryPackage:
         """Remove a package by ID.
 
         Detaches it from a route if attached, then removes it from registry.
@@ -542,35 +586,33 @@ class ApplicationData:
         return pkg
 
     @requires(Permission.PACKAGE_VIEW)
-    def view_package(self, package_id: int):
+    def view_package(self, package_id: int) -> DeliveryPackage | None:
         for p in self._packages:
             if p.package_id == package_id:
                 return p
         return None
 
     @requires(Permission.PACKAGE_VIEW_UNASSIGNED)
-    def view_unassigned_packages(self):
-        return tuple(
-            p for p in self._packages
-            if getattr(p, "route", None) is None
-        )
-    
+    def view_unassigned_packages(self) -> tuple[DeliveryPackage, ...]:
+        return tuple(p for p in self._packages if getattr(p, "route", None) is None)
+
     @requires(Permission.PACKAGE_VIEW_ALL)
-    def view_all_packages(self):
+    def view_all_packages(self) -> tuple[DeliveryPackage, ...]:
         return tuple(self._packages)
 
     @property
-    def packages(self):
+    def packages(self) -> tuple[DeliveryPackage, ...]:
         return tuple(self._packages)
-    
+
     @requires(Permission.ROUTE_ASSIGN_PACKAGE)
-    def assign_packages_to_route(self, route_id: int, package_ids: list[int]):
+    def assign_packages_to_route(self, route_id: int, package_ids: list[int]) -> list[str]:
         route = self.find_route(route_id)
         if not route:
             raise ValueError(f"Route with ID {route_id} not found.")
 
-        seen = set()
-        successes, errors = [], []
+        seen: set[int] = set()
+        successes: list[str] = []
+        errors: list[str] = []
 
         for pid in package_ids:
             if pid in seen:
@@ -598,9 +640,7 @@ class ApplicationData:
                     try:
                         eta_dt = route.arrival_time_at(package.end_location)
                         eta_str = (
-                            eta_dt.strftime("%Y-%m-%d %H:%M")
-                            if hasattr(eta_dt, "strftime")
-                            else str(eta_dt)
+                            eta_dt.strftime("%Y-%m-%d %H:%M") if hasattr(eta_dt, "strftime") else str(eta_dt)
                         )
                     except Exception:
                         eta_str = "N/A"
@@ -618,7 +658,7 @@ class ApplicationData:
         if not successes and errors:
             raise ValueError("No packages could be assigned:\n- " + "\n- ".join(errors))
 
-        parts = []
+        parts: list[str] = []
         if successes:
             parts.append("\n".join(successes))
         if errors:
@@ -626,7 +666,7 @@ class ApplicationData:
         return parts
 
     @requires(Permission.ROUTE_ASSIGN_TRUCK)
-    def assign_truck_to_route(self, vehicle_id: int, route_id: int):
+    def assign_truck_to_route(self, vehicle_id: int, route_id: int) -> DeliveryRoute:
         route = self.find_route(route_id)
         if not route:
             raise ValueError(f"Route with ID {route_id} not found")
@@ -636,7 +676,6 @@ class ApplicationData:
 
         if route.departure_time is None:
             route.schedule(datetime.now())
-
 
         ok, reason = self.vehicle_manager.is_suitable_for_route(truck, route)
         if not ok:
@@ -650,22 +689,18 @@ class ApplicationData:
 
         return route
 
-    @requires_all(
-        Permission.PACKAGE_FIND_ROUTE_FOR,
-        Permission.PACKAGE_VIEW,           
-        Permission.ROUTE_VIEW               
-    )
-    def find_suitable_routes_for_package(self, package_id: int):
+    @requires_all(Permission.PACKAGE_FIND_ROUTE_FOR, Permission.PACKAGE_VIEW, Permission.ROUTE_VIEW)
+    def find_suitable_routes_for_package(self, package_id: int) -> list[dict[str, Any]]:
         """
-        Returns a list of dicts: [{ 'route': r, 'eta': eta_dt or None, 'capacity_left': float|None }]
-        A route is suitable if start/end appear in order and (if truck assigned) it has enough remaining capacity.
+        Returns a list of dicts with 'route', 'eta' (or None), 'capacity_left' (float|None).
+        A route is suitable if start/end appear in order and
+        (if truck assigned) it has enough remaining capacity.
         """
-        pkg = self.view_package(package_id) 
+        pkg = self.view_package(package_id)
         if not pkg:
             raise ValueError(f"Package with ID {package_id} not found.")
 
-        results = []
-        now = datetime.now()
+        results: list[dict[str, Any]] = []
 
         for r in self._routes:
             locs = r.locations
@@ -695,12 +730,12 @@ class ApplicationData:
         return results
 
     @requires(Permission.ROUTE_FIND_TRUCK_FOR)
-    def find_suitable_trucks_for_route(self, route_id: int):
+    def find_suitable_trucks_for_route(self, route_id: int) -> list[Truck]:
         route = self.find_route(route_id)
         if not route:
             raise ValueError(f"Route with ID {route_id} not found")
         return self.vehicle_manager.find_available_for_route(route)
 
     @requires(Permission.TRUCK_VIEW)
-    def view_all_trucks(self):
+    def view_all_trucks(self) -> tuple[Truck, ...]:
         return tuple(self.vehicle_manager.list_fleet())

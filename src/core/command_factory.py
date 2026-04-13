@@ -1,33 +1,33 @@
-from src.core.application_data import ApplicationData
-from src.commands.base_command.base_command import BaseCommand
-from src.commands.create_route import CreateRoute
-from src.commands.remove_route import RemoveRoute
-from src.commands.view_route import ViewRoute
-from src.commands.create_package import CreatePackage
-from src.commands.view_package import ViewPackage
-from src.commands.remove_package import RemovePackage
-from src.commands.find_suitable_trucks_for_route import FindSuitableTrucksForRoute
-from src.commands.assign_truck_to_route import AssignTruckToRoute
+import shlex
+
 from src.commands.assign_package_to_route import AssignPackageToRoute
-from src.commands.find_suitable_routes_for_package import FindSuitableRoutesForPackage
-from src.commands.view_all_customers import ViewAllCustomers
-from src.commands.view_all_packages import ViewAllPackages
-from src.commands.view_all_routes import ViewAllRoutes
-from src.commands.view_all_trucks import ViewAllTrucks
-from src.commands.view_routes_in_progress import ViewRoutesInProgress
-from src.commands.view_unassigned_packages import ViewUnassignedPackages
+from src.commands.assign_truck_to_route import AssignTruckToRoute
+from src.commands.auth_change_password import AuthChangePassword
 from src.commands.auth_login import AuthLogin
 from src.commands.auth_logout import AuthLogout
 from src.commands.auth_register import AuthRegisterUser
 from src.commands.auth_whoami import AuthWhoAmI
-from src.commands.auth_change_password import AuthChangePassword
-from src.commands.save_state import SaveState
+from src.commands.base_command.base_command import BaseCommand
+from src.commands.create_package import CreatePackage
+from src.commands.create_route import CreateRoute
+from src.commands.find_suitable_routes_for_package import FindSuitableRoutesForPackage
+from src.commands.find_suitable_trucks_for_route import FindSuitableTrucksForRoute
 from src.commands.load_state import LoadState
-from typing import Dict, Type
+from src.commands.remove_package import RemovePackage
+from src.commands.remove_route import RemoveRoute
+from src.commands.save_state import SaveState
+from src.commands.view_all_customers import ViewAllCustomers
+from src.commands.view_all_packages import ViewAllPackages
+from src.commands.view_all_routes import ViewAllRoutes
+from src.commands.view_all_trucks import ViewAllTrucks
+from src.commands.view_package import ViewPackage
+from src.commands.view_route import ViewRoute
+from src.commands.view_routes_in_progress import ViewRoutesInProgress
+from src.commands.view_unassigned_packages import ViewUnassignedPackages
+from src.core.application_data import ApplicationData
+from src.core.auth_service import AuthService
 
-import shlex
-
-_REGISTRY: Dict[str, Type[BaseCommand]] = {
+_REGISTRY: dict[str, type[BaseCommand]] = {
     "createroute": CreateRoute,
     "removeroute": RemoveRoute,
     "viewroute": ViewRoute,
@@ -56,7 +56,8 @@ _REGISTRY: Dict[str, Type[BaseCommand]] = {
 
 class CommandFactory:
     """Parses input lines and instantiates command objects bound to app data."""
-    def __init__(self, data: ApplicationData, auth):
+
+    def __init__(self, data: ApplicationData, auth: AuthService) -> None:
         self._app_data = data
         self._auth = auth
 
@@ -78,7 +79,7 @@ class CommandFactory:
         if not cls:
             raise ValueError(f"Invalid command name: {name}!")
         return cls(params, self._app_data, self._auth)
-    
-    def update_app(self, new_app_data):
+
+    def update_app(self, new_app_data: ApplicationData) -> None:
         """Called by Engine after login/logout to refresh RBAC principal."""
         self._app_data = new_app_data

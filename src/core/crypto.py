@@ -1,9 +1,13 @@
-import os, base64, hmac, hashlib
+import base64
+import hashlib
+import hmac
+import os
 from dataclasses import dataclass
 
 PBKDF2_ALGO = "sha256"
-PBKDF2_ITERATIONS = 200_000 
+PBKDF2_ITERATIONS = 200_000
 SALT_BYTES = 16
+
 
 @dataclass(frozen=True)
 class PasswordHash:
@@ -22,8 +26,9 @@ class PasswordHash:
         algo = scheme.replace("pbkdf2_", "")
         return PasswordHash(algo=algo, iterations=int(iters), salt_b64=salt_b64, hash_b64=hash_b64)
 
+
 def hash_password(plain: str) -> PasswordHash:
-    if not isinstance(plain, str) or len(plain) < 8:
+    if len(plain) < 8:
         raise ValueError("Password must be at least 8 characters.")
     salt = os.urandom(SALT_BYTES)
     dk = hashlib.pbkdf2_hmac(PBKDF2_ALGO, plain.encode("utf-8"), salt, PBKDF2_ITERATIONS)
@@ -33,6 +38,7 @@ def hash_password(plain: str) -> PasswordHash:
         salt_b64=base64.b64encode(salt).decode("ascii"),
         hash_b64=base64.b64encode(dk).decode("ascii"),
     )
+
 
 def verify_password(plain: str, stored: PasswordHash) -> bool:
     salt = base64.b64decode(stored.salt_b64)

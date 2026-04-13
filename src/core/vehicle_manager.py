@@ -1,19 +1,23 @@
-
-from src.models.truck import Truck
+from src.models.delivery_route import DeliveryRoute
 from src.models.map import Map
+from src.models.truck import Truck
+
 
 class VehicleManager:
-    def __init__(self):
-        self.vehicles = ([Truck(vehicle_id, "Scania", 42000, 8000) for vehicle_id in range(1001, 1011)] + 
-                         [Truck(vehicle_id, "Man", 37000, 10000) for vehicle_id in range(1011, 1026)] +
-                         [Truck(vehicle_id, "Actros", 26000, 13000) for vehicle_id in range(1026, 1041)])
+    def __init__(self) -> None:
+        self.vehicles: list[Truck] = (
+            [Truck(vehicle_id, "Scania", 42000, 8000) for vehicle_id in range(1001, 1011)]
+            + [Truck(vehicle_id, "Man", 37000, 10000) for vehicle_id in range(1011, 1026)]
+            + [Truck(vehicle_id, "Actros", 26000, 13000) for vehicle_id in range(1026, 1041)]
+        )
         self.disperse_trucks()
 
-    def disperse_trucks(self):
+    def disperse_trucks(self) -> None:
         """Deterministic round-robin by truck type across cities (no randomness)."""
         from collections import defaultdict
+
         locs = Map.get_locations()
-        type_groups = defaultdict(list)
+        type_groups: dict[str, list[Truck]] = defaultdict(list)
         for t in self.vehicles:
             type_groups[t.name].append(t)
 
@@ -26,16 +30,16 @@ class VehicleManager:
                     t.current_location = locs[i % len(locs)]
                     i += 1
 
-    def list_fleet(self):
+    def list_fleet(self) -> list[Truck]:
         return list(self.vehicles)
 
-    def find_by_id(self, veh_id: int):
+    def find_by_id(self, veh_id: int) -> Truck | None:
         for v in self.vehicles:
             if v.vehicle_id == veh_id:
                 return v
         return None
 
-    def is_suitable_for_route(self, truck: Truck, route) -> tuple[bool,str]:
+    def is_suitable_for_route(self, truck: Truck, route: DeliveryRoute) -> tuple[bool, str]:
         if truck.max_range < route.total_distance_km:
             return False, "range too short"
         if truck.capacity < route.total_assigned_weight():
@@ -49,8 +53,8 @@ class VehicleManager:
             return False, "route not scheduled yet"
         return True, ""
 
-    def find_available_for_route(self, route):
-        result = []
+    def find_available_for_route(self, route: DeliveryRoute) -> list[Truck]:
+        result: list[Truck] = []
         for t in self.vehicles:
             ok, _ = self.is_suitable_for_route(t, route)
             if ok:

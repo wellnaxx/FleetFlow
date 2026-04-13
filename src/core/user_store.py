@@ -1,39 +1,46 @@
-from dataclasses import dataclass, asdict
-from typing import Optional, Dict
-import json, os, tempfile
+import json
+import os
+import tempfile
+from dataclasses import asdict, dataclass
+from typing import Any
+
 from src.core.crypto import PasswordHash
-from src.core.paths import resolve_data_path, ensure_data_dir
+from src.core.paths import ensure_data_dir, resolve_data_path
 from src.models.contact_info import ContactInfo
+
 
 @dataclass
 class UserRecord:
     """Serializable user record stored on disk."""
+
     user_id: int
-    username: str             
-    role: str                 
-    name: str                  
+    username: str
+    role: str
+    name: str
     email: str
     phone_number: str
-    password: str              
+    password: str
+
 
 class UserStore:
     """Load/save users to data/users.json (or a custom path) with atomic writes."""
-    def __init__(self, path: str = "users.json"):
+
+    def __init__(self, path: str = "users.json") -> None:
         """
         Args:
             path: Filename or path to the users file. Bare filenames are placed in data/.
         """
-        self.path = resolve_data_path(path)
-        self._by_username: Dict[str, UserRecord] = {}
-        self._next_id = 1
+        self.path: str = resolve_data_path(path)
+        self._by_username: dict[str, UserRecord] = {}
+        self._next_id: int = 1
         self._load()
 
-    def _load(self):
+    def _load(self) -> None:
         """Load users from disk into memory. Missing file => no users."""
         if not os.path.exists(self.path):
             return
         try:
-            with open(self.path, "r", encoding="utf-8") as f:
+            with open(self.path, encoding="utf-8") as f:
                 data = json.load(f)
         except json.JSONDecodeError:
             return
@@ -42,7 +49,7 @@ class UserStore:
             rec = UserRecord(**obj)
             self._by_username[rec.username.lower()] = rec
 
-    def _atomic_write(self, data: dict) -> str:
+    def _atomic_write(self, data: dict[str, Any]) -> str:
         """Write JSON atomically to self.path. Returns absolute path."""
         ensure_data_dir()
         directory = os.path.dirname(self.path) or "."
@@ -68,7 +75,7 @@ class UserStore:
         }
         return self._atomic_write(data)
 
-    def get(self, username: str) -> Optional[UserRecord]:
+    def get(self, username: str) -> UserRecord | None:
         """Fetch a user by username (case-insensitive)."""
         key = (username or "").lower()
         return self._by_username.get(key)
@@ -90,16 +97,13 @@ class UserStore:
         if norm in self._by_username:
             raise ValueError("Username already exists.")
 
-        role_value = role.value if hasattr(role, "value") else str(role).upper()
+        role_str: str = getattr(role, "value", role)
+        role_value: str = str(role_str).upper()
 
-        ci = ContactInfo(
-            name=name,
-            email=(email or ""),
-            phone_number=(phone_number or "")
-        )
-        clean_name  = ci.name
-        clean_email = ci.email         
-        clean_phone = ci.phone_number 
+        ci = ContactInfo(name=name, email=(email or ""), phone_number=(phone_number or ""))
+        clean_name = ci.name
+        clean_email = ci.email
+        clean_phone = ci.phone_number
 
         try:
             pw_serialized = password_hash.serialize()
@@ -108,19 +112,18 @@ class UserStore:
 
         rec = UserRecord(
             user_id=self._next_id,
-            username=key,  
+            username=key,
             role=role_value,
             name=clean_name,
             email=clean_email,
             phone_number=clean_phone,
             password=pw_serialized,
         )
-        
+
         self._by_username[norm] = rec
         self._next_id += 1
         self.save()
         return rec
-
 
     def update_password(self, username: str, new_hash: PasswordHash) -> None:
         """Update the password for an existing user."""
