@@ -33,7 +33,11 @@ extend-select = [
     "ANN",
     "TCH"
 ]
-ignore = ["B008"]
+ignore = [
+    "B008",     # do not perform function calls in argument defaults
+    "TRY003",   # long messages in raise — standard Python pattern, not worth custom exceptions
+    "ANN401",   # Any is sometimes necessary (decorators, serialization)
+]
 
 # Allow fixes for everything Ruff knows how to fix.
 # This is already the default, but keeping it explicit is nice.
@@ -47,3 +51,40 @@ unfixable = [
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
 "data/models.py" = ["TRY003", "TC003"]
+"tests/**" = [
+    "ANN",      # test annotations not required
+    "ARG",      # unused mock/patch arguments are expected
+    "N801",     # test class naming convention (e.g. AuthLogin_Should)
+    "N803",     # argument name casing in tests
+    "N806",     # variable name casing in tests
+    "E702",     # multiple statements on one line (compact test setup)
+    "RUF003",   # ambiguous unicode in comments
+]
+"src/core/engine.py" = ["T201"]  # CLI app, print is intentional
+
+# ── Pyright (strict) ──────────────────────────────────────────────
+[tool.pyright]
+pythonVersion = "3.13"
+typeCheckingMode = "strict"
+reportMissingTypeStubs = false          # don't block on third-party stubs
+reportPrivateUsage = "warning"          # allow tests to access _private members
+
+# ── Mypy (strict) ─────────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.13"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_reexport = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_untyped_decorators = false
