@@ -1,235 +1,255 @@
 # FleetFlow
 
 ![Python](https://img.shields.io/badge/Python-3.13-blue?logo=python&logoColor=white)
-![Architecture](https://img.shields.io/badge/Architecture-Console%20%2B%20Domain%20Core-6A5ACD)
-![Testing](https://img.shields.io/badge/Tests-unittest-blue)
-![Status](https://img.shields.io/badge/Status-Refactor%20in%20Progress-orange)
+![Interface](https://img.shields.io/badge/Interface-CLI-0F766E)
+![Architecture](https://img.shields.io/badge/Architecture-Hexagonal%20Refactor%20In%20Progress-8B5CF6)
+![Tests](https://img.shields.io/badge/Tests-unittest-2563EB)
 
-FleetFlow is a logistics management system for handling delivery packages, routes, trucks, and customer records across major Australian hubs. The current codebase is implemented as a console-driven Python application with a modular domain core, authentication and authorization, route scheduling, truck assignment, and persistent application state, and it is being refactored into a larger backend-first platform.
+FleetFlow is a console-based logistics management app for packages, routes, trucks, customers, and user accounts across Australian hub locations. The repository has already been reorganized into a `src`-based architecture, but the running product is still a CLI application rather than an HTTP API.
 
-## Overview
+## What Exists Today
 
-This project currently follows a command-driven layered structure:
+- Interactive CLI menus with a command mode for power users
+- Package creation, lookup, removal, and route assignment
+- Route creation, lookup, removal, truck assignment, and in-progress tracking
+- Truck suitability checks based on location, range, and capacity
+- Customer records derived from package creation
+- User authentication with employee and manager roles
+- Manual save/load plus automatic state persistence after mutating commands
+- JSON-backed local persistence for users and application state
+- A large `unittest` suite covering domain, CLI commands, auth, and persistence
 
-- `commands/` handles interactive user actions and command execution
-- `core/` contains application orchestration, auth, persistence, serialization, and shared services
-- `models/` defines the core logistics domain objects
+## Current Architecture
 
-At the moment, the live application focuses on these areas:
-
-- package creation, lookup, removal, and route assignment
-- route creation, lookup, removal, scheduling, and in-progress tracking
-- truck lookup and truck-to-route assignment
-- customer records linked to delivery packages
-- user authentication, password management, and role-based authorization
-- saving and loading application state from disk
-
-The long-term goal is to evolve this system into a backend-first logistics platform with REST APIs, real-time tracking, event-driven processing, route optimization, simulation, and analytics.
-
-## Current Status
-
-This repository is currently in a refactor-and-expand phase.
-
-- live and working today: console workflows for packages, routes, trucks, customers, auth, authorization, and state persistence
-- already implemented in the domain layer: route scheduling, package-to-route validation, truck capacity/range checks, route progress tracking, and autosave/load state support
-- planned next: API layer, PostgreSQL persistence, real-time package tracking, event-driven notifications, route optimization, simulation, and analytics
-
-## Current Features
-
-- Interactive console menus and command mode
-- Delivery package creation with customer contact information
-- Delivery route creation with scheduled stops and computed arrival times
-- Suitable-route lookup for packages based on start and destination
-- Suitable-truck lookup for routes based on capacity and range
-- Truck assignment to routes
-- Package assignment to routes with validation
-- Route progress tracking based on current time
-- View flows for routes, packages, trucks, customers, and unassigned packages
-- User registration, login, logout, who-am-I, and password change flows
-- Role-based authorization for protected operations
-- Application state save/load support with autosave behavior
-- Extensive automated unit test coverage
-
-## Tech Stack
-
-- Python 3.13
-- unittest
-- Ruff
-- JSON-based local persistence for application state and users
-
-## Project Structure
+The codebase is partway through a hexagonal/backend-oriented refactor. Some folders are fully in use today, while others are scaffolding for future work.
 
 ```text
 FleetFlow/
-|-- data/               # persisted application state and local data files
-|-- images/             # project assets
+|-- data/                         # persisted JSON files such as state and users
+|-- images/                       # repo assets
 |-- src/
-|   |-- commands/       # command handlers for console workflows
-|   |-- core/           # auth, orchestration, persistence, serialization, helpers
-|   `-- models/         # logistics domain models
-|-- tests/              # automated unit tests
-|-- main.py             # application entrypoint
-`-- pyproject.toml      # tooling configuration
+|   |-- adapters/
+|   |   |-- driven/
+|   |   |   |-- persistence/json/ # JSON file persistence
+|   |   |   `-- security/         # password hashing
+|   |   `-- driving/
+|   |       |-- cli/              # menus, command factory, CLI commands
+|   |       `-- http/             # placeholder for future HTTP layer
+|   |-- application/
+|   |   |-- services/             # auth and authorization services
+|   |   |-- dto/                  # placeholder
+|   |   |-- results/              # placeholder
+|   |   `-- use_cases/            # placeholder
+|   |-- composition/              # composition root placeholder
+|   |-- core/                     # current application orchestration/state
+|   |-- domain/
+|   |   |-- entities/             # packages, routes, trucks, users, customers
+|   |   |-- enums/
+|   |   |-- services/             # map and vehicle manager
+|   |   `-- value_objects/
+|   `-- ports/                    # placeholder ports
+|-- tests/
+|-- main.py
+`-- pyproject.toml
 ```
 
-## Architecture
-
-The application currently follows this high-level flow:
+In practice, the current runtime flow is:
 
 ```text
-Console Input
-  -> Command
-  -> Application/Core Services
-  -> Domain Models
-  -> JSON Persistence
+CLI Menu / Command Mode
+  -> CLI Command
+  -> ApplicationData + Auth Services
+  -> Domain Entities / Services
+  -> JSON Persistence in data/
 ```
 
-Each layer has a focused responsibility:
+## Domain Snapshot
 
-- commands parse user input and dispatch actions
-- core services coordinate business operations, authentication, authorization, and persistence
-- models represent packages, routes, trucks, users, customers, and map logic
-- persistence stores users and application state locally
+FleetFlow currently models:
 
-This structure is intended to be refactored into a backend-oriented flow later:
+- `DeliveryPackage`
+- `DeliveryRoute`
+- `Truck`
+- `Customer`
+- `User`, `Employee`, and `Manager`
+- `ContactInfo`
+- `Map` distance data for the supported hub codes: `SYD`, `MEL`, `ADL`, `ASP`, `BRI`, `DAR`, `PER`
 
-```text
-HTTP Request
-  -> Router
-  -> Service
-  -> Repository
-  -> PostgreSQL
-```
-
-## Domain Model
-
-The current system includes core domain objects for:
-
-- delivery packages
-- delivery routes
-- trucks
-- customers
-- users, employees, and managers
-- contact information
-- map and route-distance logic
-
-The application currently exposes these through the console interface, while the next phase will move them behind backend services and API endpoints.
-
-## Getting Started
+## Running The App
 
 ### Prerequisites
 
-- Python 3.13+
-- `pip`
+- Python 3.13
 
-### 1. Clone the repository
+### Environment note
 
-```bash
-git clone <your-repository-url>
-cd FleetFlow
-```
-
-### 2. Create and activate a virtual environment
-
-```bash
-python -m venv .venv
-```
+The repository is not packaged yet, and current imports expect `src` to be on `PYTHONPATH`.
 
 Windows PowerShell:
 
 ```powershell
-.venv\Scripts\Activate.ps1
+$env:PYTHONPATH = "src"
+python main.py
 ```
 
 macOS / Linux:
 
 ```bash
-source .venv/bin/activate
-```
-
-### 3. Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 4. Run the application
-
-```bash
+export PYTHONPATH=src
 python main.py
 ```
 
-### 5. Run tests
-```bash
-python -m unittest discover
+If you want a virtual environment:
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+$env:PYTHONPATH = "src"
+python main.py
 ```
 
-## Usage Surface
+There is currently no `requirements.txt`; the app itself uses the Python standard library at runtime.
 
-### Packages
+## Default Login
 
-- create package
-- remove package
-- assign package to route
-- find suitable routes for a package
-- view package details
-- view all packages
-- view unassigned packages
+On startup, FleetFlow bootstraps a manager account if one does not already exist:
 
-### Routes
+- Username: `admin`
+- Password: `ChangeMe123!`
 
-- create route
-- remove route
-- view route details
-- view all routes
-- assign truck to route
-- find suitable trucks for a route
-- view routes in progress
+You can then log in from the menu or command mode and change the password.
 
-### Trucks
+## CLI Surface
 
-- view all trucks
+### Menu-driven flows
 
-### Auth
+The main menu currently exposes:
 
-- register user
-- login
-- logout
-- view current user
-- change password
+- Packages
+- Routes
+- Trucks
+- State
+- Login, logout, who-am-I, registration, and password change
+- Command mode via `cmd`
 
-### State Management
+### Command mode
 
-- save application state
-- load application state
+The command registry currently supports these commands:
+
+- `createpackage`
+- `removepackage`
+- `assignpackagetoroute`
+- `findsuitableroutesforpackage`
+- `viewpackage`
+- `viewallpackages`
+- `viewunassignedpackages`
+- `createroute`
+- `removeroute`
+- `viewroute`
+- `viewallroutes`
+- `assigntrucktoroute`
+- `findsuitabletrucksforroute`
+- `viewroutesinprogress`
+- `viewalltrucks`
+- `viewallcustomers`
+- `login`
+- `logout`
+- `whoami`
+- `registeruser`
+- `changepassword`
+- `save`
+- `load`
+
+Examples:
+
+```text
+createpackage SYD MEL 10 "Jane Doe" jane@example.com 0412345678
+createroute SYD MEL 2025-09-12 06:00
+assignpackagetoroute 1 4 5 6
+assigntrucktoroute 1001 1
+findsuitableroutesforpackage 4
+findsuitabletrucksforroute 1
+viewroute 1
+viewallcustomers
+save state.json
+load state.json
+```
+
+## Persistence
+
+FleetFlow stores JSON files under `data/`.
+
+- `data/users.json`: user store
+- `data/state.json`: default application state autosave target
+
+Notes:
+
+- Mutating commands trigger an autosave to `data/state.json`
+- Manual `save` and `load` accept either bare filenames or paths
+- Bare filenames are resolved into `data/`
+
+## Authorization
+
+Two roles exist today:
+
+- `EMPLOYEE`
+- `MANAGER`
+
+Managers have full access. Employees can create and work with routes/packages but do not have full administrative visibility and state-management access.
 
 ## Testing
 
-Run tests with:
+The test files use the `*_test.py` naming convention, so plain `python -m unittest discover` will not find them.
+
+Use:
+
+Windows PowerShell:
+
+```powershell
+$env:PYTHONPATH = "src"
+python -m unittest discover -s tests -p "*_test.py"
+```
+
+macOS / Linux:
 
 ```bash
-PYTHONPATH=. unittest
+PYTHONPATH=src python -m unittest discover -s tests -p "*_test.py"
 ```
+
+## Tooling
+
+Static analysis configuration lives in `pyproject.toml` for:
+
+- Ruff
+- Pyright
+- Mypy
 
 ## Development Notes
 
-- The current application is console-first with a strong domain core.
-- The domain logic is structured to support a transition into a backend architecture.
-- The existing test suite provides a safety net for refactoring.
-- A key improvement is enabling unittest to run without manually setting PYTHONPATH.
-- The next step is replacing the command layer with an API layer while preserving domain logic.
+- The current product is still the CLI application in `src/adapters/driving/cli/`
+- The repository structure is ahead of the runtime architecture: folders such as `ports/`, `application/use_cases/`, `application/dto/`, `application/results/`, `composition/`, and `adapters/driving/http/` exist as refactor scaffolding
+- `src/core/application_data.py` is still the main orchestration point for business operations, state management, and persistence coordination
+- Persistence is currently JSON-based and local-first, with autosave and explicit save/load commands
+- Authentication and authorization are already split into application services, which is a good foundation for moving the same rules behind an API later
+- The project is not packaged yet, so both runtime and tests currently rely on `PYTHONPATH=src`
+- The automated test suite provides a solid safety net for continuing the refactor
+
+## Status
+
+This repository is in an active transition:
+
+- The CLI app is the working product today
+- The `src` layout already reflects a more layered architecture
+- Several directories such as `application/use_cases`, `ports`, `composition`, and `adapters/driving/http` are present as scaffolding for future expansion
 
 ## Roadmap
 
-- refactor into a FastAPI backend
-- move persistence to PostgreSQL
-- introduce service and repository layers
-- add shipment lifecycle tracking
-- add real-time tracking
-- add event-driven notifications
-- add route optimization
-- add simulation engine
-- add analytics and dashboard
+- Move the current CLI-centered orchestration out of `src/core/application_data.py` into clearer application use cases and ports
+- Add a real HTTP entry point under `src/adapters/driving/http/`
+- Replace or complement JSON persistence with database-backed repositories
+- Preserve the existing domain model while exposing workflows through backend services instead of CLI-only commands
+- Improve packaging/import ergonomics so the project can run and test without manually setting `PYTHONPATH`
+- Continue filling in the placeholder layers that already exist in `src/application/`, `src/ports/`, and `src/composition/`
 
 ## License
 
