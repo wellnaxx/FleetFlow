@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import Mock
 
-from src.commands.remove_package import RemovePackage
+from adapters.driving.cli.commands.remove_package import RemovePackage
 
 
 class TestRemovePackage_Should(unittest.TestCase):
@@ -24,7 +24,3 @@ class TestRemovePackage_Should(unittest.TestCase):
 
         result = RemovePackage(["42"], app_data, auth).execute()
         self.assertEqual(result, "Package 42 removed.")
-
-
-
-

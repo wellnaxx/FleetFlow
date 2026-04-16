@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import Mock
 
-from src.commands.view_all_packages import ViewAllPackages
+from adapters.driving.cli.commands.view_all_packages import ViewAllPackages
 
 
 class TestViewAllPackages_Should(unittest.TestCase):

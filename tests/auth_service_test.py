@@ -2,7 +2,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from src.core.auth_service import AuthService
+from application.services.auth_service import AuthService
 
 
 class AuthService_Should(unittest.TestCase):
@@ -11,8 +11,8 @@ class AuthService_Should(unittest.TestCase):
         svc = AuthService(user_store=store)  # type: ignore[reportArgumentType]
         return svc, store
 
-    @patch("src.core.auth_service.hash_password")
-    @patch("src.core.auth_service.ContactInfo")
+    @patch("application.services.auth_service.hash_password")
+    @patch("application.services.auth_service.ContactInfo")
     def test_register_user_passes_cleaned_fields_and_hashed_password(
         self, ContactInfo: MagicMock, hash_password: MagicMock
     ) -> None:
@@ -44,11 +44,11 @@ class AuthService_Should(unittest.TestCase):
             password_hash="HASHED!",
         )
 
-    @patch("src.core.auth_service.Employee")
-    @patch("src.core.auth_service.Manager")
-    @patch("src.core.auth_service.verify_password", return_value=True)
-    @patch("src.core.auth_service.PasswordHash.parse", return_value=object())
-    @patch("src.core.auth_service.ContactInfo")
+    @patch("application.services.auth_service.Employee")
+    @patch("application.services.auth_service.Manager")
+    @patch("application.services.auth_service.verify_password", return_value=True)
+    @patch("application.services.auth_service.PasswordHash.parse", return_value=object())
+    @patch("application.services.auth_service.ContactInfo")
     def test_login_success_manager_and_sets_last_username(
         self,
         ContactInfo: MagicMock,
@@ -82,10 +82,10 @@ class AuthService_Should(unittest.TestCase):
         self.assertEqual(user, Manager.return_value)
         self.assertEqual(svc.last_username, "boss")
 
-    @patch("src.core.auth_service.Employee")
-    @patch("src.core.auth_service.verify_password", return_value=True)
-    @patch("src.core.auth_service.PasswordHash.parse", return_value=object())
-    @patch("src.core.auth_service.ContactInfo")
+    @patch("application.services.auth_service.Employee")
+    @patch("application.services.auth_service.verify_password", return_value=True)
+    @patch("application.services.auth_service.PasswordHash.parse", return_value=object())
+    @patch("application.services.auth_service.ContactInfo")
     def test_login_success_employee(
         self, ContactInfo: MagicMock, _parse: MagicMock, _verify: MagicMock, Employee: MagicMock
     ) -> None:
@@ -108,8 +108,8 @@ class AuthService_Should(unittest.TestCase):
         self.assertEqual(user, Employee.return_value)
         self.assertEqual(svc.last_username, "alice")
 
-    @patch("src.core.auth_service.verify_password", return_value=False)
-    @patch("src.core.auth_service.PasswordHash.parse", return_value=object())
+    @patch("application.services.auth_service.verify_password", return_value=False)
+    @patch("application.services.auth_service.PasswordHash.parse", return_value=object())
     def test_login_wrong_password_raises_and_does_not_set_state(
         self, _parse: MagicMock, _verify: MagicMock
     ) -> None:
@@ -145,9 +145,9 @@ class AuthService_Should(unittest.TestCase):
         self.assertIsNone(svc.current_user)
         self.assertIsNone(svc.last_username)
 
-    @patch("src.core.auth_service.hash_password")
-    @patch("src.core.auth_service.verify_password")
-    @patch("src.core.auth_service.PasswordHash.parse", return_value=object())
+    @patch("application.services.auth_service.hash_password")
+    @patch("application.services.auth_service.verify_password")
+    @patch("application.services.auth_service.PasswordHash.parse", return_value=object())
     def test_change_password_happy_path(
         self, _parse: MagicMock, verify_password: MagicMock, hash_password: MagicMock
     ) -> None:
@@ -165,8 +165,8 @@ class AuthService_Should(unittest.TestCase):
         self.assertEqual(rec.password, "NEWHASH")
         store.save.assert_called_once()
 
-    @patch("src.core.auth_service.verify_password")
-    @patch("src.core.auth_service.PasswordHash.parse", return_value=object())
+    @patch("application.services.auth_service.verify_password")
+    @patch("application.services.auth_service.PasswordHash.parse", return_value=object())
     def test_change_password_unknown_user_raises(self, _parse: MagicMock, verify_password: MagicMock) -> None:
         svc, store = self.make_service()
         store.get.return_value = None
@@ -175,8 +175,8 @@ class AuthService_Should(unittest.TestCase):
         self.assertIn("User not found.", str(ctx.exception))
         verify_password.assert_not_called()
 
-    @patch("src.core.auth_service.verify_password")
-    @patch("src.core.auth_service.PasswordHash.parse", return_value=object())
+    @patch("application.services.auth_service.verify_password")
+    @patch("application.services.auth_service.PasswordHash.parse", return_value=object())
     def test_change_password_old_incorrect_raises(self, _parse: MagicMock, verify_password: MagicMock) -> None:
         svc, store = self.make_service()
         store.get.return_value = SimpleNamespace(password="HASH")
@@ -185,8 +185,8 @@ class AuthService_Should(unittest.TestCase):
             svc.change_password("u", "bad", "New123456")
         self.assertIn("Old password incorrect.", str(ctx.exception))
 
-    @patch("src.core.auth_service.verify_password")
-    @patch("src.core.auth_service.PasswordHash.parse", return_value=object())
+    @patch("application.services.auth_service.verify_password")
+    @patch("application.services.auth_service.PasswordHash.parse", return_value=object())
     def test_change_password_new_same_as_old_raises(
         self, _parse: MagicMock, verify_password: MagicMock
     ) -> None:
@@ -198,7 +198,7 @@ class AuthService_Should(unittest.TestCase):
             svc.change_password("u", "Old123456", "Old123456")
         self.assertIn("New password must be different from the old one.", str(ctx.exception))
 
-    @patch("src.core.auth_service.hash_password")
+    @patch("application.services.auth_service.hash_password")
     def test_reset_password_enforces_min_length_and_saves(self, hash_password: MagicMock) -> None:
         svc, store = self.make_service()
         rec = SimpleNamespace(password="OLD")

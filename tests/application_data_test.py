@@ -5,9 +5,9 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, mock_open, patch
 
+from domain.enums.auth import Role
+from domain.enums.item_status import ItemStatus
 from src.core.application_data import ApplicationData
-from src.models.auth import Role
-from src.models.item_status import ItemStatus
 
 # --- Minimal fakes for ContactInfo & Customer used inside _find_or_create_customer ---
 
@@ -810,9 +810,9 @@ class Characterization_RBAC_Should(unittest.TestCase):
     """Protected operations must respect role permissions."""
 
     def _app_for_role(self, role: Role) -> ApplicationData:
-        from src.core.authz import AuthorizationService
-        from src.models.users.employee import Employee
-        from src.models.users.manager import Manager
+        from application.services.authorization import AuthorizationService
+        from domain.entities.users.employee import Employee
+        from domain.entities.users.manager import Manager
 
         user = Employee("Test") if role == Role.EMPLOYEE else Manager("Test")
         app = ApplicationData(current_user=user)

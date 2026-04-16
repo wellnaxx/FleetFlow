@@ -1,8 +1,8 @@
 import unittest
 
-from src.models.contact_info import ContactInfo
-from src.models.customer import Customer
-from src.models.delivery_package import DeliveryPackage
+from domain.entities.customer import Customer
+from domain.entities.delivery_package import DeliveryPackage
+from domain.value_objects.contact_info import ContactInfo
 
 
 class TestDeliveryPackage_Should(unittest.TestCase):

@@ -1,8 +1,8 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from src.commands.auth_change_password import AuthChangePassword
-from src.models.auth import Permission
+from adapters.driving.cli.commands.auth_change_password import AuthChangePassword
+from domain.enums.auth import Permission
 
 
 class AuthChangePassword_Should(unittest.TestCase):
@@ -15,7 +15,7 @@ class AuthChangePassword_Should(unittest.TestCase):
         cmd._auth = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
-    @patch("src.commands.auth_change_password.getpass.getpass")
+    @patch("adapters.driving.cli.commands.auth_change_password.getpass.getpass")
     def test_manager_success_resets_password_and_lowercases_target(self, mock_gp: MagicMock) -> None:
         # Arrange
         cmd = self.make_cmd(params=["  Alice  "])
@@ -31,7 +31,7 @@ class AuthChangePassword_Should(unittest.TestCase):
         cmd._auth.reset_password.assert_called_once_with("alice", "SuperGood123")  # type: ignore[reportUnknownMemberType]
         self.assertEqual(result, "Password reset for 'alice'.")
 
-    @patch("src.commands.auth_change_password.getpass.getpass")
+    @patch("adapters.driving.cli.commands.auth_change_password.getpass.getpass")
     def test_manager_missing_permission_raises_and_does_not_call_reset(self, mock_gp: MagicMock) -> None:
         cmd = self.make_cmd(params=["bob"])
         cmd._app_data.authz.has.return_value = False  # type: ignore[reportAttributeAccessIssue]
@@ -42,7 +42,7 @@ class AuthChangePassword_Should(unittest.TestCase):
         cmd._auth.reset_password.assert_not_called()  # type: ignore[reportUnknownMemberType]
         mock_gp.assert_not_called()
 
-    @patch("src.commands.auth_change_password.getpass.getpass")
+    @patch("adapters.driving.cli.commands.auth_change_password.getpass.getpass")
     def test_manager_mismatched_passwords_raises(self, mock_gp: MagicMock) -> None:
         cmd = self.make_cmd(params=["carol"])
         cmd._app_data.authz.has.return_value = True  # type: ignore[reportAttributeAccessIssue]
@@ -53,7 +53,7 @@ class AuthChangePassword_Should(unittest.TestCase):
         self.assertIn("Passwords do not match", str(ctx.exception))
         cmd._auth.reset_password.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
-    @patch("src.commands.auth_change_password.getpass.getpass")
+    @patch("adapters.driving.cli.commands.auth_change_password.getpass.getpass")
     def test_manager_too_short_password_raises(self, mock_gp: MagicMock) -> None:
         cmd = self.make_cmd(params=["dave"])
         cmd._app_data.authz.has.return_value = True  # type: ignore[reportAttributeAccessIssue]
@@ -81,7 +81,7 @@ class AuthChangePassword_Should(unittest.TestCase):
             cmd.execute()
         self.assertIn("No login username recorded", str(ctx.exception))
 
-    @patch("src.commands.auth_change_password.getpass.getpass")
+    @patch("adapters.driving.cli.commands.auth_change_password.getpass.getpass")
     def test_selfservice_mismatched_passwords_raises(self, mock_gp: MagicMock) -> None:
         cmd = self.make_cmd(params=[])
         cmd._auth.current_user = MagicMock()  # type: ignore[reportAttributeAccessIssue]
@@ -93,7 +93,7 @@ class AuthChangePassword_Should(unittest.TestCase):
         self.assertIn("Passwords do not match", str(ctx.exception))
         cmd._auth.change_password.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
-    @patch("src.commands.auth_change_password.getpass.getpass")
+    @patch("adapters.driving.cli.commands.auth_change_password.getpass.getpass")
     def test_selfservice_too_short_password_raises(self, mock_gp: MagicMock) -> None:
         cmd = self.make_cmd(params=[])
         cmd._auth.current_user = MagicMock()  # type: ignore[reportAttributeAccessIssue]
@@ -105,7 +105,7 @@ class AuthChangePassword_Should(unittest.TestCase):
         self.assertIn("at least 8", str(ctx.exception))
         cmd._auth.change_password.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
-    @patch("src.commands.auth_change_password.getpass.getpass")
+    @patch("adapters.driving.cli.commands.auth_change_password.getpass.getpass")
     def test_selfservice_new_same_as_old_raises(self, mock_gp: MagicMock) -> None:
         cmd = self.make_cmd(params=[])
         cmd._auth.current_user = MagicMock()  # type: ignore[reportAttributeAccessIssue]
@@ -117,7 +117,7 @@ class AuthChangePassword_Should(unittest.TestCase):
         self.assertIn("must be different", str(ctx.exception))
         cmd._auth.change_password.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
-    @patch("src.commands.auth_change_password.getpass.getpass")
+    @patch("adapters.driving.cli.commands.auth_change_password.getpass.getpass")
     def test_selfservice_success_calls_change_password(self, mock_gp: MagicMock) -> None:
         cmd = self.make_cmd(params=[])
         cmd._auth.current_user = MagicMock()  # type: ignore[reportAttributeAccessIssue]

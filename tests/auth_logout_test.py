@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import MagicMock
 
-from src.commands.auth_logout import AuthLogout
+from adapters.driving.cli.commands.auth_logout import AuthLogout
 
 
 class AuthLogout_Should(unittest.TestCase):

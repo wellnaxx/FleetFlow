@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 # Adjust import path if your module name differs
-from src.commands.find_suitable_trucks_for_route import FindSuitableTrucksForRoute
+from adapters.driving.cli.commands.find_suitable_trucks_for_route import FindSuitableTrucksForRoute
 
 
 class FindSuitableTrucksForRoute_Tests(unittest.TestCase):
@@ -13,8 +13,8 @@ class FindSuitableTrucksForRoute_Tests(unittest.TestCase):
         cmd._app_data = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
-    @patch("src.commands.find_suitable_trucks_for_route.validate_params_exact")
-    @patch("src.commands.find_suitable_trucks_for_route.try_parse_int")
+    @patch("adapters.driving.cli.commands.find_suitable_trucks_for_route.validate_params_exact")
+    @patch("adapters.driving.cli.commands.find_suitable_trucks_for_route.try_parse_int")
     def test_success_formats_table(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
         mock_parse.return_value = 15
         cmd = self.make_cmd(["15"])
@@ -39,8 +39,8 @@ class FindSuitableTrucksForRoute_Tests(unittest.TestCase):
         self.assertIn("1 | Alpha | 10.0 kg | 500 km | SYD", lines[1])
         self.assertIn("2 | Bravo | 7.5 kg | 350 km | MEL", lines[2])
 
-    @patch("src.commands.find_suitable_trucks_for_route.validate_params_exact")
-    @patch("src.commands.find_suitable_trucks_for_route.try_parse_int")
+    @patch("adapters.driving.cli.commands.find_suitable_trucks_for_route.validate_params_exact")
+    @patch("adapters.driving.cli.commands.find_suitable_trucks_for_route.try_parse_int")
     def test_no_trucks_returns_friendly_message(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
         mock_parse.return_value = 9
         cmd = self.make_cmd(["9"])
@@ -50,8 +50,8 @@ class FindSuitableTrucksForRoute_Tests(unittest.TestCase):
         out = cmd.execute()
         self.assertEqual(out, "No suitable trucks found.")
 
-    @patch("src.commands.find_suitable_trucks_for_route.validate_params_exact")
-    @patch("src.commands.find_suitable_trucks_for_route.try_parse_int")
+    @patch("adapters.driving.cli.commands.find_suitable_trucks_for_route.validate_params_exact")
+    @patch("adapters.driving.cli.commands.find_suitable_trucks_for_route.try_parse_int")
     def test_missing_route_raises(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
         mock_parse.return_value = 77
         cmd = self.make_cmd(["77"])
@@ -62,8 +62,8 @@ class FindSuitableTrucksForRoute_Tests(unittest.TestCase):
         self.assertIn("Route with ID 77 not found", str(ctx.exception))
         cmd._app_data.find_suitable_trucks_for_route.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
-    @patch("src.commands.find_suitable_trucks_for_route.validate_params_exact")
-    @patch("src.commands.find_suitable_trucks_for_route.try_parse_int")
+    @patch("adapters.driving.cli.commands.find_suitable_trucks_for_route.validate_params_exact")
+    @patch("adapters.driving.cli.commands.find_suitable_trucks_for_route.try_parse_int")
     def test_parse_failure_bubbles_and_stops(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
         mock_parse.side_effect = ValueError("not an int")
         cmd = self.make_cmd(["x"])
@@ -76,16 +76,16 @@ class FindSuitableTrucksForRoute_Tests(unittest.TestCase):
     def test_validate_params_exact_called_with_one(self) -> None:
         cmd = self.make_cmd(["123"])
         with (
-            patch("src.commands.find_suitable_trucks_for_route.validate_params_exact") as mock_validate,
-            patch("src.commands.find_suitable_trucks_for_route.try_parse_int", return_value=123),
+            patch("adapters.driving.cli.commands.find_suitable_trucks_for_route.validate_params_exact") as mock_validate,
+            patch("adapters.driving.cli.commands.find_suitable_trucks_for_route.try_parse_int", return_value=123),
             patch.object(cmd._app_data, "find_route", return_value=SimpleNamespace(route_id=123)),  # type: ignore[reportPrivateUsage]
             patch.object(cmd._app_data, "find_suitable_trucks_for_route", return_value=[]),  # type: ignore[reportPrivateUsage]
         ):
             _ = cmd.execute()
             mock_validate.assert_called_once_with(["123"], 1)
 
-    @patch("src.commands.find_suitable_trucks_for_route.validate_params_exact")
-    @patch("src.commands.find_suitable_trucks_for_route.try_parse_int")
+    @patch("adapters.driving.cli.commands.find_suitable_trucks_for_route.validate_params_exact")
+    @patch("adapters.driving.cli.commands.find_suitable_trucks_for_route.try_parse_int")
     def test_downstream_error_propagates(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
         mock_parse.return_value = 5
         cmd = self.make_cmd(["5"])

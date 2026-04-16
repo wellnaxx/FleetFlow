@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock
 
-from src.commands.load_state import LoadState
+from adapters.driving.cli.commands.load_state import LoadState
 
 
 class LoadState_Tests(unittest.TestCase):

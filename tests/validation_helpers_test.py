@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime
 
-from src.commands.validation_helpers import (
+from adapters.driving.cli.commands.validation_helpers import (
     parse_departure_from_tail,
     try_parse_float,
     try_parse_int,
@@ -104,4 +104,3 @@ class ParseDepartureFromTail_Should(unittest.TestCase):
         locs, dt = parse_departure_from_tail(["SYD", "MEL", "tomorrow"])
         self.assertEqual(locs, ["SYD", "MEL", "tomorrow"])
         self.assertIsNone(dt)
-

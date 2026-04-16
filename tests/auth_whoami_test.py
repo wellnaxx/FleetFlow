@@ -2,7 +2,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from src.commands.auth_whoami import AuthWhoAmI
+from adapters.driving.cli.commands.auth_whoami import AuthWhoAmI
 
 
 class AuthWhoAmI_Tests(unittest.TestCase):

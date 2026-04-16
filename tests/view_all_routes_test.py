@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import Mock
 
-from src.commands.view_all_routes import ViewAllRoutes
+from adapters.driving.cli.commands.view_all_routes import ViewAllRoutes
 
 
 class TestViewAllRoutes_Should(unittest.TestCase):

@@ -2,7 +2,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, call, patch
 
-from src.commands.create_package import CreatePackage
+from adapters.driving.cli.commands.create_package import CreatePackage
 
 
 class CreatePackage_Tests(unittest.TestCase):
@@ -15,9 +15,9 @@ class CreatePackage_Tests(unittest.TestCase):
     def test_mutates_state_true(self) -> None:
         self.assertTrue(CreatePackage.mutates_state)
 
-    @patch("src.commands.create_package.Map.is_valid_location", return_value=True)
-    @patch("src.commands.create_package.validate_params_count")
-    @patch("src.commands.create_package.try_parse_float")
+    @patch("adapters.driving.cli.commands.create_package.Map.is_valid_location", return_value=True)
+    @patch("adapters.driving.cli.commands.create_package.validate_params_count")
+    @patch("adapters.driving.cli.commands.create_package.try_parse_float")
     def test_success_minimal_required_params(
         self, mock_parse_float: MagicMock, mock_validate: MagicMock, mock_is_valid: MagicMock
     ) -> None:
@@ -38,9 +38,9 @@ class CreatePackage_Tests(unittest.TestCase):
         cmd._app_data.create_package.assert_called_once_with("A1", "B2", 12.5, "Alice", "", "")  # type: ignore[reportUnknownMemberType]
         self.assertEqual(result, "Package 123 was created for customer Alice (ID: 55) successfully.")
 
-    @patch("src.commands.create_package.Map.is_valid_location", return_value=True)
-    @patch("src.commands.create_package.validate_params_count")
-    @patch("src.commands.create_package.try_parse_float")
+    @patch("adapters.driving.cli.commands.create_package.Map.is_valid_location", return_value=True)
+    @patch("adapters.driving.cli.commands.create_package.validate_params_count")
+    @patch("adapters.driving.cli.commands.create_package.try_parse_float")
     def test_success_with_all_params(
         self, mock_parse_float: MagicMock, mock_validate: MagicMock, mock_is_valid: MagicMock
     ) -> None:
@@ -57,8 +57,8 @@ class CreatePackage_Tests(unittest.TestCase):
         cmd._app_data.create_package.assert_called_once_with("S1", "E9", 7.0, "Bob", "bob@ex.com", "0412345678")  # type: ignore[reportUnknownMemberType]
         self.assertEqual(result, "Package 999 was created for customer Bob (ID: 1) successfully.")
 
-    @patch("src.commands.create_package.Map.is_valid_location")
-    @patch("src.commands.create_package.validate_params_count")
+    @patch("adapters.driving.cli.commands.create_package.Map.is_valid_location")
+    @patch("adapters.driving.cli.commands.create_package.validate_params_count")
     def test_invalid_start_location_raises(self, mock_validate: MagicMock, mock_is_valid: MagicMock) -> None:
         # First call (start) -> False
         mock_is_valid.side_effect = [False, True]
@@ -73,9 +73,9 @@ class CreatePackage_Tests(unittest.TestCase):
             hasattr(cmd._app_data.create_package, "called") and cmd._app_data.create_package.called  # type: ignore[reportAttributeAccessIssue]
         )
 
-    @patch("src.commands.create_package.Map.is_valid_location", return_value=True)
-    @patch("src.commands.create_package.validate_params_count")
-    @patch("src.commands.create_package.try_parse_float")
+    @patch("adapters.driving.cli.commands.create_package.Map.is_valid_location", return_value=True)
+    @patch("adapters.driving.cli.commands.create_package.validate_params_count")
+    @patch("adapters.driving.cli.commands.create_package.try_parse_float")
     def test_weight_parse_failure_propagates(
         self, mock_parse_float: MagicMock, mock_validate: MagicMock, mock_is_valid: MagicMock
     ) -> None:
@@ -88,9 +88,9 @@ class CreatePackage_Tests(unittest.TestCase):
         self.assertIn("not a number", str(ctx.exception))
         cmd._app_data.create_package.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
-    @patch("src.commands.create_package.Map.is_valid_location", return_value=True)
-    @patch("src.commands.create_package.validate_params_count")
-    @patch("src.commands.create_package.try_parse_float")
+    @patch("adapters.driving.cli.commands.create_package.Map.is_valid_location", return_value=True)
+    @patch("adapters.driving.cli.commands.create_package.validate_params_count")
+    @patch("adapters.driving.cli.commands.create_package.try_parse_float")
     def test_downstream_create_package_error_propagates(
         self, mock_parse_float: MagicMock, mock_validate: MagicMock, mock_is_valid: MagicMock
     ) -> None:
@@ -104,9 +104,9 @@ class CreatePackage_Tests(unittest.TestCase):
         self.assertIn("db error", str(ctx.exception))
         cmd._app_data.create_package.assert_called_once_with("A1", "B2", 2.5, "Alice", "", "")  # type: ignore[reportUnknownMemberType]
 
-    @patch("src.commands.create_package.Map.is_valid_location", return_value=True)
-    @patch("src.commands.create_package.validate_params_count")
-    @patch("src.commands.create_package.try_parse_float")
+    @patch("adapters.driving.cli.commands.create_package.Map.is_valid_location", return_value=True)
+    @patch("adapters.driving.cli.commands.create_package.validate_params_count")
+    @patch("adapters.driving.cli.commands.create_package.try_parse_float")
     def test_validate_called_with_min_max(
         self, mock_parse_float: MagicMock, mock_validate: MagicMock, mock_is_valid: MagicMock
     ) -> None:
@@ -118,9 +118,9 @@ class CreatePackage_Tests(unittest.TestCase):
 
         mock_validate.assert_called_once_with(params, 4, 6)
 
-    @patch("src.commands.create_package.Map.is_valid_location", return_value=True)
-    @patch("src.commands.create_package.validate_params_count")
-    @patch("src.commands.create_package.try_parse_float")
+    @patch("adapters.driving.cli.commands.create_package.Map.is_valid_location", return_value=True)
+    @patch("adapters.driving.cli.commands.create_package.validate_params_count")
+    @patch("adapters.driving.cli.commands.create_package.try_parse_float")
     def test_optional_email_phone_default_to_empty(
         self, mock_parse_float: MagicMock, mock_validate: MagicMock, mock_is_valid: MagicMock
     ) -> None:

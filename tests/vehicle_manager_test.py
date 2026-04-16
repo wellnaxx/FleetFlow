@@ -4,11 +4,11 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
-from src.core.vehicle_manager import VehicleManager
+from domain.services.vehicle_manager import VehicleManager
 
 
 class VehicleManager_Should(unittest.TestCase):
-    @patch("src.core.vehicle_manager.Map.get_locations", return_value=["L1", "L2", "L3"])
+    @patch("domain.services.vehicle_manager.Map.get_locations", return_value=["L1", "L2", "L3"])
     def test_init_builds_fleet_and_disperses_round_robin(self, _get_locs: Any) -> None:
         vm = VehicleManager()
         # Fleet sizes per constructor: 10 + 15 + 15 = 40
@@ -28,7 +28,7 @@ class VehicleManager_Should(unittest.TestCase):
         # All trucks have one of the known locations
         self.assertTrue(all(t.current_location in {"L1", "L2", "L3"} for t in vm.vehicles))
 
-    @patch("src.core.vehicle_manager.Map.get_locations", return_value=["A", "B"])
+    @patch("domain.services.vehicle_manager.Map.get_locations", return_value=["A", "B"])
     def test_list_fleet_returns_copy_and_find_by_id(self, _get_locs: Any) -> None:
         vm = VehicleManager()
         fleet1 = vm.list_fleet()

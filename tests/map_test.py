@@ -1,6 +1,6 @@
 import unittest
 
-from src.models.map import Map
+from domain.services.map import Map
 
 
 class TestMap_Should(unittest.TestCase):

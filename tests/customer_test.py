@@ -1,7 +1,7 @@
 import unittest
 
-from src.models.contact_info import ContactInfo
-from src.models.customer import Customer
+from domain.entities.customer import Customer
+from domain.value_objects.contact_info import ContactInfo
 
 
 class _FakePackage:

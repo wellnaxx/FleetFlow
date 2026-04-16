@@ -1,7 +1,7 @@
 import unittest
 from types import SimpleNamespace
 
-from src.commands.base_command.base_command import BaseCommand
+from adapters.driving.cli.commands.base_command.base_command import BaseCommand
 
 
 class ConcreteCommand(BaseCommand):
