@@ -5,24 +5,24 @@ import tempfile
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from src.core.auth_service import AuthService
-from src.core.authz import AuthorizationService, requires, requires_all
-from src.core.paths import resolve_data_path
-from src.core.serialization import dt_from_str, dt_to_str
-from src.core.vehicle_manager import VehicleManager
-from src.models.auth import Permission, Role
-from src.models.contact_info import ContactInfo
-from src.models.customer import Customer
-from src.models.delivery_package import DeliveryPackage
-from src.models.delivery_route import DeliveryRoute, RoutePosition
-from src.models.item_status import ItemStatus
-from src.models.map import Map
-from src.models.truck import Truck
-from src.models.users.user import User
+from adapters.driven.persistence.json.paths import resolve_data_path
+from adapters.driven.persistence.json.serialization import dt_from_str, dt_to_str
+from application.services.auth_service import AuthService
+from application.services.authorization import AuthorizationService, requires, requires_all
+from domain.entities.customer import Customer
+from domain.entities.delivery_package import DeliveryPackage
+from domain.entities.delivery_route import DeliveryRoute, RoutePosition
+from domain.entities.truck import Truck
+from domain.entities.users.user import User
+from domain.enums.auth import Permission, Role
+from domain.enums.item_status import ItemStatus
+from domain.services.map import Map
+from domain.services.vehicle_manager import VehicleManager
+from domain.value_objects.contact_info import ContactInfo
 
 if TYPE_CHECKING:
-    from src.models.users.employee import Employee
-    from src.models.users.manager import Manager
+    from domain.entities.users.employee import Employee
+    from domain.entities.users.manager import Manager
 
 
 class ApplicationData:
@@ -147,12 +147,12 @@ class ApplicationData:
         self._next_route_id = int(ctr.get("next_route_id", 1))
 
         # rebuild entities
-        from src.models.contact_info import ContactInfo
-        from src.models.customer import Customer as Customer_
+        from domain.entities.customer import Customer as Customer_
+        from domain.value_objects.contact_info import ContactInfo
 
         id_to_customer: dict[int, Customer_] = {}
-        from src.models.delivery_package import DeliveryPackage
-        from src.models.delivery_route import DeliveryRoute
+        from domain.entities.delivery_package import DeliveryPackage
+        from domain.entities.delivery_route import DeliveryRoute
 
         for c in data.get("customers", []):
             ci = ContactInfo(name=c["name"], email=c.get("email", ""), phone_number=c.get("phone", ""))

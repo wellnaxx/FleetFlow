@@ -60,7 +60,7 @@ unfixable = [
     "E702",     # multiple statements on one line (compact test setup)
     "RUF003",   # ambiguous unicode in comments
 ]
-"src/core/engine.py" = ["T201"]  # CLI app, print is intentional
+"src/adapters/driving/cli/engine.py" = ["T201"]  # CLI app, print is intentional
 
 # ── Pyright (strict) ──────────────────────────────────────────────
 [tool.pyright]

@@ -1,9 +1,9 @@
 from src.core.application_data import ApplicationData
-from src.core.auth_service import AuthService
-from src.core.command_factory import CommandFactory
-from src.core.engine import Engine
-from src.core.user_store import UserStore
-from src.models.auth import Role
+from application.services.auth_service import AuthService
+from adapters.driving.cli.command_factory import CommandFactory
+from adapters.driving.cli.engine import Engine
+from adapters.driven.persistence.json.user_store import UserStore
+from domain.enums.auth import Role
 
 
 def bootstrap_admin(auth: AuthService, store: UserStore) -> None:
