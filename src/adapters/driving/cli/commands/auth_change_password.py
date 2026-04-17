@@ -1,7 +1,7 @@
 import getpass
 
-from adapters.driving.cli.commands.base_command.base_command import BaseCommand
-from domain.enums.auth import Permission
+from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
+from src.domain.enums.auth import Permission
 
 
 class AuthChangePassword(BaseCommand):

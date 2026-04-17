@@ -1,5 +1,5 @@
-from adapters.driving.cli.commands.base_command.base_command import BaseCommand
-from adapters.driving.cli.commands.validation_helpers import parse_departure_from_tail, validate_params_count
+from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
+from src.adapters.driving.cli.commands.validation_helpers import parse_departure_from_tail, validate_params_count
 
 
 class CreateRoute(BaseCommand):

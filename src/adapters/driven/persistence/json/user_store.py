@@ -4,9 +4,9 @@ import tempfile
 from dataclasses import asdict, dataclass
 from typing import Any
 
-from adapters.driven.persistence.json.paths import ensure_data_dir, resolve_data_path
-from adapters.driven.security.password_hasher import PasswordHash
-from domain.value_objects.contact_info import ContactInfo
+from src.adapters.driven.persistence.json.paths import ensure_data_dir, resolve_data_path
+from src.adapters.driven.security.password_hasher import PasswordHash
+from src.domain.value_objects.contact_info import ContactInfo
 
 
 @dataclass

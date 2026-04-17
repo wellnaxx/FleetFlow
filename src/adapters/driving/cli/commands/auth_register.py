@@ -1,7 +1,7 @@
 import getpass
 
-from adapters.driving.cli.commands.base_command.base_command import BaseCommand
-from domain.enums.auth import Role
+from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
+from src.domain.enums.auth import Role
 
 
 class AuthRegisterUser(BaseCommand):

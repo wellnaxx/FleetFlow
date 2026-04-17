@@ -1,5 +1,5 @@
-from domain.enums.auth import Role
-from domain.value_objects.contact_info import ContactInfo
+from src.domain.enums.auth import Role
+from src.domain.value_objects.contact_info import ContactInfo
 
 
 class User:

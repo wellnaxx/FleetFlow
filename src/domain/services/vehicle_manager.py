@@ -1,6 +1,6 @@
-from domain.entities.delivery_route import DeliveryRoute
-from domain.entities.truck import Truck
-from domain.services.map import Map
+from src.domain.entities.delivery_route import DeliveryRoute
+from src.domain.entities.truck import Truck
+from src.domain.services.map import Map
 
 
 class VehicleManager:

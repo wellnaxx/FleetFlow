@@ -1,10 +1,10 @@
-from adapters.driven.persistence.json.user_store import UserRecord, UserStore
-from adapters.driven.security.password_hasher import PasswordHash, hash_password, verify_password
-from domain.entities.users.employee import Employee
-from domain.entities.users.manager import Manager
-from domain.entities.users.user import User
-from domain.enums.auth import Role
-from domain.value_objects.contact_info import ContactInfo
+from src.adapters.driven.persistence.json.user_store import UserRecord, UserStore
+from src.adapters.driven.security.password_hasher import PasswordHash, hash_password, verify_password
+from src.domain.entities.users.employee import Employee
+from src.domain.entities.users.manager import Manager
+from src.domain.entities.users.user import User
+from src.domain.enums.auth import Role
+from src.domain.value_objects.contact_info import ContactInfo
 
 
 class AuthService:

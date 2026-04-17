@@ -1,5 +1,5 @@
-from adapters.driving.cli.commands.base_command.base_command import BaseCommand
-from adapters.driving.cli.commands.validation_helpers import try_parse_int, validate_params_exact
+from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
+from src.adapters.driving.cli.commands.validation_helpers import try_parse_int, validate_params_exact
 
 
 class ViewRoute(BaseCommand):

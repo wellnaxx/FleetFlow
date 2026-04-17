@@ -2,8 +2,8 @@ from collections.abc import Callable
 from functools import wraps
 from typing import Any
 
-from domain.entities.users.user import User
-from domain.enums.auth import ROLE_PERMISSIONS, Permission, Role
+from src.domain.entities.users.user import User
+from src.domain.enums.auth import ROLE_PERMISSIONS, Permission, Role
 
 
 class AuthorizationService:

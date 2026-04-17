@@ -87,4 +87,3 @@ class CustomerService:
 
     def _same_name(self, input_name: str, customer_name: str) -> bool:
         return (input_name or "").strip().casefold() == (customer_name or "").strip().casefold()
- 

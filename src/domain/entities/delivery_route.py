@@ -5,11 +5,11 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
-from domain.services.map import Map
+from src.domain.services.map import Map
 
 if TYPE_CHECKING:
-    from domain.entities.delivery_package import DeliveryPackage
-    from domain.entities.truck import Truck
+    from src.domain.entities.delivery_package import DeliveryPackage
+    from src.domain.entities.truck import Truck
 
 
 @dataclass(frozen=True)

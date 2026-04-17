@@ -3,10 +3,10 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from domain.enums.truck_status import TruckStatus
+from src.domain.enums.truck_status import TruckStatus
 
 if TYPE_CHECKING:
-    from domain.entities.delivery_route import DeliveryRoute
+    from src.domain.entities.delivery_route import DeliveryRoute
 
 
 class Truck:

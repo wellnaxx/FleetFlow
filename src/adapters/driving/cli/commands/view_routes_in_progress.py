@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from adapters.driving.cli.commands.base_command.base_command import BaseCommand
+from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
 
 
 class ViewRoutesInProgress(BaseCommand):

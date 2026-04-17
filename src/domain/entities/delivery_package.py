@@ -2,17 +2,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from domain.services.map import Map
+from src.domain.services.map import Map
 
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from domain.entities.customer import Customer
-    from domain.entities.delivery_route import DeliveryRoute
+    from src.domain.entities.customer import Customer
+    from src.domain.entities.delivery_route import DeliveryRoute
 
 
 class DeliveryPackage:
-    _next_id: int = 1
 
     def __init__(
         self,
@@ -20,7 +19,7 @@ class DeliveryPackage:
         end_location: str,
         weight: float,
         customer: Customer,
-        package_id: int | None = None,
+        package_id: int,
     ) -> None:
         if not Map.is_valid_location(start_location):
             raise ValueError(f"Invalid start location: {start_location}")
@@ -30,15 +29,12 @@ class DeliveryPackage:
             raise ValueError("Start and end locations must be different.")
         if float(weight) <= 0:
             raise ValueError("Weight must be positive.")
-        if package_id is None:
-            package_id = DeliveryPackage._next_id
-            DeliveryPackage._next_id += 1
         self._package_id: int = package_id
         self.start_location: str = start_location
         self.end_location: str = end_location
         self.current_location: str = start_location
         self.weight: float = float(weight)
-        self.customer: Customer | None = customer
+        self.customer: Customer = customer
 
         self.route: DeliveryRoute | None = None
         self.expected_arrival: datetime | None = None
@@ -53,13 +49,10 @@ class DeliveryPackage:
 
     def info(self) -> str:
         """Return a human-readable description of the package."""
-        if self.customer is not None:
-            cname = self.customer.name
-            cemail = self.customer.contact.display_email()
-            cphone = self.customer.contact.display_phone()
-            contact_info = f"{cname} ({cemail}, {cphone})"
-        else:
-            contact_info = "No customer"
+        cname = self.customer.name
+        cemail = self.customer.contact.display_email()
+        cphone = self.customer.contact.display_phone()
+        contact_info = f"{cname} ({cemail}, {cphone})"
         route_str = self.route.route_id if self.route else "Not assigned"
         if self.expected_arrival:
             arrival_str = self.expected_arrival.strftime("%Y-%m-%d %H:%M")
