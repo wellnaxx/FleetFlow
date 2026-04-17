@@ -3,7 +3,7 @@ from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from adapters.driving.cli.commands.view_routes_in_progress import ViewRoutesInProgress
+from src.adapters.driving.cli.commands.view_routes_in_progress import ViewRoutesInProgress
 
 
 class ViewRoutesInProgress_Should(unittest.TestCase):
@@ -18,7 +18,7 @@ class ViewRoutesInProgress_Should(unittest.TestCase):
         r.info.return_value = text
         return r
 
-    @patch("adapters.driving.cli.commands.view_routes_in_progress.datetime")
+    @patch("src.adapters.driving.cli.commands.view_routes_in_progress.datetime")
     def test_no_routes_returns_friendly_message(self, mock_dt: MagicMock) -> None:
         fixed_now = datetime(2025, 9, 27, 10, 0, 0)
         mock_dt.now.return_value = fixed_now
@@ -31,7 +31,7 @@ class ViewRoutesInProgress_Should(unittest.TestCase):
         cmd._app_data.view_routes_in_progress.assert_called_once_with(now=fixed_now)  # type: ignore[reportPrivateUsage]
         self.assertEqual(out, "No routes in progress.")
 
-    @patch("adapters.driving.cli.commands.view_routes_in_progress.datetime")
+    @patch("src.adapters.driving.cli.commands.view_routes_in_progress.datetime")
     def test_formats_in_transit_and_at_stop(self, mock_dt: MagicMock) -> None:
         fixed_now = datetime(2025, 9, 27, 11, 30)
         mock_dt.now.return_value = fixed_now
@@ -65,7 +65,7 @@ class ViewRoutesInProgress_Should(unittest.TestCase):
         route1.info.assert_called_once_with()
         route2.info.assert_called_once_with()
 
-    @patch("adapters.driving.cli.commands.view_routes_in_progress.datetime")
+    @patch("src.adapters.driving.cli.commands.view_routes_in_progress.datetime")
     def test_unknown_pos_kind_includes_only_route_info_and_blank_line(self, mock_dt: MagicMock) -> None:
         mock_dt.now.return_value = datetime(2025, 9, 27, 12, 0)
         cmd = self.make_cmd()
@@ -81,7 +81,7 @@ class ViewRoutesInProgress_Should(unittest.TestCase):
         self.assertEqual(lines, ["Route 1: A → B", ""])
         route.info.assert_called_once_with()
 
-    @patch("adapters.driving.cli.commands.view_routes_in_progress.datetime")
+    @patch("src.adapters.driving.cli.commands.view_routes_in_progress.datetime")
     def test_multiple_entries_have_blank_separators(self, mock_dt: MagicMock) -> None:
         mock_dt.now.return_value = datetime(2025, 9, 27, 13, 0)
         cmd = self.make_cmd()

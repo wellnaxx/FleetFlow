@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import Mock
 
-from adapters.driving.cli.commands.remove_package import RemovePackage
+from src.adapters.driving.cli.commands.remove_package import RemovePackage
 
 
 class TestRemovePackage_Should(unittest.TestCase):

@@ -1,16 +1,16 @@
 import unittest
 
-from domain.entities.customer import Customer
-from domain.entities.delivery_package import DeliveryPackage
-from domain.value_objects.contact_info import ContactInfo
+from src.domain.entities.customer import Customer
+from src.domain.entities.delivery_package import DeliveryPackage
+from src.domain.value_objects.contact_info import ContactInfo
 
 
 class TestDeliveryPackage_Should(unittest.TestCase):
     def test_package_init_and_id_increments(self):
-        customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"))
+        customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
 
-        p1 = DeliveryPackage("SYD", "BRI", 500, customer)
-        p2 = DeliveryPackage("MEL", "ADL", 250, customer)
+        p1 = DeliveryPackage("SYD", "BRI", 500, customer, 1)
+        p2 = DeliveryPackage("MEL", "ADL", 250, customer, 2)
 
         # Field checks for the first package
         self.assertEqual(p1.start_location, "SYD")
@@ -27,72 +27,72 @@ class TestDeliveryPackage_Should(unittest.TestCase):
         self.assertEqual(p2.package_id, p1.package_id + 1)
 
     def test_package_wrong_start_loc(self):
-        customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"))
+        customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
         with self.assertRaises(ValueError):
-            DeliveryPackage("SOF", "BRI", 500, customer)
+            DeliveryPackage("SOF", "BRI", 500, customer, 1)
 
     def test_package_wrong_end_loc(self):
-        customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"))
+        customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
         with self.assertRaises(ValueError):
-            DeliveryPackage("SYD", "SOF", 500, customer)
+            DeliveryPackage("SYD", "SOF", 500, customer, 1)
 
     def test_package_empty_start_loc(self):
-        customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"))
+        customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
         with self.assertRaises(ValueError):
-            DeliveryPackage("", "SOF", 500, customer)
+            DeliveryPackage("", "SOF", 500, customer, 1)
 
     def test_package_empty_end_loc(self):
-        customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"))
+        customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
         with self.assertRaises(ValueError):
-            DeliveryPackage("SYD", "", 500, customer)
+            DeliveryPackage("SYD", "", 500, customer, 1)
 
     def test_package_same_start_end_loc(self):
-        customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"))
+        customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
         with self.assertRaises(ValueError):
-            DeliveryPackage("SYD", "SYD", 500, customer)
+            DeliveryPackage("SYD", "SYD", 500, customer, 1)
 
     def test_package_negative_weight(self):
-        customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"))
+        customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
         with self.assertRaises(ValueError):
-            DeliveryPackage("SYD", "BRI", -500, customer)
+            DeliveryPackage("SYD", "BRI", -500, customer, 1)
 
     def test_package_zero_weight(self):
-        customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"))
+        customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
         with self.assertRaises(ValueError):
-            DeliveryPackage("SYD", "BRI", 0, customer)
+            DeliveryPackage("SYD", "BRI", 0, customer, 1)
 
     def test_package_customer_empty_name(self):
         with self.assertRaises(ValueError):
-            Customer(ContactInfo("", "dan@e.com", "0484568777"))
+            Customer(ContactInfo("", "dan@e.com", "0484568777"), 1)
 
     def test_package_customer_int_name(self):
         with self.assertRaises(TypeError):
-            Customer(ContactInfo(150, "dan@e.com", "0484568777"))  # type: ignore[reportArgumentType]
+            Customer(ContactInfo(150, "dan@e.com", "0484568777"), 1)  # type: ignore[reportArgumentType]
 
     def test_package_customer_short_name(self):
         with self.assertRaises(ValueError):
-            Customer(ContactInfo("Da", "dan@e.com", "0484568777"))
+            Customer(ContactInfo("Da", "dan@e.com", "0484568777"), 1)
 
     def test_package_customer_long_name(self):
         with self.assertRaises(ValueError):
-            Customer(ContactInfo("Da" * 16, "dan@e.com", "0484568777"))
+            Customer(ContactInfo("Da" * 16, "dan@e.com", "0484568777"), 1)
 
     def test_package_customer_at_email(self):
         with self.assertRaises(ValueError):
-            Customer(ContactInfo("Dan", "dane.com", "0484568777"))
+            Customer(ContactInfo("Dan", "dane.com", "0484568777"), 1)
 
     def test_package_customer_dot_email(self):
         with self.assertRaises(ValueError):
-            Customer(ContactInfo("Dan", "dan@ecom", "0484568777"))
+            Customer(ContactInfo("Dan", "dan@ecom", "0484568777"), 1)
 
     def test_package_customer_int_phone(self):
         with self.assertRaises(ValueError):
-            Customer(ContactInfo("Dan", "dan@ecom", 484568777))  # type: ignore[reportArgumentType]
+            Customer(ContactInfo("Dan", "dan@ecom", 484568777), 1)  # type: ignore[reportArgumentType]
 
     def test_package_customer_len_phone(self):
         with self.assertRaises(ValueError):
-            Customer(ContactInfo("Dan", "dan@ecom", "042588997"))
+            Customer(ContactInfo("Dan", "dan@ecom", "042588997"), 1)
 
     def test_package_customer_start_num_phone(self):
         with self.assertRaises(ValueError):
-            Customer(ContactInfo("Dan", "dan@ecom", "082588997"))
+            Customer(ContactInfo("Dan", "dan@ecom", "082588997"), 1)

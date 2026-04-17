@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime
 
-from adapters.driving.cli.commands.validation_helpers import (
+from src.adapters.driving.cli.commands.validation_helpers import (
     parse_departure_from_tail,
     try_parse_float,
     try_parse_int,

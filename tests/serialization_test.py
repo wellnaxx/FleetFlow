@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime, timedelta, timezone
 
-from adapters.driven.persistence.json.serialization import dt_from_str, dt_to_str
+from src.adapters.driven.persistence.json.serialization import dt_from_str, dt_to_str
 
 
 class DateTimeSerialization_Should(unittest.TestCase):

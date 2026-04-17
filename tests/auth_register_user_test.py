@@ -2,8 +2,8 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from adapters.driving.cli.commands.auth_register import AuthRegisterUser
-from domain.enums.auth import Role
+from src.adapters.driving.cli.commands.auth_register import AuthRegisterUser
+from src.domain.enums.auth import Role
 
 
 class AuthRegisterUser_Should(unittest.TestCase):
@@ -14,7 +14,7 @@ class AuthRegisterUser_Should(unittest.TestCase):
         cmd._auth = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
-    @patch("adapters.driving.cli.commands.auth_register.getpass.getpass")
+    @patch("src.adapters.driving.cli.commands.auth_register.getpass.getpass")
     @patch("builtins.input")
     def test_prompt_mode_success_all_fields(self, mock_input: MagicMock, mock_gp: MagicMock) -> None:
         # Arrange: missing all -> prompt for each
@@ -48,7 +48,7 @@ class AuthRegisterUser_Should(unittest.TestCase):
         )
         self.assertEqual(result, f"Created {Role.MANAGER} user 'alice' (id=101).")
 
-    @patch("adapters.driving.cli.commands.auth_register.getpass.getpass")
+    @patch("src.adapters.driving.cli.commands.auth_register.getpass.getpass")
     def test_hybrid_mode_success_with_all_params(self, mock_gp: MagicMock) -> None:
         # Arrange: username, role, name, email, phone provided
         cmd = self.make_cmd(params=["Bob", "employee", "Bob B.", "bob@ex.com", "0411222333"])
@@ -71,7 +71,7 @@ class AuthRegisterUser_Should(unittest.TestCase):
         )
         self.assertEqual(result, f"Created {Role.EMPLOYEE} user 'bob' (id=202).")
 
-    @patch("adapters.driving.cli.commands.auth_register.getpass.getpass")
+    @patch("src.adapters.driving.cli.commands.auth_register.getpass.getpass")
     @patch("builtins.input")
     def test_role_parsing_accepts_prefixes(self, mock_input: MagicMock, mock_gp: MagicMock) -> None:
         # Email/phone are missing -> patch input to avoid hang
@@ -97,7 +97,7 @@ class AuthRegisterUser_Should(unittest.TestCase):
         self.assertIn("Role must be 'employee' or 'manager'", str(ctx.exception))
         cmd._app_data.register_user.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
-    @patch("adapters.driving.cli.commands.auth_register.getpass.getpass")
+    @patch("src.adapters.driving.cli.commands.auth_register.getpass.getpass")
     @patch("builtins.input")
     def test_passwords_must_match(self, mock_input: MagicMock, mock_gp: MagicMock) -> None:
         # Email/phone missing -> patch input first
@@ -110,7 +110,7 @@ class AuthRegisterUser_Should(unittest.TestCase):
         self.assertIn("Passwords do not match", str(ctx.exception))
         cmd._app_data.register_user.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
-    @patch("adapters.driving.cli.commands.auth_register.getpass.getpass")
+    @patch("src.adapters.driving.cli.commands.auth_register.getpass.getpass")
     @patch("builtins.input")
     def test_password_min_length(self, mock_input: MagicMock, mock_gp: MagicMock) -> None:
         # Email/phone missing -> patch input first
@@ -123,7 +123,7 @@ class AuthRegisterUser_Should(unittest.TestCase):
         self.assertIn("at least 8", str(ctx.exception))
         cmd._app_data.register_user.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
-    @patch("adapters.driving.cli.commands.auth_register.getpass.getpass")
+    @patch("src.adapters.driving.cli.commands.auth_register.getpass.getpass")
     @patch("builtins.input")
     def test_missing_optional_fields_are_empty_when_skipped(
         self, mock_input: MagicMock, mock_gp: MagicMock
@@ -147,7 +147,7 @@ class AuthRegisterUser_Should(unittest.TestCase):
         )
         self.assertEqual(result, f"Created {Role.EMPLOYEE} user 'gina' (id=404).")
 
-    @patch("adapters.driving.cli.commands.auth_register.getpass.getpass")
+    @patch("src.adapters.driving.cli.commands.auth_register.getpass.getpass")
     @patch("builtins.input")
     def test_register_user_errors_propagate(self, mock_input: MagicMock, mock_gp: MagicMock) -> None:
         # Email/phone missing -> patch input

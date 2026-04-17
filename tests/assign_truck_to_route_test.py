@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock, call, patch
 
-from adapters.driving.cli.commands.assign_truck_to_route import AssignTruckToRoute
+from src.adapters.driving.cli.commands.assign_truck_to_route import AssignTruckToRoute
 
 
 class AssignTruckToRoute_Should(unittest.TestCase):
@@ -15,8 +15,8 @@ class AssignTruckToRoute_Should(unittest.TestCase):
     def test_mutates_state_true(self) -> None:
         self.assertTrue(AssignTruckToRoute.mutates_state)
 
-    @patch("adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
-    @patch("adapters.driving.cli.commands.assign_truck_to_route.try_parse_int")
+    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
+    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.try_parse_int")
     def test_execute_success(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
         # Arrange
         mock_parse.side_effect = lambda v: int(v)  # type: ignore[reportUnknownLambdaType, reportUnknownArgumentType]
@@ -34,8 +34,8 @@ class AssignTruckToRoute_Should(unittest.TestCase):
         cmd._app_data.assign_truck_to_route.assert_called_once_with(11, 22)  # type: ignore[reportAttributeAccessIssue]
         self.assertEqual(result, "Assigned truck 11 to route 22.")
 
-    @patch("adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
-    @patch("adapters.driving.cli.commands.assign_truck_to_route.try_parse_int")
+    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
+    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.try_parse_int")
     def test_execute_message_uses_returned_route_id(
         self, mock_parse: MagicMock, mock_validate: MagicMock
     ) -> None:
@@ -52,7 +52,7 @@ class AssignTruckToRoute_Should(unittest.TestCase):
         # Assert
         self.assertEqual(result, "Assigned truck 5 to route 999.")
 
-    @patch("adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
+    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
     def test_execute_raises_when_param_count_invalid(self, mock_validate: MagicMock) -> None:
         # Arrange
         mock_validate.side_effect = ValueError("expected exactly 2 params")
@@ -65,8 +65,8 @@ class AssignTruckToRoute_Should(unittest.TestCase):
         # ensure downstream not called
         self.assertFalse(cmd._app_data.assign_truck_to_route.called)  # type: ignore[reportAttributeAccessIssue]
 
-    @patch("adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
-    @patch("adapters.driving.cli.commands.assign_truck_to_route.try_parse_int")
+    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
+    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.try_parse_int")
     def test_execute_raises_when_truck_id_parse_fails(
         self, mock_parse: MagicMock, mock_validate: MagicMock
     ) -> None:
@@ -85,8 +85,8 @@ class AssignTruckToRoute_Should(unittest.TestCase):
         self.assertIn("not an int", str(ctx.exception))
         self.assertFalse(cmd._app_data.assign_truck_to_route.called)  # type: ignore[reportAttributeAccessIssue]
 
-    @patch("adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
-    @patch("adapters.driving.cli.commands.assign_truck_to_route.try_parse_int")
+    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
+    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.try_parse_int")
     def test_execute_raises_when_route_id_parse_fails(
         self, mock_parse: MagicMock, mock_validate: MagicMock
     ) -> None:
@@ -108,8 +108,8 @@ class AssignTruckToRoute_Should(unittest.TestCase):
         self.assertIn("bad route id", str(ctx.exception))
         self.assertFalse(cmd._app_data.assign_truck_to_route.called)  # type: ignore[reportAttributeAccessIssue]
 
-    @patch("adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
-    @patch("adapters.driving.cli.commands.assign_truck_to_route.try_parse_int")
+    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
+    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.try_parse_int")
     def test_execute_propagates_app_data_errors(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
         # Arrange
         mock_parse.side_effect = lambda v: int(v)  # type: ignore[reportUnknownLambdaType, reportUnknownArgumentType]
@@ -122,8 +122,8 @@ class AssignTruckToRoute_Should(unittest.TestCase):
         self.assertIn("precondition failed", str(ctx.exception))
         cmd._app_data.assign_truck_to_route.assert_called_once_with(3, 4)  # type: ignore[reportAttributeAccessIssue]
 
-    @patch("adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
-    @patch("adapters.driving.cli.commands.assign_truck_to_route.try_parse_int")
+    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
+    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.try_parse_int")
     def test_execute_uses_try_parse_int_for_both_params(
         self, mock_parse: MagicMock, mock_validate: MagicMock
     ) -> None:
@@ -141,8 +141,8 @@ class AssignTruckToRoute_Should(unittest.TestCase):
         self.assertEqual(mock_parse.call_args_list, [call("10"), call("20")])  # type: ignore[reportUnknownMemberType]
         cmd._app_data.assign_truck_to_route.assert_called_once_with(10, 20)  # type: ignore[reportAttributeAccessIssue]
 
-    @patch("adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
-    @patch("adapters.driving.cli.commands.assign_truck_to_route.try_parse_int")
+    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
+    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.try_parse_int")
     def test_validate_called_with_exact_two(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
         # Arrange
         mock_parse.side_effect = lambda v: int(v)  # type: ignore[reportUnknownLambdaType, reportUnknownArgumentType]

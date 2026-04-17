@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock
 
-from adapters.driving.cli.commands.save_state import SaveState
+from src.adapters.driving.cli.commands.save_state import SaveState
 
 
 class SaveState_Should(unittest.TestCase):

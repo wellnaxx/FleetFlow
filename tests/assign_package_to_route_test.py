@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock, call, patch
 
-from adapters.driving.cli.commands.assign_package_to_route import AssignPackageToRoute
+from src.adapters.driving.cli.commands.assign_package_to_route import AssignPackageToRoute
 
 
 class AssignPackageToRoute_Should(unittest.TestCase):
@@ -11,8 +11,8 @@ class AssignPackageToRoute_Should(unittest.TestCase):
         cmd._app_data = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
-    @patch("adapters.driving.cli.commands.assign_package_to_route.validate_params_count")
-    @patch("adapters.driving.cli.commands.assign_package_to_route.try_parse_int")
+    @patch("src.adapters.driving.cli.commands.assign_package_to_route.validate_params_count")
+    @patch("src.adapters.driving.cli.commands.assign_package_to_route.try_parse_int")
     def test_execute_success_single_package(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
         mock_parse.side_effect = lambda v: int(v)  # type: ignore[reportUnknownLambdaType, reportUnknownArgumentType]
         cmd = self.make_cmd(["5", "42"])
@@ -25,8 +25,8 @@ class AssignPackageToRoute_Should(unittest.TestCase):
         cmd._app_data.assign_packages_to_route.assert_called_once_with(5, [42])  # type: ignore[reportPrivateUsage]
         self.assertEqual(result, "assigned package 42 to route 5")
 
-    @patch("adapters.driving.cli.commands.assign_package_to_route.validate_params_count")
-    @patch("adapters.driving.cli.commands.assign_package_to_route.try_parse_int")
+    @patch("src.adapters.driving.cli.commands.assign_package_to_route.validate_params_count")
+    @patch("src.adapters.driving.cli.commands.assign_package_to_route.try_parse_int")
     def test_execute_success_multiple_packages(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
         # Arrange
         mock_parse.side_effect = lambda v: int(v)  # type: ignore[reportUnknownLambdaType, reportUnknownArgumentType]
@@ -46,8 +46,8 @@ class AssignPackageToRoute_Should(unittest.TestCase):
         cmd._app_data.assign_packages_to_route.assert_called_once_with(7, [8, 9, 10])  # type: ignore[reportPrivateUsage]
         self.assertEqual(result, "assigned 8 to 7\nassigned 9 to 7\nassigned 10 to 7")
 
-    @patch("adapters.driving.cli.commands.assign_package_to_route.validate_params_count")
-    @patch("adapters.driving.cli.commands.assign_package_to_route.try_parse_int")
+    @patch("src.adapters.driving.cli.commands.assign_package_to_route.validate_params_count")
+    @patch("src.adapters.driving.cli.commands.assign_package_to_route.try_parse_int")
     def test_execute_returns_empty_string_when_no_messages(
         self,
         mock_parse: MagicMock,
@@ -64,7 +64,7 @@ class AssignPackageToRoute_Should(unittest.TestCase):
         # Assert
         self.assertEqual(result, "")
 
-    @patch("adapters.driving.cli.commands.assign_package_to_route.validate_params_count")
+    @patch("src.adapters.driving.cli.commands.assign_package_to_route.validate_params_count")
     def test_execute_raises_when_params_count_invalid(self, mock_validate: MagicMock) -> None:
         # Arrange
         mock_validate.side_effect = ValueError("invalid params count")
@@ -77,8 +77,8 @@ class AssignPackageToRoute_Should(unittest.TestCase):
         # Ensure assign is never called (we set it so we can assert)
         self.assertFalse(cmd._app_data.assign_packages_to_route.called)  # type: ignore[reportPrivateUsage]
 
-    @patch("adapters.driving.cli.commands.assign_package_to_route.validate_params_count")
-    @patch("adapters.driving.cli.commands.assign_package_to_route.try_parse_int")
+    @patch("src.adapters.driving.cli.commands.assign_package_to_route.validate_params_count")
+    @patch("src.adapters.driving.cli.commands.assign_package_to_route.try_parse_int")
     def test_execute_raises_when_route_parse_fails(
         self,
         mock_parse: MagicMock,
@@ -98,8 +98,8 @@ class AssignPackageToRoute_Should(unittest.TestCase):
             cmd.execute()
         self.assertFalse(cmd._app_data.assign_packages_to_route.called)  # type: ignore[reportPrivateUsage]
 
-    @patch("adapters.driving.cli.commands.assign_package_to_route.validate_params_count")
-    @patch("adapters.driving.cli.commands.assign_package_to_route.try_parse_int")
+    @patch("src.adapters.driving.cli.commands.assign_package_to_route.validate_params_count")
+    @patch("src.adapters.driving.cli.commands.assign_package_to_route.try_parse_int")
     def test_execute_raises_when_any_package_parse_fails(
         self,
         mock_parse: MagicMock,
@@ -123,8 +123,8 @@ class AssignPackageToRoute_Should(unittest.TestCase):
         self.assertIn("bad package id", str(ctx.exception))
         self.assertFalse(cmd._app_data.assign_packages_to_route.called)  # type: ignore[reportPrivateUsage]
 
-    @patch("adapters.driving.cli.commands.assign_package_to_route.validate_params_count")
-    @patch("adapters.driving.cli.commands.assign_package_to_route.try_parse_int")
+    @patch("src.adapters.driving.cli.commands.assign_package_to_route.validate_params_count")
+    @patch("src.adapters.driving.cli.commands.assign_package_to_route.try_parse_int")
     def test_execute_propagates_app_data_errors(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
         # Arrange
         mock_parse.side_effect = lambda v: int(v)  # type: ignore[reportUnknownLambdaType, reportUnknownArgumentType]
@@ -137,8 +137,8 @@ class AssignPackageToRoute_Should(unittest.TestCase):
         self.assertIn("constraints fail", str(ctx.exception))
         cmd._app_data.assign_packages_to_route.assert_called_once_with(3, [4])  # type: ignore[reportPrivateUsage]
 
-    @patch("adapters.driving.cli.commands.assign_package_to_route.validate_params_count")
-    @patch("adapters.driving.cli.commands.assign_package_to_route.try_parse_int")
+    @patch("src.adapters.driving.cli.commands.assign_package_to_route.validate_params_count")
+    @patch("src.adapters.driving.cli.commands.assign_package_to_route.try_parse_int")
     def test_execute_calls_validate_with_required_min_params(
         self,
         mock_parse: MagicMock,
@@ -154,8 +154,8 @@ class AssignPackageToRoute_Should(unittest.TestCase):
         # Assert
         mock_validate.assert_called_once_with(["1", "2"], 2)
 
-    @patch("adapters.driving.cli.commands.assign_package_to_route.validate_params_count")
-    @patch("adapters.driving.cli.commands.assign_package_to_route.try_parse_int")
+    @patch("src.adapters.driving.cli.commands.assign_package_to_route.validate_params_count")
+    @patch("src.adapters.driving.cli.commands.assign_package_to_route.try_parse_int")
     def test_execute_uses_try_parse_int_for_every_param(
         self,
         mock_parse: MagicMock,

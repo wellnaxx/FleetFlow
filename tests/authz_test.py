@@ -3,18 +3,18 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
-from application.services.authorization import AuthorizationService, requires, requires_all
-from domain.enums.auth import Permission, Role
+from src.application.services.authorization import AuthorizationService, requires, requires_all
+from src.domain.enums.auth import Permission, Role
 
 
 class Authz_Should(unittest.TestCase):
-    @patch("application.services.authorization.ROLE_PERMISSIONS", {Role.MANAGER: {Permission.PACKAGE_CREATE}})
+    @patch("src.application.services.authorization.ROLE_PERMISSIONS", {Role.MANAGER: {Permission.PACKAGE_CREATE}})
     def test_has_true_when_user_role_allows_permission(self) -> None:
         user = SimpleNamespace(role=Role.MANAGER)
         svc = AuthorizationService(current_user=user)  # type: ignore[reportArgumentType]
         self.assertTrue(svc.has(Permission.PACKAGE_CREATE))
 
-    @patch("application.services.authorization.ROLE_PERMISSIONS", {})  # type: ignore[reportUnknownArgumentType]
+    @patch("src.application.services.authorization.ROLE_PERMISSIONS", {})  # type: ignore[reportUnknownArgumentType]
     def test_has_false_when_no_current_user_or_role_not_mapped(self) -> None:
         svc = AuthorizationService(current_user=None)
         self.assertFalse(svc.has(Permission.PACKAGE_CREATE))

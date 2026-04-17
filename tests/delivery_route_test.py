@@ -2,7 +2,7 @@ import unittest
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
-from domain.entities.delivery_route import DeliveryRoute
+from src.domain.entities.delivery_route import DeliveryRoute
 
 LOCATIONS = ["A", "B", "C", "D"]
 # distances between consecutive pairs (A->B, B->C, C->D)
@@ -39,8 +39,8 @@ class _Truck:
         self.route = route
 
 
-@patch("domain.entities.delivery_route.Map.get_locations", return_value=LOCATIONS)
-@patch("domain.entities.delivery_route.Map.get_distance", side_effect=get_dist)
+@patch("src.domain.entities.delivery_route.Map.get_locations", return_value=LOCATIONS)
+@patch("src.domain.entities.delivery_route.Map.get_distance", side_effect=get_dist)
 class DeliveryRoute_Should(unittest.TestCase):
     def test_init_validates_locations_and_sets_id_or_uses_provided(self, *_):
         r = DeliveryRoute("A", "B", route_id=123)

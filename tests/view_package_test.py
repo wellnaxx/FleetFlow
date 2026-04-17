@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import Mock, patch
 
-from adapters.driving.cli.commands.view_package import ViewPackage
+from src.adapters.driving.cli.commands.view_package import ViewPackage
 
 
 class TestViewPackage_Should(unittest.TestCase):
@@ -31,7 +31,7 @@ class TestViewPackage_Should(unittest.TestCase):
         self.mock_app_data.view_package.assert_called_once_with(999)
 
     def test_invalid_parameter_count(self):
-        with patch("adapters.driving.cli.commands.view_package.validate_params_exact") as mock_validate:
+        with patch("src.adapters.driving.cli.commands.view_package.validate_params_exact") as mock_validate:
             mock_validate.side_effect = ValueError("Expected 1 parameter(s).")
             self.command._params = []  # type: ignore[reportAttributeAccessIssue]  # No parameters
 
@@ -42,7 +42,7 @@ class TestViewPackage_Should(unittest.TestCase):
             mock_validate.assert_called_once_with(self.command._params, 1)  # type: ignore[reportPrivateUsage]
 
     def test_invalid_parameter_type(self):
-        with patch("adapters.driving.cli.commands.view_package.try_parse_int") as mock_try_parse:
+        with patch("src.adapters.driving.cli.commands.view_package.try_parse_int") as mock_try_parse:
             mock_try_parse.side_effect = ValueError("Parameter 'abc' is not a valid integer.")
             self.command._params = ["abc"]  # type: ignore[reportAttributeAccessIssue]
 

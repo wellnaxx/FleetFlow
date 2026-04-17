@@ -2,8 +2,8 @@ import unittest
 from datetime import datetime, timedelta
 from unittest.mock import Mock
 
-from domain.entities.truck import Truck
-from domain.enums.truck_status import TruckStatus
+from src.domain.entities.truck import Truck
+from src.domain.enums.truck_status import TruckStatus
 
 
 class TestTruck_Should(unittest.TestCase):

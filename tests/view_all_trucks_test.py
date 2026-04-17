@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import Mock
 
-from adapters.driving.cli.commands.view_all_trucks import ViewAllTrucks
+from src.adapters.driving.cli.commands.view_all_trucks import ViewAllTrucks
 
 
 class TestViewAllTrucks_Should(unittest.TestCase):

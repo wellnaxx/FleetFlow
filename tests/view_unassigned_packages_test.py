@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock
 
-from adapters.driving.cli.commands.view_unassigned_packages import ViewUnassignedPackages
+from src.adapters.driving.cli.commands.view_unassigned_packages import ViewUnassignedPackages
 
 
 class ViewUnassignedPackages_Should(unittest.TestCase):

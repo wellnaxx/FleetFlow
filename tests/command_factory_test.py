@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
-from adapters.driving.cli.command_factory import CommandFactory
+from src.adapters.driving.cli.command_factory import CommandFactory
 
 
 class _DummyCmd:
@@ -22,7 +22,8 @@ class CommandFactory_Should(unittest.TestCase):
     def make_factory(self) -> tuple[CommandFactory, SimpleNamespace, SimpleNamespace]:
         app = SimpleNamespace(name="app1")
         auth = SimpleNamespace(name="auth1")
-        return CommandFactory(data=app, auth=auth), app, auth  # type: ignore[reportArgumentType]
+        container = SimpleNamespace(create_package_use_case=object())
+        return CommandFactory(data=app, auth=auth, container=container), app, auth  # type: ignore[reportArgumentType]
 
     def test_no_command_given_raises(self) -> None:
         cf, *_ = self.make_factory()
@@ -38,7 +39,7 @@ class CommandFactory_Should(unittest.TestCase):
 
     def test_case_insensitive_name_and_param_parsing_with_quotes(self) -> None:
         cf, app, auth = self.make_factory()
-        with patch("adapters.driving.cli.command_factory._REGISTRY", {"dummy": _DummyCmd}):
+        with patch("src.adapters.driving.cli.command_factory._REGISTRY", {"dummy": _DummyCmd}):
             # Mix case name; shlex should preserve quoted segments and spaces
             cmd = cf.create('DuMmY "SYD" MEL "John Doe" "email with space@x.com"')
             self.assertIsInstance(cmd, _DummyCmd)
@@ -50,7 +51,7 @@ class CommandFactory_Should(unittest.TestCase):
 
     def test_extra_whitespace_and_simple_params(self) -> None:
         cf, *_ = self.make_factory()
-        with patch("adapters.driving.cli.command_factory._REGISTRY", {"dummy": _DummyCmd}):
+        with patch("src.adapters.driving.cli.command_factory._REGISTRY", {"dummy": _DummyCmd}):
             cmd = cf.create("   dummy   A   B   C   ")
             self.assertEqual(cmd._params, ["A", "B", "C"])  # type: ignore[reportPrivateUsage]
 
@@ -59,7 +60,7 @@ class CommandFactory_Should(unittest.TestCase):
         app2 = SimpleNamespace(name="app2")
         cf.update_app(app2)  # type: ignore[reportArgumentType]
 
-        with patch("adapters.driving.cli.command_factory._REGISTRY", {"dummy": _DummyCmd}):
+        with patch("src.adapters.driving.cli.command_factory._REGISTRY", {"dummy": _DummyCmd}):
             cmd = cf.create("dummy X")
-            self.assertIs(cmd._app_data, app2)  # uses the updated app  # type: ignore[reportPrivateUsage]
+            self.assertIs(cmd._app_data, app2)  # uses the updated app  # type: ignore[reportPrivateUsage]  # noqa: E501
             self.assertIs(cmd._auth, auth1)  # auth unchanged  # type: ignore[reportPrivateUsage]

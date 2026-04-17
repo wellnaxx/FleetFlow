@@ -1,6 +1,6 @@
 import unittest
 
-from domain.value_objects.contact_info import ContactInfo
+from src.domain.value_objects.contact_info import ContactInfo
 
 
 class ContactInfo_Should(unittest.TestCase):

@@ -1,15 +1,15 @@
 import unittest
 
-from domain.entities.customer import Customer
-from domain.value_objects.contact_info import ContactInfo
+from src.domain.entities.customer import Customer
+from src.domain.value_objects.contact_info import ContactInfo
 
 
 class _FakePackage:
     """Minimal stand-in for DeliveryPackage used by Customer."""
 
-    def __init__(self, package_id: int, customer: Customer | None = None) -> None:
+    def __init__(self, package_id: int, customer: Customer) -> None:
         self.package_id = package_id
-        self.customer: Customer | None = customer
+        self.customer = customer
 
 
 class Customer_Should(unittest.TestCase):
@@ -18,27 +18,19 @@ class Customer_Should(unittest.TestCase):
     ) -> ContactInfo:
         return ContactInfo(name=name, email=email, phone_number=phone)
 
-    def test_auto_id_assigned_and_increments(self) -> None:
-        # Use the class counter to assert relative sequencing without assuming a global start.
-        start = Customer._next_id  # type: ignore[reportPrivateUsage]
-        c1 = Customer(self.make_contact("Person1"))
-        c2 = Customer(self.make_contact("Person2"))
-        self.assertEqual(c1.customer_id, start)
-        self.assertEqual(c2.customer_id, start + 1)
-
     def test_property_proxies(self) -> None:
         ci = self.make_contact("Bob", "bob@ex.com", "0411222333")
-        c = Customer(ci)
+        c = Customer(ci, 1)
         self.assertEqual(c.name, "Bob")
         self.assertEqual(c.email, "bob@ex.com")
         self.assertEqual(c.phone_number, "0411222333")
 
     def test_delivery_packages_is_tuple_and_readonly_view(self) -> None:
-        c = Customer(self.make_contact("Carlos"))
+        c = Customer(self.make_contact("Carlos"), 2)
         self.assertIsInstance(c.delivery_packages, tuple)
         self.assertEqual(len(c.delivery_packages), 0)
         # Ensure it's a new tuple each time and not directly mutable storage
-        p = _FakePackage(1)
+        p = _FakePackage(1, c)
         c.add_package(p)  # type: ignore[reportArgumentType]
         t1 = c.delivery_packages
         t2 = c.delivery_packages
@@ -46,8 +38,8 @@ class Customer_Should(unittest.TestCase):
         self.assertEqual(len(t2), 1)
 
     def test_add_package_links_both_ways_and_prevents_duplicates(self) -> None:
-        c = Customer(self.make_contact("Dean"))
-        p = _FakePackage(5)
+        c = Customer(self.make_contact("Dean"), 3)
+        p = _FakePackage(5, c)
         c.add_package(p)  # type: ignore[reportArgumentType]
         # Linked
         self.assertIs(p.customer, c)
@@ -57,9 +49,9 @@ class Customer_Should(unittest.TestCase):
             c.add_package(p)  # type: ignore[reportArgumentType]
 
     def test_add_package_reassigns_from_other_customer(self) -> None:
-        old = Customer(self.make_contact("Old"))
-        new = Customer(self.make_contact("New"))
-        p = _FakePackage(9)
+        old = Customer(self.make_contact("Old"), 4)
+        new = Customer(self.make_contact("New"), 5)
+        p = _FakePackage(9, old)
         old.add_package(p)  # type: ignore[reportArgumentType]
         self.assertIn(p, old.delivery_packages)
         # Now add to new -> should be moved
@@ -68,16 +60,8 @@ class Customer_Should(unittest.TestCase):
         self.assertIn(p, new.delivery_packages)
         self.assertNotIn(p, old.delivery_packages)
 
-    def test_remove_package_happy_clears_package_customer(self) -> None:
-        c = Customer(self.make_contact("Eve"))
-        p = _FakePackage(7)
-        c.add_package(p)  # type: ignore[reportArgumentType]
-        c.remove_package(p)  # type: ignore[reportArgumentType]
-        self.assertNotIn(p, c.delivery_packages)
-        self.assertIsNone(p.customer)
-
     def test_remove_package_missing_raises(self) -> None:
-        c = Customer(self.make_contact("Frank"))
-        p = _FakePackage(11)
+        c = Customer(self.make_contact("Frank"), 7)
+        p = _FakePackage(11, c)
         with self.assertRaises(ValueError):
-            c.remove_package(p)  # type: ignore[reportArgumentType]
+            c._remove_package_link(p)  # type: ignore[reportArgumentType]

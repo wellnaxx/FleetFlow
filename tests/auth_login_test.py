@@ -2,7 +2,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from adapters.driving.cli.commands.auth_login import AuthLogin
+from src.adapters.driving.cli.commands.auth_login import AuthLogin
 
 
 class AuthLogin_Should(unittest.TestCase):

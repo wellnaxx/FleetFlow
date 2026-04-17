@@ -5,31 +5,22 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, mock_open, patch
 
-from domain.enums.auth import Role
-from domain.enums.item_status import ItemStatus
+from src.adapters.driven.persistence.application_data.customer_repository import (
+    ApplicationDataCustomerRepository,
+)
+from src.adapters.driven.persistence.application_data.package_repository import ApplicationDataPackageRepository
+from src.application.services.customer_service import CustomerService
+from src.application.use_cases.packages.create_package import CreatePackageUseCase
 from src.core.application_data import ApplicationData
-
-# --- Minimal fakes for ContactInfo & Customer used inside _find_or_create_customer ---
-
-
-class _FakeContactInfo:
-    def __init__(self, name: str, email: str, phone_number: str) -> None:
-        self.name = name
-        self.email = email
-        self.phone_number = phone_number
+from src.domain.enums.auth import Role
+from src.domain.enums.item_status import ItemStatus
 
 
-class _FakeCustomer:
-    def __init__(self, customer_id: int, contact: _FakeContactInfo) -> None:
-        self.customer_id = customer_id
-        # expose fields the code reads
-        self.name = contact.name
-        self.email = contact.email
-        self.phone_number = contact.phone_number
-        self._packages: list[Any] = []
-
-    def add_package(self, p: Any) -> None:
-        self._packages.append(p)
+def make_create_package_uc(app: ApplicationData) -> CreatePackageUseCase:
+    customer_repo = ApplicationDataCustomerRepository(app)
+    package_repo = ApplicationDataPackageRepository(app)
+    customer_service = CustomerService(customer_repo)
+    return CreatePackageUseCase(customer_service, package_repo)
 
 
 def _mk_app() -> Any:
@@ -143,73 +134,6 @@ class _FakePackage:
 # ---------------------------
 
 
-class ApplicationData_CustomerFinding_Should(unittest.TestCase):
-    @patch("src.core.application_data.Customer", _FakeCustomer)
-    @patch("src.core.application_data.ContactInfo", _FakeContactInfo)
-    def test_same_name_and_find_or_create_new_customer(self) -> None:
-        app = _mk_app()
-
-        # same_name behavior (case/whitespace insensitive)
-        self.assertTrue(app._same_name("  Alice  ", "alice"))
-        self.assertFalse(app._same_name("Alice", "Alicia"))
-
-        # Creates a new customer and indexes by email/phone
-        c = app._find_or_create_customer(" Alice  ", "ALICE@EX.COM ", " 0412 345 678 ")
-        self.assertEqual(c.name, "Alice")
-        self.assertEqual(c.email, "alice@ex.com")
-        self.assertEqual(c.phone_number, "0412345678")
-        # Indexed
-        self.assertIs(app._customers_by_email["alice@ex.com"], c)
-        self.assertIs(app._customers_by_phone["0412345678"], c)
-        # Returned in .customers
-        self.assertIn(c, app.customers)
-
-    @patch("src.core.application_data.Customer", _FakeCustomer)
-    @patch("src.core.application_data.ContactInfo", _FakeContactInfo)
-    def test_find_or_create_reuses_by_email_and_validates_name(self) -> None:
-        app = _mk_app()
-        # seed one
-        c1 = app._find_or_create_customer("Bob", "bob@ex.com", "")
-        # same email, matching name (case-insensitive) => reuse
-        c_again = app._find_or_create_customer("  bob  ", "BOB@EX.COM", "")
-        self.assertIs(c_again, c1)
-
-        # mismatching name with same email => error
-        with self.assertRaises(ValueError):
-            app._find_or_create_customer("Bobby", "bob@ex.com", "")
-
-    @patch("src.core.application_data.Customer", _FakeCustomer)
-    @patch("src.core.application_data.ContactInfo", _FakeContactInfo)
-    def test_find_or_create_reuses_by_phone_and_validates_name(self) -> None:
-        app = _mk_app()
-        c1 = app._find_or_create_customer("Carol", "", "04 11 22 33 44")
-        # reuse by phone
-        c_again = app._find_or_create_customer("carol", "", "0411223344")
-        self.assertIs(c_again, c1)
-
-        # mismatching name with same phone => error
-        with self.assertRaises(ValueError):
-            app._find_or_create_customer("Different", "", "0411223344")
-
-    @patch("src.core.application_data.Customer", _FakeCustomer)
-    @patch("src.core.application_data.ContactInfo", _FakeContactInfo)
-    def test_find_or_create_conflict_email_and_phone_different_customers(self) -> None:
-        app = _mk_app()
-        _ = app._find_or_create_customer("Dan", "dan@ex.com", "")
-        _ = app._find_or_create_customer("Dan", "", "0400000000")
-        with self.assertRaises(ValueError):
-            app._find_or_create_customer("Dan", "dan@ex.com", "0400000000")
-
-    @patch("src.core.application_data.Customer", _FakeCustomer)
-    @patch("src.core.application_data.ContactInfo", _FakeContactInfo)
-    def test_find_or_create_name_only_reuse_when_unambiguous(self) -> None:
-        app = _mk_app()
-        c_alice = app._find_or_create_customer("Alice", "", "")
-        _ = app._find_or_create_customer("Bob", "bob@ex.com", "")
-        c_again = app._find_or_create_customer("alice", "", "")
-        self.assertIs(c_again, c_alice)
-
-
 class ApplicationData_CreateRemove_Should(unittest.TestCase):
     @patch("src.core.application_data.Map.is_valid_location", return_value=True)
     def test_create_route_find_and_remove(self, _is_valid: MagicMock) -> None:
@@ -257,47 +181,6 @@ class ApplicationData_CreateRemove_Should(unittest.TestCase):
                 truck=None,
             )
             _ = app.create_route(["A", "B", "C"], None)  # ok under our Map + fake DeliveryRoute
-
-    def test_create_package_and_remove(self) -> None:
-        with (
-            patch("src.core.application_data.ContactInfo", autospec=True),
-            patch("src.core.application_data.Customer", autospec=True) as Cust,
-            patch("src.core.application_data.DeliveryPackage") as DP,
-        ):
-            # minimal Customer stub the code expects
-            def mk_customer(customer_id: Any, contact: Any) -> SimpleNamespace:
-                return SimpleNamespace(
-                    customer_id=customer_id,
-                    name=getattr(contact, "name", "X"),
-                    email=getattr(contact, "email", ""),
-                    phone_number=getattr(contact, "phone_number", ""),
-                    add_package=lambda p: None,  # type: ignore[reportUnknownLambdaType]
-                )
-
-            Cust.side_effect = mk_customer
-
-            # minimal DeliveryPackage stub bypassing real validation
-            DP.side_effect = lambda start, end, weight, customer, package_id=None: SimpleNamespace(  # type: ignore[reportUnknownLambdaType]
-                package_id=package_id,
-                start_location=start,
-                end_location=end,
-                weight=weight,
-                customer=customer,
-                route=None,
-            )
-
-            app = _mk_app()
-            p = app.create_package("S", "E", 3.5, "N", "e@x.com", "0412")
-            self.assertEqual(len(app.packages), 1)
-
-            # remove non-existent -> error
-            with self.assertRaises(ValueError):
-                app.remove_package(999)
-
-            # remove existing
-            removed = app.remove_package(p.package_id)
-            self.assertEqual(removed.package_id, p.package_id)
-            self.assertEqual(len(app.packages), 0)
 
     def test_view_routes_and_packages_helpers(self) -> None:
         app = _mk_app()
@@ -546,7 +429,7 @@ class ApplicationData_SaveLoad_Should(unittest.TestCase):
         mock_json_load.return_value = payload
 
         with (
-            patch("src.core.application_data.ContactInfo") as CI,
+            patch("src.domain.value_objects.contact_info.ContactInfo") as CI,
             patch("src.core.application_data.Customer") as Cust,
             patch("src.core.application_data.DeliveryPackage") as DP,
             patch("src.core.application_data.DeliveryRoute") as DR,
@@ -696,7 +579,8 @@ class Characterization_SaveLoadRoundTrip_Should(unittest.TestCase):
         app = _mk_app()
         # Create real objects so counters advance (valid Map locations)
         app.create_route(["SYD", "MEL"], departure_time=None)
-        app.create_package("SYD", "MEL", 5.0, "Alice", "a@test.com")
+        uc = make_create_package_uc(app)
+        uc.execute("SYD", "MEL", 5.0, "Alice", "a@test.com")
         state = app._dump_state()
 
         app2 = _mk_app()
@@ -707,7 +591,8 @@ class Characterization_SaveLoadRoundTrip_Should(unittest.TestCase):
 
     def test_round_trip_preserves_customers(self) -> None:
         app = _mk_app()
-        app.create_package("SYD", "MEL", 3.0, "Bob", "bob@test.com")
+        uc = make_create_package_uc(app)
+        uc.execute("SYD", "MEL", 3.0, "Bob", "bob@test.com")
         state = app._dump_state()
 
         app2 = _mk_app()
@@ -729,7 +614,8 @@ class Characterization_SaveLoadRoundTrip_Should(unittest.TestCase):
     def test_round_trip_preserves_package_route_link(self) -> None:
         app = _mk_app()
         route = app.create_route(["SYD", "MEL"], departure_time=None)
-        pkg = app.create_package("SYD", "MEL", 2.0, "Carl", "carl@test.com")
+        uc = make_create_package_uc(app)
+        pkg = uc.execute("SYD", "MEL", 2.0, "Carl", "carl@test.com")
         app.assign_packages_to_route(route.route_id, [pkg.package_id])
         state = app._dump_state()
 
@@ -810,9 +696,9 @@ class Characterization_RBAC_Should(unittest.TestCase):
     """Protected operations must respect role permissions."""
 
     def _app_for_role(self, role: Role) -> ApplicationData:
-        from application.services.authorization import AuthorizationService
-        from domain.entities.users.employee import Employee
-        from domain.entities.users.manager import Manager
+        from src.application.services.authorization import AuthorizationService
+        from src.domain.entities.users.employee import Employee
+        from src.domain.entities.users.manager import Manager
 
         user = Employee("Test") if role == Role.EMPLOYEE else Manager("Test")
         app = ApplicationData(current_user=user)

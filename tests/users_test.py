@@ -1,10 +1,10 @@
 import unittest
 
-from domain.entities.users.employee import Employee
-from domain.entities.users.manager import Manager
-from domain.entities.users.user import User
-from domain.enums.auth import Role
-from domain.value_objects.contact_info import ContactInfo
+from src.domain.entities.users.employee import Employee
+from src.domain.entities.users.manager import Manager
+from src.domain.entities.users.user import User
+from src.domain.enums.auth import Role
+from src.domain.value_objects.contact_info import ContactInfo
 
 
 class User_Should(unittest.TestCase):

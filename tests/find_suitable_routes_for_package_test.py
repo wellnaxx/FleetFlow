@@ -3,7 +3,7 @@ from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from adapters.driving.cli.commands.find_suitable_routes_for_package import FindSuitableRoutesForPackage
+from src.adapters.driving.cli.commands.find_suitable_routes_for_package import FindSuitableRoutesForPackage
 
 
 class FindSuitableRoutesForPackage_Should(unittest.TestCase):
@@ -13,8 +13,8 @@ class FindSuitableRoutesForPackage_Should(unittest.TestCase):
         cmd._app_data = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
-    @patch("adapters.driving.cli.commands.find_suitable_routes_for_package.validate_params_exact")
-    @patch("adapters.driving.cli.commands.find_suitable_routes_for_package.try_parse_int")
+    @patch("src.adapters.driving.cli.commands.find_suitable_routes_for_package.validate_params_exact")
+    @patch("src.adapters.driving.cli.commands.find_suitable_routes_for_package.try_parse_int")
     def test_success_mixed_matches_formats_lines(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
         # Arrange
         mock_parse.return_value = 77
@@ -49,8 +49,8 @@ class FindSuitableRoutesForPackage_Should(unittest.TestCase):
         self.assertIn("Route 10: SYD → MEL, ETA to MEL: 2025-10-12 06:00, Capacity left: 123.46kg", lines[0])
         self.assertIn("Route 11: SYD → MEL, ETA to MEL: N/A, Capacity left: No truck", lines[1])
 
-    @patch("adapters.driving.cli.commands.find_suitable_routes_for_package.validate_params_exact")
-    @patch("adapters.driving.cli.commands.find_suitable_routes_for_package.try_parse_int")
+    @patch("src.adapters.driving.cli.commands.find_suitable_routes_for_package.validate_params_exact")
+    @patch("src.adapters.driving.cli.commands.find_suitable_routes_for_package.try_parse_int")
     def test_no_matches_returns_friendly_message(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
         mock_parse.return_value = 5
         cmd = self.make_cmd(["5"])
@@ -61,8 +61,8 @@ class FindSuitableRoutesForPackage_Should(unittest.TestCase):
 
         self.assertEqual(result, "No suitable routes found.")
 
-    @patch("adapters.driving.cli.commands.find_suitable_routes_for_package.validate_params_exact")
-    @patch("adapters.driving.cli.commands.find_suitable_routes_for_package.try_parse_int")
+    @patch("src.adapters.driving.cli.commands.find_suitable_routes_for_package.validate_params_exact")
+    @patch("src.adapters.driving.cli.commands.find_suitable_routes_for_package.try_parse_int")
     def test_missing_package_raises(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
         mock_parse.return_value = 42
         cmd = self.make_cmd(["42"])
@@ -74,8 +74,8 @@ class FindSuitableRoutesForPackage_Should(unittest.TestCase):
         self.assertIn("Package with ID 42 not found", str(ctx.exception))
         cmd._app_data.find_suitable_routes_for_package.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
-    @patch("adapters.driving.cli.commands.find_suitable_routes_for_package.validate_params_exact")
-    @patch("adapters.driving.cli.commands.find_suitable_routes_for_package.try_parse_int")
+    @patch("src.adapters.driving.cli.commands.find_suitable_routes_for_package.validate_params_exact")
+    @patch("src.adapters.driving.cli.commands.find_suitable_routes_for_package.try_parse_int")
     def test_parse_failure_bubbles_and_stops(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
         mock_parse.side_effect = ValueError("not an int")
         cmd = self.make_cmd(["x"])
@@ -91,16 +91,16 @@ class FindSuitableRoutesForPackage_Should(unittest.TestCase):
         # Separate test to explicitly check the exact count call
         cmd = self.make_cmd(["123"])
         with (
-            patch("adapters.driving.cli.commands.find_suitable_routes_for_package.validate_params_exact") as mock_validate,
-            patch("adapters.driving.cli.commands.find_suitable_routes_for_package.try_parse_int", return_value=123),
+            patch("src.adapters.driving.cli.commands.find_suitable_routes_for_package.validate_params_exact") as mock_validate,
+            patch("src.adapters.driving.cli.commands.find_suitable_routes_for_package.try_parse_int", return_value=123),
             patch.object(cmd._app_data, "view_package", return_value=SimpleNamespace(end_location="MEL")),  # type: ignore[reportPrivateUsage]
             patch.object(cmd._app_data, "find_suitable_routes_for_package", return_value=[]),  # type: ignore[reportPrivateUsage]
         ):
             _ = cmd.execute()
             mock_validate.assert_called_once_with(["123"], 1)
 
-    @patch("adapters.driving.cli.commands.find_suitable_routes_for_package.validate_params_exact")
-    @patch("adapters.driving.cli.commands.find_suitable_routes_for_package.try_parse_int")
+    @patch("src.adapters.driving.cli.commands.find_suitable_routes_for_package.validate_params_exact")
+    @patch("src.adapters.driving.cli.commands.find_suitable_routes_for_package.try_parse_int")
     def test_capacity_left_is_formatted_to_two_decimals(
         self, mock_parse: MagicMock, mock_validate: MagicMock
     ) -> None:

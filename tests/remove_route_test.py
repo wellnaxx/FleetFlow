@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import Mock
 
-from adapters.driving.cli.commands.remove_route import RemoveRoute
+from src.adapters.driving.cli.commands.remove_route import RemoveRoute
 
 
 class TestRemoveRoute_Should(unittest.TestCase):

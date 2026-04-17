@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, mock_open, patch
 
-from adapters.driven.persistence.json.user_store import UserRecord, UserStore
+from src.adapters.driven.persistence.json.user_store import UserRecord, UserStore
 
 
 def _ph(s: str = "hash") -> SimpleNamespace:
@@ -13,10 +13,10 @@ def _ph(s: str = "hash") -> SimpleNamespace:
 
 
 class UserStore_Load_Save_Should(unittest.TestCase):
-    @patch("adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")
-    @patch("adapters.driven.persistence.json.user_store.os.path.exists", return_value=True)
-    @patch("adapters.driven.persistence.json.user_store.open", new_callable=mock_open)
-    @patch("adapters.driven.persistence.json.user_store.json.load")
+    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=True)
+    @patch("src.adapters.driven.persistence.json.user_store.open", new_callable=mock_open)
+    @patch("src.adapters.driven.persistence.json.user_store.json.load")
     def test_init_loads_existing_file(
         self, jload: MagicMock, mopen: MagicMock, exists: MagicMock, resolve: MagicMock
     ) -> None:
@@ -51,11 +51,11 @@ class UserStore_Load_Save_Should(unittest.TestCase):
         # next id was restored
         self.assertEqual(store._next_id, 5)  # type: ignore[reportPrivateUsage]
 
-    @patch("adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")
-    @patch("adapters.driven.persistence.json.user_store.os.path.exists", return_value=True)
-    @patch("adapters.driven.persistence.json.user_store.open", new_callable=mock_open)
+    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=True)
+    @patch("src.adapters.driven.persistence.json.user_store.open", new_callable=mock_open)
     @patch(
-        "adapters.driven.persistence.json.user_store.json.load",
+        "src.adapters.driven.persistence.json.user_store.json.load",
         side_effect=JSONDecodeError("bad json", "{", 0),
     )
     def test_init_with_bad_json_fails_open_but_results_in_empty_store(
@@ -70,8 +70,8 @@ class UserStore_Load_Save_Should(unittest.TestCase):
         self.assertEqual(store._next_id, 1)  # type: ignore[reportPrivateUsage]
 
     @patch.object(UserStore, "_atomic_write", return_value="C:/fake/users.json")
-    @patch("adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")
-    @patch("adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
+    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
     def test_save_writes_sorted_payload(
         self, exists: MagicMock, resolve: MagicMock, atomic_write: MagicMock
     ) -> None:
@@ -93,14 +93,14 @@ class UserStore_Load_Save_Should(unittest.TestCase):
 
 
 class UserStore_Create_Get_Update_Should(unittest.TestCase):
-    @patch("adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")
-    @patch("adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
+    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
     def test_create_normalizes_and_persists_and_get_is_case_insensitive(
         self, exists: MagicMock, resolve: MagicMock
     ) -> None:
         # Patch ContactInfo so we control cleaning behavior
         with (
-            patch("adapters.driven.persistence.json.user_store.ContactInfo") as CI,
+            patch("src.adapters.driven.persistence.json.user_store.ContactInfo") as CI,
             patch.object(UserStore, "_atomic_write", return_value="C:/fake/users.json") as aw,
         ):
             CI.side_effect = lambda name, email, phone_number: SimpleNamespace(  # type: ignore[reportUnknownLambdaType]
@@ -135,11 +135,11 @@ class UserStore_Create_Get_Update_Should(unittest.TestCase):
             # ensure it persisted (save called internally via create)
             aw.assert_called()
 
-    @patch("adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")
-    @patch("adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
+    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
     def test_create_accepts_role_enums_with_value_attr(self, exists: MagicMock, resolve: MagicMock) -> None:
         with (
-            patch("adapters.driven.persistence.json.user_store.ContactInfo") as CI,
+            patch("src.adapters.driven.persistence.json.user_store.ContactInfo") as CI,
             patch.object(UserStore, "_atomic_write", return_value="C:/fake/users.json"),
         ):
             CI.side_effect = lambda name, email, phone_number: SimpleNamespace(  # type: ignore[reportUnknownLambdaType]
@@ -150,20 +150,21 @@ class UserStore_Create_Get_Update_Should(unittest.TestCase):
             rec = store.create("bob", role_enum_like, "Bob", "", "", _ph("pw2"))  # type: ignore[reportArgumentType]
             self.assertEqual(rec.role, "MANAGER")
 
-    @patch("adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")
-    @patch("adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
+    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
     def test_create_validations_and_password_type(self, exists: MagicMock, resolve: MagicMock) -> None:
-        store = UserStore()
-        with self.assertRaises(ValueError):
-            store.create("", "EMPLOYEE", "N", "", "", _ph("pw"))  # type: ignore[reportArgumentType]
-        store.create("user", "EMPLOYEE", "Name", "", "", _ph("pw"))  # type: ignore[reportArgumentType]
-        with self.assertRaises(ValueError):
-            store.create("user", "EMPLOYEE", "Name", "", "", _ph("pw"))  # type: ignore[reportArgumentType]  # duplicate username
-        with self.assertRaises(TypeError):
-            store.create("v", "EMPLOYEE", "Name", "", "", object())  # type: ignore[reportArgumentType]  # password_hash wrong type
+        with patch.object(UserStore, "_atomic_write", return_value="C:/fake/users.json"):
+            store = UserStore()
+            with self.assertRaises(ValueError):
+                store.create("", "EMPLOYEE", "N", "", "", _ph("pw"))  # type: ignore[reportArgumentType]
+            store.create("user", "EMPLOYEE", "Name", "", "", _ph("pw"))  # type: ignore[reportArgumentType]
+            with self.assertRaises(ValueError):
+                store.create("user", "EMPLOYEE", "Name", "", "", _ph("pw"))  # type: ignore[reportArgumentType]  # duplicate username
+            with self.assertRaises(TypeError):
+                store.create("v", "EMPLOYEE", "Name", "", "", object())  # type: ignore[reportArgumentType]  # password_hash wrong type
 
-    @patch("adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")
-    @patch("adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
+    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
     def test_update_password_happy_and_missing(self, exists: MagicMock, resolve: MagicMock) -> None:
         with patch.object(UserStore, "_atomic_write", return_value="C:/fake/users.json"):
             store = UserStore()
@@ -177,8 +178,8 @@ class UserStore_Create_Get_Update_Should(unittest.TestCase):
             with self.assertRaises(ValueError):
                 store.update_password("ghost", _ph("x"))  # type: ignore[reportArgumentType]
 
-    @patch("adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")
-    @patch("adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
+    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
     def test_list_users_returns_all(self, exists: MagicMock, resolve: MagicMock) -> None:
         store = UserStore()
         store._by_username = {  # type: ignore[reportAttributeAccessIssue]
@@ -190,15 +191,15 @@ class UserStore_Create_Get_Update_Should(unittest.TestCase):
 
 
 class UserStore_AtomicWrite_Should(unittest.TestCase):
-    @patch("adapters.driven.persistence.json.user_store.ensure_data_dir")
-    @patch("adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")
-    @patch("adapters.driven.persistence.json.user_store.os.path.dirname", return_value="C:/fake")
-    @patch("adapters.driven.persistence.json.user_store.os.makedirs")
-    @patch("adapters.driven.persistence.json.user_store.tempfile.mkstemp", return_value=(123, "C:/fake/.users.tmp.json"))
-    @patch("adapters.driven.persistence.json.user_store.os.fdopen")
-    @patch("adapters.driven.persistence.json.user_store.os.replace")
+    @patch("src.adapters.driven.persistence.json.user_store.ensure_data_dir")
+    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.dirname", return_value="C:/fake")
+    @patch("src.adapters.driven.persistence.json.user_store.os.makedirs")
+    @patch("src.adapters.driven.persistence.json.user_store.tempfile.mkstemp", return_value=(123, "C:/fake/.users.tmp.json"))
+    @patch("src.adapters.driven.persistence.json.user_store.os.fdopen")
+    @patch("src.adapters.driven.persistence.json.user_store.os.replace")
     @patch(
-        "adapters.driven.persistence.json.user_store.os.path.exists",
+        "src.adapters.driven.persistence.json.user_store.os.path.exists",
         side_effect=[False, False],
     )  # 1) _load -> False, 2) cleanup tmp -> False
     def test_atomic_write_writes_and_replaces(
