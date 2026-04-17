@@ -1,7 +1,7 @@
 from datetime import datetime
 
-from adapters.driving.cli.command_factory import CommandFactory
-from application.services.auth_service import AuthService
+from src.adapters.driving.cli.command_factory import CommandFactory
+from src.application.services.auth_service import AuthService
 from src.core.application_data import ApplicationData
 
 

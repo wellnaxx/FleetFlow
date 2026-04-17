@@ -1,9 +1,16 @@
+from src.adapters.driven.persistence.application_data.customer_repository import (
+    ApplicationDataCustomerRepository,
+)
+from src.adapters.driven.persistence.application_data.package_repository import ApplicationDataPackageRepository
+from src.adapters.driven.persistence.json.user_store import UserStore
+from src.adapters.driving.cli.command_factory import CommandFactory
+from src.adapters.driving.cli.engine import Engine
+from src.application.services.auth_service import AuthService
+from src.application.services.customer_service import CustomerService
+from src.application.use_cases.packages.create_package import CreatePackageUseCase
+from src.composition.container import Container
 from src.core.application_data import ApplicationData
-from application.services.auth_service import AuthService
-from adapters.driving.cli.command_factory import CommandFactory
-from adapters.driving.cli.engine import Engine
-from adapters.driven.persistence.json.user_store import UserStore
-from domain.enums.auth import Role
+from src.domain.enums.auth import Role
 
 
 def bootstrap_admin(auth: AuthService, store: UserStore) -> None:
@@ -19,11 +26,8 @@ def bootstrap_admin(auth: AuthService, store: UserStore) -> None:
 
 
 def main() -> None:
-    store = UserStore("users.json")
-    auth = AuthService(store)
-    bootstrap_admin(auth, store)
+    app_data = ApplicationData(current_user=None)
 
-    app_data: ApplicationData = ApplicationData(current_user=None)
     try:
         import json
         import os
@@ -31,10 +35,26 @@ def main() -> None:
         if os.path.exists(app_data.AUTOSAVE_PATH):
             with open(app_data.AUTOSAVE_PATH, encoding="utf-8") as f:
                 data = json.load(f)
-            app_data._apply_state(data) # pyright: ignore[reportPrivateUsage]
+            app_data._apply_state(data)  # pyright: ignore[reportPrivateUsage]; transitional, still ugly
     except Exception:
         pass
-    cmd_factory = CommandFactory(app_data, auth)
+
+    store = UserStore("users.json")
+    auth = AuthService(store)
+    bootstrap_admin(auth, store)
+
+    customer_repo = ApplicationDataCustomerRepository(app_data)
+    package_repo = ApplicationDataPackageRepository(app_data)
+    customer_service = CustomerService(customer_repo)
+
+    container = Container(
+        create_package_use_case=CreatePackageUseCase(
+            customer_service,
+            packages=package_repo,
+        )
+    )
+
+    cmd_factory = CommandFactory(app_data, auth, container)
     Engine(cmd_factory, app_data, auth).start()
 
 

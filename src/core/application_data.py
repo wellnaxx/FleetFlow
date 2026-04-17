@@ -5,24 +5,23 @@ import tempfile
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from adapters.driven.persistence.json.paths import resolve_data_path
-from adapters.driven.persistence.json.serialization import dt_from_str, dt_to_str
-from application.services.auth_service import AuthService
-from application.services.authorization import AuthorizationService, requires, requires_all
-from domain.entities.customer import Customer
-from domain.entities.delivery_package import DeliveryPackage
-from domain.entities.delivery_route import DeliveryRoute, RoutePosition
-from domain.entities.truck import Truck
-from domain.entities.users.user import User
-from domain.enums.auth import Permission, Role
-from domain.enums.item_status import ItemStatus
-from domain.services.map import Map
-from domain.services.vehicle_manager import VehicleManager
-from domain.value_objects.contact_info import ContactInfo
+from src.adapters.driven.persistence.json.paths import resolve_data_path
+from src.adapters.driven.persistence.json.serialization import dt_from_str, dt_to_str
+from src.application.services.auth_service import AuthService
+from src.application.services.authorization import AuthorizationService, requires, requires_all
+from src.domain.entities.customer import Customer
+from src.domain.entities.delivery_package import DeliveryPackage
+from src.domain.entities.delivery_route import DeliveryRoute, RoutePosition
+from src.domain.entities.truck import Truck
+from src.domain.entities.users.user import User
+from src.domain.enums.auth import Permission, Role
+from src.domain.enums.item_status import ItemStatus
+from src.domain.services.map import Map
+from src.domain.services.vehicle_manager import VehicleManager
 
 if TYPE_CHECKING:
-    from domain.entities.users.employee import Employee
-    from domain.entities.users.manager import Manager
+    from src.domain.entities.users.employee import Employee
+    from src.domain.entities.users.manager import Manager
 
 
 class ApplicationData:
@@ -73,7 +72,7 @@ class ApplicationData:
                     "customer_id": c.customer_id,
                     "name": c.name,
                     "email": c.email or "",
-                    "phone": getattr(c, "phone", "") or "",
+                    "phone": c.phone_number or "",
                 }
                 for c in self._customers
             ],
@@ -83,7 +82,7 @@ class ApplicationData:
                     "start": p.start_location,
                     "end": p.end_location,
                     "weight": p.weight,
-                    "customer_id": p.customer.customer_id if p.customer is not None else None,
+                    "customer_id": p.customer.customer_id,
                     "route_id": (p.route.route_id if p.route is not None else None),
                 }
                 for p in self._packages
@@ -147,12 +146,12 @@ class ApplicationData:
         self._next_route_id = int(ctr.get("next_route_id", 1))
 
         # rebuild entities
-        from domain.entities.customer import Customer as Customer_
-        from domain.value_objects.contact_info import ContactInfo
+        from src.domain.entities.customer import Customer as Customer_
+        from src.domain.value_objects.contact_info import ContactInfo
 
         id_to_customer: dict[int, Customer_] = {}
-        from domain.entities.delivery_package import DeliveryPackage
-        from domain.entities.delivery_route import DeliveryRoute
+        from src.domain.entities.delivery_package import DeliveryPackage
+        from src.domain.entities.delivery_route import DeliveryRoute
 
         for c in data.get("customers", []):
             ci = ContactInfo(name=c["name"], email=c.get("email", ""), phone_number=c.get("phone", ""))
@@ -167,7 +166,7 @@ class ApplicationData:
             cust = id_to_customer.get(int(p["customer_id"]))
             if not cust:
                 raise ValueError(f"Package {p['package_id']} refers to missing customer {p['customer_id']}")
-            pkg = DeliveryPackage(p["start"], p["end"], float(p["weight"]), cust)
+            pkg = DeliveryPackage(p["start"], p["end"], float(p["weight"]), cust, p["package_id"])
             pkg._set_package_id(int(p["package_id"]))  # pyright: ignore[reportPrivateUsage]
             self._packages.append(pkg)
             id_to_package[pkg.package_id] = pkg
@@ -412,80 +411,6 @@ class ApplicationData:
                 raise ValueError(f"Phone already in use by customer id={existing.customer_id}")
             self._customers_by_phone[c.phone_number] = c
 
-    def _generate_customer_id(self) -> int:
-        cid = self._next_customer_id
-        self._next_customer_id += 1
-        return cid
-
-    @staticmethod
-    def _same_name(a: str, b: str) -> bool:
-        return (a or "").strip().casefold() == (b or "").strip().casefold()
-
-    def _find_or_create_customer(self, name: str, email: str = "", phone: str = "") -> Customer:
-        name = (name or "").strip()
-        email = (email or "").strip().lower()
-        phone = "".join(ch for ch in (phone or "") if ch.isdigit())
-
-        by_email = self._customers_by_email.get(email) if email else None
-        by_phone = self._customers_by_phone.get(phone) if phone else None
-
-        if email and phone:
-            if by_email and by_phone:
-                if by_email is not by_phone:
-                    raise ValueError(
-                        f"Email belongs to customer ID: {by_email.customer_id}, "
-                        f"and phone belongs to customer ID: {by_phone.customer_id}."
-                    )
-                if name and not self._same_name(name, by_email.name):
-                    raise ValueError(
-                        f"Provided name '{name}' does not match existing customer "
-                        f"ID {by_email.customer_id} ('{by_email.name}')."
-                    )
-                return by_email
-
-            if by_email and not by_phone:
-                if name and not self._same_name(name, by_email.name):
-                    raise ValueError(
-                        f"Email already in use by customer ID {by_email.customer_id} ('{by_email.name}')."
-                    )
-                return by_email
-
-            if by_phone and not by_email:
-                if name and not self._same_name(name, by_phone.name):
-                    raise ValueError(
-                        f"Phone already in use by customer ID {by_phone.customer_id} ('{by_phone.name}')."
-                    )
-                return by_phone
-
-        if email and by_email:
-            if name and not self._same_name(name, by_email.name):
-                raise ValueError(
-                    f"Email already in use by customer ID {by_email.customer_id} ('{by_email.name}')."
-                )
-            return by_email
-
-        if phone and by_phone:
-            if name and not self._same_name(name, by_phone.name):
-                raise ValueError(
-                    f"Phone already in use by customer ID {by_phone.customer_id} ('{by_phone.name}')."
-                )
-            return by_phone
-
-        if name:
-            candidates = [c for c in self._customers if self._same_name(c.name, name)]
-            name_only = [c for c in candidates if c.email == "" and c.phone_number == ""]
-            if not email and not phone and len(name_only) == 1 and len(candidates) == 1:
-                return name_only[0]
-
-        contact_info = ContactInfo(name=name, email=email, phone_number=phone)
-        customer = Customer(customer_id=self._generate_customer_id(), contact=contact_info)
-        self._customers.append(customer)
-        if email:
-            self._customers_by_email[email] = customer
-        if phone:
-            self._customers_by_phone[phone] = customer
-        return customer
-
     @requires(Permission.CUSTOMER_VIEW)
     def view_all_customers(self) -> tuple[Customer, ...]:
         return tuple(self._customers)
@@ -544,17 +469,6 @@ class ApplicationData:
     @property
     def routes(self) -> tuple[DeliveryRoute, ...]:
         return tuple(self._routes)
-
-    @requires(Permission.PACKAGE_CREATE)
-    def create_package(
-        self, start: str, end: str, weight: float, name: str, email: str | None = None, phone: str | None = None
-    ) -> DeliveryPackage:
-        customer = self._find_or_create_customer(name, email or "", phone or "")
-        p = DeliveryPackage(start, end, float(weight), customer, package_id=self._gen_package_id())
-        p.status = ItemStatus.TODO
-        self._packages.append(p)
-        customer.add_package(p)
-        return p
 
     @requires_all(Permission.PACKAGE_REMOVE, Permission.PACKAGE_VIEW)
     def remove_package(self, package_id: int) -> DeliveryPackage:
@@ -739,3 +653,25 @@ class ApplicationData:
     @requires(Permission.TRUCK_VIEW)
     def view_all_trucks(self) -> tuple[Truck, ...]:
         return tuple(self.vehicle_manager.list_fleet())
+    
+    @property
+    def customer_store(self) -> list[Customer]:
+        return self._customers
+    
+    @property
+    def customer_email_store(self) -> dict[str, Customer]:
+        return self._customers_by_email
+    
+    @property
+    def customer_phone_store(self) -> dict[str, Customer]:
+        return self._customers_by_phone
+    
+    @property
+    def package_store(self) -> list[DeliveryPackage]:
+        return self._packages
+    
+    def allocate_customer_id(self) -> int:
+        return self._gen_customer_id()
+
+    def allocate_package_id(self) -> int:
+        return self._gen_package_id()

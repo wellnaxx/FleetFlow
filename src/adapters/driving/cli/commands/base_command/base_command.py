@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 
-from application.services.auth_service import AuthService
+from src.application.services.auth_service import AuthService
+from src.application.services.authorization import AuthorizationService
 from src.core.application_data import ApplicationData
 
 
@@ -24,6 +25,10 @@ class BaseCommand(ABC):
     @property
     def auth(self) -> AuthService:
         return self._auth
+    
+    @property
+    def authz(self) -> AuthorizationService:
+        return self._app_data.authz
 
     @abstractmethod
     def execute(self) -> str:
