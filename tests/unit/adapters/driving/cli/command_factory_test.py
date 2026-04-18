@@ -29,6 +29,16 @@ def _get_view_unassigned_packages_use_case(container: Any) -> Any:
 def _get_view_all_customers_use_case(container: Any) -> Any:
     return container.view_all_customers_use_case
 
+def _get_view_route_use_case(container: Any) -> Any:
+    return container.view_route_use_case
+
+
+def _get_view_all_routes_use_case(container: Any) -> Any:
+    return container.view_all_routes_use_case
+
+
+def _get_view_routes_in_progress_use_case(container: Any) -> Any:
+    return container.view_routes_in_progress_use_case
 
 class _DummyCmd:
     """Minimal command class compatible with legacy BaseCommand signature."""
@@ -55,6 +65,9 @@ class CommandFactory_Should(unittest.TestCase):
             remove_package_use_case=MagicMock(),
             view_unassigned_packages_use_case=MagicMock(),
             view_all_customers_use_case=MagicMock(),
+            view_route_use_case=MagicMock(),
+            view_all_routes_use_case=MagicMock(),
+            view_routes_in_progress_use_case=MagicMock(),
         )
         factory = CommandFactory(data=app, auth=auth, container=container)  # type: ignore[reportArgumentType]
         return factory, app, auth, container
@@ -235,4 +248,71 @@ class CommandFactory_Should(unittest.TestCase):
             app,
             auth,
             container.view_all_customers_use_case,
+        )
+
+
+    def test_viewroute_uses_view_route_use_case_from_container(self) -> None:
+        cf, app, auth, container = self.make_factory()
+
+        cmd_cls = MagicMock()
+        sentinel_cmd = object()
+        cmd_cls.return_value = sentinel_cmd
+
+        with patch.dict(
+            "src.adapters.driving.cli.command_factory._CONTAINER_COMMANDS",
+            {"viewroute": (cmd_cls, _get_view_route_use_case)},
+            clear=False,
+        ):
+            result = cf.create("viewroute 42")
+
+        self.assertIs(result, sentinel_cmd)
+        cmd_cls.assert_called_once_with(
+            ["42"],
+            app,
+            auth,
+            container.view_route_use_case,
+        )
+
+    def test_viewallroutes_uses_view_all_routes_use_case_from_container(self) -> None:
+        cf, app, auth, container = self.make_factory()
+
+        cmd_cls = MagicMock()
+        sentinel_cmd = object()
+        cmd_cls.return_value = sentinel_cmd
+
+        with patch.dict(
+            "src.adapters.driving.cli.command_factory._CONTAINER_COMMANDS",
+            {"viewallroutes": (cmd_cls, _get_view_all_routes_use_case)},
+            clear=False,
+        ):
+            result = cf.create("viewallroutes")
+
+        self.assertIs(result, sentinel_cmd)
+        cmd_cls.assert_called_once_with(
+            [],
+            app,
+            auth,
+            container.view_all_routes_use_case,
+        )
+
+    def test_viewroutesinprogress_uses_view_routes_in_progress_use_case_from_container(self) -> None:
+        cf, app, auth, container = self.make_factory()
+
+        cmd_cls = MagicMock()
+        sentinel_cmd = object()
+        cmd_cls.return_value = sentinel_cmd
+
+        with patch.dict(
+            "src.adapters.driving.cli.command_factory._CONTAINER_COMMANDS",
+            {"viewroutesinprogress": (cmd_cls, _get_view_routes_in_progress_use_case)},
+            clear=False,
+        ):
+            result = cf.create("viewroutesinprogress")
+
+        self.assertIs(result, sentinel_cmd)
+        cmd_cls.assert_called_once_with(
+            [],
+            app,
+            auth,
+            container.view_routes_in_progress_use_case,
         )
