@@ -13,7 +13,7 @@ class ViewAllCustomers_Should(unittest.TestCase):
     ) -> ViewAllCustomers:
         cmd = ViewAllCustomers.__new__(ViewAllCustomers)
         cmd._params = params or []  # type: ignore[reportAttributeAccessIssue]
-        cmd._view_all_customers_use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
 
         cmd._app_data = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         cmd._app_data.authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
@@ -28,16 +28,16 @@ class ViewAllCustomers_Should(unittest.TestCase):
             cmd.execute()
 
         self.assertIn("CUSTOMER_VIEW", str(ctx.exception))
-        cmd._view_all_customers_use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
     def test_no_customers_returns_friendly_message(self) -> None:
         cmd = self.make_cmd(authorized=True)
-        cmd._view_all_customers_use_case.execute.return_value = []  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = []  # type: ignore[reportAttributeAccessIssue]
 
         out = cmd.execute()
 
         self.assertEqual(out, "No customers.")
-        cmd._view_all_customers_use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
 
     def test_formats_multiple_customers_separated_by_blank_line(self) -> None:
         cmd = self.make_cmd(authorized=True)
@@ -60,7 +60,7 @@ class ViewAllCustomers_Should(unittest.TestCase):
         c3.email = ""
         c3.phone_number = ""
 
-        cmd._view_all_customers_use_case.execute.return_value = [  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = [  # type: ignore[reportAttributeAccessIssue]
             c1,
             c2,
             c3,
@@ -68,7 +68,7 @@ class ViewAllCustomers_Should(unittest.TestCase):
 
         out = cmd.execute()
 
-        cmd._view_all_customers_use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
         self.assertEqual(
             out,
             "Customer 1: Alice (alice@test.com, 0411111111)\n\n"
@@ -78,21 +78,21 @@ class ViewAllCustomers_Should(unittest.TestCase):
 
     def test_execute_propagates_errors_from_use_case(self) -> None:
         cmd = self.make_cmd(authorized=True)
-        cmd._view_all_customers_use_case.execute.side_effect = RuntimeError("db down")  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.side_effect = RuntimeError("db down")  # type: ignore[reportAttributeAccessIssue]
 
         with self.assertRaises(RuntimeError) as ctx:
             cmd.execute()
 
         self.assertIn("db down", str(ctx.exception))
-        cmd._view_all_customers_use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
 
     def test_ignores_params_if_present(self) -> None:
         cmd = self.make_cmd(params=["ignored"], authorized=True)
-        cmd._view_all_customers_use_case.execute.return_value = []  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = []  # type: ignore[reportAttributeAccessIssue]
 
         _ = cmd.execute()
 
-        cmd._view_all_customers_use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
 
     def test_no_mutates_flags(self) -> None:
         self.assertFalse(getattr(ViewAllCustomers, "mutates_state", False))

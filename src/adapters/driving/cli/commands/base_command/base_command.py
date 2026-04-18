@@ -25,7 +25,7 @@ class BaseCommand(ABC):
     @property
     def auth(self) -> AuthService:
         return self._auth
-    
+
     @property
     def authz(self) -> AuthorizationService:
         return self._app_data.authz
@@ -33,3 +33,17 @@ class BaseCommand(ABC):
     @abstractmethod
     def execute(self) -> str:
         raise NotImplementedError  # pragma: no cover
+
+
+class UseCaseCommand[T](BaseCommand, ABC):
+    """Base commands that depend on a single use case"""
+
+    def __init__(
+        self, params: Iterable[str], app_data: ApplicationData, auth: AuthService, use_case: T
+    ) -> None:
+        super().__init__(params, app_data, auth)
+        self._use_case = use_case
+
+    @property
+    def use_case(self) -> T:
+        return self._use_case

@@ -9,7 +9,7 @@ class TestRemovePackage_Should(unittest.TestCase):
     def make_cmd(self, params: list[str], *, authorized: bool = True) -> RemovePackage:
         cmd = RemovePackage.__new__(RemovePackage)
         cmd._params = params  # type: ignore[reportAttributeAccessIssue]
-        cmd._remove_package_use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
 
         cmd._app_data = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         cmd._app_data.authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
@@ -27,7 +27,7 @@ class TestRemovePackage_Should(unittest.TestCase):
             cmd.execute()
 
         self.assertIn("PACKAGE_REMOVE", str(ctx.exception))
-        cmd._remove_package_use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.remove_package.validate_params_exact")
     @patch("src.adapters.driving.cli.commands.remove_package.try_parse_int")
@@ -45,7 +45,7 @@ class TestRemovePackage_Should(unittest.TestCase):
         self.assertIn("Expected 1 parameter(s).", str(ctx.exception))
         mock_validate.assert_called_once_with([], 1)
         mock_try_parse.assert_not_called()
-        cmd._remove_package_use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.remove_package.validate_params_exact")
     @patch("src.adapters.driving.cli.commands.remove_package.try_parse_int")
@@ -63,7 +63,7 @@ class TestRemovePackage_Should(unittest.TestCase):
         self.assertIn("Parameter 'str' is not a valid integer.", str(ctx.exception))
         mock_validate.assert_called_once_with(["str"], 1)
         mock_try_parse.assert_called_once_with("str")
-        cmd._remove_package_use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.remove_package.validate_params_exact")
     @patch("src.adapters.driving.cli.commands.remove_package.try_parse_int")
@@ -75,14 +75,14 @@ class TestRemovePackage_Should(unittest.TestCase):
         cmd = self.make_cmd(["42"], authorized=True)
         mock_try_parse.return_value = 42
         removed_pkg = SimpleNamespace(package_id=42)
-        cmd._remove_package_use_case.execute.return_value = removed_pkg  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = removed_pkg  # type: ignore[reportAttributeAccessIssue]
 
         result = cmd.execute()
 
         self.assertEqual(result, "Package 42 removed.")
         mock_validate.assert_called_once_with(["42"], 1)
         mock_try_parse.assert_called_once_with("42")
-        cmd._remove_package_use_case.execute.assert_called_once_with(42)  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_called_once_with(42)  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.remove_package.validate_params_exact")
     @patch("src.adapters.driving.cli.commands.remove_package.try_parse_int")
@@ -93,7 +93,7 @@ class TestRemovePackage_Should(unittest.TestCase):
     ) -> None:
         cmd = self.make_cmd(["42"], authorized=True)
         mock_try_parse.return_value = 42
-        cmd._remove_package_use_case.execute.side_effect = ValueError("Package with ID 42 not found")  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.side_effect = ValueError("Package with ID 42 not found")  # type: ignore[reportAttributeAccessIssue]
 
         with self.assertRaises(ValueError) as ctx:
             cmd.execute()
@@ -101,4 +101,4 @@ class TestRemovePackage_Should(unittest.TestCase):
         self.assertIn("Package with ID 42 not found", str(ctx.exception))
         mock_validate.assert_called_once_with(["42"], 1)
         mock_try_parse.assert_called_once_with("42")
-        cmd._remove_package_use_case.execute.assert_called_once_with(42)  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_called_once_with(42)  # type: ignore[reportUnknownMemberType]

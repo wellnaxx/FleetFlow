@@ -9,7 +9,7 @@ class CreatePackage_Tests(unittest.TestCase):
     def make_cmd(self, params: list[str], *, authorized: bool = True) -> CreatePackage:
         cmd = CreatePackage.__new__(CreatePackage)
         cmd._params = params  # type: ignore[reportAttributeAccessIssue]
-        cmd._create_package_use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
 
         cmd._app_data = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         cmd._app_data.authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
@@ -27,7 +27,7 @@ class CreatePackage_Tests(unittest.TestCase):
             cmd.execute()
 
         self.assertIn("PACKAGE_CREATE", str(ctx.exception))
-        cmd._create_package_use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.create_package.validate_params_count")
     @patch("src.adapters.driving.cli.commands.create_package.try_parse_float")
@@ -40,13 +40,13 @@ class CreatePackage_Tests(unittest.TestCase):
         cmd = self.make_cmd(["A1", "B2", "12.5", "Alice"], authorized=True)
 
         pkg = SimpleNamespace(package_id=123, customer=SimpleNamespace(customer_id=55))
-        cmd._create_package_use_case.execute.return_value = pkg  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = pkg  # type: ignore[reportAttributeAccessIssue]
 
         result = cmd.execute()
 
         mock_validate.assert_called_once_with(["A1", "B2", "12.5", "Alice"], 4, 6)
         mock_parse_float.assert_called_once_with("12.5")
-        cmd._create_package_use_case.execute.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
             start="A1",
             end="B2",
             weight=12.5,
@@ -67,13 +67,13 @@ class CreatePackage_Tests(unittest.TestCase):
         cmd = self.make_cmd(["S1", "E9", "7", "Bob", "bob@ex.com", "0412345678"], authorized=True)
 
         pkg = SimpleNamespace(package_id=999, customer=SimpleNamespace(customer_id=1))
-        cmd._create_package_use_case.execute.return_value = pkg  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = pkg  # type: ignore[reportAttributeAccessIssue]
 
         result = cmd.execute()
 
         mock_validate.assert_called_once_with(["S1", "E9", "7", "Bob", "bob@ex.com", "0412345678"], 4, 6)
         mock_parse_float.assert_called_once_with("7")
-        cmd._create_package_use_case.execute.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
             start="S1",
             end="E9",
             weight=7.0,
@@ -97,7 +97,7 @@ class CreatePackage_Tests(unittest.TestCase):
             cmd.execute()
 
         self.assertIn("not a number", str(ctx.exception))
-        cmd._create_package_use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.create_package.validate_params_count")
     @patch("src.adapters.driving.cli.commands.create_package.try_parse_float")
@@ -108,13 +108,13 @@ class CreatePackage_Tests(unittest.TestCase):
     ) -> None:
         mock_parse_float.return_value = 2.5
         cmd = self.make_cmd(["A1", "B2", "2.5", "Alice"], authorized=True)
-        cmd._create_package_use_case.execute.side_effect = RuntimeError("db error")  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.side_effect = RuntimeError("db error")  # type: ignore[reportAttributeAccessIssue]
 
         with self.assertRaises(RuntimeError) as ctx:
             cmd.execute()
 
         self.assertIn("db error", str(ctx.exception))
-        cmd._create_package_use_case.execute.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
             start="A1",
             end="B2",
             weight=2.5,
@@ -134,7 +134,7 @@ class CreatePackage_Tests(unittest.TestCase):
         params = ["S", "E", "1", "N"]
         cmd = self.make_cmd(params, authorized=True)
         pkg = SimpleNamespace(package_id=1, customer=SimpleNamespace(customer_id=1))
-        cmd._create_package_use_case.execute.return_value = pkg  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = pkg  # type: ignore[reportAttributeAccessIssue]
 
         _ = cmd.execute()
 
@@ -150,11 +150,11 @@ class CreatePackage_Tests(unittest.TestCase):
         mock_parse_float.return_value = 4.2
         cmd = self.make_cmd(["S", "E", "4.2", "Name"], authorized=True)
         pkg = SimpleNamespace(package_id=5, customer=SimpleNamespace(customer_id=6))
-        cmd._create_package_use_case.execute.return_value = pkg  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = pkg  # type: ignore[reportAttributeAccessIssue]
 
         _ = cmd.execute()
 
-        cmd._create_package_use_case.execute.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
             start="S",
             end="E",
             weight=4.2,

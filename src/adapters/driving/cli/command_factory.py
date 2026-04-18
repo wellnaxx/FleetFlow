@@ -1,5 +1,6 @@
 import shlex
-from typing import TYPE_CHECKING
+from collections.abc import Callable
+from typing import Any
 
 from src.adapters.driving.cli.commands.assign_package_to_route import AssignPackageToRoute
 from src.adapters.driving.cli.commands.assign_truck_to_route import AssignTruckToRoute
@@ -8,7 +9,7 @@ from src.adapters.driving.cli.commands.auth_login import AuthLogin
 from src.adapters.driving.cli.commands.auth_logout import AuthLogout
 from src.adapters.driving.cli.commands.auth_register import AuthRegisterUser
 from src.adapters.driving.cli.commands.auth_whoami import AuthWhoAmI
-from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
+from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand, UseCaseCommand
 from src.adapters.driving.cli.commands.create_package import CreatePackage
 from src.adapters.driving.cli.commands.create_route import CreateRoute
 from src.adapters.driving.cli.commands.find_suitable_routes_for_package import FindSuitableRoutesForPackage
@@ -28,9 +29,6 @@ from src.adapters.driving.cli.commands.view_unassigned_packages import ViewUnass
 from src.application.services.auth_service import AuthService
 from src.composition.container import Container
 from src.core.application_data import ApplicationData
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 _LEGACY_REGISTRY: dict[str, type[BaseCommand]] = {
     "createroute": CreateRoute,
@@ -52,6 +50,27 @@ _LEGACY_REGISTRY: dict[str, type[BaseCommand]] = {
     "load": LoadState,
 }
 
+type CommandEntry[T] = tuple[type[UseCaseCommand[T]], Callable[[Container], T]]
+
+
+def bind_command[T](
+    command_cls: type[UseCaseCommand[T]],
+    getter: Callable[[Container], T],
+) -> CommandEntry[T]:
+    return command_cls, getter
+
+
+_CONTAINER_COMMANDS: dict[str, CommandEntry[Any]] = {
+    "createpackage": bind_command(CreatePackage, lambda container: container.create_package_use_case),
+    "viewpackage": bind_command(ViewPackage, lambda container: container.view_package_use_case),
+    "viewallpackages": bind_command(ViewAllPackages, lambda container: container.view_all_packages_use_case),
+    "removepackage": bind_command(RemovePackage, lambda container: container.remove_package_use_case),
+    "viewunassignedpackages": bind_command(
+        ViewUnassignedPackages, lambda container: container.view_unassigned_packages_use_case
+    ),
+    "viewallcustomers": bind_command(ViewAllCustomers, lambda container: container.view_all_customers_use_case),
+}
+
 
 class CommandFactory:
     """Parse raw CLI input and build command objects.
@@ -66,20 +85,11 @@ class CommandFactory:
         self._auth = auth
         self._container = container
 
-        self._command_builders: dict[str, Callable[[list[str]], BaseCommand]] = {
-            "createpackage": self._build_create_package,
-            "viewpackage": self._build_view_package,
-            "viewallpackages": self._build_view_all_packages,
-            "removepackage": self._build_remove_package,
-            "viewunassignedpackages": self._build_view_unassigned_packages,
-            "viewallcustomers": self._build_view_all_customers,
-        }
-
     def create(self, input_line: str) -> BaseCommand:
         """Create a command from a raw input line.
 
         Args:
-            line: User input (e.g., "createroute SYD MEL 2025-10-12 06:00").
+            input_line: User input (e.g., "createroute SYD MEL 2025-10-12 06:00").
         Returns:
             A command instance with parsed params.
         Raises:
@@ -89,54 +99,17 @@ class CommandFactory:
         if not tokens:
             raise ValueError("No command given.")
         name, params = tokens[0].lower(), tokens[1:]
-        builder = self._command_builders.get(name)
-        if builder:
-            return builder(params)
 
-        cls = _LEGACY_REGISTRY.get(name)
-        if not cls:
-            raise ValueError(f"Invalid command name: {name}!")
-        return cls(params, self._app_data, self._auth)
+        if entry := _CONTAINER_COMMANDS.get(name):
+            cls, get_use_case = entry
+            return cls(params, self._app_data, self._auth, get_use_case(self._container))
 
-    def _build_create_package(self, params: list[str]) -> CreatePackage:
-        return CreatePackage(
-            params,
-            self._app_data,
-            self._auth,
-            self._container.create_package_use_case,
-        )
+        if cls := _LEGACY_REGISTRY.get(name):
+            return cls(params, self._app_data, self._auth)
 
-    def _build_view_package(self, params: list[str]) -> ViewPackage:
-        return ViewPackage(
-            params,
-            self._app_data,
-            self._auth,
-            self._container.view_package_use_case,
-        )
+        raise ValueError(f"Invalid command name: {name}!")
 
-    def _build_view_all_packages(self, params: list[str]) -> ViewAllPackages:
-        return ViewAllPackages(
-            params,
-            self._app_data,
-            self._auth,
-            self._container.view_all_packages_use_case,
-        )
-
-    def _build_remove_package(self, params: list[str]) -> RemovePackage:
-        return RemovePackage(
-            params,
-            self._app_data,
-            self._auth,
-            self._container.remove_package_use_case,
-        )
-
-    def _build_view_unassigned_packages(self, params: list[str]) -> ViewUnassignedPackages:
-        return ViewUnassignedPackages(
-            params, self._app_data, self._auth, self._container.view_unassigned_packages_use_case
-        )
-
-    def _build_view_all_customers(self, params: list[str]) -> ViewAllCustomers:
-        return ViewAllCustomers(params, self._app_data, self._auth, self._container.view_all_customers_use_case)
+    
 
     def update_app(self, new_app_data: ApplicationData) -> None:
         """Called by Engine after login/logout to refresh RBAC principal."""

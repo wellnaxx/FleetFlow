@@ -1,25 +1,11 @@
-from collections.abc import Iterable
-
-from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
+from src.adapters.driving.cli.commands.base_command.base_command import UseCaseCommand
 from src.adapters.driving.cli.commands.validation_helpers import try_parse_float, validate_params_count
-from src.application.services.auth_service import AuthService
 from src.application.services.authorization import requires
 from src.application.use_cases.packages.create_package import CreatePackageUseCase
-from src.core.application_data import ApplicationData
 from src.domain.enums.auth import Permission
 
 
-class CreatePackage(BaseCommand):
-    def __init__(
-        self,
-        params: Iterable[str],
-        app_data: ApplicationData,
-        auth: AuthService,
-        create_package_use_case: CreatePackageUseCase,
-    ) -> None:
-        super().__init__(params, app_data, auth)
-        self._create_package_use_case = create_package_use_case
-
+class CreatePackage(UseCaseCommand[CreatePackageUseCase]):
     mutates_state = True
 
     @requires(Permission.PACKAGE_CREATE)
@@ -33,7 +19,7 @@ class CreatePackage(BaseCommand):
         email = self._params[4] if len(self._params) > 4 else ""
         phone = self._params[5] if len(self._params) > 5 else ""
 
-        pkg = self._create_package_use_case.execute(
+        pkg = self._use_case.execute(
             start=start,
             end=end,
             weight=weight,
