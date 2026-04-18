@@ -641,8 +641,15 @@ class ApplicationData:
     def package_store(self) -> list[DeliveryPackage]:
         return self._packages
     
+    @property
+    def route_store(self) -> list[DeliveryRoute]:
+        return self._routes
+
     def allocate_customer_id(self) -> int:
         return self._gen_customer_id()
 
     def allocate_package_id(self) -> int:
         return self._gen_package_id()
+    
+    def allocate_route_id(self) -> int:
+        return self._gen_route_id()
