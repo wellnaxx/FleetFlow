@@ -241,6 +241,16 @@ class DeliveryRoute:
             except Exception:
                 pass
 
+    def detach_package(self, package: DeliveryPackage) -> None:
+        for i, existing in enumerate(self._packages):
+            if existing.package_id == package.package_id:
+                self._packages.pop(i)
+                if package.route is self:
+                    package.route = None
+                return
+        raise ValueError(f"Package with id {package.package_id} is not assigned to route {self.route_id}.")
+
+
     def assign_packages(self, packages: list[DeliveryPackage]) -> None:
         errs = self.can_accept_packages(packages)
         if errs:
