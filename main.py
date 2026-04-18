@@ -1,16 +1,7 @@
-from src.adapters.driven.persistence.application_data.customer_repository import (
-    ApplicationDataCustomerRepository,
-)
-from src.adapters.driven.persistence.application_data.package_repository import ApplicationDataPackageRepository
 from src.adapters.driven.persistence.json.user_store import UserStore
 from src.adapters.driving.cli.command_factory import CommandFactory
 from src.adapters.driving.cli.engine import Engine
 from src.application.services.auth_service import AuthService
-from src.application.services.customer_service import CustomerService
-from src.application.use_cases.packages.create_package import CreatePackageUseCase
-from src.application.use_cases.packages.remove_package import RemovePackageUseCase
-from src.application.use_cases.packages.view_all_packages import ViewAllPackagesUseCase
-from src.application.use_cases.packages.view_package import ViewPackageUseCase
 from src.composition.container import Container
 from src.core.application_data import ApplicationData
 from src.domain.enums.auth import Role
@@ -46,19 +37,7 @@ def main() -> None:
     auth = AuthService(store)
     bootstrap_admin(auth, store)
 
-    customer_repo = ApplicationDataCustomerRepository(app_data)
-    package_repo = ApplicationDataPackageRepository(app_data)
-    customer_service = CustomerService(customer_repo)
-
-    container = Container(
-        create_package_use_case=CreatePackageUseCase(
-            customer_service,
-            packages=package_repo,
-        ),
-        view_package_use_case=ViewPackageUseCase(packages=package_repo),
-        view_all_packages_use_case=ViewAllPackagesUseCase(packages=package_repo),
-        remove_package_use_case=RemovePackageUseCase(packages=package_repo)
-    )
+    container = Container(app_data)
 
     cmd_factory = CommandFactory(app_data, auth, container)
     Engine(cmd_factory, app_data, auth).start()

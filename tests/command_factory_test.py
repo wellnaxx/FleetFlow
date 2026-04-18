@@ -42,7 +42,7 @@ class CommandFactory_Should(unittest.TestCase):
 
     def test_case_insensitive_name_and_param_parsing_with_quotes(self) -> None:
         cf, app, auth, _container = self.make_factory()
-        with patch("src.adapters.driving.cli.command_factory._REGISTRY", {"dummy": _DummyCmd}):
+        with patch("src.adapters.driving.cli.command_factory._LEGACY_REGISTRY", {"dummy": _DummyCmd}):
             cmd = cf.create('DuMmY "SYD" MEL "John Doe" "email with space@x.com"')
             self.assertIsInstance(cmd, _DummyCmd)
             self.assertEqual(cmd._params, ["SYD", "MEL", "John Doe", "email with space@x.com"])  # type: ignore[reportPrivateUsage]
@@ -51,7 +51,7 @@ class CommandFactory_Should(unittest.TestCase):
 
     def test_extra_whitespace_and_simple_params(self) -> None:
         cf, *_ = self.make_factory()
-        with patch("src.adapters.driving.cli.command_factory._REGISTRY", {"dummy": _DummyCmd}):
+        with patch("src.adapters.driving.cli.command_factory._LEGACY_REGISTRY", {"dummy": _DummyCmd}):
             cmd = cf.create("   dummy   A   B   C   ")
             self.assertEqual(cmd._params, ["A", "B", "C"])  # type: ignore[reportPrivateUsage]
 
@@ -60,7 +60,7 @@ class CommandFactory_Should(unittest.TestCase):
         app2 = SimpleNamespace(name="app2")
         cf.update_app(app2)  # type: ignore[reportArgumentType]
 
-        with patch("src.adapters.driving.cli.command_factory._REGISTRY", {"dummy": _DummyCmd}):
+        with patch("src.adapters.driving.cli.command_factory._LEGACY_REGISTRY", {"dummy": _DummyCmd}):
             cmd = cf.create("dummy X")
             self.assertIs(cmd._app_data, app2)  # type: ignore[reportPrivateUsage]
             self.assertIs(cmd._auth, auth1)  # type: ignore[reportPrivateUsage]

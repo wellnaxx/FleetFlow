@@ -1,4 +1,5 @@
 import shlex
+from typing import TYPE_CHECKING
 
 from src.adapters.driving.cli.commands.assign_package_to_route import AssignPackageToRoute
 from src.adapters.driving.cli.commands.assign_truck_to_route import AssignTruckToRoute
@@ -28,20 +29,19 @@ from src.application.services.auth_service import AuthService
 from src.composition.container import Container
 from src.core.application_data import ApplicationData
 
-_REGISTRY: dict[str, type[BaseCommand]] = {
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+_LEGACY_REGISTRY: dict[str, type[BaseCommand]] = {
     "createroute": CreateRoute,
     "removeroute": RemoveRoute,
     "viewroute": ViewRoute,
-    "createpackage": CreatePackage,
-    "viewpackage": ViewPackage,
-    "removepackage": RemovePackage,
     "findsuitabletrucksforroute": FindSuitableTrucksForRoute,
     "assigntrucktoroute": AssignTruckToRoute,
     "assignpackagetoroute": AssignPackageToRoute,
     "findsuitableroutesforpackage": FindSuitableRoutesForPackage,
     "viewallcustomers": ViewAllCustomers,
     "viewallroutes": ViewAllRoutes,
-    "viewallpackages": ViewAllPackages,
     "viewalltrucks": ViewAllTrucks,
     "viewunassignedpackages": ViewUnassignedPackages,
     "viewroutesinprogress": ViewRoutesInProgress,
@@ -56,12 +56,24 @@ _REGISTRY: dict[str, type[BaseCommand]] = {
 
 
 class CommandFactory:
-    """Parses input lines and instantiates command objects bound to app data."""
+    """Parse raw CLI input and build command objects.
+
+    Uses explicit builders for migrated commands and falls back to the legacy
+    command registry for commands that still use the old ApplicationData-based
+    path.
+    """
 
     def __init__(self, data: ApplicationData, auth: AuthService, container: Container) -> None:
         self._app_data = data
         self._auth = auth
         self._container = container
+
+        self._command_builders: dict[str, Callable[[list[str]], BaseCommand]] = {
+            "createpackage": self._build_create_package,
+            "viewpackage": self._build_view_package,
+            "viewallpackages": self._build_view_all_packages,
+            "removepackage": self._build_remove_package,
+        }
 
     def create(self, input_line: str) -> BaseCommand:
         """Create a command from a raw input line.
@@ -77,29 +89,47 @@ class CommandFactory:
         if not tokens:
             raise ValueError("No command given.")
         name, params = tokens[0].lower(), tokens[1:]
-        cls = _REGISTRY.get(name)
+        builder = self._command_builders.get(name)
+        if builder:
+            return builder(params)
+        
+        cls = _LEGACY_REGISTRY.get(name)
         if not cls:
             raise ValueError(f"Invalid command name: {name}!")
-
-        if name == "createpackage":
-            return CreatePackage(
-                params,
-                self._app_data,
-                self._auth,
-                self._container.create_package_use_case,
-            )
-
-        if name == "viewpackage":
-            return ViewPackage(params, self._app_data, self._auth, self._container.view_package_use_case)
-
-        if name == "viewallpackages":
-            return ViewAllPackages(
-                params, self._app_data, self._auth, self._container.view_all_packages_use_case
-            )
-
-        if name == "removepackage":
-            return RemovePackage(params, self._app_data, self._auth, self._container.remove_package_use_case)
         return cls(params, self._app_data, self._auth)
+    
+
+    def _build_create_package(self, params: list[str]) -> CreatePackage:
+        return CreatePackage(
+            params,
+            self._app_data,
+            self._auth,
+            self._container.create_package_use_case,
+        )
+
+    def _build_view_package(self, params: list[str]) -> ViewPackage:
+        return ViewPackage(
+            params,
+            self._app_data,
+            self._auth,
+            self._container.view_package_use_case,
+        )
+
+    def _build_view_all_packages(self, params: list[str]) -> ViewAllPackages:
+        return ViewAllPackages(
+            params,
+            self._app_data,
+            self._auth,
+            self._container.view_all_packages_use_case,
+        )
+
+    def _build_remove_package(self, params: list[str]) -> RemovePackage:
+        return RemovePackage(
+            params,
+            self._app_data,
+            self._auth,
+            self._container.remove_package_use_case,
+        )
 
     def update_app(self, new_app_data: ApplicationData) -> None:
         """Called by Engine after login/logout to refresh RBAC principal."""
