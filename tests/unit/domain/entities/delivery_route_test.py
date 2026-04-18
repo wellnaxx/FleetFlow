@@ -182,6 +182,62 @@ class DeliveryRoute_Should(unittest.TestCase):
         self.assertIs(p.route, r)
         self.assertIsNone(p.expected_arrival)
 
+    def test_detach_package_removes_package_and_clears_backref(self, *_):
+        r = DeliveryRoute("A", "B", "C")
+        p = _Pkg(1, "A", "C", 5)
+
+        r.assign_package(p)  # type: ignore[reportArgumentType]
+        self.assertIs(p.route, r)
+        self.assertIn(p, r.packages)
+
+        r.detach_package(p)  # type: ignore[reportArgumentType]
+
+        self.assertIsNone(p.route)
+        self.assertNotIn(p, r.packages)
+
+    def test_detach_package_only_removes_target(self, *_):
+        r = DeliveryRoute("A", "B", "C")
+        p1 = _Pkg(1, "A", "B", 5)
+        p2 = _Pkg(2, "A", "C", 7)
+
+        r.assign_package(p1)  # type: ignore[reportArgumentType]
+        r.assign_package(p2)  # type: ignore[reportArgumentType]
+
+        r.detach_package(p1)  # type: ignore[reportArgumentType]
+
+        self.assertIsNone(p1.route)
+        self.assertNotIn(p1, r.packages)
+
+        self.assertIs(p2.route, r)
+        self.assertIn(p2, r.packages)
+        self.assertEqual(len(r.packages), 1)
+
+    def test_detach_package_raises_when_not_assigned(self, *_):
+        r = DeliveryRoute("A", "B", "C")
+        p = _Pkg(1, "A", "C", 5)
+
+        with self.assertRaises(ValueError) as ctx:
+            r.detach_package(p)  # type: ignore[reportArgumentType]
+
+        self.assertIn("1", str(ctx.exception))
+        self.assertNotIn(p, r.packages)
+        self.assertIsNone(p.route)
+
+    def test_detach_package_raises_when_assigned_to_different_route(self, *_):
+        r1 = DeliveryRoute("A", "B", "C")
+        r2 = DeliveryRoute("A", "B", "C")
+        p = _Pkg(1, "A", "C", 5)
+
+        r2.assign_package(p)  # type: ignore[reportArgumentType]
+
+        with self.assertRaises(ValueError) as ctx:
+            r1.detach_package(p)  # type: ignore[reportArgumentType]
+
+        self.assertIn("1", str(ctx.exception))
+        self.assertIs(p.route, r2)
+        self.assertIn(p, r2.packages)
+        self.assertNotIn(p, r1.packages)
+
     def test_assign_packages_bulk_validation_and_assignment(self, *_):
         base = datetime(2025, 1, 1, 6, 0)
         r = DeliveryRoute("A", "B", "C")
