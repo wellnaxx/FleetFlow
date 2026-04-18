@@ -33,7 +33,6 @@ from src.core.application_data import ApplicationData
 _LEGACY_REGISTRY: dict[str, type[BaseCommand]] = {
     "createroute": CreateRoute,
     "removeroute": RemoveRoute,
-    "viewroute": ViewRoute,
     "findsuitabletrucksforroute": FindSuitableTrucksForRoute,
     "assigntrucktoroute": AssignTruckToRoute,
     "assignpackagetoroute": AssignPackageToRoute,
@@ -69,6 +68,7 @@ _CONTAINER_COMMANDS: dict[str, CommandEntry[Any]] = {
         ViewUnassignedPackages, lambda container: container.view_unassigned_packages_use_case
     ),
     "viewallcustomers": bind_command(ViewAllCustomers, lambda container: container.view_all_customers_use_case),
+    "viewroute": bind_command(ViewRoute, lambda container: container.view_route_use_case),
 }
 
 
