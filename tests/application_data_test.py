@@ -11,10 +11,15 @@ from src.adapters.driven.persistence.application_data.customer_repository import
 from src.adapters.driven.persistence.application_data.package_repository import ApplicationDataPackageRepository
 from src.application.services.customer_service import CustomerService
 from src.application.use_cases.packages.create_package import CreatePackageUseCase
+from src.application.use_cases.packages.remove_package import RemovePackageUseCase
 from src.core.application_data import ApplicationData
 from src.domain.enums.auth import Role
 from src.domain.enums.item_status import ItemStatus
 
+
+def make_remove_package_uc(app: ApplicationData):
+    package_repo = ApplicationDataPackageRepository(app)
+    return RemovePackageUseCase(package_repo)
 
 def make_create_package_uc(app: ApplicationData) -> CreatePackageUseCase:
     customer_repo = ApplicationDataCustomerRepository(app)
@@ -87,6 +92,15 @@ class _FakeRoute:
     def assign_package(self, pkg: Any) -> None:
         self.packages.append(pkg)
         pkg.route = self
+
+    def detach_package(self, package: Any) -> None:
+        for i, existing in enumerate(self.packages):
+            if existing.package_id == package.package_id:
+                self.packages.pop(i)
+                if getattr(package, "route", None) is self:
+                    package.route = None
+                return
+        raise ValueError(f"Package with id {package.package_id} is not assigned to this route.")
 
     def arrival_time_at(self, city: str) -> datetime:
         idx = self.locations.index(city)
@@ -528,7 +542,8 @@ class Characterization_PackageRemovalDetach_Should(unittest.TestCase):
         app = _mk_app()
         pkg = _FakePackage(1, "A", "B")
         app._packages.append(pkg)
-        removed = app.remove_package(1)
+        remove_uc = make_remove_package_uc(app)
+        removed = remove_uc.execute(pkg.package_id)
         self.assertIs(removed, pkg)
         self.assertEqual(len(app._packages), 0)
 
@@ -541,7 +556,9 @@ class Characterization_PackageRemovalDetach_Should(unittest.TestCase):
         app._routes.append(route)
         app._packages.append(pkg)
 
-        app.remove_package(1)
+        remove_uc = make_remove_package_uc(app)
+        remove_uc.execute(pkg.package_id)
+
         self.assertNotIn(pkg, route.packages)
 
     def test_remove_assigned_sets_route_to_none(self) -> None:
@@ -553,7 +570,8 @@ class Characterization_PackageRemovalDetach_Should(unittest.TestCase):
         app._routes.append(route)
         app._packages.append(pkg)
 
-        app.remove_package(1)
+        remove_uc = make_remove_package_uc(app)
+        remove_uc.execute(pkg.package_id)
         self.assertIsNone(pkg.route)
 
     def test_remove_leaves_other_packages_on_route(self) -> None:
@@ -567,7 +585,8 @@ class Characterization_PackageRemovalDetach_Should(unittest.TestCase):
         app._routes.append(route)
         app._packages.extend([pkg1, pkg2])
 
-        app.remove_package(1)
+        remove_uc = make_remove_package_uc(app)
+        remove_uc.execute(pkg1.package_id)
         self.assertIn(pkg2, route.packages)
         self.assertIs(pkg2.route, route)
 
