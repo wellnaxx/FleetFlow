@@ -39,7 +39,6 @@ _LEGACY_REGISTRY: dict[str, type[BaseCommand]] = {
     "findsuitableroutesforpackage": FindSuitableRoutesForPackage,
     "viewallroutes": ViewAllRoutes,
     "viewalltrucks": ViewAllTrucks,
-    "viewroutesinprogress": ViewRoutesInProgress,
     "login": AuthLogin,
     "logout": AuthLogout,
     "whoami": AuthWhoAmI,
@@ -70,6 +69,9 @@ _CONTAINER_COMMANDS: dict[str, CommandEntry[Any]] = {
     "viewallcustomers": bind_command(ViewAllCustomers, lambda container: container.view_all_customers_use_case),
     "viewroute": bind_command(ViewRoute, lambda container: container.view_route_use_case),
     "viewallroutes": bind_command(ViewAllRoutes, lambda container: container.view_all_routes_use_case),
+    "viewroutesinprogress": bind_command(
+        ViewRoutesInProgress, lambda container: container.view_routes_in_progress_use_case
+    ),
 }
 
 
@@ -109,8 +111,6 @@ class CommandFactory:
             return cls(params, self._app_data, self._auth)
 
         raise ValueError(f"Invalid command name: {name}!")
-
-    
 
     def update_app(self, new_app_data: ApplicationData) -> None:
         """Called by Engine after login/logout to refresh RBAC principal."""

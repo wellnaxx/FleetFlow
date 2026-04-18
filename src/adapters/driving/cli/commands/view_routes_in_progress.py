@@ -1,14 +1,18 @@
 from datetime import datetime
 
-from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
+from src.adapters.driving.cli.commands.base_command.base_command import UseCaseCommand
+from src.application.services.authorization import requires
+from src.application.use_cases.routes.view_routes_in_progress import ViewRoutesInProgressUseCase
+from src.domain.enums.auth import Permission
 
 
-class ViewRoutesInProgress(BaseCommand):
+class ViewRoutesInProgress(UseCaseCommand[ViewRoutesInProgressUseCase]):
     """Return a list of human-friendly strings for routes currently in progress."""
 
+    @requires(Permission.ROUTE_VIEW_IN_PROGRESS)
     def execute(self) -> str:
         now = datetime.now()
-        active = self._app_data.view_routes_in_progress(now=now)
+        active = self._use_case.execute(now)
         if not active:
             return "No routes in progress."
 
