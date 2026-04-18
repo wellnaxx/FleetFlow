@@ -40,7 +40,6 @@ _LEGACY_REGISTRY: dict[str, type[BaseCommand]] = {
     "assigntrucktoroute": AssignTruckToRoute,
     "assignpackagetoroute": AssignPackageToRoute,
     "findsuitableroutesforpackage": FindSuitableRoutesForPackage,
-    "viewallcustomers": ViewAllCustomers,
     "viewallroutes": ViewAllRoutes,
     "viewalltrucks": ViewAllTrucks,
     "viewroutesinprogress": ViewRoutesInProgress,
@@ -73,6 +72,7 @@ class CommandFactory:
             "viewallpackages": self._build_view_all_packages,
             "removepackage": self._build_remove_package,
             "viewunassignedpackages": self._build_view_unassigned_packages,
+            "viewallcustomers": self._build_view_all_customers,
         }
 
     def create(self, input_line: str) -> BaseCommand:
@@ -132,11 +132,11 @@ class CommandFactory:
 
     def _build_view_unassigned_packages(self, params: list[str]) -> ViewUnassignedPackages:
         return ViewUnassignedPackages(
-            params,
-            self._app_data,
-            self._auth,
-            self._container.view_unassigned_packages_use_case
+            params, self._app_data, self._auth, self._container.view_unassigned_packages_use_case
         )
+
+    def _build_view_all_customers(self, params: list[str]) -> ViewAllCustomers:
+        return ViewAllCustomers(params, self._app_data, self._auth, self._container.view_all_customers_use_case)
 
     def update_app(self, new_app_data: ApplicationData) -> None:
         """Called by Engine after login/logout to refresh RBAC principal."""

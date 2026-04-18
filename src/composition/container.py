@@ -3,6 +3,7 @@ from src.adapters.driven.persistence.application_data.customer_repository import
 )
 from src.adapters.driven.persistence.application_data.package_repository import ApplicationDataPackageRepository
 from src.application.services.customer_service import CustomerService
+from src.application.use_cases.customers.view_all_customers import ViewAllCustomersUseCase
 from src.application.use_cases.packages.create_package import CreatePackageUseCase
 from src.application.use_cases.packages.remove_package import RemovePackageUseCase
 from src.application.use_cases.packages.view_all_packages import ViewAllPackagesUseCase
@@ -26,3 +27,4 @@ class Container:
         self.view_all_packages_use_case = ViewAllPackagesUseCase(self.package_repo)
         self.remove_package_use_case = RemovePackageUseCase(self.package_repo)
         self.view_unassigned_packages_use_case = ViewUnassignedPackagesUseCase(self.package_repo)
+        self.view_all_customers_use_case = ViewAllCustomersUseCase(self.customer_repo)
