@@ -470,35 +470,6 @@ class ApplicationData:
     def routes(self) -> tuple[DeliveryRoute, ...]:
         return tuple(self._routes)
 
-    @requires_all(Permission.PACKAGE_REMOVE, Permission.PACKAGE_VIEW)
-    def remove_package(self, package_id: int) -> DeliveryPackage:
-        """Remove a package by ID.
-
-        Detaches it from a route if attached, then removes it from registry.
-
-        Args:
-            package_id: The package identifier.
-
-        Returns:
-            The removed package object.
-
-        Raises:
-            ValueError: If the package does not exist.
-            PermissionError: If the current user lacks rights.
-        """
-        pkg = self.view_package(package_id)
-        if not pkg:
-            raise ValueError(f"Package with ID {package_id} not found")
-
-        r = getattr(pkg, "route", None)
-        if r:
-            if hasattr(r, "packages"):
-                r.packages = [pp for pp in r.packages if pp.package_id != package_id]
-            pkg.route = None
-
-        self._packages.remove(pkg)
-        return pkg
-
     @requires(Permission.PACKAGE_VIEW)
     def view_package(self, package_id: int) -> DeliveryPackage | None:
         for p in self._packages:
