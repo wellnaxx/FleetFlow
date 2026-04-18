@@ -30,6 +30,7 @@ class CommandFactory_Should(unittest.TestCase):
             view_all_packages_use_case=MagicMock(),
             remove_package_use_case=MagicMock(),
             view_unassigned_packages_use_case=MagicMock(),
+            view_all_customers_use_case=MagicMock(),
         )
         factory = CommandFactory(data=app, auth=auth, container=container)  # type: ignore[reportArgumentType]
         return factory, app, auth, container
@@ -154,4 +155,21 @@ class CommandFactory_Should(unittest.TestCase):
                 app,
                 auth,
                 container.view_unassigned_packages_use_case,
+            )
+
+    def test_viewallcustomers_uses_view_all_customers_use_case_from_container(self) -> None:
+        cf, app, auth, container = self.make_factory()
+
+        with patch("src.adapters.driving.cli.command_factory.ViewAllCustomers") as cls:
+            sentinel_cmd = object()
+            cls.return_value = sentinel_cmd
+
+            result = cf.create("viewallcustomers")
+
+            self.assertIs(result, sentinel_cmd)
+            cls.assert_called_once_with(
+                [],
+                app,
+                auth,
+                container.view_all_customers_use_case,
             )
