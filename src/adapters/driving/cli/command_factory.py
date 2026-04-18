@@ -80,7 +80,7 @@ class CommandFactory:
         cls = _REGISTRY.get(name)
         if not cls:
             raise ValueError(f"Invalid command name: {name}!")
-        
+
         if name == "createpackage":
             return CreatePackage(
                 params,
@@ -88,13 +88,13 @@ class CommandFactory:
                 self._auth,
                 self._container.create_package_use_case,
             )
-        
+
         if name == "viewpackage":
-            return ViewPackage(
-                params,
-                self._app_data,
-                self._auth,
-                self._container.view_package_use_case
+            return ViewPackage(params, self._app_data, self._auth, self._container.view_package_use_case)
+
+        if name == "viewallpackages":
+            return ViewAllPackages(
+                params, self._app_data, self._auth, self._container.view_all_packages_use_case
             )
         return cls(params, self._app_data, self._auth)
 
