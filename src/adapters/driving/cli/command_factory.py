@@ -96,6 +96,9 @@ class CommandFactory:
             return ViewAllPackages(
                 params, self._app_data, self._auth, self._container.view_all_packages_use_case
             )
+
+        if name == "removepackage":
+            return RemovePackage(params, self._app_data, self._auth, self._container.remove_package_use_case)
         return cls(params, self._app_data, self._auth)
 
     def update_app(self, new_app_data: ApplicationData) -> None:
