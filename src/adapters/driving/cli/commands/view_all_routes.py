@@ -1,7 +1,11 @@
-from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
+from src.adapters.driving.cli.commands.base_command.base_command import UseCaseCommand
+from src.application.services.authorization import requires
+from src.application.use_cases.routes.view_all_routes import ViewAllRoutesUseCase
+from src.domain.enums.auth import Permission
 
 
-class ViewAllRoutes(BaseCommand):
+class ViewAllRoutes(UseCaseCommand[ViewAllRoutesUseCase]):
+    @requires(Permission.ROUTE_VIEW_ALL)
     def execute(self) -> str:
-        routes = self._app_data.view_all_routes()
+        routes = self._use_case.execute()
         return "\n\n".join(r.info() for r in routes) if routes else "No routes available."

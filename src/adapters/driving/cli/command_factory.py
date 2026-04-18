@@ -69,6 +69,7 @@ _CONTAINER_COMMANDS: dict[str, CommandEntry[Any]] = {
     ),
     "viewallcustomers": bind_command(ViewAllCustomers, lambda container: container.view_all_customers_use_case),
     "viewroute": bind_command(ViewRoute, lambda container: container.view_route_use_case),
+    "viewallroutes": bind_command(ViewAllRoutes, lambda container: container.view_all_routes_use_case),
 }
 
 
