@@ -1,53 +1,96 @@
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, patch
 
 from src.adapters.driving.cli.commands.view_package import ViewPackage
 
 
 class TestViewPackage_Should(unittest.TestCase):
-    def setUp(self):
-        self.mock_app_data = Mock()
-        self.command = ViewPackage(params=[], app_data=self.mock_app_data, auth=None)  # type: ignore[reportArgumentType]
+    def make_cmd(self, params: list[str], *, authorized: bool = True) -> ViewPackage:
+        cmd = ViewPackage.__new__(ViewPackage)
+        cmd._params = params  # type: ignore[reportAttributeAccessIssue]
+        cmd._view_package_use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
 
-    def test_successful_execution(self):
-        mock_package = Mock()
+        cmd._app_data = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._app_data.authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._app_data.authz.has.return_value = authorized  # type: ignore[reportAttributeAccessIssue]
+
+        return cmd
+
+    def test_execute_without_permission_raises(self) -> None:
+        cmd = self.make_cmd(["123"], authorized=False)
+
+        with self.assertRaises(PermissionError) as context:
+            cmd.execute()
+
+        self.assertIn("PACKAGE_VIEW", str(context.exception))
+        cmd._view_package_use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
+
+    @patch("src.adapters.driving.cli.commands.view_package.validate_params_exact")
+    @patch("src.adapters.driving.cli.commands.view_package.try_parse_int")
+    def test_successful_execution(
+        self,
+        mock_try_parse: MagicMock,
+        mock_validate: MagicMock,
+    ) -> None:
+        cmd = self.make_cmd(["123"], authorized=True)
+        mock_try_parse.return_value = 123
+
+        mock_package = MagicMock()
         mock_package.info.return_value = "Package 123 details"
+        cmd._view_package_use_case.execute.return_value = mock_package  # type: ignore[reportAttributeAccessIssue]
 
-        self.command._params = ["123"]  # type: ignore[reportAttributeAccessIssue]
-        self.mock_app_data.view_package.return_value = mock_package
+        result = cmd.execute()
 
-        result = self.command.execute()
+        mock_validate.assert_called_once_with(["123"], 1)
+        mock_try_parse.assert_called_once_with("123")
+        cmd._view_package_use_case.execute.assert_called_once_with(123)  # type: ignore[reportUnknownMemberType]
         self.assertEqual(result, "Package 123 details")
-        self.mock_app_data.view_package.assert_called_once_with(123)
 
-    def test_package_not_found(self):
-        self.command._params = ["999"]  # type: ignore[reportAttributeAccessIssue]
-        self.mock_app_data.view_package.return_value = None
+    @patch("src.adapters.driving.cli.commands.view_package.validate_params_exact")
+    @patch("src.adapters.driving.cli.commands.view_package.try_parse_int")
+    def test_package_not_found(
+        self,
+        mock_try_parse: MagicMock,
+        mock_validate: MagicMock,
+    ) -> None:
+        cmd = self.make_cmd(["999"], authorized=True)
+        mock_try_parse.return_value = 999
+        cmd._view_package_use_case.execute.side_effect = ValueError("Package with ID 999 not found")  # type: ignore[reportAttributeAccessIssue]
 
         with self.assertRaises(ValueError) as context:
-            self.command.execute()
+            cmd.execute()
 
-        self.assertTrue("Package with ID 999 not found" in str(context.exception))
-        self.mock_app_data.view_package.assert_called_once_with(999)
+        self.assertIn("Package with ID 999 not found", str(context.exception))
+        mock_validate.assert_called_once_with(["999"], 1)
+        mock_try_parse.assert_called_once_with("999")
+        cmd._view_package_use_case.execute.assert_called_once_with(999)  # type: ignore[reportUnknownMemberType]
 
-    def test_invalid_parameter_count(self):
-        with patch("src.adapters.driving.cli.commands.view_package.validate_params_exact") as mock_validate:
-            mock_validate.side_effect = ValueError("Expected 1 parameter(s).")
-            self.command._params = []  # type: ignore[reportAttributeAccessIssue]  # No parameters
+    @patch("src.adapters.driving.cli.commands.view_package.validate_params_exact")
+    def test_invalid_parameter_count(self, mock_validate: MagicMock) -> None:
+        cmd = self.make_cmd([], authorized=True)
+        mock_validate.side_effect = ValueError("Expected 1 parameter(s).")
 
-            with self.assertRaises(ValueError) as context:
-                self.command.execute()
+        with self.assertRaises(ValueError) as context:
+            cmd.execute()
 
-            self.assertTrue("Expected 1 parameter(s)." in str(context.exception))
-            mock_validate.assert_called_once_with(self.command._params, 1)  # type: ignore[reportPrivateUsage]
+        self.assertIn("Expected 1 parameter(s).", str(context.exception))
+        mock_validate.assert_called_once_with([], 1)
+        cmd._view_package_use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
-    def test_invalid_parameter_type(self):
-        with patch("src.adapters.driving.cli.commands.view_package.try_parse_int") as mock_try_parse:
-            mock_try_parse.side_effect = ValueError("Parameter 'abc' is not a valid integer.")
-            self.command._params = ["abc"]  # type: ignore[reportAttributeAccessIssue]
+    @patch("src.adapters.driving.cli.commands.view_package.validate_params_exact")
+    @patch("src.adapters.driving.cli.commands.view_package.try_parse_int")
+    def test_invalid_parameter_type(
+        self,
+        mock_try_parse: MagicMock,
+        mock_validate: MagicMock,
+    ) -> None:
+        cmd = self.make_cmd(["abc"], authorized=True)
+        mock_try_parse.side_effect = ValueError("Parameter 'abc' is not a valid integer.")
 
-            with self.assertRaises(ValueError) as context:
-                self.command.execute()
+        with self.assertRaises(ValueError) as context:
+            cmd.execute()
 
-            self.assertTrue("Parameter 'abc' is not a valid integer." in str(context.exception))
-            mock_try_parse.assert_called_once_with("abc")
+        self.assertIn("Parameter 'abc' is not a valid integer.", str(context.exception))
+        mock_validate.assert_called_once_with(["abc"], 1)
+        mock_try_parse.assert_called_once_with("abc")
+        cmd._view_package_use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]

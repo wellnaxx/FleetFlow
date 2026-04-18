@@ -88,6 +88,14 @@ class CommandFactory:
                 self._auth,
                 self._container.create_package_use_case,
             )
+        
+        if name == "viewpackage":
+            return ViewPackage(
+                params,
+                self._app_data,
+                self._auth,
+                self._container.view_package_use_case
+            )
         return cls(params, self._app_data, self._auth)
 
     def update_app(self, new_app_data: ApplicationData) -> None:

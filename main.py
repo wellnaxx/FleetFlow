@@ -8,6 +8,7 @@ from src.adapters.driving.cli.engine import Engine
 from src.application.services.auth_service import AuthService
 from src.application.services.customer_service import CustomerService
 from src.application.use_cases.packages.create_package import CreatePackageUseCase
+from src.application.use_cases.packages.view_package import ViewPackageUseCase
 from src.composition.container import Container
 from src.core.application_data import ApplicationData
 from src.domain.enums.auth import Role
@@ -51,7 +52,8 @@ def main() -> None:
         create_package_use_case=CreatePackageUseCase(
             customer_service,
             packages=package_repo,
-        )
+        ),
+        view_package_use_case=ViewPackageUseCase(packages=package_repo),
     )
 
     cmd_factory = CommandFactory(app_data, auth, container)
