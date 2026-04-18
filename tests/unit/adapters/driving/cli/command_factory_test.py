@@ -24,7 +24,13 @@ class CommandFactory_Should(unittest.TestCase):
     ) -> tuple[CommandFactory, SimpleNamespace, SimpleNamespace, SimpleNamespace]:
         app = SimpleNamespace(name="app1")
         auth = SimpleNamespace(name="auth1")
-        container = SimpleNamespace(create_package_use_case=MagicMock())
+        container = SimpleNamespace(
+            create_package_use_case=MagicMock(),
+            view_package_use_case=MagicMock(),
+            view_all_packages_use_case=MagicMock(),
+            remove_package_use_case=MagicMock(),
+            view_unassigned_packages_use_case=MagicMock(),
+        )
         factory = CommandFactory(data=app, auth=auth, container=container)  # type: ignore[reportArgumentType]
         return factory, app, auth, container
 
@@ -68,16 +74,84 @@ class CommandFactory_Should(unittest.TestCase):
     def test_createpackage_uses_create_package_use_case_from_container(self) -> None:
         cf, app, auth, container = self.make_factory()
 
-        with patch("src.adapters.driving.cli.command_factory.CreatePackage") as create_package_cls:
+        with patch("src.adapters.driving.cli.command_factory.CreatePackage") as cls:
             sentinel_cmd = object()
-            create_package_cls.return_value = sentinel_cmd
+            cls.return_value = sentinel_cmd
 
             result = cf.create('createpackage "SYD" "MEL" 5 "Alice"')
 
             self.assertIs(result, sentinel_cmd)
-            create_package_cls.assert_called_once_with(
+            cls.assert_called_once_with(
                 ["SYD", "MEL", "5", "Alice"],
                 app,
                 auth,
                 container.create_package_use_case,
+            )
+
+    def test_viewpackage_uses_view_package_use_case_from_container(self) -> None:
+        cf, app, auth, container = self.make_factory()
+
+        with patch("src.adapters.driving.cli.command_factory.ViewPackage") as cls:
+            sentinel_cmd = object()
+            cls.return_value = sentinel_cmd
+
+            result = cf.create("viewpackage 42")
+
+            self.assertIs(result, sentinel_cmd)
+            cls.assert_called_once_with(
+                ["42"],
+                app,
+                auth,
+                container.view_package_use_case,
+            )
+
+    def test_viewallpackages_uses_view_all_packages_use_case_from_container(self) -> None:
+        cf, app, auth, container = self.make_factory()
+
+        with patch("src.adapters.driving.cli.command_factory.ViewAllPackages") as cls:
+            sentinel_cmd = object()
+            cls.return_value = sentinel_cmd
+
+            result = cf.create("viewallpackages")
+
+            self.assertIs(result, sentinel_cmd)
+            cls.assert_called_once_with(
+                [],
+                app,
+                auth,
+                container.view_all_packages_use_case,
+            )
+
+    def test_removepackage_uses_remove_package_use_case_from_container(self) -> None:
+        cf, app, auth, container = self.make_factory()
+
+        with patch("src.adapters.driving.cli.command_factory.RemovePackage") as cls:
+            sentinel_cmd = object()
+            cls.return_value = sentinel_cmd
+
+            result = cf.create("removepackage 42")
+
+            self.assertIs(result, sentinel_cmd)
+            cls.assert_called_once_with(
+                ["42"],
+                app,
+                auth,
+                container.remove_package_use_case,
+            )
+
+    def test_viewunassignedpackages_uses_view_unassigned_packages_use_case_from_container(self) -> None:
+        cf, app, auth, container = self.make_factory()
+
+        with patch("src.adapters.driving.cli.command_factory.ViewUnassignedPackages") as cls:
+            sentinel_cmd = object()
+            cls.return_value = sentinel_cmd
+
+            result = cf.create("viewunassignedpackages")
+
+            self.assertIs(result, sentinel_cmd)
+            cls.assert_called_once_with(
+                [],
+                app,
+                auth,
+                container.view_unassigned_packages_use_case,
             )
