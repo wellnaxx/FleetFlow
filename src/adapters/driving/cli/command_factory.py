@@ -43,7 +43,6 @@ _LEGACY_REGISTRY: dict[str, type[BaseCommand]] = {
     "viewallcustomers": ViewAllCustomers,
     "viewallroutes": ViewAllRoutes,
     "viewalltrucks": ViewAllTrucks,
-    "viewunassignedpackages": ViewUnassignedPackages,
     "viewroutesinprogress": ViewRoutesInProgress,
     "login": AuthLogin,
     "logout": AuthLogout,
@@ -73,6 +72,7 @@ class CommandFactory:
             "viewpackage": self._build_view_package,
             "viewallpackages": self._build_view_all_packages,
             "removepackage": self._build_remove_package,
+            "viewunassignedpackages": self._build_view_unassigned_packages,
         }
 
     def create(self, input_line: str) -> BaseCommand:
@@ -92,12 +92,11 @@ class CommandFactory:
         builder = self._command_builders.get(name)
         if builder:
             return builder(params)
-        
+
         cls = _LEGACY_REGISTRY.get(name)
         if not cls:
             raise ValueError(f"Invalid command name: {name}!")
         return cls(params, self._app_data, self._auth)
-    
 
     def _build_create_package(self, params: list[str]) -> CreatePackage:
         return CreatePackage(
@@ -129,6 +128,14 @@ class CommandFactory:
             self._app_data,
             self._auth,
             self._container.remove_package_use_case,
+        )
+
+    def _build_view_unassigned_packages(self, params: list[str]) -> ViewUnassignedPackages:
+        return ViewUnassignedPackages(
+            params,
+            self._app_data,
+            self._auth,
+            self._container.view_unassigned_packages_use_case
         )
 
     def update_app(self, new_app_data: ApplicationData) -> None:

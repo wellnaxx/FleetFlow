@@ -7,6 +7,7 @@ from src.application.use_cases.packages.create_package import CreatePackageUseCa
 from src.application.use_cases.packages.remove_package import RemovePackageUseCase
 from src.application.use_cases.packages.view_all_packages import ViewAllPackagesUseCase
 from src.application.use_cases.packages.view_package import ViewPackageUseCase
+from src.application.use_cases.packages.view_unassigned_packages import ViewUnassignedPackagesUseCase
 from src.core.application_data import ApplicationData
 
 
@@ -24,3 +25,4 @@ class Container:
         self.view_package_use_case = ViewPackageUseCase(self.package_repo)
         self.view_all_packages_use_case = ViewAllPackagesUseCase(self.package_repo)
         self.remove_package_use_case = RemovePackageUseCase(self.package_repo)
+        self.view_unassigned_packages_use_case = ViewUnassignedPackagesUseCase(self.package_repo)
