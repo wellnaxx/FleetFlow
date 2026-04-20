@@ -29,6 +29,11 @@ def _get_view_unassigned_packages_use_case(container: Any) -> Any:
 def _get_view_all_customers_use_case(container: Any) -> Any:
     return container.view_all_customers_use_case
 
+
+def _get_create_route_use_case(container: Any) -> Any:
+    return container.create_route_use_case
+
+
 def _get_view_route_use_case(container: Any) -> Any:
     return container.view_route_use_case
 
@@ -39,6 +44,7 @@ def _get_view_all_routes_use_case(container: Any) -> Any:
 
 def _get_view_routes_in_progress_use_case(container: Any) -> Any:
     return container.view_routes_in_progress_use_case
+
 
 class _DummyCmd:
     """Minimal command class compatible with legacy BaseCommand signature."""
@@ -65,6 +71,7 @@ class CommandFactory_Should(unittest.TestCase):
             remove_package_use_case=MagicMock(),
             view_unassigned_packages_use_case=MagicMock(),
             view_all_customers_use_case=MagicMock(),
+            create_route_use_case=MagicMock(),
             view_route_use_case=MagicMock(),
             view_all_routes_use_case=MagicMock(),
             view_routes_in_progress_use_case=MagicMock(),
@@ -248,6 +255,28 @@ class CommandFactory_Should(unittest.TestCase):
             app,
             auth,
             container.view_all_customers_use_case,
+        )
+
+    def test_createroute_uses_create_route_use_case_from_container(self) -> None:
+        cf, app, auth, container = self.make_factory()
+
+        cmd_cls = MagicMock()
+        sentinel_cmd = object()
+        cmd_cls.return_value = sentinel_cmd
+
+        with patch.dict(
+            "src.adapters.driving.cli.command_factory._CONTAINER_COMMANDS",
+            {"createroute": (cmd_cls, _get_create_route_use_case)},
+            clear=False,
+        ):
+            result = cf.create('createroute "SYD" "MEL" "2025-10-12" "06:00"')
+
+        self.assertIs(result, sentinel_cmd)
+        cmd_cls.assert_called_once_with(
+            ["SYD", "MEL", "2025-10-12", "06:00"],
+            app,
+            auth,
+            container.create_route_use_case,
         )
 
 
