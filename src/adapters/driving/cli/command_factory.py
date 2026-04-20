@@ -37,7 +37,6 @@ _LEGACY_REGISTRY: dict[str, type[BaseCommand]] = {
     "assigntrucktoroute": AssignTruckToRoute,
     "assignpackagetoroute": AssignPackageToRoute,
     "findsuitableroutesforpackage": FindSuitableRoutesForPackage,
-    "viewallroutes": ViewAllRoutes,
     "viewalltrucks": ViewAllTrucks,
     "login": AuthLogin,
     "logout": AuthLogout,
