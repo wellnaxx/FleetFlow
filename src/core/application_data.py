@@ -11,12 +11,11 @@ from src.application.services.auth_service import AuthService
 from src.application.services.authorization import AuthorizationService, requires, requires_all
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
-from src.domain.entities.delivery_route import DeliveryRoute, RoutePosition
+from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.entities.truck import Truck
 from src.domain.entities.users.user import User
 from src.domain.enums.auth import Permission, Role
 from src.domain.enums.item_status import ItemStatus
-from src.domain.services.map import Map
 from src.domain.services.vehicle_manager import VehicleManager
 
 if TYPE_CHECKING:
@@ -419,52 +418,11 @@ class ApplicationData:
     def customers(self) -> tuple[Customer, ...]:
         return tuple(self._customers)
 
-    @requires(Permission.ROUTE_CREATE)
-    def create_route(self, locations: list[str], departure_time: datetime | None) -> DeliveryRoute:
-        if len(locations) < 2:
-            raise ValueError("Invalid number of locations. A route must contain at least 2 locations.")
-        for c in locations:
-            if not Map.is_valid_location(c):
-                raise ValueError(f"Invalid location: {c}")
-        r = DeliveryRoute(*locations, departure_time=departure_time, route_id=self._gen_route_id())
-        self._routes.append(r)
-        return r
-
     def find_route(self, route_id: int) -> DeliveryRoute | None:
         for r in self._routes:
             if r.route_id == route_id:
                 return r
         return None
-
-    @requires(Permission.ROUTE_REMOVE)
-    def remove_route(self, route_id: int) -> DeliveryRoute:
-        r = self.find_route(route_id)
-        if not r:
-            raise ValueError(f"Route with ID {route_id} not found")
-        self._routes.remove(r)
-        if r.truck:
-            r.truck.release()
-        return r
-
-    @requires(Permission.ROUTE_VIEW)
-    def view_route(self, route_id: int) -> DeliveryRoute | None:
-        return self.find_route(route_id)
-
-    @requires(Permission.ROUTE_VIEW_IN_PROGRESS)
-    def view_routes_in_progress(
-        self, now: datetime | None = None
-    ) -> tuple[tuple[DeliveryRoute, RoutePosition], ...]:
-        now = now or datetime.now()
-        active: list[tuple[DeliveryRoute, RoutePosition]] = []
-        for r in self._routes:
-            pos = r.current_position(now)
-            if pos.kind in {"AT_STOP", "IN_TRANSIT"}:
-                active.append((r, pos))
-        return tuple(active)
-
-    @requires(Permission.ROUTE_VIEW_ALL)
-    def view_all_routes(self) -> tuple[DeliveryRoute, ...]:
-        return tuple(self._routes)
 
     @property
     def routes(self) -> tuple[DeliveryRoute, ...]:

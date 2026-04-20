@@ -9,13 +9,36 @@ from src.adapters.driven.persistence.application_data.customer_repository import
     ApplicationDataCustomerRepository,
 )
 from src.adapters.driven.persistence.application_data.package_repository import ApplicationDataPackageRepository
+from src.adapters.driven.persistence.application_data.route_repository import ApplicationDataRouteRepository
 from src.application.services.customer_service import CustomerService
 from src.application.use_cases.packages.create_package import CreatePackageUseCase
 from src.application.use_cases.packages.remove_package import RemovePackageUseCase
+from src.application.use_cases.routes.create_route import CreateRouteUseCase
+from src.application.use_cases.routes.remove_route import RemoveRouteUseCase
+from src.application.use_cases.routes.view_all_routes import ViewAllRoutesUseCase
+from src.application.use_cases.routes.view_route import ViewRouteUseCase
 from src.core.application_data import ApplicationData
 from src.domain.enums.auth import Role
 from src.domain.enums.item_status import ItemStatus
 
+
+def make_create_route_uc(app: ApplicationData):
+    route_repo = ApplicationDataRouteRepository(app)
+    return CreateRouteUseCase(route_repo)
+
+
+def make_view_all_routes_uc(app: ApplicationData):
+    route_repo = ApplicationDataRouteRepository(app)
+    return ViewAllRoutesUseCase(route_repo)
+
+
+def make_view_route_uc(app: ApplicationData):
+    route_repo = ApplicationDataRouteRepository(app)
+    return ViewRouteUseCase(route_repo)
+
+def make_remove_route_uc(app: ApplicationData):
+    route_repo = ApplicationDataRouteRepository(app)
+    return RemoveRouteUseCase(route_repo)
 
 def make_remove_package_uc(app: ApplicationData):
     package_repo = ApplicationDataPackageRepository(app)
@@ -38,6 +61,25 @@ def _mk_app() -> Any:
     app.vehicle_manager = MagicMock()  # type: ignore[assignment]
     app.vehicle_manager.vehicles = []
     return app
+
+def _fake_delivery_route_ctor(
+    *locs: str,
+    departure_time: datetime | None = None,
+    route_id: int | None = None,
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        route_id=route_id,
+        locations=list(locs),
+        start_location=locs[0],
+        end_location=locs[-1],
+        departure_time=departure_time,
+        packages=[],
+        truck=None,
+    )
+
+
+def _location_is_not_bad(location: str) -> bool:
+    return location != "BAD"
 
 
 # ---------------------------
@@ -149,52 +191,47 @@ class _FakePackage:
 
 
 class ApplicationData_CreateRemove_Should(unittest.TestCase):
-    @patch("src.core.application_data.Map.is_valid_location", return_value=True)
+    @patch("src.application.use_cases.routes.create_route.Map.is_valid_location", return_value=True)
     def test_create_route_find_and_remove(self, _is_valid: MagicMock) -> None:
         app = _mk_app()
-        # Patch DeliveryRoute to bypass its own strict validation
-        with patch("src.core.application_data.DeliveryRoute") as DR:
-            # make a simple route object exposing attributes used later
-            DR.side_effect = lambda *locs, departure_time=None, route_id=None: SimpleNamespace(  # type: ignore[reportUnknownLambdaType]
-                route_id=route_id,
-                locations=list(locs),  # type: ignore[reportUnknownArgumentType]
-                start_location=locs[0],
-                end_location=locs[-1],
-                departure_time=departure_time,
-                packages=[],
-                truck=None,
-            )
-            r = app.create_route(["A", "B"], None)
+
+        with patch("src.application.use_cases.routes.create_route.DeliveryRoute") as DR:
+            DR.side_effect = _fake_delivery_route_ctor
+
+            create_route = make_create_route_uc(app)
+            remove_route = make_remove_route_uc(app)
+
+            r = create_route.execute(["A", "B"], None)
             self.assertIs(app.find_route(r.route_id), r)
-            # attach truck and ensure release on remove
+
             truck = _FakeTruck(vehicle_id=5)
-            r.truck = truck
+            r.truck = truck  # type: ignore[reportAttributeAccessIssue]
             truck.route = r
-            removed = app.remove_route(r.route_id)
+
+            removed = remove_route.execute(r.route_id)
+
             self.assertIs(removed, r)
             self.assertIsNone(truck.route)
+            self.assertIsNone(app.find_route(r.route_id))
 
-    @patch("src.core.application_data.Map.is_valid_location", side_effect=lambda c: c != "BAD")  # type: ignore[reportUnknownLambdaType]
+    @patch(
+        "src.application.use_cases.routes.create_route.Map.is_valid_location",
+        side_effect=_location_is_not_bad,
+    )
     def test_create_route_validates_locations(self, is_valid: MagicMock) -> None:
         app = _mk_app()
-        with self.assertRaises(ValueError):
-            app.create_route(["A"], None)
+        create_route = make_create_route_uc(app)
 
         with self.assertRaises(ValueError):
-            app.create_route(["A", "BAD"], None)
+            create_route.execute(["A"], None)
 
-        # Patch DeliveryRoute so the “happy path” doesn’t hit real validation
-        with patch("src.core.application_data.DeliveryRoute") as DR:
-            DR.side_effect = lambda *locs, departure_time=None, route_id=None: SimpleNamespace(  # type: ignore[reportUnknownLambdaType]
-                route_id=route_id,
-                locations=list(locs),  # type: ignore[reportUnknownArgumentType]
-                start_location=locs[0],
-                end_location=locs[-1],
-                departure_time=departure_time,
-                packages=[],
-                truck=None,
-            )
-            _ = app.create_route(["A", "B", "C"], None)  # ok under our Map + fake DeliveryRoute
+        with self.assertRaises(ValueError):
+            create_route.execute(["A", "BAD"], None)
+
+        with patch("src.application.use_cases.routes.create_route.DeliveryRoute") as DR:
+            DR.side_effect = _fake_delivery_route_ctor
+
+            _ = create_route.execute(["A", "B", "C"], None)
 
     def test_view_routes_and_packages_helpers(self) -> None:
         app = _mk_app()
@@ -202,9 +239,12 @@ class ApplicationData_CreateRemove_Should(unittest.TestCase):
         p = SimpleNamespace(package_id=2)
         app._routes = [r]
         app._packages = [p]
+
+        view_all_routes = make_view_all_routes_uc(app)
+
         self.assertIn(r, app.routes)
         self.assertIn(p, app.packages)
-        self.assertIn(r, app.view_all_routes())
+        self.assertIn(r, view_all_routes.execute())
         self.assertIn(p, app.view_all_packages())
 
 
@@ -596,10 +636,12 @@ class Characterization_SaveLoadRoundTrip_Should(unittest.TestCase):
 
     def test_round_trip_preserves_counters(self) -> None:
         app = _mk_app()
-        # Create real objects so counters advance (valid Map locations)
-        app.create_route(["SYD", "MEL"], departure_time=None)
-        uc = make_create_package_uc(app)
-        uc.execute("SYD", "MEL", 5.0, "Alice", "a@test.com")
+        create_route = make_create_route_uc(app)
+        create_route.execute(["SYD", "MEL"], departure_time=None)
+
+        create_package = make_create_package_uc(app)
+        create_package.execute("SYD", "MEL", 5.0, "Alice", "a@test.com")
+
         state = app._dump_state()
 
         app2 = _mk_app()
@@ -621,7 +663,9 @@ class Characterization_SaveLoadRoundTrip_Should(unittest.TestCase):
 
     def test_round_trip_preserves_routes(self) -> None:
         app = _mk_app()
-        r = app.create_route(["SYD", "MEL", "ADL"], departure_time=None)
+        create_route = make_create_route_uc(app)
+        r = create_route.execute(["SYD", "MEL", "ADL"], departure_time=None)
+
         state = app._dump_state()
 
         app2 = _mk_app()
@@ -632,9 +676,12 @@ class Characterization_SaveLoadRoundTrip_Should(unittest.TestCase):
 
     def test_round_trip_preserves_package_route_link(self) -> None:
         app = _mk_app()
-        route = app.create_route(["SYD", "MEL"], departure_time=None)
-        uc = make_create_package_uc(app)
-        pkg = uc.execute("SYD", "MEL", 2.0, "Carl", "carl@test.com")
+        create_route = make_create_route_uc(app)
+        route = create_route.execute(["SYD", "MEL"], departure_time=None)
+
+        create_package = make_create_package_uc(app)
+        pkg = create_package.execute("SYD", "MEL", 2.0, "Carl", "carl@test.com")
+
         app.assign_packages_to_route(route.route_id, [pkg.package_id])
         state = app._dump_state()
 
@@ -754,8 +801,3 @@ class Characterization_RBAC_Should(unittest.TestCase):
         app = self._app_for_role(Role.MANAGER)
         result = app.view_all_packages()
         self.assertEqual(result, ())
-
-    def test_no_user_cannot_create_route(self) -> None:
-        app = ApplicationData(current_user=None)
-        with self.assertRaises(PermissionError):
-            app.create_route(["SYD", "MEL"], departure_time=None)
