@@ -10,6 +10,7 @@ from src.application.use_cases.packages.remove_package import RemovePackageUseCa
 from src.application.use_cases.packages.view_all_packages import ViewAllPackagesUseCase
 from src.application.use_cases.packages.view_package import ViewPackageUseCase
 from src.application.use_cases.packages.view_unassigned_packages import ViewUnassignedPackagesUseCase
+from src.application.use_cases.routes.create_route import CreateRouteUseCase
 from src.application.use_cases.routes.view_all_routes import ViewAllRoutesUseCase
 from src.application.use_cases.routes.view_route import ViewRouteUseCase
 from src.application.use_cases.routes.view_routes_in_progress import ViewRoutesInProgressUseCase
@@ -36,3 +37,4 @@ class Container:
         self.view_route_use_case = ViewRouteUseCase(self.route_repo)
         self.view_all_routes_use_case = ViewAllRoutesUseCase(self.route_repo)
         self.view_routes_in_progress_use_case = ViewRoutesInProgressUseCase(self.route_repo)
+        self.create_route_use_case = CreateRouteUseCase(self.route_repo)
