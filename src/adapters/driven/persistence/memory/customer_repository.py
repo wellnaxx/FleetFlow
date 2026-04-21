@@ -13,6 +13,16 @@ class InMemoryCustomerRepository:
         return max(self._customers_by_id.keys()) + 1
 
     def add(self, customer: Customer) -> None:
+        if customer.customer_id in self._customers_by_id:
+            raise ValueError(f"Customer with id {customer.customer_id} already exists.")
+        if customer.email:
+            existing_id = self._id_by_email.get(customer.email)
+            if existing_id is not None and existing_id != customer.customer_id:
+                raise ValueError(f"Email already in use by customer id={existing_id}")
+        if customer.phone_number:
+            existing_id = self._id_by_phone.get(customer.phone_number)
+            if existing_id is not None and existing_id != customer.customer_id:
+                raise ValueError(f"Phone already in use by customer id={existing_id}")
         self._customers_by_id[customer.customer_id] = customer
         if customer.email:
             self._id_by_email[customer.email] = customer.customer_id
