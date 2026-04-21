@@ -548,33 +548,26 @@ class ApplicationData:
         results.sort(key=lambda x: (x["eta"] is None, x["eta"] or datetime.max))
         return results
 
-    @requires(Permission.ROUTE_FIND_TRUCK_FOR)
-    def find_suitable_trucks_for_route(self, route_id: int) -> list[Truck]:
-        route = self.find_route(route_id)
-        if not route:
-            raise ValueError(f"Route with ID {route_id} not found")
-        return self.vehicle_manager.find_available_for_route(route)
-
     @requires(Permission.TRUCK_VIEW)
     def view_all_trucks(self) -> tuple[Truck, ...]:
         return tuple(self.vehicle_manager.list_fleet())
-    
+
     @property
     def customer_store(self) -> list[Customer]:
         return self._customers
-    
+
     @property
     def customer_email_store(self) -> dict[str, Customer]:
         return self._customers_by_email
-    
+
     @property
     def customer_phone_store(self) -> dict[str, Customer]:
         return self._customers_by_phone
-    
+
     @property
     def package_store(self) -> list[DeliveryPackage]:
         return self._packages
-    
+
     @property
     def route_store(self) -> list[DeliveryRoute]:
         return self._routes
@@ -584,6 +577,6 @@ class ApplicationData:
 
     def allocate_package_id(self) -> int:
         return self._gen_package_id()
-    
+
     def allocate_route_id(self) -> int:
         return self._gen_route_id()
