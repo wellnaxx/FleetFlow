@@ -16,6 +16,7 @@ from src.domain.entities.truck import Truck
 from src.domain.entities.users.user import User
 from src.domain.enums.auth import Permission, Role
 from src.domain.enums.item_status import ItemStatus
+from src.domain.enums.truck_status import TruckStatus
 from src.domain.services.vehicle_manager import VehicleManager
 
 if TYPE_CHECKING:
@@ -131,23 +132,18 @@ class ApplicationData:
         if ver != 1:
             raise ValueError(f"Unsupported state version: {ver}")
 
-        # clear tables
-        self._routes.clear()
-        self._packages.clear()
-        self._customers.clear()
-        self._customers_by_email.clear()
-        self._customers_by_phone.clear()
-
-        # counters
         ctr = data.get("counters", {})
-        self._next_customer_id = int(ctr.get("next_customer_id", 1))
-        self._next_package_id = int(ctr.get("next_package_id", 1))
-        self._next_route_id = int(ctr.get("next_route_id", 1))
+        next_customer_id = int(ctr.get("next_customer_id", 1))
+        next_package_id = int(ctr.get("next_package_id", 1))
+        next_route_id = int(ctr.get("next_route_id", 1))
 
         # rebuild entities
         from src.domain.entities.customer import Customer as Customer_
         from src.domain.value_objects.contact_info import ContactInfo
 
+        customers: list[Customer] = []
+        customers_by_email: dict[str, Customer] = {}
+        customers_by_phone: dict[str, Customer] = {}
         id_to_customer: dict[int, Customer_] = {}
         from src.domain.entities.delivery_package import DeliveryPackage
         from src.domain.entities.delivery_route import DeliveryRoute
@@ -155,39 +151,41 @@ class ApplicationData:
         for c in data.get("customers", []):
             ci = ContactInfo(name=c["name"], email=c.get("email", ""), phone_number=c.get("phone", ""))
             cust = Customer(customer_id=int(c["customer_id"]), contact=ci)
-            self._customers.append(cust)
+            customers.append(cust)
             assert cust.customer_id is not None
             id_to_customer[cust.customer_id] = cust
-            self._index_customer(cust)
+            self._index_customer_record(cust, customers_by_email, customers_by_phone)
 
         id_to_package: dict[int, DeliveryPackage] = {}
+        packages: list[DeliveryPackage] = []
         for p in data.get("packages", []):
             cust = id_to_customer.get(int(p["customer_id"]))
             if not cust:
                 raise ValueError(f"Package {p['package_id']} refers to missing customer {p['customer_id']}")
             pkg = DeliveryPackage(p["start"], p["end"], float(p["weight"]), cust, p["package_id"])
             pkg._set_package_id(int(p["package_id"]))  # pyright: ignore[reportPrivateUsage]
-            self._packages.append(pkg)
+            packages.append(pkg)
             id_to_package[pkg.package_id] = pkg
             cust.add_package(pkg)
 
         id_to_route: dict[int, DeliveryRoute] = {}
+        routes: list[DeliveryRoute] = []
         for r in data.get("routes", []):
             dep = dt_from_str(r.get("departure_time"))
             route = DeliveryRoute(*r["locations"], departure_time=dep)
             route.route_id = int(r["route_id"])
             id_to_route[route.route_id] = route
-            self._routes.append(route)
+            routes.append(route)
 
-        # link trucks and packages
+        route_truck_pairs: list[tuple[DeliveryRoute, Truck]] = []
         for r in data.get("routes", []):
             route = id_to_route[int(r["route_id"])]
             v_id = r.get("truck_vehicle_id")
             if v_id is not None:
                 truck = self.vehicle_manager.find_by_id(int(v_id))
-                if truck:
-                    route.truck = truck
-                    truck.assign(route, route.start_location)
+                if truck is None:
+                    raise ValueError(f"Route {route.route_id} refers to missing truck {v_id}")
+                route_truck_pairs.append((route, truck))
             for pid in r.get("package_ids", []):
                 pkg = id_to_package.get(int(pid))
                 if not pkg:
@@ -197,6 +195,20 @@ class ApplicationData:
                 else:
                     route.packages.append(pkg)
                     pkg.route = route
+
+        self._reset_vehicle_manager_state()
+        for route, truck in route_truck_pairs:
+            route.truck = truck
+            truck.assign(route, route.start_location)
+
+        self._routes = routes
+        self._packages = packages
+        self._customers = customers
+        self._customers_by_email = customers_by_email
+        self._customers_by_phone = customers_by_phone
+        self._next_customer_id = next_customer_id
+        self._next_package_id = next_package_id
+        self._next_route_id = next_route_id
 
         # refresh derived fields
         with contextlib.suppress(Exception):
@@ -399,16 +411,39 @@ class ApplicationData:
         return delta
 
     def _index_customer(self, c: Customer) -> None:
-        if c.email:
-            existing = self._customers_by_email.get(c.email)
-            if existing and existing is not c:
+        self._index_customer_record(c, self._customers_by_email, self._customers_by_phone)
+
+    @staticmethod
+    def _index_customer_record(
+        customer: Customer,
+        by_email: dict[str, Customer],
+        by_phone: dict[str, Customer],
+    ) -> None:
+        if customer.email:
+            existing = by_email.get(customer.email)
+            if existing and existing is not customer:
                 raise ValueError(f"Email already in use by customer id={existing.customer_id}")
-            self._customers_by_email[c.email] = c
-        if c.phone_number:
-            existing = self._customers_by_phone.get(c.phone_number)
-            if existing and existing is not c:
+            by_email[customer.email] = customer
+        if customer.phone_number:
+            existing = by_phone.get(customer.phone_number)
+            if existing and existing is not customer:
                 raise ValueError(f"Phone already in use by customer id={existing.customer_id}")
-            self._customers_by_phone[c.phone_number] = c
+            by_phone[customer.phone_number] = customer
+
+    def _reset_vehicle_manager_state(self) -> None:
+        vehicles = getattr(self.vehicle_manager, "vehicles", None)
+        if vehicles is None:
+            return
+
+        with contextlib.suppress(Exception):
+            self.vehicle_manager.disperse_trucks()
+
+        for truck in vehicles:
+            truck.route = None
+            truck.status = TruckStatus.FREE
+            truck.busy_from = None
+            truck.busy_until = None
+            truck.in_transit_to = None
 
     @requires(Permission.CUSTOMER_VIEW)
     def view_all_customers(self) -> tuple[Customer, ...]:

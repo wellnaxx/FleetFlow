@@ -15,6 +15,7 @@ from src.adapters.driven.persistence.application_data.route_repository import (
 )
 from src.application.services.customer_service import CustomerService
 from src.application.use_cases.packages.create_package import CreatePackageUseCase
+from src.application.use_cases.routes.assign_truck_to_route import AssignTruckToRouteUseCase
 from src.application.use_cases.routes.create_route import CreateRouteUseCase
 from src.core.application_data import ApplicationData
 from src.domain.enums.auth import Role
@@ -24,6 +25,11 @@ from src.domain.enums.item_status import ItemStatus
 def make_create_route_uc(app: ApplicationData) -> CreateRouteUseCase:
     route_repo = ApplicationDataRouteRepository(app)
     return CreateRouteUseCase(route_repo)
+
+
+def make_assign_truck_uc(app: ApplicationData) -> AssignTruckToRouteUseCase:
+    route_repo = ApplicationDataRouteRepository(app)
+    return AssignTruckToRouteUseCase(route_repo, app.vehicle_manager)
 
 
 def make_create_package_uc(app: ApplicationData) -> CreatePackageUseCase:
@@ -553,6 +559,84 @@ class Characterization_SaveLoadRoundTrip_Should(unittest.TestCase):
         app = _mk_app()
         with self.assertRaises(ValueError):
             app._apply_state({"schema_version": 99})
+
+    def test_apply_invalid_payload_preserves_existing_state(self) -> None:
+        app = ApplicationData(current_user=None)
+        create_route = make_create_route_uc(app)
+        assign_truck = make_assign_truck_uc(app)
+
+        route = create_route.execute(["SYD", "MEL"], departure_time=None)
+        truck = app.vehicle_manager.find_by_id(1001)
+        assert truck is not None
+        truck.current_location = "SYD"
+        assign_truck.execute(1001, route.route_id, now=datetime(2027, 1, 1, 10, 0))
+
+        bad_payload = {
+            "schema_version": 1,
+            "counters": {"next_customer_id": 1, "next_package_id": 1, "next_route_id": 1},
+            "customers": [],
+            "packages": [
+                {
+                    "package_id": 1,
+                    "start": "SYD",
+                    "end": "MEL",
+                    "weight": 1.0,
+                    "customer_id": 999,
+                    "route_id": None,
+                }
+            ],
+            "routes": [],
+        }
+
+        with self.assertRaises(ValueError):
+            app._apply_state(bad_payload) # pyright: ignore[reportPrivateUsage]
+
+        self.assertEqual(app.route_store, [route])
+        self.assertIs(truck.route, route)
+        self.assertIs(app.find_route(route.route_id), route)
+
+    def test_apply_state_resets_existing_truck_assignments_before_loading(self) -> None:
+        app = ApplicationData(current_user=None)
+        create_route = make_create_route_uc(app)
+        assign_truck = make_assign_truck_uc(app)
+
+        route = create_route.execute(["SYD", "MEL"], departure_time=None)
+        truck = app.vehicle_manager.find_by_id(1001)
+        assert truck is not None
+        truck.current_location = "SYD"
+        assign_truck.execute(1001, route.route_id, now=datetime(2027, 1, 1, 10, 0))
+
+        empty_payload: dict[str, Any] = {
+            "schema_version": 1,
+            "counters": {"next_customer_id": 1, "next_package_id": 1, "next_route_id": 1},
+            "customers": [],
+            "packages": [],
+            "routes": [],
+        }
+
+        app._apply_state(empty_payload) # pyright: ignore[reportPrivateUsage]
+
+        self.assertEqual(app.route_store, [])
+        self.assertIsNone(truck.route)
+        self.assertEqual(truck.status, "Free")
+
+    def test_apply_state_rejects_duplicate_customer_contacts(self) -> None:
+        app = ApplicationData(current_user=None)
+        payload = {
+            "schema_version": 1,
+            "counters": {"next_customer_id": 3, "next_package_id": 1, "next_route_id": 1},
+            "customers": [
+                {"customer_id": 1, "name": "Alice", "email": "dup@example.com", "phone": "0412345678"},
+                {"customer_id": 2, "name": "Bob", "email": "dup@example.com", "phone": "0499999999"},
+            ],
+            "packages": [],
+            "routes": [],
+        }
+
+        with self.assertRaises(ValueError) as ctx:
+            app._apply_state(payload) # pyright: ignore[reportPrivateUsage]
+
+        self.assertIn("Email already in use", str(ctx.exception))
 
 
 class Characterization_RBAC_Should(unittest.TestCase):
