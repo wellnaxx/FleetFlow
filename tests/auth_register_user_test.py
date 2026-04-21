@@ -7,11 +7,13 @@ from src.domain.enums.auth import Role
 
 
 class AuthRegisterUser_Should(unittest.TestCase):
-    def make_cmd(self, params: list[str] | None = None) -> AuthRegisterUser:
+    def make_cmd(self, params: list[str] | None = None, *, authorized: bool = True) -> AuthRegisterUser:
         cmd = AuthRegisterUser.__new__(AuthRegisterUser)
         cmd._params = params or []  # type: ignore[reportAttributeAccessIssue]
         cmd._app_data = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._auth = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._app_data.authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._app_data.authz.has.return_value = authorized  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
     @patch("src.adapters.driving.cli.commands.auth_register.getpass.getpass")
@@ -31,20 +33,19 @@ class AuthRegisterUser_Should(unittest.TestCase):
 
         # Mock return record from register_user
         rec = SimpleNamespace(username="alice", role=Role.MANAGER, user_id=101)
-        cmd._app_data.register_user.return_value = rec  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = rec  # type: ignore[reportAttributeAccessIssue]
 
         # Act
         result = cmd.execute()
 
         # Assert: inputs were stripped/lowercased as specified
-        cmd._app_data.register_user.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
             username="alice",
             role=Role.MANAGER,
             name="Alice Wonder",
             email="alice@example.com",
-            phone="0412345678",
+            phone_number="0412345678",
             password="TempPass123",
-            auth_service=cmd._auth,  # type: ignore[reportPrivateUsage]
         )
         self.assertEqual(result, f"Created {Role.MANAGER} user 'alice' (id=101).")
 
@@ -54,20 +55,19 @@ class AuthRegisterUser_Should(unittest.TestCase):
         cmd = self.make_cmd(params=["Bob", "employee", "Bob B.", "bob@ex.com", "0411222333"])
         mock_gp.side_effect = ["SuperStrong1", "SuperStrong1"]
         rec = SimpleNamespace(username="bob", role=Role.EMPLOYEE, user_id=202)
-        cmd._app_data.register_user.return_value = rec  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = rec  # type: ignore[reportAttributeAccessIssue]
 
         # Act
         result = cmd.execute()
 
         # Assert: username is lowercased, role parsed from 'employee'
-        cmd._app_data.register_user.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
             username="bob",
             role=Role.EMPLOYEE,
             name="Bob B.",
             email="bob@ex.com",
-            phone="0411222333",
+            phone_number="0411222333",
             password="SuperStrong1",
-            auth_service=cmd._auth,  # type: ignore[reportPrivateUsage]
         )
         self.assertEqual(result, f"Created {Role.EMPLOYEE} user 'bob' (id=202).")
 
@@ -78,13 +78,13 @@ class AuthRegisterUser_Should(unittest.TestCase):
         mock_input.side_effect = ["", ""]
         cmd = self.make_cmd(params=["carol", "MAN", "Carol C."])
         mock_gp.side_effect = ["Pa55word!!", "Pa55word!!"]
-        cmd._app_data.register_user.return_value = SimpleNamespace(  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = SimpleNamespace(  # type: ignore[reportAttributeAccessIssue]
             username="carol", role=Role.MANAGER, user_id=303
         )
 
         _ = cmd.execute()
         # Ensure manager was selected
-        (_, kwargs) = cmd._app_data.register_user.call_args  # type: ignore[reportAttributeAccessIssue]
+        (_, kwargs) = cmd._use_case.execute.call_args  # type: ignore[reportAttributeAccessIssue]
         self.assertEqual(kwargs["role"], Role.MANAGER)
 
     @patch("builtins.input")
@@ -95,7 +95,7 @@ class AuthRegisterUser_Should(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             cmd.execute()
         self.assertIn("Role must be 'employee' or 'manager'", str(ctx.exception))
-        cmd._app_data.register_user.assert_not_called()  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.auth_register.getpass.getpass")
     @patch("builtins.input")
@@ -108,7 +108,7 @@ class AuthRegisterUser_Should(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             cmd.execute()
         self.assertIn("Passwords do not match", str(ctx.exception))
-        cmd._app_data.register_user.assert_not_called()  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.auth_register.getpass.getpass")
     @patch("builtins.input")
@@ -121,7 +121,7 @@ class AuthRegisterUser_Should(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             cmd.execute()
         self.assertIn("at least 8", str(ctx.exception))
-        cmd._app_data.register_user.assert_not_called()  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.auth_register.getpass.getpass")
     @patch("builtins.input")
@@ -132,18 +132,17 @@ class AuthRegisterUser_Should(unittest.TestCase):
         mock_input.side_effect = ["", ""]  # email, phone prompts -> empty
         mock_gp.side_effect = ["PassWord999", "PassWord999"]
         rec = SimpleNamespace(username="gina", role=Role.EMPLOYEE, user_id=404)
-        cmd._app_data.register_user.return_value = rec  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = rec  # type: ignore[reportAttributeAccessIssue]
 
         result = cmd.execute()
 
-        cmd._app_data.register_user.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
             username="gina",
             role=Role.EMPLOYEE,
             name="Gina G",
             email="",
-            phone="",
+            phone_number="",
             password="PassWord999",
-            auth_service=cmd._auth,  # type: ignore[reportPrivateUsage]
         )
         self.assertEqual(result, f"Created {Role.EMPLOYEE} user 'gina' (id=404).")
 
@@ -154,11 +153,20 @@ class AuthRegisterUser_Should(unittest.TestCase):
         mock_input.side_effect = ["", ""]
         cmd = self.make_cmd(params=["harry", "manager", "Harry H."])
         mock_gp.side_effect = ["CorrectHorse1", "CorrectHorse1"]
-        cmd._app_data.register_user.side_effect = PermissionError("not allowed")  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.side_effect = PermissionError("not allowed")  # type: ignore[reportAttributeAccessIssue]
 
         with self.assertRaises(PermissionError) as ctx:
             cmd.execute()
         self.assertIn("not allowed", str(ctx.exception))
+
+    def test_requires_admin_permission(self) -> None:
+        cmd = self.make_cmd(authorized=False)
+
+        with self.assertRaises(PermissionError) as ctx:
+            cmd.execute()
+
+        self.assertIn("ADMIN_USER", str(ctx.exception))
+        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
     def test_no_mutates_session_flag_present(self) -> None:
         self.assertFalse(getattr(AuthRegisterUser, "mutates_session", False))

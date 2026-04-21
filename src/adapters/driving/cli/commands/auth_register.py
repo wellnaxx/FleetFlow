@@ -1,10 +1,13 @@
 import getpass
 
-from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
+from src.adapters.driving.cli.commands.base_command.base_command import UseCaseCommand
+from src.application.services.authorization import requires
+from src.application.use_cases.auth.register_user import RegisterUserUseCase
 from src.domain.enums.auth import Role
+from src.domain.enums.auth import Permission
 
 
-class AuthRegisterUser(BaseCommand):
+class AuthRegisterUser(UseCaseCommand[RegisterUserUseCase]):
     """
     Usage:
       registeruser                                  # prompts for all fields
@@ -12,6 +15,7 @@ class AuthRegisterUser(BaseCommand):
     Roles: 'employee' or 'manager'
     """
 
+    @requires(Permission.ADMIN_USER)
     def execute(self) -> str:
         # Gather inputs (use prompts for anything missing)
         p = self._params
@@ -36,14 +40,12 @@ class AuthRegisterUser(BaseCommand):
         if len(password) < 8:
             raise ValueError("Password must be at least 8 characters.")
 
-        # Manager-only guard is enforced inside ApplicationData.register_user
-        rec = self._app_data.register_user(
+        rec = self._use_case.execute(
             username=username,
             role=role,
             name=name,
             email=email,
-            phone=phone,
+            phone_number=phone,
             password=password,
-            auth_service=self._auth,
         )
         return f"Created {rec.role} user '{rec.username}' (id={rec.user_id})."
