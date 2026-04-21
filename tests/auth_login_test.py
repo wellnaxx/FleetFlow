@@ -9,7 +9,7 @@ class AuthLogin_Should(unittest.TestCase):
     def make_cmd(self, params: list[str] | None = None) -> AuthLogin:
         cmd = AuthLogin.__new__(AuthLogin)
         cmd._params = params or []  # type: ignore[reportAttributeAccessIssue]
-        cmd._auth = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
     def test_mutates_session_true(self) -> None:
@@ -21,13 +21,13 @@ class AuthLogin_Should(unittest.TestCase):
         cmd = self.make_cmd(params=["alice "])  # note trailing space; code does NOT strip this path
         mock_getpass.return_value = "secretPW"
         user_obj = SimpleNamespace(name="Alice", role=SimpleNamespace(value="ADMIN"))
-        cmd._auth.login.return_value = user_obj  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = user_obj  # type: ignore[reportAttributeAccessIssue]
 
         # Act
         result = cmd.execute()
 
         # Assert
-        cmd._auth.login.assert_called_once_with("alice ", "secretPW")  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_called_once_with("alice ", "secretPW")  # type: ignore[reportUnknownMemberType]
         mock_getpass.assert_called_once_with("Password: ")
         self.assertEqual(result, "Logged in as Alice [ADMIN]")
 
@@ -41,7 +41,7 @@ class AuthLogin_Should(unittest.TestCase):
         mock_input.return_value = "  Bob\t"
         mock_getpass.return_value = "pw123456"
         user_obj = SimpleNamespace(name="Bob", role=SimpleNamespace(value="USER"))
-        cmd._auth.login.return_value = user_obj  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = user_obj  # type: ignore[reportAttributeAccessIssue]
 
         # Act
         result = cmd.execute()
@@ -49,7 +49,7 @@ class AuthLogin_Should(unittest.TestCase):
         # Assert
         mock_input.assert_called_once_with("Username: ")
         mock_getpass.assert_called_once_with("Password: ")
-        cmd._auth.login.assert_called_once_with("Bob", "pw123456")  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_called_once_with("Bob", "pw123456")  # type: ignore[reportUnknownMemberType]
         self.assertEqual(result, "Logged in as Bob [USER]")
 
     @patch("getpass.getpass")
@@ -59,7 +59,7 @@ class AuthLogin_Should(unittest.TestCase):
         cmd = self.make_cmd(params=[])
         mock_input.return_value = "carol"
         mock_getpass.return_value = "wrong"
-        cmd._auth.login.side_effect = ValueError("invalid credentials")  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.side_effect = ValueError("invalid credentials")  # type: ignore[reportAttributeAccessIssue]
 
         # Act / Assert
         with self.assertRaises(ValueError) as ctx:
@@ -68,14 +68,16 @@ class AuthLogin_Should(unittest.TestCase):
         self.assertIn("invalid credentials", str(ctx.exception))
         mock_input.assert_called_once_with("Username: ")
         mock_getpass.assert_called_once_with("Password: ")
-        cmd._auth.login.assert_called_once_with("carol", "wrong")  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_called_once_with("carol", "wrong")  # type: ignore[reportUnknownMemberType]
 
     @patch("getpass.getpass")
     def test_execute_always_prompts_for_password(self, mock_getpass: MagicMock) -> None:
         # Arrange
         cmd = self.make_cmd(params=["dave"])
         mock_getpass.return_value = "pw"
-        cmd._auth.login.return_value = SimpleNamespace(name="Dave", role=SimpleNamespace(value="OP"))  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = SimpleNamespace(  # type: ignore[reportAttributeAccessIssue]
+            name="Dave", role=SimpleNamespace(value="OP")
+        )
 
         # Act
         _ = cmd.execute()
@@ -91,8 +93,10 @@ class AuthLogin_Should(unittest.TestCase):
         """
         cmd = self.make_cmd(params=[""])
         mock_getpass.return_value = "pw"
-        cmd._auth.login.return_value = SimpleNamespace(name="", role=SimpleNamespace(value="USER"))  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = SimpleNamespace(  # type: ignore[reportAttributeAccessIssue]
+            name="", role=SimpleNamespace(value="USER")
+        )
 
         _ = cmd.execute()
 
-        cmd._auth.login.assert_called_once_with("", "pw")  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_called_once_with("", "pw")  # type: ignore[reportUnknownMemberType]
