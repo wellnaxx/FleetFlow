@@ -41,6 +41,22 @@ class ApplicationDataCustomerRepositoryTests(unittest.TestCase):
 
         self.assertIn("Customer with id 1 already exists.", str(ctx.exception))
 
+    def test_add_raises_for_duplicate_email(self) -> None:
+        self.repo.add(self.make_customer(1, "Alice", "alice@example.com"))
+
+        with self.assertRaises(ValueError) as ctx:
+            self.repo.add(self.make_customer(2, "Bob", "alice@example.com"))
+
+        self.assertIn("Email already in use", str(ctx.exception))
+
+    def test_add_raises_for_duplicate_phone(self) -> None:
+        self.repo.add(self.make_customer(1, "Alice", phone="0412345678"))
+
+        with self.assertRaises(ValueError) as ctx:
+            self.repo.add(self.make_customer(2, "Bob", phone="0412345678"))
+
+        self.assertIn("Phone already in use", str(ctx.exception))
+
     def test_remove_deletes_customer_from_list_and_indexes(self) -> None:
         customer = self.make_customer(1, "Alice", "alice@example.com", "0412345678")
         self.repo.add(customer)

@@ -13,6 +13,14 @@ class ApplicationDataCustomerRepository:
         customers = self._app_data.customer_store
         if any(existing.customer_id == customer.customer_id for existing in customers):
             raise ValueError(f"Customer with id {customer.customer_id} already exists.")
+        if customer.email:
+            existing = self._app_data.customer_email_store.get(customer.email)
+            if existing is not None and existing is not customer:
+                raise ValueError(f"Email already in use by customer id={existing.customer_id}")
+        if customer.phone_number:
+            existing = self._app_data.customer_phone_store.get(customer.phone_number)
+            if existing is not None and existing is not customer:
+                raise ValueError(f"Phone already in use by customer id={existing.customer_id}")
         customers.append(customer)
 
         if customer.email:
