@@ -10,6 +10,26 @@ def _get_create_package_use_case(container: Any) -> Any:
     return container.create_package_use_case
 
 
+def _get_login_use_case(container: Any) -> Any:
+    return container.login_use_case
+
+
+def _get_logout_use_case(container: Any) -> Any:
+    return container.logout_use_case
+
+
+def _get_who_am_i_use_case(container: Any) -> Any:
+    return container.who_am_i_use_case
+
+
+def _get_register_user_use_case(container: Any) -> Any:
+    return container.register_user_use_case
+
+
+def _get_change_password_use_case(container: Any) -> Any:
+    return container.change_password_use_case
+
+
 def _get_view_package_use_case(container: Any) -> Any:
     return container.view_package_use_case
 
@@ -89,6 +109,11 @@ class CommandFactory_Should(unittest.TestCase):
         app = SimpleNamespace(name="app1")
         auth = SimpleNamespace(name="auth1")
         container = SimpleNamespace(
+            login_use_case=MagicMock(),
+            logout_use_case=MagicMock(),
+            who_am_i_use_case=MagicMock(),
+            register_user_use_case=MagicMock(),
+            change_password_use_case=MagicMock(),
             create_package_use_case=MagicMock(),
             view_package_use_case=MagicMock(),
             view_all_packages_use_case=MagicMock(),
@@ -176,6 +201,96 @@ class CommandFactory_Should(unittest.TestCase):
             auth,
             container.create_package_use_case,
         )
+
+    def test_login_uses_login_use_case_from_container(self) -> None:
+        cf, app, auth, container = self.make_factory()
+
+        cmd_cls = MagicMock()
+        sentinel_cmd = object()
+        cmd_cls.return_value = sentinel_cmd
+
+        with patch.dict(
+            "src.adapters.driving.cli.command_factory._CONTAINER_COMMANDS",
+            {"login": (cmd_cls, _get_login_use_case)},
+            clear=False,
+        ):
+            result = cf.create("login alice")
+
+        self.assertIs(result, sentinel_cmd)
+        cmd_cls.assert_called_once_with(["alice"], app, auth, container.login_use_case)
+
+    def test_logout_uses_logout_use_case_from_container(self) -> None:
+        cf, app, auth, container = self.make_factory()
+
+        cmd_cls = MagicMock()
+        sentinel_cmd = object()
+        cmd_cls.return_value = sentinel_cmd
+
+        with patch.dict(
+            "src.adapters.driving.cli.command_factory._CONTAINER_COMMANDS",
+            {"logout": (cmd_cls, _get_logout_use_case)},
+            clear=False,
+        ):
+            result = cf.create("logout")
+
+        self.assertIs(result, sentinel_cmd)
+        cmd_cls.assert_called_once_with([], app, auth, container.logout_use_case)
+
+    def test_whoami_uses_who_am_i_use_case_from_container(self) -> None:
+        cf, app, auth, container = self.make_factory()
+
+        cmd_cls = MagicMock()
+        sentinel_cmd = object()
+        cmd_cls.return_value = sentinel_cmd
+
+        with patch.dict(
+            "src.adapters.driving.cli.command_factory._CONTAINER_COMMANDS",
+            {"whoami": (cmd_cls, _get_who_am_i_use_case)},
+            clear=False,
+        ):
+            result = cf.create("whoami")
+
+        self.assertIs(result, sentinel_cmd)
+        cmd_cls.assert_called_once_with([], app, auth, container.who_am_i_use_case)
+
+    def test_registeruser_uses_register_user_use_case_from_container(self) -> None:
+        cf, app, auth, container = self.make_factory()
+
+        cmd_cls = MagicMock()
+        sentinel_cmd = object()
+        cmd_cls.return_value = sentinel_cmd
+
+        with patch.dict(
+            "src.adapters.driving.cli.command_factory._CONTAINER_COMMANDS",
+            {"registeruser": (cmd_cls, _get_register_user_use_case)},
+            clear=False,
+        ):
+            result = cf.create("registeruser alice employee Alice")
+
+        self.assertIs(result, sentinel_cmd)
+        cmd_cls.assert_called_once_with(
+            ["alice", "employee", "Alice"],
+            app,
+            auth,
+            container.register_user_use_case,
+        )
+
+    def test_changepassword_uses_change_password_use_case_from_container(self) -> None:
+        cf, app, auth, container = self.make_factory()
+
+        cmd_cls = MagicMock()
+        sentinel_cmd = object()
+        cmd_cls.return_value = sentinel_cmd
+
+        with patch.dict(
+            "src.adapters.driving.cli.command_factory._CONTAINER_COMMANDS",
+            {"changepassword": (cmd_cls, _get_change_password_use_case)},
+            clear=False,
+        ):
+            result = cf.create("changepassword alice")
+
+        self.assertIs(result, sentinel_cmd)
+        cmd_cls.assert_called_once_with(["alice"], app, auth, container.change_password_use_case)
 
     def test_viewpackage_uses_view_package_use_case_from_container(self) -> None:
         cf, app, auth, container = self.make_factory()
