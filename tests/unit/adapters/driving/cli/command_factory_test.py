@@ -58,6 +58,10 @@ def _get_find_suitable_trucks_for_route_use_case(container: Any) -> Any:
     return container.find_suitable_trucks_for_route_use_case
 
 
+def _get_assign_packages_to_route_use_case(container: Any) -> Any:
+    return container.assign_packages_to_route_use_case
+
+
 class _DummyCmd:
     """Minimal command class compatible with legacy BaseCommand signature."""
 
@@ -90,6 +94,7 @@ class CommandFactory_Should(unittest.TestCase):
             remove_route_use_case=MagicMock(),
             assign_truck_to_route_use_case=MagicMock(),
             find_suitable_trucks_for_route_use_case=MagicMock(),
+            assign_packages_to_route_use_case=MagicMock(),
         )
         factory = CommandFactory(data=app, auth=auth, container=container)  # type: ignore[reportArgumentType]
         return factory, app, auth, container
@@ -424,4 +429,26 @@ class CommandFactory_Should(unittest.TestCase):
             app,
             auth,
             container.find_suitable_trucks_for_route_use_case,
+        )
+
+    def test_assignpackagetoroute_uses_assign_packages_to_route_use_case_from_container(self) -> None:
+        cf, app, auth, container = self.make_factory()
+
+        cmd_cls = MagicMock()
+        sentinel_cmd = object()
+        cmd_cls.return_value = sentinel_cmd
+
+        with patch.dict(
+            "src.adapters.driving.cli.command_factory._CONTAINER_COMMANDS",
+            {"assignpackagetoroute": (cmd_cls, _get_assign_packages_to_route_use_case)},
+            clear=False,
+        ):
+            result = cf.create("assignpackagetoroute 5 42 43")
+
+        self.assertIs(result, sentinel_cmd)
+        cmd_cls.assert_called_once_with(
+            ["5", "42", "43"],
+            app,
+            auth,
+            container.assign_packages_to_route_use_case,
         )
