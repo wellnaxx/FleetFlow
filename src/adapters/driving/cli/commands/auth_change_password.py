@@ -1,10 +1,11 @@
 import getpass
 
-from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
+from src.adapters.driving.cli.commands.base_command.base_command import UseCaseCommand
+from src.application.use_cases.auth.change_password import ChangePasswordUseCase
 from src.domain.enums.auth import Permission
 
 
-class AuthChangePassword(BaseCommand):
+class AuthChangePassword(UseCaseCommand[ChangePasswordUseCase]):
     """
     Usage:
       changepassword                # self-service: prompts old/new/confirm
@@ -16,7 +17,7 @@ class AuthChangePassword(BaseCommand):
 
         # Manager override (requires ADMIN_USER)
         if target:
-            if not self._app_data.authz.has(Permission.ADMIN_USER):
+            if not self.authz.has(Permission.ADMIN_USER):
                 raise PermissionError("Missing permission: ADMIN_USER (manager required).")
             new_pw = getpass.getpass(f"New password for '{target}': ")
             confirm = getpass.getpass("Confirm new password: ")
@@ -24,7 +25,7 @@ class AuthChangePassword(BaseCommand):
                 raise ValueError("Passwords do not match.")
             if len(new_pw) < 8:
                 raise ValueError("Password must be at least 8 characters.")
-            self._auth.reset_password(target, new_pw)
+            self._use_case.execute(target, new_pw)
             return f"Password reset for '{target}'."
 
         # Self-service (must be logged in)
@@ -45,5 +46,5 @@ class AuthChangePassword(BaseCommand):
         if new_pw == old_pw:
             raise ValueError("New password must be different from the old password.")
 
-        self._auth.change_password(username, old_pw, new_pw)
+        self._use_case.execute(username, new_pw, old_password=old_pw)
         return "Password changed."
