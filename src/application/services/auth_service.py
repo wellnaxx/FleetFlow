@@ -1,14 +1,15 @@
-from src.adapters.driven.persistence.json.user_store import UserRecord, UserStore
 from src.adapters.driven.security.password_hasher import PasswordHash, hash_password, verify_password
+from src.application.models.user_record import UserRecord
 from src.domain.entities.users.employee import Employee
 from src.domain.entities.users.manager import Manager
 from src.domain.entities.users.user import User
 from src.domain.enums.auth import Role
 from src.domain.value_objects.contact_info import ContactInfo
+from src.ports.output.user_repository import UserRepositoryPort
 
 
 class AuthService:
-    def __init__(self, user_store: UserStore) -> None:
+    def __init__(self, user_store: UserRepositoryPort) -> None:
         self._store = user_store
         self._current_user: User | None = None
         self.last_username: str | None = None
@@ -36,11 +37,10 @@ class AuthService:
             password_hash=ph,
         )
 
-    def _set_password(self, rec: UserRecord, new_password: str) -> None:
+    def _set_password(self, username: str, new_password: str) -> None:
         if len(new_password) < 8:
             raise ValueError("Password must be at least 8 characters.")
-        rec.password = hash_password(new_password).serialize()
-        self._store.save()
+        self._store.update_password(username, hash_password(new_password))
 
     def login(self, username: str, password: str) -> User:
         rec = self._store.get(username)
@@ -70,10 +70,10 @@ class AuthService:
             raise ValueError("Old password incorrect.")
         if verify_password(new_password, PasswordHash.parse(rec.password)):
             raise ValueError("New password must be different from the old one.")
-        self._set_password(rec, new_password)
+        self._set_password(username, new_password)
 
     def reset_password(self, username: str, new_password: str) -> None:
         rec = self._store.get(username)
         if not rec:
             raise ValueError("User not found.")
-        self._set_password(rec, new_password)
+        self._set_password(username, new_password)

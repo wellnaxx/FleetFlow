@@ -1,25 +1,13 @@
 import json
 import os
 import tempfile
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 from typing import Any
 
 from src.adapters.driven.persistence.json.paths import ensure_data_dir, resolve_data_path
 from src.adapters.driven.security.password_hasher import PasswordHash
+from src.application.models.user_record import UserRecord
 from src.domain.value_objects.contact_info import ContactInfo
-
-
-@dataclass
-class UserRecord:
-    """Serializable user record stored on disk."""
-
-    user_id: int
-    username: str
-    role: str
-    name: str
-    email: str
-    phone_number: str
-    password: str
 
 
 class UserStore:

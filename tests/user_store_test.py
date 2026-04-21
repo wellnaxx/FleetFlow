@@ -4,7 +4,8 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, mock_open, patch
 
-from src.adapters.driven.persistence.json.user_store import UserRecord, UserStore
+from src.adapters.driven.persistence.json.user_store import UserStore
+from src.application.models.user_record import UserRecord
 
 
 def _ph(s: str = "hash") -> SimpleNamespace:

@@ -152,18 +152,17 @@ class AuthService_Should(unittest.TestCase):
         self, _parse: MagicMock, verify_password: MagicMock, hash_password: MagicMock
     ) -> None:
         svc, store = self.make_service()
-        rec = SimpleNamespace(password="OLDHASH")
+        rec = SimpleNamespace(username="alice", password="OLDHASH")
         store.get.return_value = rec
 
         # old matches, new does NOT match old
         verify_password.side_effect = [True, False]  # [old_ok, new_same?]
-        hash_password.return_value = SimpleNamespace(serialize=lambda: "NEWHASH")
+        hashed = SimpleNamespace(serialize=lambda: "NEWHASH")
+        hash_password.return_value = hashed
 
         svc.change_password("alice", "Old123456", "New123456")
 
-        # rec.password updated and persisted
-        self.assertEqual(rec.password, "NEWHASH")
-        store.save.assert_called_once()
+        store.update_password.assert_called_once_with("alice", hashed)
 
     @patch("src.application.services.auth_service.verify_password")
     @patch("src.application.services.auth_service.PasswordHash.parse", return_value=object())
@@ -201,20 +200,56 @@ class AuthService_Should(unittest.TestCase):
     @patch("src.application.services.auth_service.hash_password")
     def test_reset_password_enforces_min_length_and_saves(self, hash_password: MagicMock) -> None:
         svc, store = self.make_service()
-        rec = SimpleNamespace(password="OLD")
+        rec = SimpleNamespace(username="u", password="OLD")
         store.get.return_value = rec
-        hash_password.return_value = SimpleNamespace(serialize=lambda: "NEWHASH")
+        hashed = SimpleNamespace(serialize=lambda: "NEWHASH")
+        hash_password.return_value = hashed
 
         # Too short -> error (via _set_password)
         with self.assertRaises(ValueError) as ctx:
             svc.reset_password("u", "short7")
         self.assertIn("at least 8", str(ctx.exception))
-        store.save.assert_not_called()
+        store.update_password.assert_not_called()
 
         # Long enough -> ok
         svc.reset_password("u", "LongEnough8")
-        self.assertEqual(rec.password, "NEWHASH")
-        store.save.assert_called_once()
+        store.update_password.assert_called_once_with("u", hashed)
+
+    @patch("src.application.services.auth_service.hash_password")
+    def test_auth_service_works_with_in_memory_repository(self, hash_password: MagicMock) -> None:
+        from src.adapters.driven.persistence.memory.user_repository import InMemoryUserRepository
+        from src.domain.enums.auth import Role
+
+        hash_password.side_effect = [
+            SimpleNamespace(serialize=lambda: "HASH1"),
+            SimpleNamespace(serialize=lambda: "HASH2"),
+        ]
+        svc = AuthService(user_store=InMemoryUserRepository())
+
+        rec = svc.register_user(
+            username="alice",
+            role=Role.EMPLOYEE,
+            name="Alice",
+            email="alice@example.com",
+            phone_number="0412345678",
+            password="Secret123",
+        )
+
+        self.assertEqual(rec.password, "HASH1")
+
+        with (
+            patch("src.application.services.auth_service.PasswordHash.parse", return_value=object()),
+            patch(
+                "src.application.services.auth_service.verify_password", side_effect=[True, True, False, True]
+            ),
+        ):
+            user1 = svc.login("ALICE", "Secret123")
+            self.assertEqual(user1.name, "Alice")
+
+            svc.change_password("alice", "Secret123", "NewSecret123")
+
+            user2 = svc.login("alice", "NewSecret123")
+            self.assertEqual(user2.name, "Alice")
 
     def test_reset_password_unknown_user_raises(self) -> None:
         svc, store = self.make_service()
