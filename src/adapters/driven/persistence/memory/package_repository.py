@@ -11,6 +11,8 @@ class InMemoryPackageRepository:
         return max(self._packages.keys()) + 1
 
     def add(self, package: DeliveryPackage) -> None:
+        if package.package_id in self._packages:
+            raise ValueError(f"Package with id {package.package_id} already exists.")
         self._packages[package.package_id] = package
 
     def remove(self, package_id: int) -> None:
