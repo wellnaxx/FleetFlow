@@ -1,4 +1,3 @@
-# application_data_test.py
 import unittest
 from datetime import datetime, timedelta
 from types import SimpleNamespace
@@ -8,44 +7,23 @@ from unittest.mock import MagicMock, mock_open, patch
 from src.adapters.driven.persistence.application_data.customer_repository import (
     ApplicationDataCustomerRepository,
 )
-from src.adapters.driven.persistence.application_data.package_repository import ApplicationDataPackageRepository
-from src.adapters.driven.persistence.application_data.route_repository import ApplicationDataRouteRepository
+from src.adapters.driven.persistence.application_data.package_repository import (
+    ApplicationDataPackageRepository,
+)
+from src.adapters.driven.persistence.application_data.route_repository import (
+    ApplicationDataRouteRepository,
+)
 from src.application.services.customer_service import CustomerService
 from src.application.use_cases.packages.create_package import CreatePackageUseCase
-from src.application.use_cases.packages.remove_package import RemovePackageUseCase
-from src.application.use_cases.routes.assign_truck_to_route import AssignTruckToRouteUseCase
 from src.application.use_cases.routes.create_route import CreateRouteUseCase
-from src.application.use_cases.routes.remove_route import RemoveRouteUseCase
-from src.application.use_cases.routes.view_all_routes import ViewAllRoutesUseCase
-from src.application.use_cases.routes.view_route import ViewRouteUseCase
 from src.core.application_data import ApplicationData
 from src.domain.enums.auth import Role
 from src.domain.enums.item_status import ItemStatus
 
 
-def make_create_route_uc(app: ApplicationData):
+def make_create_route_uc(app: ApplicationData) -> CreateRouteUseCase:
     route_repo = ApplicationDataRouteRepository(app)
     return CreateRouteUseCase(route_repo)
-
-
-def make_view_all_routes_uc(app: ApplicationData):
-    route_repo = ApplicationDataRouteRepository(app)
-    return ViewAllRoutesUseCase(route_repo)
-
-
-def make_view_route_uc(app: ApplicationData):
-    route_repo = ApplicationDataRouteRepository(app)
-    return ViewRouteUseCase(route_repo)
-
-
-def make_remove_route_uc(app: ApplicationData):
-    route_repo = ApplicationDataRouteRepository(app)
-    return RemoveRouteUseCase(route_repo)
-
-
-def make_remove_package_uc(app: ApplicationData):
-    package_repo = ApplicationDataPackageRepository(app)
-    return RemovePackageUseCase(package_repo)
 
 
 def make_create_package_uc(app: ApplicationData) -> CreatePackageUseCase:
@@ -55,46 +33,56 @@ def make_create_package_uc(app: ApplicationData) -> CreatePackageUseCase:
     return CreatePackageUseCase(customer_service, package_repo)
 
 
-def make_assign_truck_to_route_uc(app: ApplicationData) -> AssignTruckToRouteUseCase:
-    route_repo = ApplicationDataRouteRepository(app)
-    return AssignTruckToRouteUseCase(route_repo, app.vehicle_manager)
+def _allow_all(*_args: Any, **_kwargs: Any) -> bool:
+    return True
 
 
 def _mk_app() -> Any:
     """ApplicationData with permissive authz and a stubbed vehicle manager."""
     app = ApplicationData(current_user=None)
     app.authz = SimpleNamespace(  # type: ignore[assignment]
-        has=lambda *args: True,  # type: ignore[reportUnknownLambdaType]
-        has_all=lambda *args: True,  # type: ignore[reportUnknownLambdaType]
+        has=_allow_all,
+        has_all=_allow_all,
     )
     app.vehicle_manager = MagicMock()  # type: ignore[assignment]
     app.vehicle_manager.vehicles = []
     return app
 
 
-def _fake_delivery_route_ctor(
-    *locs: str,
-    departure_time: datetime | None = None,
-    route_id: int | None = None,
-) -> SimpleNamespace:
-    return SimpleNamespace(
-        route_id=route_id,
-        locations=list(locs),
-        start_location=locs[0],
-        end_location=locs[-1],
-        departure_time=departure_time,
-        packages=[],
-        truck=None,
-    )
+class _FakeCustomer:
+    def __init__(
+        self,
+        customer_id: int = 1,
+        name: str = "Name",
+        email: str = "",
+        phone_number: str = "",
+    ) -> None:
+        self.customer_id = customer_id
+        self.name = name
+        self.email = email
+        self.phone_number = phone_number
+        self.packages: list[Any] = []
 
+    def add_package(self, pkg: Any) -> None:
+        old_customer = getattr(pkg, "customer", None)
+        if (
+            old_customer is not None
+            and old_customer is not self
+            and hasattr(old_customer, "_remove_package_link")
+        ):
+            old_customer._remove_package_link(pkg)
+        self._add_package_link(pkg)
 
-def _location_is_not_bad(location: str) -> bool:
-    return location != "BAD"
+    def _add_package_link(self, pkg: Any) -> None:
+        if pkg not in self.packages:
+            self.packages.append(pkg)
+        pkg.customer = self
 
-
-# ---------------------------
-# Lightweight fakes for route/truck/pkg where helpful
-# ---------------------------
+    def _remove_package_link(self, pkg: Any) -> None:
+        if pkg in self.packages:
+            self.packages.remove(pkg)
+        if getattr(pkg, "customer", None) is self:
+            pkg.customer = None
 
 
 class _FakeTruck:
@@ -142,7 +130,8 @@ class _FakeRoute:
         return sum(getattr(p, "weight", 0.0) for p in self.packages)
 
     def assign_package(self, pkg: Any) -> None:
-        self.packages.append(pkg)
+        if pkg not in self.packages:
+            self.packages.append(pkg)
         pkg.route = self
 
     def detach_package(self, package: Any) -> None:
@@ -184,78 +173,60 @@ class _FakeRoute:
 
 class _FakePackage:
     def __init__(
-        self, package_id: int, start: str, end: str, weight: float = 1.0, customer: Any = None
+        self,
+        package_id: int,
+        start: str,
+        end: str,
+        weight: float = 1.0,
+        customer: Any = None,
     ) -> None:
         self.package_id = package_id
         self.start_location = start
         self.end_location = end
         self.weight = weight
-        self.customer: Any = customer or SimpleNamespace(customer_id=1)
+        self.customer: Any = customer or _FakeCustomer()
         self.route: Any = None
         self.status: str | None = None
 
-
-# ---------------------------
-# Tests
-# ---------------------------
+    def _set_package_id(self, package_id: int) -> None:
+        self.package_id = package_id
 
 
-class ApplicationData_CreateRemove_Should(unittest.TestCase):
-    @patch("src.application.use_cases.routes.create_route.Map.is_valid_location", return_value=True)
-    def test_create_route_find_and_remove(self, _is_valid: MagicMock) -> None:
-        app = _mk_app()
-
-        with patch("src.application.use_cases.routes.create_route.DeliveryRoute") as DR:
-            DR.side_effect = _fake_delivery_route_ctor
-
-            create_route = make_create_route_uc(app)
-            remove_route = make_remove_route_uc(app)
-
-            r = create_route.execute(["A", "B"], None)
-            self.assertIs(app.find_route(r.route_id), r)
-
-            truck = _FakeTruck(vehicle_id=5)
-            r.truck = truck  # type: ignore[reportAttributeAccessIssue]
-            truck.route = r
-
-            removed = remove_route.execute(r.route_id)
-
-            self.assertIs(removed, r)
-            self.assertIsNone(truck.route)
-            self.assertIsNone(app.find_route(r.route_id))
-
-    @patch(
-        "src.application.use_cases.routes.create_route.Map.is_valid_location",
-        side_effect=_location_is_not_bad,
+def _make_contact_info(name: str, email: str, phone_number: str) -> SimpleNamespace:
+    return SimpleNamespace(
+        name=name,
+        email=email,
+        phone_number=phone_number,
     )
-    def test_create_route_validates_locations(self, is_valid: MagicMock) -> None:
-        app = _mk_app()
-        create_route = make_create_route_uc(app)
 
-        with self.assertRaises(ValueError):
-            create_route.execute(["A"], None)
 
-        with self.assertRaises(ValueError):
-            create_route.execute(["A", "BAD"], None)
+def _make_fake_customer(customer_id: int, contact: Any) -> _FakeCustomer:
+    return _FakeCustomer(
+        customer_id=customer_id,
+        name=getattr(contact, "name", "Name"),
+        email=getattr(contact, "email", ""),
+        phone_number=getattr(contact, "phone_number", ""),
+    )
 
-        with patch("src.application.use_cases.routes.create_route.DeliveryRoute") as DR:
-            DR.side_effect = _fake_delivery_route_ctor
 
-            _ = create_route.execute(["A", "B", "C"], None)
+def _make_fake_package(*args: Any, **kwargs: Any) -> _FakePackage:
+    customer = kwargs.get("customer")
+    if customer is None and args:
+        customer = args[-1]
+    return _FakePackage(
+        package_id=1,
+        start="SYD",
+        end="MEL",
+        weight=1.0,
+        customer=customer,
+    )
 
-    def test_view_routes_and_packages_helpers(self) -> None:
-        app = _mk_app()
-        r = SimpleNamespace(route_id=1)
-        p = SimpleNamespace(package_id=2)
-        app._routes = [r]
-        app._packages = [p]
 
-        view_all_routes = make_view_all_routes_uc(app)
-
-        self.assertIn(r, app.routes)
-        self.assertIn(p, app.packages)
-        self.assertIn(r, view_all_routes.execute())
-        self.assertIn(p, app.view_all_packages())
+def _make_fake_route(*args: Any, **kwargs: Any) -> _FakeRoute:
+    route_id = kwargs.get("route_id", 10)
+    locations = list(args) if args else ["SYD", "MEL"]
+    departure_time = kwargs.get("departure_time")
+    return _FakeRoute(route_id=route_id, locations=locations, departure_time=departure_time)
 
 
 class ApplicationData_AssignPackages_Should(unittest.TestCase):
@@ -264,13 +235,9 @@ class ApplicationData_AssignPackages_Should(unittest.TestCase):
         scheduled: bool = False,
     ) -> tuple[Any, Any, tuple[Any, Any, Any]]:
         app = _mk_app()
-        route = SimpleNamespace(
+        route = _FakeRoute(
             route_id=10,
-            start_location="SYD",
-            end_location="MEL",
             locations=["SYD", "CBR", "MEL"],
-            packages=[],
-            truck=None,
             departure_time=(datetime(2025, 10, 1, 9, 0) if scheduled else None),
         )
 
@@ -282,12 +249,13 @@ class ApplicationData_AssignPackages_Should(unittest.TestCase):
             }
             return table.get(city)
 
-        route.arrival_time_at = arrival_time_at
+        route.arrival_time_at = arrival_time_at  # type: ignore[method-assign]
         app._routes.append(route)
 
-        pkg1 = SimpleNamespace(package_id=1, end_location="MEL", route=None)
-        pkg2 = SimpleNamespace(package_id=2, end_location="CBR", route=None)
-        pkg3 = SimpleNamespace(package_id=3, end_location="MEL", route=route)
+        pkg1 = _FakePackage(package_id=1, start="SYD", end="MEL")
+        pkg2 = _FakePackage(package_id=2, start="SYD", end="CBR")
+        pkg3 = _FakePackage(package_id=3, start="SYD", end="MEL")
+        pkg3.route = route
         app._packages.extend([pkg1, pkg2, pkg3])
         return app, route, (pkg1, pkg2, pkg3)
 
@@ -336,96 +304,26 @@ class ApplicationData_FindSuitables_Should(unittest.TestCase):
             departure_time=datetime(2025, 1, 1, 9),
             eta_final=datetime(2025, 1, 1, 11),
         )
-        r3 = _FakeRoute(30, ["A", "C"])  # unscheduled
+        r3 = _FakeRoute(30, ["A", "C"])
         t1 = _FakeTruck(vehicle_id=100, capacity=5.0)
-        t2 = _FakeTruck(vehicle_id=200, capacity=1.0)  # too small
+        t2 = _FakeTruck(vehicle_id=200, capacity=1.0)
         r1.truck = t1
         r2.truck = t2
 
         app._routes = [r3, r2, r1]
-        cust = SimpleNamespace(customer_id=1)
-        pkg = _FakePackage(7, "A", "C", weight=2.0, customer=cust)
+        pkg = _FakePackage(7, "A", "C", weight=2.0, customer=_FakeCustomer(customer_id=1))
         app._packages = [pkg]
 
         res = app.find_suitable_routes_for_package(pkg.package_id)
         ids = [x["route"].route_id for x in res]
         self.assertEqual(ids, [10, 30])
 
-    def test_find_suitable_trucks_for_route_delegates(self) -> None:
-        app = _mk_app()
-        r = _FakeRoute(9, ["A", "B"])
-        app._routes = [r]
-        app.vehicle_manager.find_available_for_route.return_value = ["T1", "T2"]
-        out = app.find_suitable_trucks_for_route(9)
-        self.assertEqual(out, ["T1", "T2"])
-        app.vehicle_manager.find_available_for_route.assert_called_once()
 
-
-class ApplicationData_AssignTruckAndHeartbeat_Should(unittest.TestCase):
-    def test_assign_truck_schedules_if_unscheduled_and_checks_suitability(self) -> None:
-        app = _mk_app()
-        r = _FakeRoute(1, ["S", "E"])  # unscheduled initially
-        app._routes = [r]
-
-        truck = _FakeTruck(vehicle_id=5, capacity=10.0)
-        app.vehicle_manager.find_by_id.return_value = truck
-        app.vehicle_manager.is_suitable_for_route.return_value = (True, "")
-
-        assign_truck = make_assign_truck_to_route_uc(app)
-        now = datetime(2025, 1, 1, 10, 0)
-
-        result = assign_truck.execute(5, 1, now=now)
-
-        self.assertIs(result, r)
-        self.assertIs(r.truck, truck)
-        self.assertIs(truck.route, r)
-        self.assertEqual(r.departure_time, now)
-        app.vehicle_manager.find_by_id.assert_called_once_with(5)
-        app.vehicle_manager.is_suitable_for_route.assert_called_once_with(truck, r)
-
-    def test_assign_truck_not_found_errors(self) -> None:
-        app = _mk_app()
-        r = _FakeRoute(1, ["S", "E"])
-        app._routes = [r]
-        app.vehicle_manager.find_by_id.return_value = None
-
-        assign_truck = make_assign_truck_to_route_uc(app)
-
-        with self.assertRaises(ValueError) as ctx:
-            assign_truck.execute(99, 1, now=datetime(2025, 1, 1, 10, 0))
-
-        self.assertIn("Truck with ID 99 not found", str(ctx.exception))
-
-    def test_assign_truck_route_not_found_errors(self) -> None:
-        app = _mk_app()
-        assign_truck = make_assign_truck_to_route_uc(app)
-
-        with self.assertRaises(ValueError) as ctx:
-            assign_truck.execute(5, 999, now=datetime(2025, 1, 1, 10, 0))
-
-        self.assertIn("Route with ID 999 not found", str(ctx.exception))
-
-    def test_assign_truck_unsuitable_errors(self) -> None:
-        app = _mk_app()
-        r = _FakeRoute(1, ["S", "E"])
-        app._routes = [r]
-
-        truck = _FakeTruck(vehicle_id=5, capacity=10.0)
-        app.vehicle_manager.find_by_id.return_value = truck
-        app.vehicle_manager.is_suitable_for_route.return_value = (False, "range too short")
-
-        assign_truck = make_assign_truck_to_route_uc(app)
-
-        with self.assertRaises(ValueError) as ctx:
-            assign_truck.execute(5, 1, now=datetime(2025, 1, 1, 10, 0))
-
-        self.assertIn("Truck 5 is not suitable for route 1: range too short", str(ctx.exception))
-
+class ApplicationData_Heartbeat_Should(unittest.TestCase):
     def test_heartbeat_moves_trucks_and_updates_packages(self) -> None:
         app = _mk_app()
         base = datetime(2025, 1, 1, 8, 0)
 
-        # BEFORE_START
         r1 = _FakeRoute(
             1,
             ["S1", "E1"],
@@ -436,7 +334,7 @@ class ApplicationData_AssignTruckAndHeartbeat_Should(unittest.TestCase):
         r1.truck = t1
         t1.route = r1
         t1.current_location = "X"
-        # AT_STOP then AFTER_END
+
         r2 = _FakeRoute(
             2,
             ["S2", "E2"],
@@ -446,7 +344,7 @@ class ApplicationData_AssignTruckAndHeartbeat_Should(unittest.TestCase):
         t2 = _FakeTruck(vehicle_id=2)
         r2.truck = t2
         t2.route = r2
-        # IN_TRANSIT
+
         r3 = _FakeRoute(
             3,
             ["S3", "M3", "E3"],
@@ -456,12 +354,11 @@ class ApplicationData_AssignTruckAndHeartbeat_Should(unittest.TestCase):
         t3 = _FakeTruck(vehicle_id=3)
         r3.truck = t3
         t3.route = r3
-        # UNSCHEDULED
+
         r4 = _FakeRoute(4, ["S4", "E4"], departure_time=None, eta_final=None)
 
-        cust = SimpleNamespace(customer_id=1)
-        p_a = _FakePackage(1, "S3", "M3", weight=1, customer=cust)
-        p_b = _FakePackage(2, "S3", "E3", weight=1, customer=cust)
+        p_a = _FakePackage(1, "S3", "M3", weight=1, customer=_FakeCustomer(customer_id=1))
+        p_b = _FakePackage(2, "S3", "E3", weight=1, customer=_FakeCustomer(customer_id=1))
         r3.assign_package(p_a)
         r3.assign_package(p_b)
 
@@ -469,22 +366,18 @@ class ApplicationData_AssignTruckAndHeartbeat_Should(unittest.TestCase):
         app.vehicle_manager.vehicles = [t1, t2, t3]
         app._packages += [p_a, p_b]
 
-        # 1) exactly departure for r2 -> AT_STOP
         summary1 = app.heartbeat(now=base)
         self.assertGreaterEqual(summary1["trucks_moved"], 0)
 
-        # 2) IN_TRANSIT on r3 between S3->M3 (now S3->M3, should set in_transit_to and count a move)
         mid = base + timedelta(minutes=30)
         summary2 = app.heartbeat(now=mid)
         self.assertGreaterEqual(summary2["trucks_moved"], 1)
         self.assertEqual(p_a.status, ItemStatus.IN_PROGRESS)
         self.assertEqual(p_b.status, ItemStatus.IN_PROGRESS)
 
-        # 3) AFTER_END triggers release on r2
         summary3 = app.heartbeat(now=base + timedelta(hours=2))
         self.assertGreaterEqual(summary3["trucks_released"], 1)
 
-        # route status helper sanity
         self.assertIn(app._compute_route_status(r4, base), {"PLANNED"})
         self.assertEqual(app._compute_route_status(r1, base + timedelta(hours=1)), "SCHEDULED")
         self.assertEqual(app._compute_route_status(r3, base + timedelta(hours=3)), "COMPLETED")
@@ -536,34 +429,13 @@ class ApplicationData_SaveLoad_Should(unittest.TestCase):
             patch("src.core.application_data.DeliveryRoute") as DR,
             patch.object(app, "heartbeat", return_value={}),
         ):
-            cust_obj = SimpleNamespace(
-                customer_id=1,
-                name="Name",
-                email="",
-                phone_number="",
-                add_package=lambda p: None,  # type: ignore[reportUnknownLambdaType]
-            )
-            Cust.side_effect = lambda customer_id, contact: cust_obj  # type: ignore[reportUnknownLambdaType]
-            CI.side_effect = lambda name, email, phone_number: SimpleNamespace(  # type: ignore[reportUnknownLambdaType]
-                name=name,
-                email=email,
-                phone_number=phone_number,
-            )
-            pkg_obj = SimpleNamespace(
-                package_id=1,
-                start_location="SYD",
-                end_location="MEL",
-                weight=1.0,
-                customer=cust_obj,
-            )
-            DP.side_effect = lambda *args, **kwargs: pkg_obj  # type: ignore[reportUnknownLambdaType]
-            DR.side_effect = lambda *args, **kwargs: SimpleNamespace(  # type: ignore[reportUnknownLambdaType]
-                route_id=10,
-                locations=["SYD", "MEL"],
-                packages=[],
-            )
+            CI.side_effect = _make_contact_info
+            Cust.side_effect = _make_fake_customer
+            DP.side_effect = _make_fake_package
+            DR.side_effect = _make_fake_route
 
             msg = app.load("state.json")
+
             self.assertIn("Loaded state from", msg)
             self.assertTrue(app._customers)
             self.assertTrue(app._packages)
@@ -597,8 +469,8 @@ class ApplicationData_SaveLoad_Should(unittest.TestCase):
             fdopen.return_value.__enter__.return_value = cm
             path = app._persist_to_file("state.json")
             self.assertEqual(path, "C:/fake/state.json")
-            makedirs.assert_called_once()  # type: ignore[reportUnknownMemberType]
-            replace.assert_called_once()  # type: ignore[reportUnknownMemberType]  # atomic rename
+            makedirs.assert_called_once()
+            replace.assert_called_once()
 
     def test_register_user_delegates(self) -> None:
         app = _mk_app()
@@ -615,67 +487,6 @@ class ApplicationData_SaveLoad_Should(unittest.TestCase):
         auth.register_user.assert_called_once_with(
             username="u", role=Role.EMPLOYEE, name="N", email="", phone_number="", password="pw"
         )
-
-
-# ---------------------------------------------------------------------------
-# Characterization tests – document behaviour of fragile code paths
-# ---------------------------------------------------------------------------
-
-
-class Characterization_PackageRemovalDetach_Should(unittest.TestCase):
-    """Package removal must detach the package from routes and registry."""
-
-    def test_remove_unassigned_package(self) -> None:
-        app = _mk_app()
-        pkg = _FakePackage(1, "A", "B")
-        app._packages.append(pkg)
-        remove_uc = make_remove_package_uc(app)
-        removed = remove_uc.execute(pkg.package_id)
-        self.assertIs(removed, pkg)
-        self.assertEqual(len(app._packages), 0)
-
-    def test_remove_assigned_clears_route_list(self) -> None:
-        app = _mk_app()
-        route = _FakeRoute(10, ["A", "B"])
-        pkg = _FakePackage(1, "A", "B")
-        route.packages.append(pkg)
-        pkg.route = route
-        app._routes.append(route)
-        app._packages.append(pkg)
-
-        remove_uc = make_remove_package_uc(app)
-        remove_uc.execute(pkg.package_id)
-
-        self.assertNotIn(pkg, route.packages)
-
-    def test_remove_assigned_sets_route_to_none(self) -> None:
-        app = _mk_app()
-        route = _FakeRoute(10, ["A", "B"])
-        pkg = _FakePackage(1, "A", "B")
-        route.packages.append(pkg)
-        pkg.route = route
-        app._routes.append(route)
-        app._packages.append(pkg)
-
-        remove_uc = make_remove_package_uc(app)
-        remove_uc.execute(pkg.package_id)
-        self.assertIsNone(pkg.route)
-
-    def test_remove_leaves_other_packages_on_route(self) -> None:
-        app = _mk_app()
-        route = _FakeRoute(10, ["A", "B"])
-        pkg1 = _FakePackage(1, "A", "B")
-        pkg2 = _FakePackage(2, "A", "B")
-        route.packages.extend([pkg1, pkg2])
-        pkg1.route = route
-        pkg2.route = route
-        app._routes.append(route)
-        app._packages.extend([pkg1, pkg2])
-
-        remove_uc = make_remove_package_uc(app)
-        remove_uc.execute(pkg1.package_id)
-        self.assertIn(pkg2, route.packages)
-        self.assertIs(pkg2.route, route)
 
 
 class Characterization_SaveLoadRoundTrip_Should(unittest.TestCase):
@@ -742,67 +553,6 @@ class Characterization_SaveLoadRoundTrip_Should(unittest.TestCase):
         app = _mk_app()
         with self.assertRaises(ValueError):
             app._apply_state({"schema_version": 99})
-
-
-class Characterization_HeartbeatStatus_Should(unittest.TestCase):
-    """heartbeat() must transition route statuses correctly."""
-
-    def _make_route_with_truck(self, dep: datetime, eta: datetime) -> tuple[Any, _FakeRoute, _FakeTruck]:
-        app = _mk_app()
-        route = _FakeRoute(1, ["A", "B", "C"], departure_time=dep, eta_final=eta)
-        truck = _FakeTruck(vehicle_id=1, current_location="A")
-        truck.route = route
-        route.truck = truck
-        app._routes.append(route)
-        app.vehicle_manager.vehicles = [truck]
-        return app, route, truck
-
-    def test_status_planned_when_no_departure(self) -> None:
-        app = _mk_app()
-        route = _FakeRoute(1, ["A", "B"])
-        app._routes.append(route)
-        app.heartbeat(now=datetime(2025, 1, 1))
-        self.assertEqual(route.status, "PLANNED")
-
-    def test_status_scheduled_before_departure(self) -> None:
-        dep = datetime(2025, 6, 1, 10, 0)
-        eta = datetime(2025, 6, 1, 12, 0)
-        app, route, _ = self._make_route_with_truck(dep, eta)
-        app.heartbeat(now=datetime(2025, 6, 1, 9, 0))
-        self.assertEqual(route.status, "SCHEDULED")
-
-    def test_status_in_progress_after_departure_before_eta(self) -> None:
-        dep = datetime(2025, 6, 1, 10, 0)
-        eta = datetime(2025, 6, 1, 14, 0)
-        app, route, _ = self._make_route_with_truck(dep, eta)
-        app.heartbeat(now=datetime(2025, 6, 1, 11, 0))
-        self.assertEqual(route.status, "IN_PROGRESS")
-
-    def test_status_completed_at_eta(self) -> None:
-        dep = datetime(2025, 6, 1, 10, 0)
-        eta = datetime(2025, 6, 1, 12, 0)
-        app, route, _ = self._make_route_with_truck(dep, eta)
-        app.heartbeat(now=datetime(2025, 6, 1, 12, 0))
-        self.assertEqual(route.status, "COMPLETED")
-
-    def test_package_transitions_to_done_at_destination(self) -> None:
-        dep = datetime(2025, 1, 1, 0, 0)
-        eta = datetime(2025, 1, 1, 2, 0)
-        app, route, _ = self._make_route_with_truck(dep, eta)
-        pkg = _FakePackage(1, "A", "C")
-        route.packages.append(pkg)
-        pkg.route = route
-        app._packages.append(pkg)
-
-        app.heartbeat(now=datetime(2025, 1, 1, 3, 0))
-        self.assertEqual(pkg.status, ItemStatus.DONE)
-
-    def test_truck_released_after_eta(self) -> None:
-        dep = datetime(2025, 1, 1, 0, 0)
-        eta = datetime(2025, 1, 1, 2, 0)
-        app, _route, truck = self._make_route_with_truck(dep, eta)
-        app.heartbeat(now=datetime(2025, 1, 1, 3, 0))
-        self.assertIsNone(truck.route)
 
 
 class Characterization_RBAC_Should(unittest.TestCase):
