@@ -1,0 +1,47 @@
+import unittest
+from unittest.mock import MagicMock
+
+from src.adapters.driving.cli.commands.view_all_trucks import ViewAllTrucks
+
+
+class ViewAllTrucks_Should(unittest.TestCase):
+    def make_cmd(self, *, authorized: bool = True) -> ViewAllTrucks:
+        cmd = ViewAllTrucks.__new__(ViewAllTrucks)
+        cmd._params = ()  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._app_data = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._app_data.authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._app_data.authz.has.return_value = authorized  # type: ignore[reportAttributeAccessIssue]
+        cmd._auth = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        return cmd
+
+    def test_execute_without_permission_raises(self) -> None:
+        cmd = self.make_cmd(authorized=False)
+
+        with self.assertRaises(PermissionError) as ctx:
+            cmd.execute()
+
+        self.assertIn("TRUCK_VIEW", str(ctx.exception))
+        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
+
+    def test_no_trucks_exist(self) -> None:
+        cmd = self.make_cmd()
+        cmd._use_case.execute.return_value = []  # type: ignore[reportAttributeAccessIssue]
+
+        result = cmd.execute()
+
+        self.assertEqual(result, "No trucks.")
+        cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
+
+    def test_with_multiple_trucks(self) -> None:
+        cmd = self.make_cmd()
+        truck1 = MagicMock()
+        truck1.info.return_value = "Truck 1 Info"
+        truck2 = MagicMock()
+        truck2.info.return_value = "Truck 2 Info"
+        cmd._use_case.execute.return_value = [truck1, truck2]  # type: ignore[reportAttributeAccessIssue]
+
+        result = cmd.execute()
+
+        self.assertEqual(result, "Truck 1 Info\n\nTruck 2 Info")
+        cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]

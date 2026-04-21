@@ -31,7 +31,6 @@ from src.composition.container import Container
 from src.core.application_data import ApplicationData
 
 _LEGACY_REGISTRY: dict[str, type[BaseCommand]] = {
-    "viewalltrucks": ViewAllTrucks,
     "login": AuthLogin,
     "logout": AuthLogout,
     "whoami": AuthWhoAmI,
@@ -79,6 +78,7 @@ _CONTAINER_COMMANDS: dict[str, CommandEntry[Any]] = {
     "assignpackagestoroute": bind_command(
         AssignPackageToRoute, lambda container: container.assign_packages_to_route_use_case
     ),
+    "viewalltrucks": bind_command(ViewAllTrucks, lambda container: container.view_all_trucks_use_case),
 }
 
 

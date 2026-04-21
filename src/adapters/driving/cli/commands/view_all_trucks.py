@@ -1,6 +1,11 @@
-from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
+from src.adapters.driving.cli.commands.base_command.base_command import UseCaseCommand
+from src.application.services.authorization import requires
+from src.application.use_cases.trucks.view_all_trucks import ViewAllTrucksUseCase
+from src.domain.enums.auth import Permission
 
 
-class ViewAllTrucks(BaseCommand):
+class ViewAllTrucks(UseCaseCommand[ViewAllTrucksUseCase]):
+
+    @requires(Permission.TRUCK_VIEW)
     def execute(self) -> str:
-        return "\n\n".join(truck.info() for truck in self._app_data.view_all_trucks()) or "No trucks."
+        return "\n\n".join(truck.info() for truck in self._use_case.execute()) or "No trucks."

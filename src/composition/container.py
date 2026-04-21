@@ -13,12 +13,15 @@ from src.application.use_cases.packages.view_unassigned_packages import ViewUnas
 from src.application.use_cases.routes.assign_packages_to_route import AssignPackagesToRouteUseCase
 from src.application.use_cases.routes.assign_truck_to_route import AssignTruckToRouteUseCase
 from src.application.use_cases.routes.create_route import CreateRouteUseCase
-from src.application.use_cases.routes.find_suitable_routes_for_package import FindSuitableRoutesForPackageUseCase
+from src.application.use_cases.routes.find_suitable_routes_for_package import (
+    FindSuitableRoutesForPackageUseCase,
+)
 from src.application.use_cases.routes.find_suitable_trucks_for_route import FindSuitableTrucksForRouteUseCase
 from src.application.use_cases.routes.remove_route import RemoveRouteUseCase
 from src.application.use_cases.routes.view_all_routes import ViewAllRoutesUseCase
 from src.application.use_cases.routes.view_route import ViewRouteUseCase
 from src.application.use_cases.routes.view_routes_in_progress import ViewRoutesInProgressUseCase
+from src.application.use_cases.trucks.view_all_trucks import ViewAllTrucksUseCase
 from src.core.application_data import ApplicationData
 
 
@@ -56,3 +59,4 @@ class Container:
         self.find_suitable_routes_for_package_use_case = FindSuitableRoutesForPackageUseCase(
             self.route_repo, self.package_repo
         )
+        self.view_all_trucks_use_case = ViewAllTrucksUseCase(self.vehicle_manager)
