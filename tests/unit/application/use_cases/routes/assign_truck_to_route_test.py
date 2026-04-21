@@ -1,0 +1,142 @@
+import unittest
+from datetime import datetime
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+
+from src.application.use_cases.routes.assign_truck_to_route import AssignTruckToRouteUseCase
+
+
+class AssignTruckToRouteUseCase_Should(unittest.TestCase):
+    def setUp(self) -> None:
+        self.mock_routes = MagicMock()
+        self.mock_vehicles = MagicMock()
+        self.use_case = AssignTruckToRouteUseCase(self.mock_routes, self.mock_vehicles)
+
+    def test_raises_when_route_not_found(self) -> None:
+        self.mock_routes.get_by_id.return_value = None
+
+        with self.assertRaises(ValueError) as ctx:
+            self.use_case.execute(11, 22, now=datetime(2025, 10, 12, 6, 0))
+
+        self.assertIn("Route with ID 22 not found", str(ctx.exception))
+        self.mock_routes.get_by_id.assert_called_once_with(22)
+        self.mock_vehicles.find_by_id.assert_not_called()
+
+    def test_raises_when_truck_not_found(self) -> None:
+        route = SimpleNamespace(route_id=22, departure_time=None, start_location="SYD", truck=None)
+        self.mock_routes.get_by_id.return_value = route
+        self.mock_vehicles.find_by_id.return_value = None
+
+        with self.assertRaises(ValueError) as ctx:
+            self.use_case.execute(11, 22, now=datetime(2025, 10, 12, 6, 0))
+
+        self.assertIn("Truck with ID 11 not found", str(ctx.exception))
+        self.mock_routes.get_by_id.assert_called_once_with(22)
+        self.mock_vehicles.find_by_id.assert_called_once_with(11)
+
+    def test_schedules_route_when_unscheduled(self) -> None:
+        fixed_now = datetime(2025, 10, 12, 6, 0)
+
+        route = SimpleNamespace(
+            route_id=22,
+            departure_time=None,
+            start_location="SYD",
+            truck=None,
+        )
+
+        def _set_departure(when: datetime) -> None:
+            route.departure_time = when
+
+        route.schedule = MagicMock(side_effect=_set_departure)
+
+        truck = MagicMock()
+
+        self.mock_routes.get_by_id.return_value = route
+        self.mock_vehicles.find_by_id.return_value = truck
+        self.mock_vehicles.is_suitable_for_route.return_value = (True, "")
+
+        result = self.use_case.execute(11, 22, now=fixed_now)
+
+        self.assertIs(result, route)
+        route.schedule.assert_called_once_with(fixed_now)
+        self.mock_vehicles.is_suitable_for_route.assert_called_once_with(truck, route)
+        self.assertIs(route.truck, truck)
+        truck.assign.assert_called_once_with(route, "SYD")
+
+    def test_does_not_reschedule_when_route_already_scheduled(self) -> None:
+        fixed_now = datetime(2025, 10, 12, 6, 0)
+
+        route = SimpleNamespace(
+            route_id=22,
+            departure_time=datetime(2025, 10, 13, 6, 0),
+            start_location="SYD",
+            truck=None,
+        )
+        route.schedule = MagicMock()
+
+        truck = MagicMock()
+
+        self.mock_routes.get_by_id.return_value = route
+        self.mock_vehicles.find_by_id.return_value = truck
+        self.mock_vehicles.is_suitable_for_route.return_value = (True, "")
+
+        result = self.use_case.execute(11, 22, now=fixed_now)
+
+        self.assertIs(result, route)
+        route.schedule.assert_not_called()
+        self.mock_vehicles.is_suitable_for_route.assert_called_once_with(truck, route)
+        self.assertIs(route.truck, truck)
+        truck.assign.assert_called_once_with(route, "SYD")
+
+    def test_raises_when_truck_is_not_suitable(self) -> None:
+        fixed_now = datetime(2025, 10, 12, 6, 0)
+
+        route = SimpleNamespace(
+            route_id=22,
+            departure_time=None,
+            start_location="SYD",
+            truck=None,
+        )
+
+        def _set_departure(when: datetime) -> None:
+            route.departure_time = when
+
+        route.schedule = MagicMock(side_effect=_set_departure)
+
+        truck = MagicMock()
+
+        self.mock_routes.get_by_id.return_value = route
+        self.mock_vehicles.find_by_id.return_value = truck
+        self.mock_vehicles.is_suitable_for_route.return_value = (False, "range too short")
+
+        with self.assertRaises(ValueError) as ctx:
+            self.use_case.execute(11, 22, now=fixed_now)
+
+        self.assertIn("Truck 11 is not suitable for route 22: range too short", str(ctx.exception))
+        route.schedule.assert_called_once_with(fixed_now)
+        self.mock_vehicles.is_suitable_for_route.assert_called_once_with(truck, route)
+        truck.assign.assert_not_called()
+        self.assertIsNone(route.truck)
+
+    def test_assigns_truck_to_route_on_success(self) -> None:
+        fixed_now = datetime(2025, 10, 12, 6, 0)
+
+        route = SimpleNamespace(
+            route_id=22,
+            departure_time=datetime(2025, 10, 13, 6, 0),
+            start_location="SYD",
+            truck=None,
+        )
+        route.schedule = MagicMock()
+
+        truck = MagicMock()
+
+        self.mock_routes.get_by_id.return_value = route
+        self.mock_vehicles.find_by_id.return_value = truck
+        self.mock_vehicles.is_suitable_for_route.return_value = (True, "")
+
+        result = self.use_case.execute(11, 22, now=fixed_now)
+
+        self.assertIs(result, route)
+        self.assertIs(route.truck, truck)
+        truck.assign.assert_called_once_with(route, "SYD")
