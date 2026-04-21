@@ -1,6 +1,7 @@
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.entities.truck import Truck
 from src.domain.services.map import Map
+from src.ports.output.vehicle_manager import RouteSuitabilityView
 
 
 class VehicleManager:
@@ -39,7 +40,7 @@ class VehicleManager:
                 return v
         return None
 
-    def is_suitable_for_route(self, truck: Truck, route: DeliveryRoute) -> tuple[bool, str]:
+    def is_suitable_for_route(self, truck: Truck, route: RouteSuitabilityView) -> tuple[bool, str]:
         if truck.max_range < route.total_distance_km:
             return False, "range too short"
         if truck.capacity < route.total_assigned_weight():
