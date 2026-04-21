@@ -10,6 +10,7 @@ from src.application.use_cases.packages.remove_package import RemovePackageUseCa
 from src.application.use_cases.packages.view_all_packages import ViewAllPackagesUseCase
 from src.application.use_cases.packages.view_package import ViewPackageUseCase
 from src.application.use_cases.packages.view_unassigned_packages import ViewUnassignedPackagesUseCase
+from src.application.use_cases.routes.assign_truck_to_route import AssignTruckToRouteUseCase
 from src.application.use_cases.routes.create_route import CreateRouteUseCase
 from src.application.use_cases.routes.remove_route import RemoveRouteUseCase
 from src.application.use_cases.routes.view_all_routes import ViewAllRoutesUseCase
@@ -26,6 +27,8 @@ class Container:
 
         self.customer_service = CustomerService(self.customer_repo)
 
+        self.vehicle_manager = app_data.vehicle_manager
+
         self.create_package_use_case = CreatePackageUseCase(
             self.customer_service,
             self.package_repo,
@@ -40,3 +43,4 @@ class Container:
         self.view_routes_in_progress_use_case = ViewRoutesInProgressUseCase(self.route_repo)
         self.create_route_use_case = CreateRouteUseCase(self.route_repo)
         self.remove_route_use_case = RemoveRouteUseCase(self.route_repo)
+        self.assign_truck_to_route_use_case = AssignTruckToRouteUseCase(self.route_repo, self.vehicle_manager)

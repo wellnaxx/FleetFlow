@@ -32,7 +32,6 @@ from src.core.application_data import ApplicationData
 
 _LEGACY_REGISTRY: dict[str, type[BaseCommand]] = {
     "findsuitabletrucksforroute": FindSuitableTrucksForRoute,
-    "assigntrucktoroute": AssignTruckToRoute,
     "assignpackagetoroute": AssignPackageToRoute,
     "findsuitableroutesforpackage": FindSuitableRoutesForPackage,
     "viewalltrucks": ViewAllTrucks,
@@ -70,7 +69,10 @@ _CONTAINER_COMMANDS: dict[str, CommandEntry[Any]] = {
     "viewroutesinprogress": bind_command(
         ViewRoutesInProgress, lambda container: container.view_routes_in_progress_use_case
     ),
-    "removeroute": bind_command(RemoveRoute, lambda container: container.remove_route_use_case)
+    "removeroute": bind_command(RemoveRoute, lambda container: container.remove_route_use_case),
+    "assigntrucktoroute": bind_command(
+        AssignTruckToRoute, lambda container: container.assign_truck_to_route_use_case
+    ),
 }
 
 
