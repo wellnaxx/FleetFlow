@@ -12,7 +12,6 @@ from src.application.services.authorization import AuthorizationService, require
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.entities.delivery_route import DeliveryRoute
-from src.domain.entities.truck import Truck
 from src.domain.entities.users.user import User
 from src.domain.enums.auth import Permission, Role
 from src.domain.enums.item_status import ItemStatus
@@ -20,6 +19,7 @@ from src.domain.enums.truck_status import TruckStatus
 from src.domain.services.vehicle_manager import VehicleManager
 
 if TYPE_CHECKING:
+    from src.domain.entities.truck import Truck
     from src.domain.entities.users.employee import Employee
     from src.domain.entities.users.manager import Manager
 
@@ -458,10 +458,6 @@ class ApplicationData:
     def packages(self) -> tuple[DeliveryPackage, ...]:
         return tuple(self._packages)
 
-
-    @requires(Permission.TRUCK_VIEW)
-    def view_all_trucks(self) -> tuple[Truck, ...]:
-        return tuple(self.vehicle_manager.list_fleet())
 
     @property
     def customer_store(self) -> list[Customer]:
