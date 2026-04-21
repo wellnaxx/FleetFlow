@@ -3,7 +3,9 @@ from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from src.application.use_cases.routes.find_suitable_routes_for_package import FindSuitableRoutesForPackageUseCase
+from src.application.use_cases.routes.find_suitable_routes_for_package import (
+    FindSuitableRoutesForPackageUseCase,
+)
 
 
 class FindSuitableRoutesForPackageUseCase_Should(unittest.TestCase):
