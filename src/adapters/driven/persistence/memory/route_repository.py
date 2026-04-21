@@ -11,6 +11,8 @@ class InMemoryRouteRepository:
         return max(self._routes.keys()) + 1
     
     def add(self, route: DeliveryRoute) -> None:
+        if route.route_id in self._routes:
+            raise ValueError(f"Route with ID {route.route_id} already exists")
         self._routes[route.route_id] = route
 
     def remove(self, route_id: int) -> None:
