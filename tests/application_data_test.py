@@ -235,36 +235,6 @@ def _make_fake_route(*args: Any, **kwargs: Any) -> _FakeRoute:
     return _FakeRoute(route_id=route_id, locations=locations, departure_time=departure_time)
 
 
-class ApplicationData_FindSuitables_Should(unittest.TestCase):
-    def test_find_suitable_routes_for_package_capacity_and_sort(self) -> None:
-        app = _mk_app()
-        r1 = _FakeRoute(
-            10,
-            ["A", "B", "C"],
-            departure_time=datetime(2025, 1, 1, 8),
-            eta_final=datetime(2025, 1, 1, 10),
-        )
-        r2 = _FakeRoute(
-            20,
-            ["A", "X", "C"],
-            departure_time=datetime(2025, 1, 1, 9),
-            eta_final=datetime(2025, 1, 1, 11),
-        )
-        r3 = _FakeRoute(30, ["A", "C"])
-        t1 = _FakeTruck(vehicle_id=100, capacity=5.0)
-        t2 = _FakeTruck(vehicle_id=200, capacity=1.0)
-        r1.truck = t1
-        r2.truck = t2
-
-        app._routes = [r3, r2, r1]
-        pkg = _FakePackage(7, "A", "C", weight=2.0, customer=_FakeCustomer(customer_id=1))
-        app._packages = [pkg]
-
-        res = app.find_suitable_routes_for_package(pkg.package_id)
-        ids = [x["route"].route_id for x in res]
-        self.assertEqual(ids, [10, 30])
-
-
 class ApplicationData_Heartbeat_Should(unittest.TestCase):
     def test_heartbeat_moves_trucks_and_updates_packages(self) -> None:
         app = _mk_app()
@@ -533,7 +503,8 @@ class Characterization_SaveLoadRoundTrip_Should(unittest.TestCase):
 
         self.assertEqual(app.route_store, [route])
         self.assertIs(truck.route, route)
-        self.assertIs(app.find_route(route.route_id), route)
+        route_repo = ApplicationDataRouteRepository(app)
+        self.assertIs(route_repo.get_by_id(route.route_id), route)
 
     def test_apply_state_resets_existing_truck_assignments_before_loading(self) -> None:
         app = ApplicationData(current_user=None)
@@ -602,11 +573,6 @@ class Characterization_RBAC_Should(unittest.TestCase):
         with self.assertRaises(PermissionError):
             app.load("dummy.json")
 
-    def test_employee_cannot_view_all_packages(self) -> None:
-        app = self._app_for_role(Role.EMPLOYEE)
-        with self.assertRaises(PermissionError):
-            app.view_all_packages()
-
     def test_employee_cannot_view_all_customers(self) -> None:
         app = self._app_for_role(Role.EMPLOYEE)
         with self.assertRaises(PermissionError):
@@ -618,7 +584,3 @@ class Characterization_RBAC_Should(unittest.TestCase):
             result = app.save("state.json")
             self.assertIn("/fake/path", result)
 
-    def test_manager_can_view_all_packages(self) -> None:
-        app = self._app_for_role(Role.MANAGER)
-        result = app.view_all_packages()
-        self.assertEqual(result, ())

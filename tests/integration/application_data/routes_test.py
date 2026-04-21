@@ -85,11 +85,12 @@ class _FakeRoute:
 class ApplicationDataBackedRoutesIntegration_Should(unittest.TestCase):
     def test_create_and_remove_route_updates_shared_state(self) -> None:
         app = _mk_app()
+        route_repo = ApplicationDataRouteRepository(app)
         create_route = make_create_route_uc(app)
         remove_route = make_remove_route_uc(app)
 
         route = create_route.execute(["SYD", "MEL"], None)
-        self.assertIs(app.find_route(route.route_id), route)
+        self.assertIs(route_repo.get_by_id(route.route_id), route)
 
         package = SimpleNamespace(
             package_id=77,
@@ -107,7 +108,7 @@ class ApplicationDataBackedRoutesIntegration_Should(unittest.TestCase):
         removed = remove_route.execute(route.route_id)
 
         self.assertIs(removed, route)
-        self.assertIsNone(app.find_route(route.route_id))
+        self.assertIsNone(route_repo.get_by_id(route.route_id))
         self.assertIsNone(truck.route)
         self.assertIsNone(package.route)
         self.assertEqual(route.packages, [])

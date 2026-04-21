@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from src.adapters.driven.persistence.json.paths import resolve_data_path
 from src.adapters.driven.persistence.json.serialization import dt_from_str, dt_to_str
 from src.application.services.auth_service import AuthService
-from src.application.services.authorization import AuthorizationService, requires, requires_all
+from src.application.services.authorization import AuthorizationService, requires
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.entities.delivery_route import DeliveryRoute
@@ -453,74 +453,11 @@ class ApplicationData:
     def customers(self) -> tuple[Customer, ...]:
         return tuple(self._customers)
 
-    def find_route(self, route_id: int) -> DeliveryRoute | None:
-        for r in self._routes:
-            if r.route_id == route_id:
-                return r
-        return None
-
-    @property
-    def routes(self) -> tuple[DeliveryRoute, ...]:
-        return tuple(self._routes)
-
-    @requires(Permission.PACKAGE_VIEW)
-    def view_package(self, package_id: int) -> DeliveryPackage | None:
-        for p in self._packages:
-            if p.package_id == package_id:
-                return p
-        return None
-
-    @requires(Permission.PACKAGE_VIEW_UNASSIGNED)
-    def view_unassigned_packages(self) -> tuple[DeliveryPackage, ...]:
-        return tuple(p for p in self._packages if getattr(p, "route", None) is None)
-
-    @requires(Permission.PACKAGE_VIEW_ALL)
-    def view_all_packages(self) -> tuple[DeliveryPackage, ...]:
-        return tuple(self._packages)
 
     @property
     def packages(self) -> tuple[DeliveryPackage, ...]:
         return tuple(self._packages)
 
-    @requires_all(Permission.PACKAGE_FIND_ROUTE_FOR, Permission.PACKAGE_VIEW, Permission.ROUTE_VIEW)
-    def find_suitable_routes_for_package(self, package_id: int) -> list[dict[str, Any]]:
-        """
-        Returns a list of dicts with 'route', 'eta' (or None), 'capacity_left' (float|None).
-        A route is suitable if start/end appear in order and
-        (if truck assigned) it has enough remaining capacity.
-        """
-        pkg = self.view_package(package_id)
-        if not pkg:
-            raise ValueError(f"Package with ID {package_id} not found.")
-
-        results: list[dict[str, Any]] = []
-
-        for r in self._routes:
-            locs = r.locations
-            try:
-                si = locs.index(pkg.start_location)
-                ei = locs.index(pkg.end_location)
-                if si >= ei:
-                    continue
-            except ValueError:
-                continue
-
-            capacity_left = None
-            if r.truck:
-                capacity_left = r.truck.capacity - r.total_assigned_weight()
-                if capacity_left < pkg.weight:
-                    continue
-
-            eta = None
-            try:
-                eta = r.arrival_time_at(pkg.end_location)
-            except Exception:
-                eta = None
-
-            results.append({"route": r, "eta": eta, "capacity_left": capacity_left})
-
-        results.sort(key=lambda x: (x["eta"] is None, x["eta"] or datetime.max))
-        return results
 
     @requires(Permission.TRUCK_VIEW)
     def view_all_trucks(self) -> tuple[Truck, ...]:
