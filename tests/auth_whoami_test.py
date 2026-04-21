@@ -8,13 +8,13 @@ from src.adapters.driving.cli.commands.auth_whoami import AuthWhoAmI
 class AuthWhoAmI_Tests(unittest.TestCase):
     def make_cmd(self):
         cmd = AuthWhoAmI.__new__(AuthWhoAmI)
-        cmd._auth = MagicMock()  # type: ignore[reportPrivateUsage]
+        cmd._use_case = MagicMock()  # type: ignore[reportPrivateUsage]
         cmd._params = []  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
     def test_not_logged_in_returns_message(self):
         cmd = self.make_cmd()
-        cmd._auth.current_user = None  # type: ignore[reportAttributeAccessIssue]  # explicitly not logged in
+        cmd._use_case.execute.return_value = None  # type: ignore[reportAttributeAccessIssue]
 
         result = cmd.execute()
 
@@ -22,7 +22,7 @@ class AuthWhoAmI_Tests(unittest.TestCase):
 
     def test_logged_in_formats_name_and_role_value(self):
         cmd = self.make_cmd()
-        cmd._auth.current_user = SimpleNamespace(  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = SimpleNamespace(  # type: ignore[reportAttributeAccessIssue]
             name="Alice", role=SimpleNamespace(value="ADMIN")
         )
 
@@ -33,7 +33,7 @@ class AuthWhoAmI_Tests(unittest.TestCase):
     def test_ignores_params_if_present(self):
         cmd = self.make_cmd()
         cmd._params = ["ignored", "stuff"]  # type: ignore[reportAttributeAccessIssue]
-        cmd._auth.current_user = SimpleNamespace(  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = SimpleNamespace(  # type: ignore[reportAttributeAccessIssue]
             name="Bob", role=SimpleNamespace(value="USER")
         )
 
