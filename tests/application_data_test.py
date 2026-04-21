@@ -388,23 +388,6 @@ class ApplicationData_SaveLoad_Should(unittest.TestCase):
             makedirs.assert_called_once()
             replace.assert_called_once()
 
-    def test_register_user_delegates(self) -> None:
-        app = _mk_app()
-        auth = MagicMock()
-        app.register_user(
-            username="u",
-            role=Role.EMPLOYEE,
-            name="N",
-            email="",
-            phone="",
-            password="pw",
-            auth_service=auth,
-        )
-        auth.register_user.assert_called_once_with(
-            username="u", role=Role.EMPLOYEE, name="N", email="", phone_number="", password="pw"
-        )
-
-
 class Characterization_SaveLoadRoundTrip_Should(unittest.TestCase):
     """_dump_state / _apply_state must round-trip all domain entities."""
 

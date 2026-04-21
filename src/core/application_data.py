@@ -7,13 +7,12 @@ from typing import TYPE_CHECKING, Any
 
 from src.adapters.driven.persistence.json.paths import resolve_data_path
 from src.adapters.driven.persistence.json.serialization import dt_from_str, dt_to_str
-from src.application.services.auth_service import AuthService
 from src.application.services.authorization import AuthorizationService, requires
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.entities.users.user import User
-from src.domain.enums.auth import Permission, Role
+from src.domain.enums.auth import Permission
 from src.domain.enums.item_status import ItemStatus
 from src.domain.enums.truck_status import TruckStatus
 from src.domain.services.vehicle_manager import VehicleManager
@@ -245,26 +244,6 @@ class ApplicationData:
             data = json.load(f)
         self._apply_state(data)
         return f"Loaded state from {abs_path}"
-
-    @requires(Permission.ADMIN_USER)
-    def register_user(
-        self,
-        *,
-        username: str,
-        role: Role,
-        name: str,
-        email: str,
-        phone: str,
-        password: str,
-        auth_service: AuthService,
-    ) -> Any:
-        """
-        Manager-only. Delegates to AuthService to create the account in the user store.
-        """
-        # NB: pass-through to AuthService; keeps RBAC centralized here.
-        return auth_service.register_user(
-            username=username, role=role, name=name, email=email, phone_number=phone, password=password
-        )
 
     def heartbeat(self, now: datetime | None = None) -> dict[str, int]:
         """
