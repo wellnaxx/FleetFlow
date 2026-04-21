@@ -1,5 +1,6 @@
 import unittest
 from datetime import datetime
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -72,6 +73,7 @@ class _FakeRoute:
         self.departure_time = departure_time
         self.truck: Any = None
         self.packages: list[Any] = []
+        self.total_distance_km = max(len(locations) - 1, 1) * 100
 
     def schedule(self, when: datetime) -> None:
         self.departure_time = when
@@ -89,6 +91,15 @@ class ApplicationDataBackedRoutesIntegration_Should(unittest.TestCase):
         route = create_route.execute(["SYD", "MEL"], None)
         self.assertIs(app.find_route(route.route_id), route)
 
+        package = SimpleNamespace(
+            package_id=77,
+            start_location="SYD",
+            end_location="MEL",
+            weight=1.0,
+            route=None,
+        )
+        route.assign_package(package)  # type: ignore[reportArgumentType]
+
         truck = _FakeTruck(vehicle_id=5)
         route.truck = truck  # type: ignore[assignment]
         truck.route = route
@@ -98,6 +109,8 @@ class ApplicationDataBackedRoutesIntegration_Should(unittest.TestCase):
         self.assertIs(removed, route)
         self.assertIsNone(app.find_route(route.route_id))
         self.assertIsNone(truck.route)
+        self.assertIsNone(package.route)
+        self.assertEqual(route.packages, [])
 
     def test_assign_truck_schedules_if_unscheduled_and_checks_suitability(self) -> None:
         app = _mk_app()
@@ -118,7 +131,8 @@ class ApplicationDataBackedRoutesIntegration_Should(unittest.TestCase):
         self.assertIs(truck.route, route)
         self.assertEqual(route.departure_time, now)
         app.vehicle_manager.find_by_id.assert_called_once_with(5)
-        app.vehicle_manager.is_suitable_for_route.assert_called_once_with(truck, route)
+        app.vehicle_manager.is_suitable_for_route.assert_called_once()
+        self.assertEqual(app.vehicle_manager.is_suitable_for_route.call_args.args[1].departure_time, now)
 
     def test_assign_truck_route_not_found_raises(self) -> None:
         app = _mk_app()
