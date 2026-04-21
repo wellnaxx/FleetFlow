@@ -33,9 +33,9 @@ class VehicleManager:
     def list_fleet(self) -> list[Truck]:
         return list(self.vehicles)
 
-    def find_by_id(self, veh_id: int) -> Truck | None:
+    def find_by_id(self, vehicle_id: int) -> Truck | None:
         for v in self.vehicles:
-            if v.vehicle_id == veh_id:
+            if v.vehicle_id == vehicle_id:
                 return v
         return None
 
