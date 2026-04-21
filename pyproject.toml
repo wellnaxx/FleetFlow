@@ -37,6 +37,7 @@ ignore = [
     "B008",     # do not perform function calls in argument defaults
     "TRY003",   # long messages in raise — standard Python pattern, not worth custom exceptions
     "ANN401",   # Any is sometimes necessary (decorators, serialization)
+    "TC006"
 ]
 
 # Allow fixes for everything Ruff knows how to fix.
