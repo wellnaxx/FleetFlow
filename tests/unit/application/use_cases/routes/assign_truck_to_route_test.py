@@ -42,7 +42,9 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
             departure_time=None,
             start_location="SYD",
             truck=None,
+            total_distance_km=100,
         )
+        route.total_assigned_weight = MagicMock(return_value=0.0)
 
         def _set_departure(when: datetime) -> None:
             route.departure_time = when
@@ -58,8 +60,8 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         result = self.use_case.execute(11, 22, now=fixed_now)
 
         self.assertIs(result, route)
+        self.assertEqual(self.mock_vehicles.is_suitable_for_route.call_args.args[1].departure_time, fixed_now)
         route.schedule.assert_called_once_with(fixed_now)
-        self.mock_vehicles.is_suitable_for_route.assert_called_once_with(truck, route)
         self.assertIs(route.truck, truck)
         truck.assign.assert_called_once_with(route, "SYD")
 
@@ -72,6 +74,7 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
             start_location="SYD",
             truck=None,
         )
+        route.total_assigned_weight = MagicMock(return_value=0.0)
         route.schedule = MagicMock()
 
         truck = MagicMock()
@@ -96,7 +99,9 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
             departure_time=None,
             start_location="SYD",
             truck=None,
+            total_distance_km=100,
         )
+        route.total_assigned_weight = MagicMock(return_value=0.0)
 
         def _set_departure(when: datetime) -> None:
             route.departure_time = when
@@ -113,10 +118,10 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
             self.use_case.execute(11, 22, now=fixed_now)
 
         self.assertIn("Truck 11 is not suitable for route 22: range too short", str(ctx.exception))
-        route.schedule.assert_called_once_with(fixed_now)
-        self.mock_vehicles.is_suitable_for_route.assert_called_once_with(truck, route)
+        route.schedule.assert_not_called()
         truck.assign.assert_not_called()
         self.assertIsNone(route.truck)
+        self.assertIsNone(route.departure_time)
 
     def test_assigns_truck_to_route_on_success(self) -> None:
         fixed_now = datetime(2025, 10, 12, 6, 0)
@@ -127,6 +132,7 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
             start_location="SYD",
             truck=None,
         )
+        route.total_assigned_weight = MagicMock(return_value=0.0)
         route.schedule = MagicMock()
 
         truck = MagicMock()
@@ -140,3 +146,22 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         self.assertIs(result, route)
         self.assertIs(route.truck, truck)
         truck.assign.assert_called_once_with(route, "SYD")
+
+    def test_raises_when_route_already_has_a_truck(self) -> None:
+        route = SimpleNamespace(
+            route_id=22,
+            departure_time=datetime(2025, 10, 13, 6, 0),
+            start_location="SYD",
+            truck=SimpleNamespace(vehicle_id=7),
+        )
+        route.total_assigned_weight = MagicMock(return_value=0.0)
+        route.schedule = MagicMock()
+        self.mock_routes.get_by_id.return_value = route
+
+        with self.assertRaises(ValueError) as ctx:
+            self.use_case.execute(11, 22, now=datetime(2025, 10, 12, 6, 0))
+
+        self.assertIn("Route 22 already has truck 7 assigned", str(ctx.exception))
+        self.mock_vehicles.find_by_id.assert_called_once_with(11)
+        self.mock_vehicles.is_suitable_for_route.assert_not_called()
+        route.schedule.assert_not_called()
