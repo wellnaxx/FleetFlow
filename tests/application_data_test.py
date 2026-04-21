@@ -235,66 +235,6 @@ def _make_fake_route(*args: Any, **kwargs: Any) -> _FakeRoute:
     return _FakeRoute(route_id=route_id, locations=locations, departure_time=departure_time)
 
 
-class ApplicationData_AssignPackages_Should(unittest.TestCase):
-    def _seed_app_with_route_and_packages(
-        self,
-        scheduled: bool = False,
-    ) -> tuple[Any, Any, tuple[Any, Any, Any]]:
-        app = _mk_app()
-        route = _FakeRoute(
-            route_id=10,
-            locations=["SYD", "CBR", "MEL"],
-            departure_time=(datetime(2025, 10, 1, 9, 0) if scheduled else None),
-        )
-
-        def arrival_time_at(city: str) -> datetime | None:
-            table = {
-                "SYD": datetime(2025, 10, 1, 9, 0),
-                "CBR": datetime(2025, 10, 1, 12, 0),
-                "MEL": datetime(2025, 10, 1, 18, 0),
-            }
-            return table.get(city)
-
-        route.arrival_time_at = arrival_time_at  # type: ignore[method-assign]
-        app._routes.append(route)
-
-        pkg1 = _FakePackage(package_id=1, start="SYD", end="MEL")
-        pkg2 = _FakePackage(package_id=2, start="SYD", end="CBR")
-        pkg3 = _FakePackage(package_id=3, start="SYD", end="MEL")
-        pkg3.route = route
-        app._packages.extend([pkg1, pkg2, pkg3])
-        return app, route, (pkg1, pkg2, pkg3)
-
-    def test_assign_packages_unscheduled_route_formats_eta_na(self) -> None:
-        app, route, (pkg1, _, _) = self._seed_app_with_route_and_packages(scheduled=False)
-        out_parts = app.assign_packages_to_route(route.route_id, [pkg1.package_id])
-        self.assertEqual(
-            out_parts,
-            [f"Assigned package {pkg1.package_id} to route {route.route_id}. ETA: N/A (route unscheduled)"],
-        )
-        self.assertIs(pkg1.route, route)
-        self.assertIn(pkg1, route.packages)
-
-    def test_assign_packages_scheduled_mixes_success_and_errors(self) -> None:
-        app, route, (pkg1, _, pkg3) = self._seed_app_with_route_and_packages(scheduled=True)
-        out = app.assign_packages_to_route(
-            route.route_id,
-            [pkg1.package_id, 99, pkg3.package_id, pkg1.package_id],
-        )
-        txt = "\n".join(out)
-        self.assertIn("Assigned package 1 to route 10. ETA: 2025-10-01 18:00", txt)
-        self.assertIn("Failed:", txt)
-        self.assertIn("Package 99 not found.", txt)
-        self.assertIn("already on route 10", txt)
-
-    def test_assign_packages_all_errors_raise(self) -> None:
-        app, route, (_, _, pkg3) = self._seed_app_with_route_and_packages(scheduled=True)
-        app._packages = [pkg3]
-        with self.assertRaises(ValueError) as ctx:
-            app.assign_packages_to_route(route.route_id, [999, pkg3.package_id])
-        self.assertIn("No packages could be assigned:", str(ctx.exception))
-
-
 class ApplicationData_FindSuitables_Should(unittest.TestCase):
     def test_find_suitable_routes_for_package_capacity_and_sort(self) -> None:
         app = _mk_app()
@@ -546,7 +486,7 @@ class Characterization_SaveLoadRoundTrip_Should(unittest.TestCase):
         create_package = make_create_package_uc(app)
         pkg = create_package.execute("SYD", "MEL", 2.0, "Carl", "carl@test.com")
 
-        app.assign_packages_to_route(route.route_id, [pkg.package_id])
+        route.assign_package(pkg)
         state = app._dump_state()
 
         app2 = _mk_app()

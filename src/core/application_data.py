@@ -482,67 +482,6 @@ class ApplicationData:
     def packages(self) -> tuple[DeliveryPackage, ...]:
         return tuple(self._packages)
 
-    @requires(Permission.ROUTE_ASSIGN_PACKAGE)
-    def assign_packages_to_route(self, route_id: int, package_ids: list[int]) -> list[str]:
-        route = self.find_route(route_id)
-        if not route:
-            raise ValueError(f"Route with ID {route_id} not found.")
-
-        seen: set[int] = set()
-        successes: list[str] = []
-        errors: list[str] = []
-
-        for pid in package_ids:
-            if pid in seen:
-                continue
-            seen.add(pid)
-
-            package = getattr(self, "get_package", None)
-            package = package(pid) if package else self.view_package(pid)
-
-            if not package:
-                errors.append(f"Package {pid} not found.")
-                continue
-            if getattr(package, "route", None):
-                errors.append(f"Package {pid} is already on route {package.route.route_id}.")
-                continue
-
-            try:
-                if hasattr(route, "assign_package"):
-                    route.assign_package(package)
-                else:
-                    route.packages.append(package)
-                    package.route = route
-
-                if getattr(route, "departure_time", None):
-                    try:
-                        eta_dt = route.arrival_time_at(package.end_location)
-                        eta_str = (
-                            eta_dt.strftime("%Y-%m-%d %H:%M") if hasattr(eta_dt, "strftime") else str(eta_dt)
-                        )
-                    except Exception:
-                        eta_str = "N/A"
-                    successes.append(
-                        f"Assigned package {package.package_id} to route {route.route_id}. ETA: {eta_str}"
-                    )
-                else:
-                    successes.append(
-                        f"Assigned package {package.package_id} to route {route.route_id}. "
-                        "ETA: N/A (route unscheduled)"
-                    )
-            except Exception as e:
-                errors.append(f"{pid}: {e}")
-
-        if not successes and errors:
-            raise ValueError("No packages could be assigned:\n- " + "\n- ".join(errors))
-
-        parts: list[str] = []
-        if successes:
-            parts.append("\n".join(successes))
-        if errors:
-            parts.append("Failed:\n- " + "\n- ".join(errors))
-        return parts
-
     @requires_all(Permission.PACKAGE_FIND_ROUTE_FOR, Permission.PACKAGE_VIEW, Permission.ROUTE_VIEW)
     def find_suitable_routes_for_package(self, package_id: int) -> list[dict[str, Any]]:
         """
