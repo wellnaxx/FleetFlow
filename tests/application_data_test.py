@@ -13,6 +13,7 @@ from src.adapters.driven.persistence.application_data.route_repository import Ap
 from src.application.services.customer_service import CustomerService
 from src.application.use_cases.packages.create_package import CreatePackageUseCase
 from src.application.use_cases.packages.remove_package import RemovePackageUseCase
+from src.application.use_cases.routes.assign_truck_to_route import AssignTruckToRouteUseCase
 from src.application.use_cases.routes.create_route import CreateRouteUseCase
 from src.application.use_cases.routes.remove_route import RemoveRouteUseCase
 from src.application.use_cases.routes.view_all_routes import ViewAllRoutesUseCase
@@ -36,19 +37,27 @@ def make_view_route_uc(app: ApplicationData):
     route_repo = ApplicationDataRouteRepository(app)
     return ViewRouteUseCase(route_repo)
 
+
 def make_remove_route_uc(app: ApplicationData):
     route_repo = ApplicationDataRouteRepository(app)
     return RemoveRouteUseCase(route_repo)
 
+
 def make_remove_package_uc(app: ApplicationData):
     package_repo = ApplicationDataPackageRepository(app)
     return RemovePackageUseCase(package_repo)
+
 
 def make_create_package_uc(app: ApplicationData) -> CreatePackageUseCase:
     customer_repo = ApplicationDataCustomerRepository(app)
     package_repo = ApplicationDataPackageRepository(app)
     customer_service = CustomerService(customer_repo)
     return CreatePackageUseCase(customer_service, package_repo)
+
+
+def make_assign_truck_to_route_uc(app: ApplicationData) -> AssignTruckToRouteUseCase:
+    route_repo = ApplicationDataRouteRepository(app)
+    return AssignTruckToRouteUseCase(route_repo, app.vehicle_manager)
 
 
 def _mk_app() -> Any:
@@ -61,6 +70,7 @@ def _mk_app() -> Any:
     app.vehicle_manager = MagicMock()  # type: ignore[assignment]
     app.vehicle_manager.vehicles = []
     return app
+
 
 def _fake_delivery_route_ctor(
     *locs: str,
@@ -356,23 +366,60 @@ class ApplicationData_AssignTruckAndHeartbeat_Should(unittest.TestCase):
         app = _mk_app()
         r = _FakeRoute(1, ["S", "E"])  # unscheduled initially
         app._routes = [r]
+
         truck = _FakeTruck(vehicle_id=5, capacity=10.0)
         app.vehicle_manager.find_by_id.return_value = truck
         app.vehicle_manager.is_suitable_for_route.return_value = (True, "")
 
-        result = app.assign_truck_to_route(5, 1)
+        assign_truck = make_assign_truck_to_route_uc(app)
+        now = datetime(2025, 1, 1, 10, 0)
+
+        result = assign_truck.execute(5, 1, now=now)
+
         self.assertIs(result, r)
         self.assertIs(r.truck, truck)
         self.assertIs(truck.route, r)
-        self.assertIsNotNone(r.departure_time)
+        self.assertEqual(r.departure_time, now)
+        app.vehicle_manager.find_by_id.assert_called_once_with(5)
+        app.vehicle_manager.is_suitable_for_route.assert_called_once_with(truck, r)
 
     def test_assign_truck_not_found_errors(self) -> None:
         app = _mk_app()
         r = _FakeRoute(1, ["S", "E"])
         app._routes = [r]
         app.vehicle_manager.find_by_id.return_value = None
-        with self.assertRaises(ValueError):
-            app.assign_truck_to_route(99, 1)
+
+        assign_truck = make_assign_truck_to_route_uc(app)
+
+        with self.assertRaises(ValueError) as ctx:
+            assign_truck.execute(99, 1, now=datetime(2025, 1, 1, 10, 0))
+
+        self.assertIn("Truck with ID 99 not found", str(ctx.exception))
+
+    def test_assign_truck_route_not_found_errors(self) -> None:
+        app = _mk_app()
+        assign_truck = make_assign_truck_to_route_uc(app)
+
+        with self.assertRaises(ValueError) as ctx:
+            assign_truck.execute(5, 999, now=datetime(2025, 1, 1, 10, 0))
+
+        self.assertIn("Route with ID 999 not found", str(ctx.exception))
+
+    def test_assign_truck_unsuitable_errors(self) -> None:
+        app = _mk_app()
+        r = _FakeRoute(1, ["S", "E"])
+        app._routes = [r]
+
+        truck = _FakeTruck(vehicle_id=5, capacity=10.0)
+        app.vehicle_manager.find_by_id.return_value = truck
+        app.vehicle_manager.is_suitable_for_route.return_value = (False, "range too short")
+
+        assign_truck = make_assign_truck_to_route_uc(app)
+
+        with self.assertRaises(ValueError) as ctx:
+            assign_truck.execute(5, 1, now=datetime(2025, 1, 1, 10, 0))
+
+        self.assertIn("Truck 5 is not suitable for route 1: range too short", str(ctx.exception))
 
     def test_heartbeat_moves_trucks_and_updates_packages(self) -> None:
         app = _mk_app()

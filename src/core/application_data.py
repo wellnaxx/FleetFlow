@@ -508,30 +508,6 @@ class ApplicationData:
             parts.append("Failed:\n- " + "\n- ".join(errors))
         return parts
 
-    @requires(Permission.ROUTE_ASSIGN_TRUCK)
-    def assign_truck_to_route(self, vehicle_id: int, route_id: int) -> DeliveryRoute:
-        route = self.find_route(route_id)
-        if not route:
-            raise ValueError(f"Route with ID {route_id} not found")
-        truck = self.vehicle_manager.find_by_id(vehicle_id)
-        if not truck:
-            raise ValueError(f"Truck with ID {vehicle_id} not found")
-
-        if route.departure_time is None:
-            route.schedule(datetime.now())
-
-        ok, reason = self.vehicle_manager.is_suitable_for_route(truck, route)
-        if not ok:
-            raise ValueError(
-                f"Truck {vehicle_id} is not suitable for route {route_id}: {reason}. "
-                f"Use 'findsuitabletrucksforroute {route_id}' to list options."
-            )
-
-        route.truck = truck
-        truck.assign(route, route.start_location)
-
-        return route
-
     @requires_all(Permission.PACKAGE_FIND_ROUTE_FOR, Permission.PACKAGE_VIEW, Permission.ROUTE_VIEW)
     def find_suitable_routes_for_package(self, package_id: int) -> list[dict[str, Any]]:
         """
