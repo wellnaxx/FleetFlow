@@ -52,6 +52,11 @@ class DeliveryRoute_Should(unittest.TestCase):
         with self.assertRaises(ValueError):
             DeliveryRoute("A", "Z")  # invalid code
 
+    def test_init_rejects_duplicate_locations(self, *_):
+        with self.assertRaises(ValueError) as ctx:
+            DeliveryRoute("A", "B", "A")
+        self.assertIn("duplicate", str(ctx.exception).lower())
+
     def test_schedule_builds_segments_and_stop_times_eta_final(self, *_):
         base = datetime(2025, 1, 1, 8, 0, 0)
         r = DeliveryRoute("A", "B", "C")
@@ -237,33 +242,6 @@ class DeliveryRoute_Should(unittest.TestCase):
         self.assertIs(p.route, r2)
         self.assertIn(p, r2.packages)
         self.assertNotIn(p, r1.packages)
-
-    def test_assign_packages_bulk_validation_and_assignment(self, *_):
-        base = datetime(2025, 1, 1, 6, 0)
-        r = DeliveryRoute("A", "B", "C")
-        r.schedule(base)
-        r.truck = _Truck(vehicle_id=1, capacity=20, max_range=1000, current_location="A")  # type: ignore[reportAttributeAccessIssue]
-
-        good1 = _Pkg(1, "A", "B", 5)
-        good2 = _Pkg(2, "A", "C", 5)
-        bad_inc = _Pkg(3, "A", "Z", 1)
-
-        # Inclusion error in bulk
-        with self.assertRaises(ValueError) as ctx:
-            r.assign_packages([good1, bad_inc])  # type: ignore[reportArgumentType]
-        self.assertIn("Bulk assignment failed:", str(ctx.exception))
-
-        # Over-capacity in bulk
-        with self.assertRaises(ValueError) as ctx2:
-            r.assign_packages([_Pkg(4, "A", "C", 15), _Pkg(5, "A", "C", 10)])  # type: ignore[reportArgumentType]  # 25 > 20
-        self.assertIn("capacity exceeded", str(ctx2.exception))
-
-        # Happy path assigns both and sets ETA
-        r.assign_packages([good1, good2])  # type: ignore[reportArgumentType]
-        self.assertIn(good1, r.packages)
-        self.assertIn(good2, r.packages)
-        self.assertIsInstance(good1.expected_arrival, datetime)
-        self.assertIsInstance(good2.expected_arrival, datetime)
 
     def test_info_contains_key_lines(self, *_):
         base = datetime(2025, 1, 1, 8, 0)

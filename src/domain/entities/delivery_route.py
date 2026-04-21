@@ -26,16 +26,25 @@ class DeliveryRoute:
     SPEED_KMPH: int = 87
 
     def __init__(
-        self, *locations: str, departure_time: datetime | None = None, route_id: int | None = None
+        self,
+        *locations: str,
+        departure_time: datetime | None = None,
+        route_id: int | None = None,
     ) -> None:
         if len(locations) < 2:
             raise ValueError("A route must have at least two locations.")
+
         valid = set(Map.get_locations())
-        for c in locations:
-            if c not in valid:
-                raise ValueError(f"Invalid location code: {c}.")
+        for location in locations:
+            if location not in valid:
+                raise ValueError(f"Invalid location code: {location}.")
+
+        if len(set(locations)) != len(locations):
+            raise ValueError("A route cannot contain duplicate locations.")
+
         self._locations: list[str] = list(locations)
         self._departure_time: datetime | None = departure_time
+
         if route_id is None:
             route_id = DeliveryRoute._next_id
             DeliveryRoute._next_id += 1
@@ -56,25 +65,6 @@ class DeliveryRoute:
     def departure_time(self) -> datetime | None:
         return self._departure_time
 
-    def schedule(self, departure_time: datetime) -> None:
-        """Set (or reset) the departure time and rebuild schedule."""
-        self._departure_time = departure_time
-        self._build_schedule()
-
-    def _build_schedule(self) -> None:
-        if self._departure_time is None:
-            raise ValueError("Cannot build schedule without a departure time.")
-        self._segments.clear()
-        self._stop_times.clear()
-        curr = self._departure_time
-        self._stop_times[self._locations[0]] = curr
-        for a, b in zip(self._locations, self._locations[1:], strict=False):
-            dist = Map.get_distance(a, b)
-            dur = timedelta(hours=dist / DeliveryRoute.SPEED_KMPH)
-            self._segments.append((a, b, dist, dur))
-            curr = curr + dur
-            self._stop_times[b] = curr
-
     @property
     def locations(self) -> list[str]:
         return list(self._locations)
@@ -88,12 +78,44 @@ class DeliveryRoute:
         return self._locations[-1]
 
     @property
+    def packages(self) -> list[DeliveryPackage]:
+        return list(self._packages)
+
+    @property
     def total_distance_km(self) -> int:
         if self._segments:
-            return int(sum(k for _, _, k, _ in self._segments))
+            return int(sum(km for _, _, km, _ in self._segments))
+
         return int(
             sum(Map.get_distance(a, b) for a, b in zip(self._locations, self._locations[1:], strict=False))
         )
+
+    @property
+    def eta_final(self) -> datetime | None:
+        if self._departure_time is None:
+            return None
+        return self._stop_times[self._locations[-1]]
+
+    def schedule(self, departure_time: datetime) -> None:
+        self._departure_time = departure_time
+        self._build_schedule()
+
+    def _build_schedule(self) -> None:
+        if self._departure_time is None:
+            raise ValueError("Cannot build schedule without a departure time.")
+
+        self._segments.clear()
+        self._stop_times.clear()
+
+        current_time = self._departure_time
+        self._stop_times[self._locations[0]] = current_time
+
+        for start, end in zip(self._locations, self._locations[1:], strict=False):
+            distance_km = Map.get_distance(start, end)
+            duration = timedelta(hours=distance_km / DeliveryRoute.SPEED_KMPH)
+            self._segments.append((start, end, distance_km, duration))
+            current_time += duration
+            self._stop_times[end] = current_time
 
     def arrival_time_at(self, city: str) -> datetime:
         if self._departure_time is None:
@@ -102,144 +124,69 @@ class DeliveryRoute:
             raise ValueError(f"City {city} is not on route {self.route_id}.")
         return self._stop_times[city]
 
-    @property
-    def eta_final(self) -> datetime | None:
-        if self._departure_time is None:
-            return None
-        return self._stop_times[self._locations[-1]]
-
     def current_position(self, now: datetime | None = None) -> RoutePosition:
-        """Compute the route's current position snapshot.
-
-        Boundary rules:
-            * ``now < departure_time`` → ``BEFORE_START``
-            * ``now == arrival[k]`` → ``AT_STOP`` at that city
-            * ``arrival[k] < now < arrival[k+1]`` → ``IN_TRANSIT`` on leg k→k+1
-            * ``now > final_arrival`` → ``AFTER_END``
-
-        Exact arrivals prefer ``AT_STOP``; progress is clamped to ``[0, leg_km]``.
-
-        Returns:
-            dict with keys:
-                - kind: 'BEFORE_START' | 'IN_TRANSIT' | 'AT_STOP' | 'AFTER_END'
-                - leg_index: int or None
-                - from_city, to_city: present for ``IN_TRANSIT``
-                - progress_km: float for ``IN_TRANSIT``
-                - arrived_city: str for ``AT_STOP``
-        """
+        """Return a snapshot of the route's current position."""
         if self._departure_time is None:
-            return RoutePosition(kind="UNSCHEDULED", stop_city=self._locations[0])
+            return RoutePosition(kind="UNSCHEDULED", stop_city=self.start_location)
 
         now = now or datetime.now()
-        first = self._locations[0]
-        first_depart = self._stop_times[first]
+        first_city = self.start_location
+        first_departure = self._stop_times[first_city]
 
-        if now < first_depart:
-            return RoutePosition(kind="BEFORE_START", stop_city=first, next_eta=first_depart)
+        if now < first_departure:
+            return RoutePosition(kind="BEFORE_START", stop_city=first_city, next_eta=first_departure)
 
-        for a, b, _, _ in self._segments:
-            ta, tb = self._stop_times[a], self._stop_times[b]
+        for start, end, _, _ in self._segments:
+            start_time = self._stop_times[start]
+            end_time = self._stop_times[end]
 
-            if now == ta:
-                if a == first:
-                    return RoutePosition(kind="IN_TRANSIT", from_city=a, to_city=b, next_eta=tb)
-                return RoutePosition(kind="AT_STOP", stop_city=a, next_eta=tb)
+            if now == start_time:
+                if start == first_city:
+                    return RoutePosition(kind="IN_TRANSIT", from_city=start, to_city=end, next_eta=end_time)
+                return RoutePosition(kind="AT_STOP", stop_city=start, next_eta=end_time)
 
-            if now == tb:
-                nxt_eta = None
-                idx = self._pos_index[b]
-                if idx + 1 < len(self._locations):
-                    nxt_eta = self._stop_times[self._locations[idx + 1]]
-                return RoutePosition(kind="AT_STOP", stop_city=b, next_eta=nxt_eta)
+            if now == end_time:
+                next_eta = None
+                index = self._pos_index[end]
+                if index + 1 < len(self._locations):
+                    next_eta = self._stop_times[self._locations[index + 1]]
+                return RoutePosition(kind="AT_STOP", stop_city=end, next_eta=next_eta)
 
-            if ta < now < tb:
-                return RoutePosition(kind="IN_TRANSIT", from_city=a, to_city=b, next_eta=tb)
+            if start_time < now < end_time:
+                return RoutePosition(kind="IN_TRANSIT", from_city=start, to_city=end, next_eta=end_time)
 
-        last = self._locations[-1]
-        if now >= self._stop_times[last]:
-            return RoutePosition(kind="AFTER_END", stop_city=last)
+        if now >= self._stop_times[self.end_location]:
+            return RoutePosition(kind="AFTER_END", stop_city=self.end_location)
 
-        return RoutePosition(kind="AT_STOP", stop_city=first, next_eta=first_depart)
-
-    @property
-    def packages(self) -> list[DeliveryPackage]:
-        return list(self._packages)
+        return RoutePosition(kind="AT_STOP", stop_city=first_city, next_eta=first_departure)
 
     def includes_in_order(self, start: str, end: str) -> bool:
-        pos = self._pos_index
-        return start in pos and end in pos and pos[start] < pos[end]
+        return (
+            start in self._pos_index
+            and end in self._pos_index
+            and self._pos_index[start] < self._pos_index[end]
+        )
 
     def can_accept_package(self, package: DeliveryPackage) -> str | None:
-        s = getattr(package, "start_location", None)
-        e = getattr(package, "end_location", None)
-        if s not in self._pos_index or e not in self._pos_index:
-            return (
-                f"Route {self.route_id} does not include start/end of "
-                f"package {getattr(package, 'package_id', '?')} ({s} -> {e})."
-            )
-        if not self.includes_in_order(s, e):
-            return (
-                f"Route {self.route_id} does not pass from {s} to {e} in order "
-                f"for package {getattr(package, 'package_id', '?')}."
-            )
+        # bugfix TODO: disallow assigning packages after route has passed pickup location
+        if error := self._validate_package_route_compatibility(package):
+            return error
 
-        if self.truck:
-            total_after = self.total_assigned_weight() + float(getattr(package, "weight", 0.0))
-            if total_after > float(getattr(self.truck, "capacity", 0.0)):
-                return (
-                    f"Truck {getattr(self.truck, 'vehicle_id', '?')} capacity exceeded: "
-                    f"{total_after}kg > {self.truck.capacity}kg."
-                )
-            if float(getattr(self.truck, "max_range", 0.0)) < float(self.total_distance_km):
-                return (
-                    f"Truck {self.truck.vehicle_id} lacks range for {self.total_distance_km} km "
-                    f"(range: {self.truck.max_range} km)."
-                )
+        if error := self._validate_truck_constraints(extra_weight=package.weight):
+            return error
+
         return None
 
-    def can_accept_packages(self, packages: list[DeliveryPackage]) -> list[str]:
-        errors: list[str] = []
-        for package in packages:
-            s = getattr(package, "start_location", None)
-            e = getattr(package, "end_location", None)
-            if s not in self._pos_index or e not in self._pos_index:
-                errors.append(
-                    f"Route {self.route_id} does not include start/end of "
-                    f"package {getattr(package, 'package_id', '?')} ({s} -> {e})."
-                )
-            elif not self.includes_in_order(s, e):
-                errors.append(
-                    f"Route {self.route_id} does not pass from {s} to {e} in order "
-                    f"for package {getattr(package, 'package_id', '?')}."
-                )
-        if self.truck:
-            total_after = self.total_assigned_weight() + sum(float(getattr(p, "weight", 0.0)) for p in packages)
-            if total_after > float(getattr(self.truck, "capacity", 0.0)):
-                errors.append(
-                    f"Truck {self.truck.vehicle_id} capacity exceeded: "
-                    f"{total_after}kg > {self.truck.capacity}kg."
-                )
-            if float(getattr(self.truck, "max_range", 0.0)) < float(self.total_distance_km):
-                errors.append(
-                    f"Truck {self.truck.vehicle_id} lacks range for {self.total_distance_km} km "
-                    f"(range: {self.truck.max_range} km)."
-                )
-        return errors
-
     def assign_package(self, package: DeliveryPackage) -> None:
-        err = self.can_accept_package(package)
-        if err:
-            raise ValueError(err)
+        if error := self.can_accept_package(package):
+            raise ValueError(error)
+
         if package in self._packages:
             return
+
         self._packages.append(package)
         package.route = self
-        if self._departure_time is not None:
-            try:
-                eta = self.arrival_time_at(getattr(package, "end_location", self.end_location))
-                package.expected_arrival = eta
-            except Exception:
-                pass
+        self._update_expected_arrival(package)
 
     def detach_package(self, package: DeliveryPackage) -> None:
         for i, existing in enumerate(self._packages):
@@ -250,39 +197,69 @@ class DeliveryRoute:
                 return
         raise ValueError(f"Package with id {package.package_id} is not assigned to route {self.route_id}.")
 
-
-    def assign_packages(self, packages: list[DeliveryPackage]) -> None:
-        errs = self.can_accept_packages(packages)
-        if errs:
-            raise ValueError("Bulk assignment failed:\n- " + "\n- ".join(errs))
-        for p in packages:
-            if p in self._packages:
-                continue
-            self._packages.append(p)
-            p.route = self
-            if self._departure_time is not None:
-                with contextlib.suppress(Exception):
-                    p.expected_arrival = self.arrival_time_at(getattr(p, "end_location", self.end_location))
-
     def total_assigned_weight(self) -> float:
-        return sum(float(getattr(p, "weight", 0.0)) for p in self._packages)
+        return sum(package.weight for package in self._packages)
+
+    def _validate_package_route_compatibility(self, package: DeliveryPackage) -> str | None:
+        if package.start_location not in self._pos_index or package.end_location not in self._pos_index:
+            return (
+                f"Route {self.route_id} does not include start/end of "
+                f"package {package.package_id} ({package.start_location} -> {package.end_location})."
+            )
+
+        if not self.includes_in_order(package.start_location, package.end_location):
+            return (
+                f"Route {self.route_id} does not pass from {package.start_location} "
+                f"to {package.end_location} in order for package {package.package_id}."
+            )
+
+        return None
+
+    def _validate_truck_constraints(self, extra_weight: float) -> str | None:
+        if self.truck is None:
+            return None
+
+        total_after = self.total_assigned_weight() + extra_weight
+        if total_after > self.truck.capacity:
+            return (
+                f"Truck {self.truck.vehicle_id} capacity exceeded: {total_after}kg > {self.truck.capacity}kg."
+            )
+
+        if self.truck.max_range < self.total_distance_km:
+            return (
+                f"Truck {self.truck.vehicle_id} lacks range for {self.total_distance_km} km "
+                f"(range: {self.truck.max_range} km)."
+            )
+
+        return None
+
+    def _update_expected_arrival(self, package: DeliveryPackage) -> None:
+        if self._departure_time is None:
+            return
+
+        with contextlib.suppress(ValueError):
+            package.expected_arrival = self.arrival_time_at(package.end_location)
 
     def info(self) -> str:
         lines: list[str] = []
         lines.append(f"Route ID: {self.route_id}")
-        lines.append(f"Truck ID: {getattr(self.truck, 'vehicle_id', 'Not assigned')}")
+        lines.append(f"Truck ID: {self.truck.vehicle_id if self.truck else 'Not assigned'}")
         lines.append(f"Start: {self.start_location}")
         lines.append(f"End: {self.end_location}")
+
         if self._departure_time is None:
             lines.append("Departure: (unscheduled)")
         else:
             lines.append(f"Departure: {self._departure_time.strftime('%Y-%m-%d %H:%M')}")
+
         lines.append(f"Total Distance: {self.total_distance_km} km")
+
         if self._departure_time is not None:
             lines.append("Stops:")
-            for c in self._locations:
-                t = self._stop_times[c]
-                lines.append(f"  - {c} @ {t.strftime('%Y-%m-%d %H:%M')}")
+            for city in self._locations:
+                stop_time = self._stop_times[city]
+                lines.append(f"  - {city} @ {stop_time.strftime('%Y-%m-%d %H:%M')}")
+
             pos = self.current_position()
             if pos.kind == "BEFORE_START":
                 eta_str = pos.next_eta.strftime("%Y-%m-%d %H:%M") if pos.next_eta else "N/A"
@@ -296,5 +273,6 @@ class DeliveryRoute:
                 lines.append("Status: AFTER_END")
         else:
             lines.append("Status: PLANNED (unscheduled)")
+
         lines.append(f"Assigned weight: {self.total_assigned_weight():.2f} kg")
         return "\n".join(lines)

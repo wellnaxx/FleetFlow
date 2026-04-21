@@ -88,7 +88,7 @@ class Engine:
                     route_id = input("Route ID: ").strip()
                     pkg_ids = input("Package IDs (space-separated): ").strip()
                     # One command handles 1..N packages
-                    self._exec_line(f"assignpackagetoroute {route_id} {pkg_ids}")
+                    self._exec_line(f"assignpackagestoroute {route_id} {pkg_ids}")
 
                 elif choice == "4":
                     pid = input("Package ID to find suitable routes: ").strip()
