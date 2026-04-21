@@ -37,7 +37,7 @@ def main() -> None:
     auth = AuthService(store)
     bootstrap_admin(auth, store)
 
-    container = Container(app_data)
+    container = Container(app_data, auth)
 
     cmd_factory = CommandFactory(app_data, auth, container)
     Engine(cmd_factory, app_data, auth).start()

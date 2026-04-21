@@ -31,11 +31,6 @@ from src.composition.container import Container
 from src.core.application_data import ApplicationData
 
 _LEGACY_REGISTRY: dict[str, type[BaseCommand]] = {
-    "login": AuthLogin,
-    "logout": AuthLogout,
-    "whoami": AuthWhoAmI,
-    "registeruser": AuthRegisterUser,
-    "changepassword": AuthChangePassword,
     "save": SaveState,
     "load": LoadState,
 }
@@ -51,6 +46,11 @@ def bind_command[T](
 
 
 _CONTAINER_COMMANDS: dict[str, CommandEntry[Any]] = {
+    "login": bind_command(AuthLogin, lambda container: container.login_use_case),
+    "logout": bind_command(AuthLogout, lambda container: container.logout_use_case),
+    "whoami": bind_command(AuthWhoAmI, lambda container: container.who_am_i_use_case),
+    "registeruser": bind_command(AuthRegisterUser, lambda container: container.register_user_use_case),
+    "changepassword": bind_command(AuthChangePassword, lambda container: container.change_password_use_case),
     "createpackage": bind_command(CreatePackage, lambda container: container.create_package_use_case),
     "viewpackage": bind_command(ViewPackage, lambda container: container.view_package_use_case),
     "viewallpackages": bind_command(ViewAllPackages, lambda container: container.view_all_packages_use_case),

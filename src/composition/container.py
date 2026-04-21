@@ -3,7 +3,13 @@ from src.adapters.driven.persistence.application_data.customer_repository import
 )
 from src.adapters.driven.persistence.application_data.package_repository import ApplicationDataPackageRepository
 from src.adapters.driven.persistence.application_data.route_repository import ApplicationDataRouteRepository
+from src.application.services.auth_service import AuthService
 from src.application.services.customer_service import CustomerService
+from src.application.use_cases.auth.change_password import ChangePasswordUseCase
+from src.application.use_cases.auth.login import LoginUseCase
+from src.application.use_cases.auth.logout import LogoutUseCase
+from src.application.use_cases.auth.register_user import RegisterUserUseCase
+from src.application.use_cases.auth.who_am_i import WhoAmIUseCase
 from src.application.use_cases.customers.view_all_customers import ViewAllCustomersUseCase
 from src.application.use_cases.packages.create_package import CreatePackageUseCase
 from src.application.use_cases.packages.remove_package import RemovePackageUseCase
@@ -26,7 +32,7 @@ from src.core.application_data import ApplicationData
 
 
 class Container:
-    def __init__(self, app_data: ApplicationData) -> None:
+    def __init__(self, app_data: ApplicationData, auth: AuthService) -> None:
         self.package_repo = ApplicationDataPackageRepository(app_data)
         self.customer_repo = ApplicationDataCustomerRepository(app_data)
         self.route_repo = ApplicationDataRouteRepository(app_data)
@@ -34,6 +40,13 @@ class Container:
         self.customer_service = CustomerService(self.customer_repo)
 
         self.vehicle_manager = app_data.vehicle_manager
+        self.auth = auth
+
+        self.login_use_case = LoginUseCase(self.auth)
+        self.logout_use_case = LogoutUseCase(self.auth)
+        self.who_am_i_use_case = WhoAmIUseCase(self.auth)
+        self.register_user_use_case = RegisterUserUseCase(self.auth)
+        self.change_password_use_case = ChangePasswordUseCase(self.auth)
 
         self.create_package_use_case = CreatePackageUseCase(
             self.customer_service,
