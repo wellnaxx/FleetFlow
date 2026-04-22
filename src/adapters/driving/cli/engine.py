@@ -12,6 +12,8 @@ logger = logging.getLogger(__name__)
 
 
 class Engine:
+    """Drive the interactive CLI menus and raw command mode."""
+
     def __init__(
         self,
         factory: CommandFactory,
@@ -21,6 +23,16 @@ class Engine:
         autosave_path: str,
         advance_world_state: AdvanceWorldStateUseCase,
     ) -> None:
+        """Initialize the CLI engine.
+
+        Args:
+            factory: Command factory used to parse and instantiate commands.
+            auth: Authentication service used to keep menu state in sync.
+            authz: Authorization service used by commands.
+            save_world_state: Use case used for post-mutation autosave.
+            autosave_path: Default autosave path for state mutations.
+            advance_world_state: Use case used to run the pre-command heartbeat.
+        """
         self._factory = factory
         self.auth = auth
         self.authz = authz
@@ -30,6 +42,7 @@ class Engine:
         self._running: bool = False
 
     def _rebind_app(self) -> None:
+        """Synchronize authorization state after session-changing commands."""
         self.authz.current_user = self.auth.current_user
 
     def start(self) -> None:

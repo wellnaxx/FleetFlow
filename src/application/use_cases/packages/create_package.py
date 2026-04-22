@@ -6,14 +6,31 @@ from src.ports.output.package_repository import PackageRepositoryPort
 
 
 class CreatePackageUseCase:
+    """Create a package and attach it to an existing or new customer."""
+
     def __init__(self, customers: CustomerService, packages: PackageRepositoryPort) -> None:
         self._customers = customers
         self._packages = packages
 
-
     def execute(
         self, start: str, end: str, weight: float, name: str, email: str = "", phone: str = ""
     ) -> DeliveryPackage:
+        """Create and persist a delivery package.
+
+        Args:
+            start: Pickup location code.
+            end: Delivery location code.
+            weight: Package weight in kilograms.
+            name: Customer name.
+            email: Optional customer email address.
+            phone: Optional customer phone number.
+
+        Returns:
+            The newly created delivery package.
+
+        Raises:
+            ValueError: If a location is invalid or customer resolution fails.
+        """
         if not Map.is_valid_location(start):
             raise ValueError(f"Invalid start location: {start}")
         if not Map.is_valid_location(end):

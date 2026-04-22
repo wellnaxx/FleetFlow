@@ -6,6 +6,8 @@ from src.domain.entities.truck import Truck
 
 
 class RouteSuitabilityView(Protocol):
+    """Describe the route fields needed for truck suitability checks."""
+
     @property
     def total_distance_km(self) -> int: ...
 
@@ -19,6 +21,8 @@ class RouteSuitabilityView(Protocol):
 
 
 class VehicleManagerPort(Protocol):
+    """Manage truck availability and route suitability decisions."""
+
     def list_fleet(self) -> list[Truck]: ...
     def find_by_id(self, vehicle_id: int) -> Truck | None: ...
     def is_suitable_for_route(self, truck: Truck, route: RouteSuitabilityView) -> tuple[bool, str]: ...

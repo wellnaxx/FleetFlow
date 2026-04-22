@@ -4,10 +4,32 @@ from src.ports.output.customer_repository import CustomerRepositoryPort
 
 
 class CustomerService:
+    """Resolve existing customers and create new ones consistently."""
+
     def __init__(self, customers: CustomerRepositoryPort) -> None:
+        """Initialize the service with a customer repository.
+
+        Args:
+            customers: Repository used to query and persist customer records.
+        """
         self._customers = customers
 
     def find_existing_customer(self, name: str, email: str = "", phone: str = "") -> Customer | None:
+        """Find an existing customer matching the supplied contact details.
+
+        Args:
+            name: Customer name supplied by the caller.
+            email: Optional email address used to disambiguate the customer.
+            phone: Optional phone number used to disambiguate the customer.
+
+        Returns:
+            The resolved customer when the input maps to one unambiguous record;
+            otherwise `None`.
+
+        Raises:
+            ValueError: If the supplied details point to conflicting customers or
+                contradict the name on an existing customer.
+        """
         name = (name or "").strip()
         email = (email or "").strip().lower()
         phone = "".join(ch for ch in (phone or "") if ch.isdigit())
@@ -29,6 +51,19 @@ class CustomerService:
         return self._resolve_name_only(name, email, phone)
 
     def create(self, name: str, email: str = "", phone: str = "") -> Customer:
+        """Create and persist a new customer.
+
+        Args:
+            name: Customer display name.
+            email: Optional email address.
+            phone: Optional phone number.
+
+        Returns:
+            The newly created customer entity.
+
+        Raises:
+            ValueError: If the contact information fails validation.
+        """
         contact_info = ContactInfo(name=name, email=email, phone_number=phone)
         customer = Customer(customer_id=self._customers.peek_next_id(), contact=contact_info)
         self._customers.add(customer)

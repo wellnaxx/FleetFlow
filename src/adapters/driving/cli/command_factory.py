@@ -37,6 +37,15 @@ def bind_command[T](
     command_cls: type[BaseCommand[T]],
     getter: Callable[[Container], T],
 ) -> CommandEntry[T]:
+    """Bind a command class to the container lookup for its use case.
+
+    Args:
+        command_cls: CLI command class to instantiate.
+        getter: Function that retrieves the matching use case from the container.
+
+    Returns:
+        A registry entry consumed by `CommandFactory`.
+    """
     return command_cls, getter
 
 
@@ -80,12 +89,32 @@ _CONTAINER_COMMANDS: dict[str, CommandEntry[Any]] = {
 
 
 class CommandFactory:
+    """Parse CLI input and create fully wired command objects."""
+
     def __init__(self, auth: AuthService, authz: AuthorizationService, container: Container) -> None:
+        """Initialize the factory with shared command dependencies.
+
+        Args:
+            auth: Authentication service exposed to commands.
+            authz: Authorization service exposed to commands.
+            container: Dependency container holding command use cases.
+        """
         self._auth = auth
         self._authz = authz
         self._container = container
 
     def create(self, input_line: str) -> BaseCommand[Any]:
+        """Create a command instance from raw CLI input.
+
+        Args:
+            input_line: Raw command line entered by the user.
+
+        Returns:
+            A concrete command instance bound to its use case.
+
+        Raises:
+            ValueError: If no command is provided or the command name is unknown.
+        """
         tokens = shlex.split(input_line)
         if not tokens:
             raise ValueError("No command given.")

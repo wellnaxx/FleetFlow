@@ -15,12 +15,14 @@ logger = logging.getLogger(__name__)
 
 
 class UserStore:
-    """Load/save users to data/users.json (or a custom path) with atomic writes."""
+    """Persist user records as JSON with strict load-time validation."""
 
     def __init__(self, path: str = "users.json") -> None:
-        """
+        """Initialize the store and eagerly load any existing file.
+
         Args:
-            path: Filename or path to the users file. Bare filenames are placed in data/.
+            path: Filename or path to the users file. Bare filenames are placed
+                in `data/`.
         """
         self.path: str = resolve_data_path(path)
         self._by_username: dict[str, UserRecord] = {}
@@ -28,6 +30,12 @@ class UserStore:
         self._load()
 
     def _load(self) -> None:
+        """Load and validate persisted users from disk.
+
+        Raises:
+            ValueError: If the persisted JSON is malformed or violates store
+                invariants.
+        """
         if not os.path.exists(self.path):
             return
         try:
@@ -46,6 +54,7 @@ class UserStore:
 
     @staticmethod
     def _parse_loaded_payload(data: object) -> tuple[int, dict[str, UserRecord]]:
+        """Validate raw JSON payload and convert it to runtime user records."""
         if not isinstance(data, dict):
             raise TypeError("payload must be an object")
 
@@ -78,6 +87,7 @@ class UserStore:
 
     @staticmethod
     def _parse_next_id(payload: dict[object, object]) -> int:
+        """Validate the persisted next-id counter."""
         next_id = payload.get("_next_id", 1)
         if not isinstance(next_id, int) or isinstance(next_id, bool):
             raise TypeError(f"_next_id must be int, got {type(next_id).__name__}")
@@ -85,6 +95,7 @@ class UserStore:
 
     @staticmethod
     def _parse_raw_user(raw_user: object) -> UserRecord:
+        """Validate and convert one raw JSON user payload."""
         if not isinstance(raw_user, dict):
             raise TypeError("user record must be an object")
 
@@ -112,6 +123,7 @@ class UserStore:
 
     @staticmethod
     def _parse_string_field(raw: dict[object, object], field: str) -> str:
+        """Read and validate a required string field from raw JSON data."""
         value = raw[field]
         if not isinstance(value, str):
             raise TypeError(f"{field!r} must be str, got {type(value).__name__}")
@@ -119,6 +131,7 @@ class UserStore:
 
     @staticmethod
     def _normalize_role(role: Role | str) -> str:
+        """Normalize a role enum or role string into the persisted role value."""
         if isinstance(role, Role):
             return role.value
         try:
@@ -127,7 +140,17 @@ class UserStore:
             raise ValueError(f"Invalid role: {role!r}") from exc
 
     def _atomic_write(self, data: dict[str, Any]) -> str:
-        """Write JSON atomically to self.path. Returns absolute path."""
+        """Write JSON atomically to the configured path.
+
+        Args:
+            data: Serialized JSON payload to write.
+
+        Returns:
+            The resolved absolute store path.
+
+        Raises:
+            OSError: If the target file cannot be written.
+        """
         ensure_data_dir()
         directory = os.path.dirname(self.path) or "."
         os.makedirs(directory, exist_ok=True)
@@ -145,7 +168,14 @@ class UserStore:
         return self.path
 
     def save(self) -> str:
-        """Persist users to disk. Returns absolute path."""
+        """Persist all users to disk.
+
+        Returns:
+            The resolved absolute path written by the store.
+
+        Raises:
+            OSError: If the store cannot be written.
+        """
         data = {
             "_next_id": self._next_id,
             "users": [asdict(rec) for rec in sorted(self._by_username.values(), key=lambda r: r.user_id)],
@@ -153,7 +183,14 @@ class UserStore:
         return self._atomic_write(data)
 
     def get(self, username: str) -> UserRecord | None:
-        """Fetch a user by username (case-insensitive)."""
+        """Fetch a user by username.
+
+        Args:
+            username: Username to look up case-insensitively.
+
+        Returns:
+            The matching user record, or `None` when the user does not exist.
+        """
         key = (username or "").lower()
         return self._by_username.get(key)
 
@@ -166,7 +203,24 @@ class UserStore:
         phone_number: str,
         password_hash: PasswordHash,
     ) -> UserRecord:
-        """Create and persist a new user. Raises ValueError if username exists."""
+        """Create and persist a new user record.
+
+        Args:
+            username: Unique login name.
+            role: Role enum or role string to persist.
+            name: Human-readable display name.
+            email: Optional email address.
+            phone_number: Optional phone number.
+            password_hash: Pre-hashed password value.
+
+        Returns:
+            The newly created persisted user record.
+
+        Raises:
+            TypeError: If `password_hash` does not expose the expected hash API.
+            ValueError: If the username is blank, already exists, or the role is
+                invalid.
+        """
         key = username.strip()
         norm = key.lower()
         if not norm:
@@ -202,7 +256,15 @@ class UserStore:
         return rec
 
     def update_password(self, username: str, new_hash: PasswordHash) -> None:
-        """Update the password for an existing user."""
+        """Replace the persisted password hash for an existing user.
+
+        Args:
+            username: Username whose password should be updated.
+            new_hash: Replacement password hash.
+
+        Raises:
+            ValueError: If the user does not exist.
+        """
         rec = self.get(username)
 
         if not rec:
@@ -212,5 +274,9 @@ class UserStore:
         self.save()
 
     def list_users(self) -> list[UserRecord]:
-        """Return all users (unordered)."""
+        """Return all persisted users.
+
+        Returns:
+            A list of user records in the store's current in-memory order.
+        """
         return list(self._by_username.values())

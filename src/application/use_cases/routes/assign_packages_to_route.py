@@ -13,6 +13,8 @@ from src.ports.output.route_repository import RouteRepositoryPort
 
 
 class AssignPackagesToRouteUseCase:
+    """Assign one or more packages to a route."""
+
     def __init__(
         self,
         routes: RouteRepositoryPort,
@@ -24,6 +26,19 @@ class AssignPackagesToRouteUseCase:
         self._clock = clock
 
     def execute(self, route_id: int, package_ids: list[int]) -> AssignPackagesToRouteResult:
+        """Assign packages to the requested route.
+
+        Args:
+            route_id: Identifier of the target route.
+            package_ids: Package ids to assign.
+
+        Returns:
+            A result object describing successful assignments and per-package
+            failures.
+
+        Raises:
+            ValueError: If the target route does not exist.
+        """
         route = self._routes.get_by_id(route_id)
         if route is None:
             raise ValueError(f"Route with ID {route_id} not found.")

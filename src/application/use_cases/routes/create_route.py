@@ -6,10 +6,25 @@ from src.ports.output.route_repository import RouteRepositoryPort
 
 
 class CreateRouteUseCase:
+    """Create and persist delivery routes."""
+
     def __init__(self, routes: RouteRepositoryPort) -> None:
         self._routes = routes
 
     def execute(self, locations: list[str], departure_time: datetime | None) -> DeliveryRoute:
+        """Create and persist a delivery route.
+
+        Args:
+            locations: Ordered list of route stops.
+            departure_time: Optional initial departure time.
+
+        Returns:
+            The newly created route.
+
+        Raises:
+            ValueError: If the route has too few stops or contains invalid
+                locations.
+        """
         if len(locations) < 2:
             raise ValueError("Invalid number of locations. A route must contain at least 2 locations.")
 

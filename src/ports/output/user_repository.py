@@ -5,6 +5,8 @@ from src.application.models.user_record import UserRecord
 
 
 class UserRepositoryPort(Protocol):
+    """Persist and query registered application users."""
+
     def get(self, username: str) -> UserRecord | None: ...
     def create(
         self,

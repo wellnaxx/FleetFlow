@@ -5,10 +5,20 @@ from src.ports.output.route_repository import RouteRepositoryPort
 
 
 class ViewRoutesInProgressUseCase:
+    """List routes that are currently active at the supplied time."""
+
     def __init__(self, routes: RouteRepositoryPort) -> None:
         self._routes = routes
 
     def execute(self, now: datetime) -> list[tuple[DeliveryRoute, RoutePosition]]:
+        """Return routes currently at a stop or in transit.
+
+        Args:
+            now: Clock value used to compute each route's position.
+
+        Returns:
+            A list of `(route, position)` tuples for active routes.
+        """
         active: list[tuple[DeliveryRoute, RoutePosition]] = []
 
         for route in self._routes.list_all():

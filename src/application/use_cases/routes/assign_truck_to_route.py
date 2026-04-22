@@ -27,15 +27,31 @@ class AssignTruckToRouteResult:
 
 
 class AssignTruckToRouteUseCase:
+    """Assign a truck to a route after suitability checks."""
+
     def __init__(self, routes: RouteRepositoryPort, vehicles: VehicleManagerPort) -> None:
         self._routes = routes
         self._vehicles = vehicles
 
     def execute(self, truck_id: int, route_id: int, now: datetime) -> AssignTruckToRouteResult:
+        """Assign a truck to a route.
+
+        Args:
+            truck_id: Identifier of the truck to assign.
+            route_id: Identifier of the route to update.
+            now: Clock value used when scheduling an unscheduled route.
+
+        Returns:
+            A summary of the successful truck assignment.
+
+        Raises:
+            ValueError: If the route or truck is missing, the route already has a
+                truck, or the truck is unsuitable.
+        """
         route = self._routes.get_by_id(route_id)
         if route is None:
             raise ValueError(f"Route with ID {route_id} not found")
-        
+
         truck = self._vehicles.find_by_id(truck_id)
         if not truck:
             raise ValueError(f"Truck with ID {truck_id} not found")

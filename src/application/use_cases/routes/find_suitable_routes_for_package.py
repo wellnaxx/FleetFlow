@@ -11,6 +11,8 @@ def _sort_key(item: SuitableRouteForPackage) -> tuple[bool, datetime]:
 
 
 class FindSuitableRoutesForPackageUseCase:
+    """Find candidate routes that can accept a package."""
+
     def __init__(
         self,
         routes: RouteRepositoryPort,
@@ -22,6 +24,17 @@ class FindSuitableRoutesForPackageUseCase:
         self._clock = clock
 
     def execute(self, package_id: int) -> list[SuitableRouteForPackage]:
+        """Return suitable routes for a package ordered by ETA.
+
+        Args:
+            package_id: Identifier of the package to place.
+
+        Returns:
+            Candidate routes ordered by the best available ETA.
+
+        Raises:
+            ValueError: If the package does not exist.
+        """
         package = self._packages.get_by_id(package_id)
         if package is None:
             raise ValueError(f"Package with ID {package_id} not found.")

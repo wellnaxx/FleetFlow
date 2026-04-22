@@ -17,7 +17,21 @@ from src.ports.output.world_state_persistence import WorldStatePersistencePort
 
 
 class JsonWorldStatePersistence(WorldStatePersistencePort):
+    """Persist world-state snapshots as JSON files."""
+
     def write(self, path: str, snapshot: WorldStateSnapshot) -> str:
+        """Serialize and atomically write a world-state snapshot.
+
+        Args:
+            path: Target path or filename for the JSON snapshot.
+            snapshot: Snapshot payload to serialize.
+
+        Returns:
+            The resolved absolute path that was written.
+
+        Raises:
+            OSError: If the target file cannot be written.
+        """
         abs_path = resolve_data_path(path)
         os.makedirs(os.path.dirname(abs_path) or ".", exist_ok=True)
         raw_snapshot = self._raw_from_snapshot(snapshot)
@@ -41,6 +55,18 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
         return abs_path
 
     def read(self, path: str) -> tuple[str, WorldStateSnapshot]:
+        """Read and deserialize a world-state snapshot from JSON.
+
+        Args:
+            path: Source path or filename to read.
+
+        Returns:
+            A tuple of the resolved absolute path and the deserialized snapshot.
+
+        Raises:
+            ValueError: If the file does not exist.
+            json.JSONDecodeError: If the file is not valid JSON.
+        """
         abs_path = resolve_data_path(path)
         if not os.path.exists(abs_path):
             raise ValueError(f"State file not found: {abs_path}")
@@ -51,9 +77,11 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
         return abs_path, self._snapshot_from_raw(raw)
 
     def _raw_from_snapshot(self, snapshot: WorldStateSnapshot) -> dict[str, Any]:
+        """Convert a snapshot DTO into its persisted JSON shape."""
         return asdict(snapshot)
 
     def _snapshot_from_raw(self, raw: dict[str, Any]) -> WorldStateSnapshot:
+        """Build a snapshot DTO from canonical or legacy JSON payloads."""
         world = raw.get("world")
         if world is None:
             world = {

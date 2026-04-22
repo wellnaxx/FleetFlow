@@ -44,7 +44,15 @@ from src.domain.services.vehicle_manager import VehicleManager
 
 
 class Container:
+    """Wire repositories, services, and use cases for the CLI application."""
+
     def __init__(self, auth: AuthService) -> None:
+        """Construct the application dependency graph.
+
+        Args:
+            auth: Shared authentication service used by auth-related use cases
+                and authorization checks.
+        """
         self.package_repo = InMemoryPackageRepository()
         self.customer_repo = InMemoryCustomerRepository()
         self.route_repo = InMemoryRouteRepository()

@@ -13,6 +13,8 @@ from src.ports.output.world_state_runtime_port import WorldStateRuntimePort
 
 
 class InMemoryWorldStateRuntime(WorldStateRuntimePort):
+    """Apply snapshot swaps to the in-memory runtime collaborators."""
+
     def __init__(
         self,
         customer_repo: InMemoryCustomerRepository,
@@ -39,11 +41,20 @@ class InMemoryWorldStateRuntime(WorldStateRuntimePort):
 
 
 class InMemoryWorldStateGateway(WorldStateGatewayPort):
+    """Bridge world-state snapshot use cases to the in-memory runtime."""
+
     def __init__(self, snapshot_service: WorldStateSnapshotService) -> None:
+        """Initialize the gateway with the snapshot orchestration service.
+
+        Args:
+            snapshot_service: Service used to build and apply snapshots.
+        """
         self._snapshot_service = snapshot_service
 
     def build_snapshot(self) -> WorldStateSnapshot:
+        """Build a snapshot from the current in-memory runtime state."""
         return self._snapshot_service.build_snapshot()
 
     def apply_snapshot(self, snapshot: WorldStateSnapshot) -> None:
+        """Replace in-memory runtime state from a snapshot payload."""
         self._snapshot_service.apply_snapshot(snapshot)
