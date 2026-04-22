@@ -317,7 +317,7 @@ class Engine:
             if cmd.mutates_session:
                 self._rebind_app()
 
-            if cmd.mutates_state:
+            if cmd.mutates_state and cmd.autosaves_state:
                 try:
                     self._save_world_state.execute(self._autosave_path)
                 except Exception as se:

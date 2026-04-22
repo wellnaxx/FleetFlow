@@ -16,6 +16,9 @@ class LoadStateTests(unittest.TestCase):
     def test_mutates_state_true(self) -> None:
         self.assertTrue(LoadState.mutates_state)
 
+    def test_autosaves_state_false(self) -> None:
+        self.assertFalse(LoadState.autosaves_state)
+
     def test_execute_without_permission_raises(self) -> None:
         cmd = self.make_cmd(["state.json"], authorized=False)
 

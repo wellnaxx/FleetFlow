@@ -7,6 +7,7 @@ from src.domain.enums.auth import Permission
 
 class CreatePackage(BaseCommand[CreatePackageUseCase]):
     mutates_state = True
+    autosaves_state = True
 
     @requires(Permission.PACKAGE_CREATE)
     def execute(self) -> str:
@@ -32,4 +33,3 @@ class CreatePackage(BaseCommand[CreatePackageUseCase]):
             f"Package {pkg.package_id} was created for customer {name} "
             f"(ID: {pkg.customer.customer_id}) successfully."
         )
-

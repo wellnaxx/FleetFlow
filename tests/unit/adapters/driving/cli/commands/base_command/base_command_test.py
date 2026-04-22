@@ -31,3 +31,4 @@ class BaseCommandShould(unittest.TestCase):
         self.assertFalse(cmd.mutates_state)
         self.assertFalse(cmd.mutates_session)
         self.assertFalse(cmd.skips_heartbeat)
+        self.assertFalse(cmd.autosaves_state)

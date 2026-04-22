@@ -36,6 +36,7 @@ class EngineTests(unittest.TestCase):
         cmd.skips_heartbeat = False
         cmd.mutates_state = False
         cmd.mutates_session = False
+        cmd.autosaves_state = False
         cmd.execute.return_value = "ok"
         factory.create.return_value = cmd
 
@@ -54,6 +55,7 @@ class EngineTests(unittest.TestCase):
         cmd.skips_heartbeat = True
         cmd.mutates_state = False
         cmd.mutates_session = False
+        cmd.autosaves_state = False
         cmd.execute.return_value = "ok"
         factory.create.return_value = cmd
 
@@ -72,6 +74,7 @@ class EngineTests(unittest.TestCase):
         cmd.skips_heartbeat = False
         cmd.mutates_state = True
         cmd.mutates_session = False
+        cmd.autosaves_state = True
         cmd.execute.return_value = "ok"
         factory.create.return_value = cmd
 
@@ -90,6 +93,7 @@ class EngineTests(unittest.TestCase):
         cmd.skips_heartbeat = False
         cmd.mutates_state = False
         cmd.mutates_session = False
+        cmd.autosaves_state = False
         cmd.execute.return_value = ""
         factory.create.return_value = cmd
 
@@ -106,6 +110,7 @@ class EngineTests(unittest.TestCase):
         cmd.skips_heartbeat = True
         cmd.mutates_state = False
         cmd.mutates_session = True
+        cmd.autosaves_state = False
         cmd.execute.return_value = "logged in"
         factory.create.return_value = cmd
 
@@ -123,6 +128,7 @@ class EngineTests(unittest.TestCase):
         cmd.skips_heartbeat = False
         cmd.mutates_state = True
         cmd.mutates_session = False
+        cmd.autosaves_state = True
         cmd.execute.return_value = "ok"
         factory.create.return_value = cmd
 
@@ -173,6 +179,7 @@ class EngineTests(unittest.TestCase):
         cmd.skips_heartbeat = False
         cmd.mutates_state = False
         cmd.mutates_session = False
+        cmd.autosaves_state = False
         cmd.execute.side_effect = RuntimeError("boom")
         factory.create.return_value = cmd
 
@@ -188,6 +195,25 @@ class EngineTests(unittest.TestCase):
             "viewallroutes",
         )
         mock_print.assert_called_once_with("Unexpected error: boom")
+
+    def test_exec_line_does_not_autosave_mutating_command_when_autosave_disabled(self) -> None:
+        engine, factory, _auth, _authz, save_world, advance = self.make_engine()
+
+        cmd = MagicMock()
+        cmd.skips_heartbeat = False
+        cmd.mutates_state = True
+        cmd.mutates_session = False
+        cmd.autosaves_state = False
+        cmd.execute.return_value = "Loaded state."
+        factory.create.return_value = cmd
+
+        with patch("builtins.print") as mock_print:
+            engine._exec_line("load state.json")  # pyright: ignore[reportPrivateUsage]
+
+        advance.execute.assert_called_once_with()
+        cmd.execute.assert_called_once_with()
+        save_world.execute.assert_not_called()
+        mock_print.assert_called_once_with("Loaded state.")
 
     def test_menu_state_quotes_save_paths_with_spaces(self) -> None:
         engine, _factory, _auth, _authz, _save_world, _advance = self.make_engine()

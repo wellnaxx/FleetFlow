@@ -9,6 +9,7 @@ class LoadState(BaseCommand[LoadWorldStateUseCase]):
     """Load world state through the CLI authorization boundary."""
 
     mutates_state = True
+    autosaves_state = False
 
     @requires(Permission.APP_LOAD_STATE)
     def execute(self) -> str:
@@ -29,4 +30,3 @@ class LoadState(BaseCommand[LoadWorldStateUseCase]):
         path = self.params[0] if self.params else "state.json"
         abs_path = self.use_case.execute(path)
         return f"Loaded state from {abs_path}"
-

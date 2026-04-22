@@ -18,6 +18,7 @@ class AssignTruckToRoute(BaseCommand[AssignTruckToRouteUseCase]):
     """
 
     mutates_state = True
+    autosaves_state = True
 
     @requires(Permission.ROUTE_ASSIGN_TRUCK)
     def execute(self) -> str:
@@ -30,4 +31,3 @@ class AssignTruckToRoute(BaseCommand[AssignTruckToRouteUseCase]):
         result = self._use_case.execute(truck_id, route_id, now)
 
         return f"Assigned truck {truck_id} to route {result.route_id}."
-

@@ -19,6 +19,7 @@ class RemovePackage(BaseCommand[RemovePackageUseCase]):
     """
 
     mutates_state = True
+    autosaves_state = True
 
     @requires_all(Permission.PACKAGE_REMOVE, Permission.PACKAGE_VIEW)
     def execute(self) -> str:
@@ -26,4 +27,3 @@ class RemovePackage(BaseCommand[RemovePackageUseCase]):
         package_id = try_parse_int(self._params[0])
         self._use_case.execute(package_id)
         return f"Package {package_id} removed."
-

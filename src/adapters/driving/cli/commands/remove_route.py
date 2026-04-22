@@ -7,6 +7,7 @@ from src.domain.enums.auth import Permission
 
 class RemoveRoute(BaseCommand[RemoveRouteUseCase]):
     mutates_state = True
+    autosaves_state = True
 
     @requires_all(Permission.ROUTE_REMOVE, Permission.ROUTE_VIEW)
     def execute(self) -> str:
@@ -14,4 +15,3 @@ class RemoveRoute(BaseCommand[RemoveRouteUseCase]):
         route_id = try_parse_int(self._params[0])
         self._use_case.execute(route_id)
         return f"Route {route_id} removed."
-

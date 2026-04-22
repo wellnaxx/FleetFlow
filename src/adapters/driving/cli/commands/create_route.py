@@ -21,6 +21,7 @@ class CreateRoute(BaseCommand[CreateRouteUseCase]):
     """
 
     mutates_state = True
+    autosaves_state = True
 
     @requires(Permission.ROUTE_CREATE)
     def execute(self) -> str:
@@ -32,4 +33,3 @@ class CreateRoute(BaseCommand[CreateRouteUseCase]):
             f"Route {route.route_id} created: {' -> '.join(loc_tokens)} "
             f"| Departure: {dep_str} | Distance: {route.total_distance_km} km"
         )
-

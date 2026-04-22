@@ -16,6 +16,7 @@ class AssignPackageToRoute(BaseCommand[AssignPackagesToRouteUseCase]):
     """
 
     mutates_state = True
+    autosaves_state = True
 
     @requires(Permission.ROUTE_ASSIGN_PACKAGE)
     def execute(self) -> str:
@@ -40,4 +41,3 @@ class AssignPackageToRoute(BaseCommand[AssignPackagesToRouteUseCase]):
             parts.append("Failed:\n- " + "\n- ".join(error_lines))
 
         return "\n\n".join(parts)
-

@@ -15,6 +15,7 @@ class BaseCommand[T](ABC):
     mutates_state: bool = False
     mutates_session: bool = False
     skips_heartbeat: bool = False
+    autosaves_state: bool = False
 
     def __init__(
         self,
