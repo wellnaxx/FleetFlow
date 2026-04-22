@@ -18,7 +18,7 @@ class CreateRouteUseCase_Should(unittest.TestCase):
         mock_route_cls: MagicMock,
     ) -> None:
         mock_is_valid.return_value = True
-        self.mock_routes.next_id.return_value = 42
+        self.mock_routes.peek_next_id.return_value = 42
 
         departure = datetime(2025, 10, 12, 6, 0)
         fake_route = MagicMock()
@@ -31,7 +31,7 @@ class CreateRouteUseCase_Should(unittest.TestCase):
             [call.args[0] for call in mock_is_valid.call_args_list],
             ["SYD", "MEL", "ADL"],
         )
-        self.mock_routes.next_id.assert_called_once_with()
+        self.mock_routes.peek_next_id.assert_called_once_with()
         mock_route_cls.assert_called_once_with(
             "SYD",
             "MEL",
@@ -77,7 +77,7 @@ class CreateRouteUseCase_Should(unittest.TestCase):
         mock_route_cls: MagicMock,
     ) -> None:
         mock_is_valid.return_value = True
-        self.mock_routes.next_id.return_value = 7
+        self.mock_routes.peek_next_id.return_value = 7
         mock_route_cls.return_value = MagicMock()
 
         _ = self.use_case.execute(["A", "B", "C"], None)
@@ -86,5 +86,5 @@ class CreateRouteUseCase_Should(unittest.TestCase):
             [call.args[0] for call in mock_is_valid.call_args_list],
             ["A", "B", "C"],
         )
-        self.mock_routes.next_id.assert_called_once_with()
+        self.mock_routes.peek_next_id.assert_called_once_with()
         self.mock_routes.add.assert_called_once()

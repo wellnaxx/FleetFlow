@@ -23,7 +23,7 @@ class CreatePackageUseCase:
         if customer is None:
             customer = self._customers.create(name, email, phone)
 
-        package_id = self._packages.next_id()
+        package_id = self._packages.peek_next_id()
 
         package = DeliveryPackage(
             start_location=start, end_location=end, weight=weight, customer=customer, package_id=package_id

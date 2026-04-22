@@ -40,7 +40,7 @@ class CreatePackageUseCaseLayerTests(unittest.TestCase):
     ) -> None:
         customer = MagicMock()
         self.customers.find_existing_customer.return_value = customer
-        self.packages.next_id.return_value = 42
+        self.packages.peek_next_id.return_value = 42
 
         package = self.use_case.execute("SYD", "MEL", 12.5, "Alice", "alice@example.com", "0412345678")
 
@@ -48,7 +48,7 @@ class CreatePackageUseCaseLayerTests(unittest.TestCase):
             "Alice", "alice@example.com", "0412345678"
         )
         self.customers.create.assert_not_called()
-        self.packages.next_id.assert_called_once_with()
+        self.packages.peek_next_id.assert_called_once_with()
         customer.add_package.assert_called_once_with(package)
         self.packages.add.assert_called_once_with(package)
         self.assertIsInstance(package, DeliveryPackage)
@@ -64,7 +64,7 @@ class CreatePackageUseCaseLayerTests(unittest.TestCase):
         customer = MagicMock()
         self.customers.find_existing_customer.return_value = None
         self.customers.create.return_value = customer
-        self.packages.next_id.return_value = 7
+        self.packages.peek_next_id.return_value = 7
 
         package = self.use_case.execute("SYD", "MEL", 3.5, "Alice", "alice@example.com", "0412345678")
 
@@ -72,7 +72,7 @@ class CreatePackageUseCaseLayerTests(unittest.TestCase):
             "Alice", "alice@example.com", "0412345678"
         )
         self.customers.create.assert_called_once_with("Alice", "alice@example.com", "0412345678")
-        self.packages.next_id.assert_called_once_with()
+        self.packages.peek_next_id.assert_called_once_with()
         customer.add_package.assert_called_once_with(package)
         self.packages.add.assert_called_once_with(package)
         self.assertEqual(package.package_id, 7)

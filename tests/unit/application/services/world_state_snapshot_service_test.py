@@ -621,9 +621,9 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
         customer = self.customer_repo.get_by_id(3)
 
         assert customer is not None
-        self.assertEqual(self.customer_repo.next_id(), 4)
-        self.assertEqual(self.package_repo.next_id(), 5)
-        self.assertEqual(self.route_repo.next_id(), 6)
+        self.assertEqual(self.customer_repo.peek_next_id(), 4)
+        self.assertEqual(self.package_repo.peek_next_id(), 5)
+        self.assertEqual(self.route_repo.peek_next_id(), 6)
         self.assertIs(self.customer_repo.get_by_email("alice@example.com"), customer)
         self.assertIs(self.customer_repo.get_by_phone("0412345678"), customer)
 
@@ -714,9 +714,9 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
         self.assertIs(self.customer_repo.get_by_id(1), customer)
         self.assertIs(self.package_repo.get_by_id(1), package)
         self.assertIs(self.route_repo.get_by_id(1), route)
-        self.assertEqual(self.customer_repo.next_id(), 2)
-        self.assertEqual(self.package_repo.next_id(), 2)
-        self.assertEqual(self.route_repo.next_id(), 2)
+        self.assertEqual(self.customer_repo.peek_next_id(), 2)
+        self.assertEqual(self.package_repo.peek_next_id(), 2)
+        self.assertEqual(self.route_repo.peek_next_id(), 2)
         self.assertIs(self.customer_repo.get_by_email("alice@example.com"), customer)
         self.assertIs(self.customer_repo.get_by_phone("0412345678"), customer)
         self.assertIs(truck.route, route)

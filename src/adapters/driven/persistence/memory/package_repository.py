@@ -6,7 +6,7 @@ class InMemoryPackageRepository:
         self._packages: dict[int, DeliveryPackage] = {}
         self._next_id: int = 1
 
-    def next_id(self) -> int:
+    def peek_next_id(self) -> int:
         return self._next_id
 
     def add(self, package: DeliveryPackage) -> None:

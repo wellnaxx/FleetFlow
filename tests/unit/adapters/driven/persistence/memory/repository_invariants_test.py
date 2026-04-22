@@ -48,7 +48,7 @@ class InMemoryRepositoryInvariants_Should(unittest.TestCase):
 
         repo.replace_customers({alice.customer_id: alice, bob.customer_id: bob}, next_id=7)
 
-        self.assertEqual(repo.next_id(), 7)
+        self.assertEqual(repo.peek_next_id(), 7)
         self.assertEqual([customer.customer_id for customer in repo.list_all()], [1, 2])
         self.assertIs(repo.get_by_email("alice@example.com"), alice)
         self.assertIs(repo.get_by_phone("0412345678"), alice)
@@ -76,7 +76,7 @@ class InMemoryRepositoryInvariants_Should(unittest.TestCase):
         repo.add(assigned)
         repo.add(unassigned)
 
-        self.assertEqual(repo.next_id(), 3)
+        self.assertEqual(repo.peek_next_id(), 3)
         self.assertEqual([package.package_id for package in repo.list_all()], [1, 2])
         self.assertEqual([package.package_id for package in repo.list_unassigned()], [1])
 
@@ -87,7 +87,7 @@ class InMemoryRepositoryInvariants_Should(unittest.TestCase):
 
         repo.replace_packages({4: package}, next_id=8)
 
-        self.assertEqual(repo.next_id(), 8)
+        self.assertEqual(repo.peek_next_id(), 8)
         self.assertIs(repo.get_by_id(4), package)
 
     def test_route_repository_rejects_duplicate_id(self) -> None:
@@ -108,7 +108,7 @@ class InMemoryRepositoryInvariants_Should(unittest.TestCase):
         repo.add(route_b)
         repo.add(route_a)
 
-        self.assertEqual(repo.next_id(), 3)
+        self.assertEqual(repo.peek_next_id(), 3)
         self.assertEqual([route.route_id for route in repo.list_all()], [1, 2])
 
     def test_route_repository_replaces_routes_and_counter(self) -> None:
@@ -117,5 +117,5 @@ class InMemoryRepositoryInvariants_Should(unittest.TestCase):
 
         repo.replace_routes({5: route}, next_id=9)
 
-        self.assertEqual(repo.next_id(), 9)
+        self.assertEqual(repo.peek_next_id(), 9)
         self.assertIs(repo.get_by_id(5), route)

@@ -54,9 +54,9 @@ class WorldStateSnapshotService:
 
     def _build_counters_snapshot(self) -> CountersSnapshot:
         return CountersSnapshot(
-            next_customer_id=self._customer_repo.next_id(),
-            next_package_id=self._package_repo.next_id(),
-            next_route_id=self._route_repo.next_id(),
+            next_customer_id=self._customer_repo.peek_next_id(),
+            next_package_id=self._package_repo.peek_next_id(),
+            next_route_id=self._route_repo.peek_next_id(),
         )
 
     def _build_customer_snapshots(self) -> tuple[CustomerSnapshot, ...]:

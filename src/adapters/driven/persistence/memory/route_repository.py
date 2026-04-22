@@ -6,7 +6,7 @@ class InMemoryRouteRepository:
         self._routes: dict[int, DeliveryRoute] = {}
         self._next_id = 1
 
-    def next_id(self) -> int:
+    def peek_next_id(self) -> int:
         return self._next_id
 
     def add(self, route: DeliveryRoute) -> None:

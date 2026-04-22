@@ -20,7 +20,7 @@ class CreateRouteUseCase:
         route = DeliveryRoute(
             *locations,
             departure_time=departure_time,
-            route_id=self._routes.next_id(),
+            route_id=self._routes.peek_next_id(),
         )
         self._routes.add(route)
         return route

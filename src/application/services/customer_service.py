@@ -30,7 +30,7 @@ class CustomerService:
 
     def create(self, name: str, email: str = "", phone: str = "") -> Customer:
         contact_info = ContactInfo(name=name, email=email, phone_number=phone)
-        customer = Customer(customer_id=self._customers.next_id(), contact=contact_info)
+        customer = Customer(customer_id=self._customers.peek_next_id(), contact=contact_info)
         self._customers.add(customer)
         return customer
 
