@@ -1,5 +1,8 @@
+from dataclasses import replace
+
 from src.adapters.driven.security.password_hasher import PasswordHash
 from src.application.models.user_record import UserRecord
+from src.domain.enums.auth import Role
 from src.domain.value_objects.contact_info import ContactInfo
 
 
@@ -8,8 +11,12 @@ class InMemoryUserRepository:
         self._by_username: dict[str, UserRecord] = {}
         self._next_id = 1
 
+    @staticmethod
+    def _normalize_username(username: str | None) -> str:
+        return (username or "").strip().lower()
+
     def get(self, username: str) -> UserRecord | None:
-        key = (username or "").strip().lower()
+        key = self._normalize_username(username)
         if not key:
             return None
         return self._by_username.get(key)
@@ -17,26 +24,22 @@ class InMemoryUserRepository:
     def create(
         self,
         username: str,
-        role: str,
+        role: Role | str,
         name: str,
         email: str,
         phone_number: str,
         password_hash: PasswordHash,
     ) -> UserRecord:
-        key = (username or "").strip()
-        norm = key.lower()
+        raw_username = (username or "").strip()
+        norm = self._normalize_username(username)
+
         if not norm:
             raise ValueError("Username is required.")
         if norm in self._by_username:
             raise ValueError("Username already exists.")
 
-        role_str: str = getattr(role, "value", role)
-        role_value = str(role_str).upper()
-
-        ci = ContactInfo(name=name, email=(email or ""), phone_number=(phone_number or ""))
-        clean_name = ci.name
-        clean_email = ci.email
-        clean_phone = ci.phone_number
+        role_value = InMemoryUserRepository._normalize_role(role)
+        ci = ContactInfo(name=name, email=email, phone_number=phone_number)
 
         try:
             pw_serialized = password_hash.serialize()
@@ -45,11 +48,11 @@ class InMemoryUserRepository:
 
         rec = UserRecord(
             user_id=self._next_id,
-            username=key,
+            username=raw_username,
             role=role_value,
-            name=clean_name,
-            email=clean_email,
-            phone_number=clean_phone,
+            name=ci.name,
+            email=ci.email,
+            phone_number=ci.phone_number,
             password=pw_serialized,
         )
         self._by_username[norm] = rec
@@ -58,10 +61,11 @@ class InMemoryUserRepository:
         return rec
 
     def update_password(self, username: str, new_hash: PasswordHash) -> None:
-        rec = self.get(username)
+        norm = self._normalize_username(username)
+        rec = self._by_username.get(norm)
         if rec is None:
             raise ValueError("User not found.")
-        rec.password = new_hash.serialize()
+        self._by_username[norm] = replace(rec, password=new_hash.serialize())
         self.save()
 
     def save(self) -> None:
@@ -69,3 +73,13 @@ class InMemoryUserRepository:
 
     def list_users(self) -> list[UserRecord]:
         return list(self._by_username.values())
+
+    @staticmethod
+    def _normalize_role(role: Role | str) -> str:
+        """Normalize a role enum or role string into the persisted role value."""
+        if isinstance(role, Role):
+            return role.value
+        try:
+            return Role(role.upper()).value
+        except ValueError as exc:
+            raise ValueError(f"Invalid role: {role!r}") from exc

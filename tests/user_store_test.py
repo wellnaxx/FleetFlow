@@ -15,7 +15,9 @@ def _ph(s: str = "hash") -> SimpleNamespace:
 
 
 class UserStore_Load_Save_Should(unittest.TestCase):
-    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
+    )
     @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=True)
     @patch("src.adapters.driven.persistence.json.user_store.open", new_callable=mock_open)
     @patch("src.adapters.driven.persistence.json.user_store.json.load")
@@ -53,7 +55,9 @@ class UserStore_Load_Save_Should(unittest.TestCase):
         # next id was restored
         self.assertEqual(store._next_id, 7)  # type: ignore[reportPrivateUsage]
 
-    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
+    )
     @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=True)
     @patch("src.adapters.driven.persistence.json.user_store.open", new_callable=mock_open)
     @patch(
@@ -72,7 +76,9 @@ class UserStore_Load_Save_Should(unittest.TestCase):
 
         self.assertIn("Malformed user store JSON", str(ctx.exception))
 
-    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
+    )
     @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=True)
     @patch("src.adapters.driven.persistence.json.user_store.open", new_callable=mock_open)
     @patch("src.adapters.driven.persistence.json.user_store.json.load", return_value=["not", "a", "dict"])
@@ -84,7 +90,9 @@ class UserStore_Load_Save_Should(unittest.TestCase):
 
         self.assertIn("Malformed user store JSON", str(ctx.exception))
 
-    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
+    )
     @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=True)
     @patch("src.adapters.driven.persistence.json.user_store.open", new_callable=mock_open)
     @patch("src.adapters.driven.persistence.json.user_store.json.load", return_value={"_next_id": 2})
@@ -96,7 +104,9 @@ class UserStore_Load_Save_Should(unittest.TestCase):
 
         self.assertIn("Malformed user store JSON", str(ctx.exception))
 
-    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
+    )
     @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=True)
     @patch("src.adapters.driven.persistence.json.user_store.open", new_callable=mock_open)
     @patch(
@@ -114,7 +124,9 @@ class UserStore_Load_Save_Should(unittest.TestCase):
 
         self.assertIn("Malformed user store JSON", str(ctx.exception))
 
-    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
+    )
     @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=True)
     @patch("src.adapters.driven.persistence.json.user_store.open", new_callable=mock_open)
     @patch(
@@ -151,7 +163,9 @@ class UserStore_Load_Save_Should(unittest.TestCase):
 
         self.assertIn("Malformed user store JSON", str(ctx.exception))
 
-    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
+    )
     @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=True)
     @patch("src.adapters.driven.persistence.json.user_store.open", new_callable=mock_open)
     @patch(
@@ -188,7 +202,9 @@ class UserStore_Load_Save_Should(unittest.TestCase):
 
         self.assertIn("Malformed user store JSON", str(ctx.exception))
 
-    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
+    )
     @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=True)
     @patch("src.adapters.driven.persistence.json.user_store.open", new_callable=mock_open)
     @patch(
@@ -224,7 +240,9 @@ class UserStore_Load_Save_Should(unittest.TestCase):
 
         self.assertEqual(store._next_id, 5)  # type: ignore[reportPrivateUsage]
 
-    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
+    )
     @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=True)
     @patch("src.adapters.driven.persistence.json.user_store.open", new_callable=mock_open)
     @patch(
@@ -273,7 +291,9 @@ class UserStore_Load_Save_Should(unittest.TestCase):
         self.assertEqual(store.get("charlie").user_id, 9)  # type: ignore[reportOptionalMemberAccess]
 
     @patch.object(UserStore, "_atomic_write", return_value="C:/fake/users.json")
-    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
+    )
     @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
     def test_save_writes_sorted_payload(
         self, exists: MagicMock, resolve: MagicMock, atomic_write: MagicMock
@@ -296,7 +316,9 @@ class UserStore_Load_Save_Should(unittest.TestCase):
 
 
 class UserStore_Create_Get_Update_Should(unittest.TestCase):
-    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
+    )
     @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
     def test_create_normalizes_and_persists_and_get_is_case_insensitive(
         self, exists: MagicMock, resolve: MagicMock
@@ -338,7 +360,9 @@ class UserStore_Create_Get_Update_Should(unittest.TestCase):
             # ensure it persisted (save called internally via create)
             aw.assert_called()
 
-    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
+    )
     @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
     def test_create_accepts_role_enum(self, exists: MagicMock, resolve: MagicMock) -> None:
         with (
@@ -352,7 +376,9 @@ class UserStore_Create_Get_Update_Should(unittest.TestCase):
             rec = store.create("bob", Role.MANAGER, "Bob", "", "", _ph("pw2"))  # type: ignore[reportArgumentType]
             self.assertEqual(rec.role, "MANAGER")
 
-    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
+    )
     @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
     def test_create_validations_and_password_type(self, exists: MagicMock, resolve: MagicMock) -> None:
         with patch.object(UserStore, "_atomic_write", return_value="C:/fake/users.json"):
@@ -367,7 +393,9 @@ class UserStore_Create_Get_Update_Should(unittest.TestCase):
             with self.assertRaises(TypeError):
                 store.create("v", "EMPLOYEE", "Name", "", "", object())  # type: ignore[reportArgumentType]  # password_hash wrong type
 
-    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
+    )
     @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
     def test_update_password_happy_and_missing(self, exists: MagicMock, resolve: MagicMock) -> None:
         with patch.object(UserStore, "_atomic_write", return_value="C:/fake/users.json"):
@@ -382,7 +410,9 @@ class UserStore_Create_Get_Update_Should(unittest.TestCase):
             with self.assertRaises(ValueError):
                 store.update_password("ghost", _ph("x"))  # type: ignore[reportArgumentType]
 
-    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
+    )
     @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
     def test_list_users_returns_all(self, exists: MagicMock, resolve: MagicMock) -> None:
         store = UserStore()
@@ -393,13 +423,62 @@ class UserStore_Create_Get_Update_Should(unittest.TestCase):
         users = store.list_users()
         self.assertCountEqual([u.username for u in users], ["a", "b"])
 
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
+    )
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
+    def test_get_is_whitespace_and_case_insensitive(self, exists: MagicMock, resolve: MagicMock) -> None:
+        with patch.object(UserStore, "_atomic_write", return_value="C:/fake/users.json"):
+            store = UserStore()
+            rec = store.create("Alice", "EMPLOYEE", "Alice", "", "", _ph("pw1"))  # type: ignore[reportArgumentType]
+
+            self.assertIs(store.get("alice"), rec)
+            self.assertIs(store.get(" ALICE "), rec)
+            self.assertIs(store.get("\tAlice\n"), rec)
+
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
+    )
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
+    def test_create_rejects_duplicate_username_with_whitespace_and_case_variants(
+        self, exists: MagicMock, resolve: MagicMock
+    ) -> None:
+        with patch.object(UserStore, "_atomic_write", return_value="C:/fake/users.json"):
+            store = UserStore()
+            store.create("Alice", "EMPLOYEE", "Alice", "", "", _ph("pw1"))  # type: ignore[reportArgumentType]
+
+            with self.assertRaises(ValueError) as ctx:
+                store.create("  alice  ", "EMPLOYEE", "Alice 2", "", "", _ph("pw2"))  # type: ignore[reportArgumentType]
+
+            self.assertIn("Username already exists.", str(ctx.exception))
+
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
+    )
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
+    def test_update_password_accepts_whitespace_and_case_insensitive_username(
+        self, exists: MagicMock, resolve: MagicMock
+    ) -> None:
+        with patch.object(UserStore, "_atomic_write", return_value="C:/fake/users.json"):
+            store = UserStore()
+            store.create("Alice", "EMPLOYEE", "Alice", "", "", _ph("old"))  # type: ignore[reportArgumentType]
+
+            store.update_password("  ALICE  ", _ph("new"))  # type: ignore[reportArgumentType]
+
+            self.assertEqual(store.get("alice").password, "SER(new)")  # type: ignore[reportOptionalMemberAccess]
+
 
 class UserStore_AtomicWrite_Should(unittest.TestCase):
     @patch("src.adapters.driven.persistence.json.user_store.ensure_data_dir")
-    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
+    )
     @patch("src.adapters.driven.persistence.json.user_store.os.path.dirname", return_value="C:/fake")
     @patch("src.adapters.driven.persistence.json.user_store.os.makedirs")
-    @patch("src.adapters.driven.persistence.json.user_store.tempfile.mkstemp", return_value=(123, "C:/fake/.users.tmp.json"))  # noqa: E501
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.tempfile.mkstemp",
+        return_value=(123, "C:/fake/.users.tmp.json"),
+    )
     @patch("src.adapters.driven.persistence.json.user_store.os.fdopen")
     @patch("src.adapters.driven.persistence.json.user_store.os.replace")
     @patch(
@@ -431,10 +510,15 @@ class UserStore_AtomicWrite_Should(unittest.TestCase):
 
     @patch("src.adapters.driven.persistence.json.user_store.logger")
     @patch("src.adapters.driven.persistence.json.user_store.ensure_data_dir")
-    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
+    )
     @patch("src.adapters.driven.persistence.json.user_store.os.path.dirname", return_value="C:/fake")
     @patch("src.adapters.driven.persistence.json.user_store.os.makedirs")
-    @patch("src.adapters.driven.persistence.json.user_store.tempfile.mkstemp", return_value=(123, "C:/fake/.users.tmp.json"))  # noqa: E501
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.tempfile.mkstemp",
+        return_value=(123, "C:/fake/.users.tmp.json"),
+    )
     @patch("src.adapters.driven.persistence.json.user_store.os.fdopen")
     @patch("src.adapters.driven.persistence.json.user_store.os.replace")
     @patch(

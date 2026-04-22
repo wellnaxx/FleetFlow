@@ -44,11 +44,20 @@ class InMemoryUserRepository_Should(unittest.TestCase):
 
         self.assertIn("Username already exists.", str(ctx.exception))
 
-    def test_get_is_case_insensitive(self) -> None:
+    def test_duplicate_username_is_rejected_with_whitespace_and_case_variants(self) -> None:
+        self.repo.create("Alice", "EMPLOYEE", "Alice", "", "", _ph("pw1"))  # type: ignore[reportArgumentType]
+
+        with self.assertRaises(ValueError) as ctx:
+            self.repo.create("  alice  ", "EMPLOYEE", "Alice 2", "", "", _ph("pw2"))  # type: ignore[reportArgumentType]
+
+        self.assertIn("Username already exists.", str(ctx.exception))
+
+    def test_get_is_whitespace_and_case_insensitive(self) -> None:
         rec = self.repo.create("Alice", "EMPLOYEE", "Alice", "", "", _ph("pw1"))  # type: ignore[reportArgumentType]
 
         self.assertIs(self.repo.get("alice"), rec)
-        self.assertIs(self.repo.get("ALICE"), rec)
+        self.assertIs(self.repo.get(" ALICE "), rec)
+        self.assertIs(self.repo.get("\tAlice\n"), rec)
 
     def test_update_password_updates_only_target_user(self) -> None:
         self.repo.create("alice", "EMPLOYEE", "Alice", "", "", _ph("old1"))  # type: ignore[reportArgumentType]
@@ -65,6 +74,13 @@ class InMemoryUserRepository_Should(unittest.TestCase):
 
         self.assertIn("User not found.", str(ctx.exception))
 
+    def test_update_password_accepts_whitespace_and_case_insensitive_username(self) -> None:
+        self.repo.create("Alice", "EMPLOYEE", "Alice", "", "", _ph("old"))  # type: ignore[reportArgumentType]
+
+        self.repo.update_password("  ALICE  ", _ph("new"))  # type: ignore[reportArgumentType]
+
+        self.assertEqual(self.repo.get("alice").password, "SER(new)")  # type: ignore[reportOptionalMemberAccess]
+
     def test_list_users_returns_all_records(self) -> None:
         self.repo.create("alice", "EMPLOYEE", "Alice", "", "", _ph("pw1"))  # type: ignore[reportArgumentType]
         self.repo.create("bob", "MANAGER", "Bob", "", "", _ph("pw2"))  # type: ignore[reportArgumentType]
@@ -75,3 +91,5 @@ class InMemoryUserRepository_Should(unittest.TestCase):
 
     def test_save_is_noop(self) -> None:
         self.assertIsNone(self.repo.save())
+
+

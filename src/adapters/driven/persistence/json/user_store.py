@@ -53,6 +53,10 @@ class UserStore:
         self._by_username = users_by_username
 
     @staticmethod
+    def _normalize_username(username: str | None) -> str:
+        return (username or "").strip().lower()
+
+    @staticmethod
     def _parse_loaded_payload(data: object) -> tuple[int, dict[str, UserRecord]]:
         """Validate raw JSON payload and convert it to runtime user records."""
         if not isinstance(data, dict):
@@ -72,7 +76,7 @@ class UserStore:
         max_user_id = 0
         for raw_user in users:
             user = UserStore._parse_raw_user(raw_user)
-            key = user.username.lower()
+            key = UserStore._normalize_username(user.username)
             if key in users_by_username:
                 raise ValueError(f"Duplicate username in store: {user.username!r}")
             user_id = user.user_id
@@ -191,8 +195,7 @@ class UserStore:
         Returns:
             The matching user record, or `None` when the user does not exist.
         """
-        key = (username or "").lower()
-        return self._by_username.get(key)
+        return self._by_username.get(self._normalize_username(username))
 
     def create(
         self,
@@ -221,8 +224,9 @@ class UserStore:
             ValueError: If the username is blank, already exists, or the role is
                 invalid.
         """
-        key = username.strip()
-        norm = key.lower()
+        raw_username = (username or "").strip()
+        norm = self._normalize_username(username)
+
         if not norm:
             raise ValueError("Username is required.")
         if norm in self._by_username:
@@ -231,9 +235,6 @@ class UserStore:
         role_value = UserStore._normalize_role(role)
 
         ci = ContactInfo(name=name, email=email, phone_number=phone_number)
-        clean_name = ci.name
-        clean_email = ci.email
-        clean_phone = ci.phone_number
 
         try:
             pw_serialized = password_hash.serialize()
@@ -242,11 +243,11 @@ class UserStore:
 
         rec = UserRecord(
             user_id=self._next_id,
-            username=key,
+            username=raw_username,
             role=role_value,
-            name=clean_name,
-            email=clean_email,
-            phone_number=clean_phone,
+            name=ci.name,
+            email=ci.email,
+            phone_number=ci.phone_number,
             password=pw_serialized,
         )
 
@@ -265,12 +266,12 @@ class UserStore:
         Raises:
             ValueError: If the user does not exist.
         """
-        rec = self.get(username)
-
+        norm = self._normalize_username(username)
+        rec = self._by_username.get(norm)
         if not rec:
             raise ValueError("User not found.")
 
-        self._by_username[username.lower()] = replace(rec, password=new_hash.serialize())
+        self._by_username[norm] = replace(rec, password=new_hash.serialize())
         self.save()
 
     def list_users(self) -> list[UserRecord]:
