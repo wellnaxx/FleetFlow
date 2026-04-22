@@ -2,7 +2,10 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from src.application.models.user_record import UserRecord
 from src.application.services.auth_service import AuthService
+from src.domain.entities.users.employee import Employee
+from src.domain.entities.users.manager import Manager
 
 
 class AuthService_Should(unittest.TestCase):
@@ -78,7 +81,7 @@ class AuthService_Should(unittest.TestCase):
 
         user = svc.login("boss", "CorrectHorse")
         # Constructed as Manager
-        Manager.assert_called_once_with("Bea", "bea@ex.com", "0400", user_id=101)
+        Manager.assert_called_once_with(101, "Bea", "bea@ex.com", "0400")
         self.assertEqual(svc.current_user, Manager.return_value)
         self.assertEqual(user, Manager.return_value)
         self.assertEqual(svc.last_username, "boss")
@@ -106,7 +109,7 @@ class AuthService_Should(unittest.TestCase):
         )
 
         user = svc.login("alice", "ok")
-        Employee.assert_called_once_with("Alice", "a@x", "0412", user_id=202)
+        Employee.assert_called_once_with(202, "Alice", "a@x", "0412")
         self.assertEqual(user, Employee.return_value)
         self.assertEqual(svc.last_username, "alice")
 
@@ -260,3 +263,49 @@ class AuthService_Should(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             svc.reset_password("ghost", "NewPass123")
         self.assertIn("User not found.", str(ctx.exception))
+
+    @patch("src.application.services.auth_service.verify_password", return_value=True)
+    def test_login_preserves_user_id_for_manager(self, mock_verify: MagicMock) -> None:
+        store = MagicMock()
+        auth = AuthService(store)
+
+        store.get.return_value = UserRecord(
+            user_id=42,
+            username="alice",
+            role="MANAGER",
+            name="Alice",
+            email="alice@example.com",
+            phone_number="0412345678",
+            password="pbkdf2_sha256$200000$salt$hash",
+        )
+
+        user = auth.login("alice", "pw")
+
+        self.assertIsInstance(user, Manager)
+        self.assertEqual(user.user_id, 42)
+        self.assertEqual(user.name, "Alice")
+        self.assertEqual(auth.current_user, user)
+        mock_verify.assert_called_once()
+
+    @patch("src.application.services.auth_service.verify_password", return_value=True)
+    def test_login_preserves_user_id_for_employee(self, mock_verify: MagicMock) -> None:
+        store = MagicMock()
+        auth = AuthService(store)
+
+        store.get.return_value = UserRecord(
+            user_id=17,
+            username="bob",
+            role="EMPLOYEE",
+            name="Bob",
+            email="bob@example.com",
+            phone_number="0400123456",
+            password="pbkdf2_sha256$200000$salt$hash",
+        )
+
+        user = auth.login("bob", "pw")
+
+        self.assertIsInstance(user, Employee)
+        self.assertEqual(user.user_id, 17)
+        self.assertEqual(user.name, "Bob")
+        self.assertEqual(auth.current_user, user)
+        mock_verify.assert_called_once()

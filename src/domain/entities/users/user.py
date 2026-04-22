@@ -3,13 +3,13 @@ from src.domain.value_objects.contact_info import ContactInfo
 
 
 class User:
-    def __init__(self, contact: ContactInfo, role: Role, user_id: int | None = None) -> None:
+    def __init__(self, contact: ContactInfo, role: Role, user_id: int) -> None:
         self._user_id = user_id
         self.role = role
         self.contact = contact
 
     @property
-    def user_id(self) -> int | None:
+    def user_id(self) -> int:
         return self._user_id
 
     @property
