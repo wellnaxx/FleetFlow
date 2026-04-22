@@ -3,6 +3,10 @@ from src.adapters.driven.persistence.application_data.customer_repository import
 )
 from src.adapters.driven.persistence.application_data.package_repository import ApplicationDataPackageRepository
 from src.adapters.driven.persistence.application_data.route_repository import ApplicationDataRouteRepository
+from src.adapters.driven.persistence.application_data.world_state_gateway import (
+    ApplicationDataWorldStateGateway,
+)
+from src.adapters.driven.persistence.json.world_state_persistence import JsonWorldStatePersistence
 from src.application.services.auth_service import AuthService
 from src.application.services.customer_service import CustomerService
 from src.application.use_cases.auth.change_password import ChangePasswordUseCase
@@ -27,6 +31,9 @@ from src.application.use_cases.routes.remove_route import RemoveRouteUseCase
 from src.application.use_cases.routes.view_all_routes import ViewAllRoutesUseCase
 from src.application.use_cases.routes.view_route import ViewRouteUseCase
 from src.application.use_cases.routes.view_routes_in_progress import ViewRoutesInProgressUseCase
+from src.application.use_cases.state.auto_save_world import AutosaveWorldState
+from src.application.use_cases.state.load_world import LoadWorldStateUseCase
+from src.application.use_cases.state.save_world import SaveWorldStateUseCase
 from src.application.use_cases.trucks.view_all_trucks import ViewAllTrucksUseCase
 from src.core.application_data import ApplicationData
 
@@ -41,6 +48,22 @@ class Container:
 
         self.vehicle_manager = app_data.vehicle_manager
         self.auth = auth
+
+        self.world_state_gateway = ApplicationDataWorldStateGateway(app_data)
+        self.world_state_persistence = JsonWorldStatePersistence()
+        self.save_world_state_use_case = SaveWorldStateUseCase(
+            self.world_state_gateway,
+            self.world_state_persistence,
+        )
+        self.load_world_state_use_case = LoadWorldStateUseCase(
+            self.world_state_gateway,
+            self.world_state_persistence,
+        )
+        self.autosave_world_state = AutosaveWorldState(
+            self.world_state_gateway,
+            self.world_state_persistence,
+            app_data.AUTOSAVE_PATH,
+        )
 
         self.login_use_case = LoginUseCase(self.auth)
         self.logout_use_case = LogoutUseCase(self.auth)

@@ -30,10 +30,7 @@ from src.application.services.auth_service import AuthService
 from src.composition.container import Container
 from src.core.application_data import ApplicationData
 
-_LEGACY_REGISTRY: dict[str, type[BaseCommand]] = {
-    "save": SaveState,
-    "load": LoadState,
-}
+_LEGACY_REGISTRY: dict[str, type[BaseCommand]] = {}
 
 type CommandEntry[T] = tuple[type[UseCaseCommand[T]], Callable[[Container], T]]
 
@@ -46,6 +43,8 @@ def bind_command[T](
 
 
 _CONTAINER_COMMANDS: dict[str, CommandEntry[Any]] = {
+    "save": bind_command(SaveState, lambda container: container.save_world_state_use_case),
+    "load": bind_command(LoadState, lambda container: container.load_world_state_use_case),
     "login": bind_command(AuthLogin, lambda container: container.login_use_case),
     "logout": bind_command(AuthLogout, lambda container: container.logout_use_case),
     "whoami": bind_command(AuthWhoAmI, lambda container: container.who_am_i_use_case),
@@ -96,15 +95,6 @@ class CommandFactory:
         self._container = container
 
     def create(self, input_line: str) -> BaseCommand:
-        """Create a command from a raw input line.
-
-        Args:
-            input_line: User input (e.g., "createroute SYD MEL 2025-10-12 06:00").
-        Returns:
-            A command instance with parsed params.
-        Raises:
-            ValueError: For unknown command names or invalid params.
-        """
         tokens = shlex.split(input_line)
         if not tokens:
             raise ValueError("No command given.")
@@ -120,5 +110,4 @@ class CommandFactory:
         raise ValueError(f"Invalid command name: {name}!")
 
     def update_app(self, new_app_data: ApplicationData) -> None:
-        """Called by Engine after login/logout to refresh RBAC principal."""
         self._app_data = new_app_data

@@ -10,6 +10,14 @@ def _get_create_package_use_case(container: Any) -> Any:
     return container.create_package_use_case
 
 
+def _get_save_world_state_use_case(container: Any) -> Any:
+    return container.save_world_state_use_case
+
+
+def _get_load_world_state_use_case(container: Any) -> Any:
+    return container.load_world_state_use_case
+
+
 def _get_login_use_case(container: Any) -> Any:
     return container.login_use_case
 
@@ -109,6 +117,8 @@ class CommandFactory_Should(unittest.TestCase):
         app = SimpleNamespace(name="app1")
         auth = SimpleNamespace(name="auth1")
         container = SimpleNamespace(
+            save_world_state_use_case=MagicMock(),
+            load_world_state_use_case=MagicMock(),
             login_use_case=MagicMock(),
             logout_use_case=MagicMock(),
             who_am_i_use_case=MagicMock(),
@@ -200,6 +210,50 @@ class CommandFactory_Should(unittest.TestCase):
             app,
             auth,
             container.create_package_use_case,
+        )
+
+    def test_save_uses_save_world_state_use_case_from_container(self) -> None:
+        cf, app, auth, container = self.make_factory()
+
+        cmd_cls = MagicMock()
+        sentinel_cmd = object()
+        cmd_cls.return_value = sentinel_cmd
+
+        with patch.dict(
+            "src.adapters.driving.cli.command_factory._CONTAINER_COMMANDS",
+            {"save": (cmd_cls, _get_save_world_state_use_case)},
+            clear=False,
+        ):
+            result = cf.create("save state.json")
+
+        self.assertIs(result, sentinel_cmd)
+        cmd_cls.assert_called_once_with(
+            ["state.json"],
+            app,
+            auth,
+            container.save_world_state_use_case,
+        )
+
+    def test_load_uses_load_world_state_use_case_from_container(self) -> None:
+        cf, app, auth, container = self.make_factory()
+
+        cmd_cls = MagicMock()
+        sentinel_cmd = object()
+        cmd_cls.return_value = sentinel_cmd
+
+        with patch.dict(
+            "src.adapters.driving.cli.command_factory._CONTAINER_COMMANDS",
+            {"load": (cmd_cls, _get_load_world_state_use_case)},
+            clear=False,
+        ):
+            result = cf.create("load state.json")
+
+        self.assertIs(result, sentinel_cmd)
+        cmd_cls.assert_called_once_with(
+            ["state.json"],
+            app,
+            auth,
+            container.load_world_state_use_case,
         )
 
     def test_login_uses_login_use_case_from_container(self) -> None:
