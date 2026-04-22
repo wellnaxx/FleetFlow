@@ -2,14 +2,22 @@ from datetime import datetime
 
 from src.adapters.driving.cli.command_factory import CommandFactory
 from src.application.services.auth_service import AuthService
+from src.application.use_cases.state.auto_save_world import AutosaveWorldState
 from src.core.application_data import ApplicationData
 
 
 class Engine:
-    def __init__(self, factory: CommandFactory, app: ApplicationData, auth: AuthService) -> None:
+    def __init__(
+        self,
+        factory: CommandFactory,
+        app: ApplicationData,
+        auth: AuthService,
+        autosave_world_state: AutosaveWorldState | None = None,
+    ) -> None:
         self._factory = factory
         self.app = app
         self.auth = auth
+        self._autosave_world_state = autosave_world_state
         self._running: bool = False
 
     def _rebind_app(self) -> None:
@@ -272,8 +280,11 @@ class Engine:
 
             if getattr(cmd, "mutates_state", False):
                 try:
-                    path = getattr(self.app, "AUTOSAVE_PATH", "state.json")
-                    self.app._persist_to_file(path)  # pyright: ignore[reportPrivateUsage]
+                    if self._autosave_world_state is not None:
+                        self._autosave_world_state.execute()
+                    else:
+                        path = getattr(self.app, "AUTOSAVE_PATH", "state.json")
+                        self.app._persist_to_file(path)  # pyright: ignore[reportPrivateUsage]
                 except Exception as se:
                     print(f"Warning: autosave failed: {se}")
 
