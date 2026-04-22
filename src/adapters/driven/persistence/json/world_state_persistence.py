@@ -51,10 +51,7 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
         return abs_path, self._snapshot_from_raw(raw)
 
     def _raw_from_snapshot(self, snapshot: WorldStateSnapshot) -> dict[str, Any]:
-        raw = asdict(snapshot)
-        world = raw.pop("world")
-        raw.update(world)
-        return raw
+        return asdict(snapshot)
 
     def _snapshot_from_raw(self, raw: dict[str, Any]) -> WorldStateSnapshot:
         world = raw.get("world")
