@@ -82,10 +82,6 @@ class ContactInfo_Should(unittest.TestCase):
         self.assertEqual(ci2.display_email(), "a@b.com")
         self.assertEqual(ci2.display_phone(), "0412345678")
 
-    def test_normalized_phone_passthrough(self):
-        ci = ContactInfo("Frank", phone_number="0412345678")
-        self.assertEqual(ci.normalized_phone(), "0412345678")
-
     def test_setting_attributes_after_init_applies_cleaning(self):
         ci = ContactInfo("Grace", email="x@y.com", phone_number="0412345678")
         ci.name = "  Grace Hopper  "

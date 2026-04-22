@@ -11,9 +11,6 @@ class ContactInfo:
     email: str = ""
     phone_number: str = ""
 
-    def normalized_phone(self) -> str:
-        return self.phone_number
-
     def display_email(self) -> str:
         return self.email or "No email provided"
 
