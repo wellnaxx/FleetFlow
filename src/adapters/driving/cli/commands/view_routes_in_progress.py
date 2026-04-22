@@ -1,12 +1,12 @@
 from datetime import datetime
 
-from src.adapters.driving.cli.commands.base_command.base_command import UseCaseCommand
+from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
 from src.application.services.authorization_service import requires
 from src.application.use_cases.routes.view_routes_in_progress import ViewRoutesInProgressUseCase
 from src.domain.enums.auth import Permission
 
 
-class ViewRoutesInProgress(UseCaseCommand[ViewRoutesInProgressUseCase]):
+class ViewRoutesInProgress(BaseCommand[ViewRoutesInProgressUseCase]):
     """Return a list of human-friendly strings for routes currently in progress."""
 
     @requires(Permission.ROUTE_VIEW_IN_PROGRESS)
@@ -25,3 +25,4 @@ class ViewRoutesInProgress(UseCaseCommand[ViewRoutesInProgressUseCase]):
                 lines.append(f"  >> Currently at stop: {pos.stop_city}")
             lines.append("")
         return "\n".join(lines)
+

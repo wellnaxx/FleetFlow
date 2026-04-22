@@ -1,4 +1,4 @@
-from src.adapters.driving.cli.commands.base_command.base_command import UseCaseCommand
+from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
 from src.adapters.driving.cli.commands.validation_helpers import (
     parse_departure_from_tail,
     validate_params_count,
@@ -8,7 +8,7 @@ from src.application.use_cases.routes.create_route import CreateRouteUseCase
 from src.domain.enums.auth import Permission
 
 
-class CreateRoute(UseCaseCommand[CreateRouteUseCase]):
+class CreateRoute(BaseCommand[CreateRouteUseCase]):
     """
     Usage:
       createroute <LOC1> <LOC2> [LOC3 ...] [YYYY-MM-DD HH:MM]
@@ -32,3 +32,4 @@ class CreateRoute(UseCaseCommand[CreateRouteUseCase]):
             f"Route {route.route_id} created: {' -> '.join(loc_tokens)} "
             f"| Departure: {dep_str} | Distance: {route.total_distance_km} km"
         )
+

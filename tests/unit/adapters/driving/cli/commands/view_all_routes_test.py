@@ -10,9 +10,8 @@ class TestViewAllRoutes_Should(unittest.TestCase):
         cmd._params = ()  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
 
-        cmd._app_data = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._app_data.authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._app_data.authz.has.return_value = authorized  # type: ignore[reportAttributeAccessIssue]
+        cmd._authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._authz.has.return_value = authorized  # type: ignore[reportAttributeAccessIssue]
 
         cmd._auth = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
@@ -66,3 +65,5 @@ class TestViewAllRoutes_Should(unittest.TestCase):
     def test_no_mutates_flags(self) -> None:
         self.assertFalse(getattr(ViewAllRoutes, "mutates_state", False))
         self.assertFalse(getattr(ViewAllRoutes, "mutates_session", False))
+
+

@@ -10,9 +10,8 @@ class TestViewPackage_Should(unittest.TestCase):
         cmd._params = params  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
 
-        cmd._app_data = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._app_data.authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._app_data.authz.has.return_value = authorized  # type: ignore[reportAttributeAccessIssue]
+        cmd._authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._authz.has.return_value = authorized  # type: ignore[reportAttributeAccessIssue]
 
         return cmd
 
@@ -94,3 +93,5 @@ class TestViewPackage_Should(unittest.TestCase):
         mock_validate.assert_called_once_with(["abc"], 1)
         mock_try_parse.assert_called_once_with("abc")
         cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
+
+

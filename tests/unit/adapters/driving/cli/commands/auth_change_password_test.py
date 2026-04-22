@@ -10,8 +10,7 @@ class AuthChangePassword_Should(unittest.TestCase):
         cmd = AuthChangePassword.__new__(AuthChangePassword)
         cmd._params = params or []  # type: ignore[reportAttributeAccessIssue]
         # stub app_data.authz and auth
-        cmd._app_data = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._app_data.authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         cmd._auth = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
@@ -20,7 +19,7 @@ class AuthChangePassword_Should(unittest.TestCase):
     def test_manager_success_resets_password_and_lowercases_target(self, mock_gp: MagicMock) -> None:
         # Arrange
         cmd = self.make_cmd(params=["  Alice  "])
-        cmd._app_data.authz.has.return_value = True  # type: ignore[reportAttributeAccessIssue]
+        cmd._authz.has.return_value = True  # type: ignore[reportAttributeAccessIssue]
         # Simulate new/confirm prompts
         mock_gp.side_effect = ["SuperGood123", "SuperGood123"]
 
@@ -28,14 +27,14 @@ class AuthChangePassword_Should(unittest.TestCase):
         result = cmd.execute()
 
         # Assert
-        cmd._app_data.authz.has.assert_called_once_with(Permission.ADMIN_USER)  # type: ignore[reportUnknownMemberType]
+        cmd._authz.has.assert_called_once_with(Permission.ADMIN_USER)  # type: ignore[reportUnknownMemberType]
         cmd._use_case.execute.assert_called_once_with("alice", "SuperGood123")  # type: ignore[reportUnknownMemberType]
         self.assertEqual(result, "Password reset for 'alice'.")
 
     @patch("src.adapters.driving.cli.commands.auth_change_password.getpass.getpass")
     def test_manager_missing_permission_raises_and_does_not_call_reset(self, mock_gp: MagicMock) -> None:
         cmd = self.make_cmd(params=["bob"])
-        cmd._app_data.authz.has.return_value = False  # type: ignore[reportAttributeAccessIssue]
+        cmd._authz.has.return_value = False  # type: ignore[reportAttributeAccessIssue]
 
         with self.assertRaises(PermissionError) as ctx:
             cmd.execute()
@@ -46,7 +45,7 @@ class AuthChangePassword_Should(unittest.TestCase):
     @patch("src.adapters.driving.cli.commands.auth_change_password.getpass.getpass")
     def test_manager_mismatched_passwords_raises(self, mock_gp: MagicMock) -> None:
         cmd = self.make_cmd(params=["carol"])
-        cmd._app_data.authz.has.return_value = True  # type: ignore[reportAttributeAccessIssue]
+        cmd._authz.has.return_value = True  # type: ignore[reportAttributeAccessIssue]
         mock_gp.side_effect = ["NewPass123", "Different!"]
 
         with self.assertRaises(ValueError) as ctx:
@@ -57,7 +56,7 @@ class AuthChangePassword_Should(unittest.TestCase):
     @patch("src.adapters.driving.cli.commands.auth_change_password.getpass.getpass")
     def test_manager_too_short_password_raises(self, mock_gp: MagicMock) -> None:
         cmd = self.make_cmd(params=["dave"])
-        cmd._app_data.authz.has.return_value = True  # type: ignore[reportAttributeAccessIssue]
+        cmd._authz.has.return_value = True  # type: ignore[reportAttributeAccessIssue]
         mock_gp.side_effect = ["short", "short"]  # < 8 chars
 
         with self.assertRaises(ValueError) as ctx:
@@ -137,3 +136,5 @@ class AuthChangePassword_Should(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+

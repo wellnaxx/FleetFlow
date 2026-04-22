@@ -1,12 +1,12 @@
 import getpass
 
-from src.adapters.driving.cli.commands.base_command.base_command import UseCaseCommand
+from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
 from src.application.services.authorization_service import requires
 from src.application.use_cases.auth.register_user import RegisterUserUseCase
 from src.domain.enums.auth import Permission, Role
 
 
-class AuthRegisterUser(UseCaseCommand[RegisterUserUseCase]):
+class AuthRegisterUser(BaseCommand[RegisterUserUseCase]):
     """
     Usage:
       registeruser                                  # prompts for all fields
@@ -48,3 +48,4 @@ class AuthRegisterUser(UseCaseCommand[RegisterUserUseCase]):
             password=password,
         )
         return f"Created {rec.role} user '{rec.username}' (id={rec.user_id})."
+

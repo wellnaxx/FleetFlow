@@ -1,11 +1,11 @@
-from src.adapters.driving.cli.commands.base_command.base_command import UseCaseCommand
+from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
 from src.adapters.driving.cli.commands.validation_helpers import try_parse_int, validate_params_count
 from src.application.services.authorization_service import requires
 from src.application.use_cases.routes.assign_packages_to_route import AssignPackagesToRouteUseCase
 from src.domain.enums.auth import Permission
 
 
-class AssignPackageToRoute(UseCaseCommand[AssignPackagesToRouteUseCase]):
+class AssignPackageToRoute(BaseCommand[AssignPackagesToRouteUseCase]):
     """Attach a package to a route subject to capacity/range constraints.
 
     Args:
@@ -40,3 +40,4 @@ class AssignPackageToRoute(UseCaseCommand[AssignPackagesToRouteUseCase]):
             parts.append("Failed:\n- " + "\n- ".join(error_lines))
 
         return "\n\n".join(parts)
+

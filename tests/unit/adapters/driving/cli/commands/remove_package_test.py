@@ -11,13 +11,12 @@ class TestRemovePackage_Should(unittest.TestCase):
         cmd._params = params  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
 
-        cmd._app_data = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._app_data.authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-
+        cmd._authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        
         def has_side_effect(permission): # pyright: ignore[reportMissingParameterType, reportUnknownParameterType]
             return authorized
 
-        cmd._app_data.authz.has.side_effect = has_side_effect  # type: ignore[reportAttributeAccessIssue]
+        cmd._authz.has.side_effect = has_side_effect  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
     def test_execute_without_permission_raises(self) -> None:
@@ -102,3 +101,5 @@ class TestRemovePackage_Should(unittest.TestCase):
         mock_validate.assert_called_once_with(["42"], 1)
         mock_try_parse.assert_called_once_with("42")
         cmd._use_case.execute.assert_called_once_with(42)  # type: ignore[reportUnknownMemberType]
+
+

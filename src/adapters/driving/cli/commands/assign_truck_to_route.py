@@ -1,13 +1,13 @@
 from datetime import datetime
 
-from src.adapters.driving.cli.commands.base_command.base_command import UseCaseCommand
+from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
 from src.adapters.driving.cli.commands.validation_helpers import try_parse_int, validate_params_exact
 from src.application.services.authorization_service import requires
 from src.application.use_cases.routes.assign_truck_to_route import AssignTruckToRouteUseCase
 from src.domain.enums.auth import Permission
 
 
-class AssignTruckToRoute(UseCaseCommand[AssignTruckToRouteUseCase]):
+class AssignTruckToRoute(BaseCommand[AssignTruckToRouteUseCase]):
     """Assign a truck and start the route immediately (intended behavior).
 
     Preconditions:
@@ -30,3 +30,4 @@ class AssignTruckToRoute(UseCaseCommand[AssignTruckToRouteUseCase]):
         result = self._use_case.execute(truck_id, route_id, now)
 
         return f"Assigned truck {truck_id} to route {result.route_id}."
+

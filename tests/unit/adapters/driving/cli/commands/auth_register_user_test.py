@@ -10,9 +10,8 @@ class AuthRegisterUser_Should(unittest.TestCase):
     def make_cmd(self, params: list[str] | None = None, *, authorized: bool = True) -> AuthRegisterUser:
         cmd = AuthRegisterUser.__new__(AuthRegisterUser)
         cmd._params = params or []  # type: ignore[reportAttributeAccessIssue]
-        cmd._app_data = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._app_data.authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._app_data.authz.has.return_value = authorized  # type: ignore[reportAttributeAccessIssue]
+        cmd._authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._authz.has.return_value = authorized  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
@@ -170,3 +169,5 @@ class AuthRegisterUser_Should(unittest.TestCase):
 
     def test_no_mutates_session_flag_present(self) -> None:
         self.assertFalse(getattr(AuthRegisterUser, "mutates_session", False))
+
+

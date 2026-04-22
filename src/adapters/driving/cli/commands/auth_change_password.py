@@ -1,11 +1,11 @@
 import getpass
 
-from src.adapters.driving.cli.commands.base_command.base_command import UseCaseCommand
+from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
 from src.application.use_cases.auth.change_password import ChangePasswordUseCase
 from src.domain.enums.auth import Permission
 
 
-class AuthChangePassword(UseCaseCommand[ChangePasswordUseCase]):
+class AuthChangePassword(BaseCommand[ChangePasswordUseCase]):
     """
     Usage:
       changepassword                # self-service: prompts old/new/confirm
@@ -48,3 +48,4 @@ class AuthChangePassword(UseCaseCommand[ChangePasswordUseCase]):
 
         self._use_case.execute(username, new_pw, old_password=old_pw)
         return "Password changed."
+

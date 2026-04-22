@@ -15,9 +15,8 @@ class ViewUnassignedPackages_Should(unittest.TestCase):
         cmd._params = params or []  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
 
-        cmd._app_data = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._app_data.authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._app_data.authz.has.return_value = authorized  # type: ignore[reportAttributeAccessIssue]
+        cmd._authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._authz.has.return_value = authorized  # type: ignore[reportAttributeAccessIssue]
 
         return cmd
 
@@ -85,3 +84,5 @@ class ViewUnassignedPackages_Should(unittest.TestCase):
     def test_no_mutates_flags(self) -> None:
         self.assertFalse(getattr(ViewUnassignedPackages, "mutates_state", False))
         self.assertFalse(getattr(ViewUnassignedPackages, "mutates_session", False))
+
+

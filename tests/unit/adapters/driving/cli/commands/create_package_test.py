@@ -11,9 +11,8 @@ class CreatePackage_Tests(unittest.TestCase):
         cmd._params = params  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
 
-        cmd._app_data = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._app_data.authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._app_data.authz.has.return_value = authorized  # type: ignore[reportAttributeAccessIssue]
+        cmd._authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._authz.has.return_value = authorized  # type: ignore[reportAttributeAccessIssue]
 
         return cmd
 
@@ -162,3 +161,5 @@ class CreatePackage_Tests(unittest.TestCase):
             email="",
             phone="",
         )
+
+

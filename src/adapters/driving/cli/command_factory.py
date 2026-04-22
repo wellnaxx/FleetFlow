@@ -9,7 +9,7 @@ from src.adapters.driving.cli.commands.auth_login import AuthLogin
 from src.adapters.driving.cli.commands.auth_logout import AuthLogout
 from src.adapters.driving.cli.commands.auth_register import AuthRegisterUser
 from src.adapters.driving.cli.commands.auth_whoami import AuthWhoAmI
-from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand, UseCaseCommand
+from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
 from src.adapters.driving.cli.commands.create_package import CreatePackage
 from src.adapters.driving.cli.commands.create_route import CreateRoute
 from src.adapters.driving.cli.commands.find_suitable_routes_for_package import FindSuitableRoutesForPackage
@@ -27,16 +27,14 @@ from src.adapters.driving.cli.commands.view_route import ViewRoute
 from src.adapters.driving.cli.commands.view_routes_in_progress import ViewRoutesInProgress
 from src.adapters.driving.cli.commands.view_unassigned_packages import ViewUnassignedPackages
 from src.application.services.auth_service import AuthService
+from src.application.services.authorization_service import AuthorizationService
 from src.composition.container import Container
-from src.core.application_data import ApplicationData
 
-_LEGACY_REGISTRY: dict[str, type[BaseCommand]] = {}
-
-type CommandEntry[T] = tuple[type[UseCaseCommand[T]], Callable[[Container], T]]
+type CommandEntry[T] = tuple[type[BaseCommand[T]], Callable[[Container], T]]
 
 
 def bind_command[T](
-    command_cls: type[UseCaseCommand[T]],
+    command_cls: type[BaseCommand[T]],
     getter: Callable[[Container], T],
 ) -> CommandEntry[T]:
     return command_cls, getter
@@ -82,32 +80,20 @@ _CONTAINER_COMMANDS: dict[str, CommandEntry[Any]] = {
 
 
 class CommandFactory:
-    """Parse raw CLI input and build command objects.
-
-    Uses explicit builders for migrated commands and falls back to the legacy
-    command registry for commands that still use the old ApplicationData-based
-    path.
-    """
-
-    def __init__(self, data: ApplicationData, auth: AuthService, container: Container) -> None:
-        self._app_data = data
+    def __init__(self, auth: AuthService, authz: AuthorizationService, container: Container) -> None:
         self._auth = auth
+        self._authz = authz
         self._container = container
 
-    def create(self, input_line: str) -> BaseCommand:
+    def create(self, input_line: str) -> BaseCommand[Any]:
         tokens = shlex.split(input_line)
         if not tokens:
             raise ValueError("No command given.")
         name, params = tokens[0].lower(), tokens[1:]
 
-        if entry := _CONTAINER_COMMANDS.get(name):
-            cls, get_use_case = entry
-            return cls(params, self._app_data, self._auth, get_use_case(self._container))
+        entry = _CONTAINER_COMMANDS.get(name)
+        if entry is None:
+            raise ValueError(f"Invalid command name: {name}!")
 
-        if cls := _LEGACY_REGISTRY.get(name):
-            return cls(params, self._app_data, self._auth)
-
-        raise ValueError(f"Invalid command name: {name}!")
-
-    def update_app(self, new_app_data: ApplicationData) -> None:
-        self._app_data = new_app_data
+        cls, get_use_case = entry
+        return cls(params, self._auth, self._authz, get_use_case(self._container))

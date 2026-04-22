@@ -9,9 +9,8 @@ class ViewAllTrucks_Should(unittest.TestCase):
         cmd = ViewAllTrucks.__new__(ViewAllTrucks)
         cmd._params = ()  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._app_data = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._app_data.authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._app_data.authz.has.return_value = authorized  # type: ignore[reportAttributeAccessIssue]
+        cmd._authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._authz.has.return_value = authorized  # type: ignore[reportAttributeAccessIssue]
         cmd._auth = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
@@ -45,3 +44,5 @@ class ViewAllTrucks_Should(unittest.TestCase):
 
         self.assertEqual(result, "Truck 1 Info\n\nTruck 2 Info")
         cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
+
+

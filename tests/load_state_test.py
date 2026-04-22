@@ -9,9 +9,8 @@ class LoadStateTests(unittest.TestCase):
         cmd = LoadState.__new__(LoadState)
         cmd._params = tuple(params or [])  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._app_data = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._app_data.authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._app_data.authz.has.return_value = authorized  # type: ignore[reportAttributeAccessIssue]
+        cmd._authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._authz.has.return_value = authorized  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
     def test_mutates_state_true(self) -> None:
@@ -59,3 +58,5 @@ class LoadStateTests(unittest.TestCase):
         self.assertIn("not found", str(ctx.exception))
         mock_validate.assert_called_once_with(cmd.params, 0, 1)
         cmd._use_case.execute.assert_called_once_with("missing.json")  # type: ignore[reportUnknownMemberType]
+
+
