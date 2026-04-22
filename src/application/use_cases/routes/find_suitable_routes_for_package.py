@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from datetime import datetime
 
 from src.application.results.find_suitable_packages_for_route_result import SuitableRouteForPackage
@@ -10,9 +11,15 @@ def _sort_key(item: SuitableRouteForPackage) -> tuple[bool, datetime]:
 
 
 class FindSuitableRoutesForPackageUseCase:
-    def __init__(self, routes: RouteRepositoryPort, packages: PackageRepositoryPort) -> None:
+    def __init__(
+        self,
+        routes: RouteRepositoryPort,
+        packages: PackageRepositoryPort,
+        clock: Callable[[], datetime] = datetime.now,
+    ) -> None:
         self._routes = routes
         self._packages = packages
+        self._clock = clock
 
     def execute(self, package_id: int) -> list[SuitableRouteForPackage]:
         package = self._packages.get_by_id(package_id)
@@ -20,9 +27,10 @@ class FindSuitableRoutesForPackageUseCase:
             raise ValueError(f"Package with ID {package_id} not found.")
 
         results: list[SuitableRouteForPackage] = []
+        now = self._clock()
 
         for route in self._routes.list_all():
-            if route.can_accept_package(package) is not None:
+            if route.can_accept_package(package, now=now) is not None:
                 continue
 
             capacity_left = None

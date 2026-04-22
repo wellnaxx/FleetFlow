@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from src.adapters.driven.persistence.json.world_state_persistence import JsonWorldStatePersistence
 from src.adapters.driven.persistence.memory.customer_repository import InMemoryCustomerRepository
 from src.adapters.driven.persistence.memory.package_repository import InMemoryPackageRepository
@@ -113,9 +115,13 @@ class Container:
             self.route_repo, self.vehicle_manager
         )
         self.assign_packages_to_route_use_case = AssignPackagesToRouteUseCase(
-            self.route_repo, self.package_repo
+            self.route_repo,
+            self.package_repo,
+            clock=datetime.now,
         )
         self.find_suitable_routes_for_package_use_case = FindSuitableRoutesForPackageUseCase(
-            self.route_repo, self.package_repo
+            self.route_repo,
+            self.package_repo,
+            clock=datetime.now,
         )
         self.view_all_trucks_use_case = ViewAllTrucksUseCase(self.vehicle_manager)

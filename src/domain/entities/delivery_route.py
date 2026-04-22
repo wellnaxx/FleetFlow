@@ -162,9 +162,11 @@ class DeliveryRoute:
             and self._pos_index[start] < self._pos_index[end]
         )
 
-    def can_accept_package(self, package: DeliveryPackage) -> str | None:
-        # bugfix TODO: disallow assigning packages after route has passed pickup location
+    def can_accept_package(self, package: DeliveryPackage, now: datetime | None = None) -> str | None:
         if error := self._validate_package_route_compatibility(package):
+            return error
+
+        if error := self._validate_pickup_not_passed(package, now):
             return error
 
         if error := self._validate_truck_constraints(extra_weight=package.weight):
@@ -172,8 +174,8 @@ class DeliveryRoute:
 
         return None
 
-    def assign_package(self, package: DeliveryPackage) -> None:
-        if error := self.can_accept_package(package):
+    def assign_package(self, package: DeliveryPackage, now: datetime | None = None) -> None:
+        if error := self.can_accept_package(package, now=now):
             raise ValueError(error)
 
         if package in self._packages:
@@ -209,6 +211,43 @@ class DeliveryRoute:
             )
 
         return None
+
+    def _validate_pickup_not_passed(self, package: DeliveryPackage, now: datetime | None) -> str | None:
+        if now is None or self._departure_time is None:
+            return None
+
+        pickup_index = self._pos_index[package.start_location]
+        position = self.current_position(now)
+
+        if position.kind in {"UNSCHEDULED", "BEFORE_START"}:
+            return None
+
+        if position.kind == "AT_STOP":
+            stop_city = position.stop_city
+            if stop_city is None:
+                return None
+            if self._pos_index[stop_city] > pickup_index:
+                return self._pickup_passed_error(package)
+            return None
+
+        if position.kind == "IN_TRANSIT":
+            from_city = position.from_city
+            if from_city is None:
+                return None
+            if self._pos_index[from_city] >= pickup_index:
+                return self._pickup_passed_error(package)
+            return None
+
+        if position.kind == "AFTER_END":
+            return self._pickup_passed_error(package)
+
+        return None
+
+    def _pickup_passed_error(self, package: DeliveryPackage) -> str:
+        return (
+            f"Route {self.route_id} has already passed pickup location "
+            f"{package.start_location} for package {package.package_id}."
+        )
 
     def _validate_truck_constraints(self, extra_weight: float) -> str | None:
         if self.truck is None:

@@ -15,7 +15,12 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
     def setUp(self) -> None:
         self.mock_routes = MagicMock()
         self.mock_packages = MagicMock()
-        self.use_case = AssignPackagesToRouteUseCase(self.mock_routes, self.mock_packages)
+        self.now = datetime(2025, 10, 1, 9, 0)
+        self.use_case = AssignPackagesToRouteUseCase(
+            self.mock_routes,
+            self.mock_packages,
+            clock=lambda: self.now,
+        )
 
     def _make_route(self, route_id: int = 7, departure_time: datetime | None = None) -> MagicMock:
         route = MagicMock()
@@ -67,7 +72,7 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
                 errors=[],
             ),
         )
-        route.assign_package.assert_called_once_with(package)
+        route.assign_package.assert_called_once_with(package, now=self.now)
 
     def test_returns_success_for_scheduled_route_with_eta(self) -> None:
         route = self._make_route(route_id=7, departure_time=datetime(2025, 10, 1, 9, 0))
@@ -80,7 +85,7 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
         result = self.use_case.execute(7, [8])
 
         self.assertEqual(result.successes[0].eta_text, "2025-10-01 18:00")
-        route.assign_package.assert_called_once_with(package)
+        route.assign_package.assert_called_once_with(package, now=self.now)
         route.arrival_time_at.assert_called_once_with("MEL")
 
     def test_deduplicates_package_ids(self) -> None:
@@ -95,7 +100,7 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
         self.assertEqual(len(result.successes), 1)
         self.assertEqual(len(result.errors), 0)
         self.mock_packages.get_by_id.assert_called_once_with(8)
-        route.assign_package.assert_called_once_with(package)
+        route.assign_package.assert_called_once_with(package, now=self.now)
 
     def test_returns_errors_when_all_packages_missing(self) -> None:
         route = self._make_route(route_id=7, departure_time=None)

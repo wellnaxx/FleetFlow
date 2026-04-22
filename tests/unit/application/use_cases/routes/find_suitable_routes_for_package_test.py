@@ -12,7 +12,12 @@ class FindSuitableRoutesForPackageUseCase_Should(unittest.TestCase):
     def setUp(self) -> None:
         self.mock_routes = MagicMock()
         self.mock_packages = MagicMock()
-        self.use_case = FindSuitableRoutesForPackageUseCase(self.mock_routes, self.mock_packages)
+        self.now = datetime(2025, 1, 1, 8, 0)
+        self.use_case = FindSuitableRoutesForPackageUseCase(
+            self.mock_routes,
+            self.mock_packages,
+            clock=lambda: self.now,
+        )
 
     def test_raises_when_package_not_found(self) -> None:
         self.mock_packages.get_by_id.return_value = None
@@ -62,9 +67,9 @@ class FindSuitableRoutesForPackageUseCase_Should(unittest.TestCase):
         self.assertIsNone(result[1].eta)
         self.assertIsNone(result[1].capacity_left)
 
-        route_with_eta.can_accept_package.assert_called_once_with(package)
-        route_no_eta.can_accept_package.assert_called_once_with(package)
-        route_rejected.can_accept_package.assert_called_once_with(package)
+        route_with_eta.can_accept_package.assert_called_once_with(package, now=self.now)
+        route_no_eta.can_accept_package.assert_called_once_with(package, now=self.now)
+        route_rejected.can_accept_package.assert_called_once_with(package, now=self.now)
 
     def test_returns_empty_list_when_no_routes_accept_package(self) -> None:
         package = SimpleNamespace(package_id=7, start_location="SYD", end_location="MEL", weight=2.0)

@@ -166,6 +166,33 @@ class DeliveryRoute_Should(unittest.TestCase):
         ok_err = r.can_accept_package(_Pkg(5, "A", "C", 10))  # type: ignore[reportArgumentType]
         self.assertIsNone(ok_err)
 
+    def test_can_accept_package_allows_before_pickup_and_blocks_after_pickup(self, *_):
+        base = datetime(2025, 1, 1, 8, 0)
+        route = DeliveryRoute("A", "B", "C", route_id=1)
+        route.schedule(base)
+
+        start_pkg = _Pkg(1, "A", "C", 5)
+        mid_pkg = _Pkg(2, "B", "C", 5)
+
+        self.assertIsNone(route.can_accept_package(start_pkg, now=base - timedelta(seconds=1)))  # type: ignore[reportArgumentType]
+        self.assertIn(
+            "already passed pickup location A",
+            route.can_accept_package(start_pkg, now=base),  # type: ignore[reportArgumentType]
+        )
+
+        stop_b = route.arrival_time_at("B")
+        self.assertIsNone(route.can_accept_package(mid_pkg, now=stop_b))  # type: ignore[reportArgumentType]
+        self.assertIn(
+            "already passed pickup location B",
+            route.can_accept_package(mid_pkg, now=stop_b + timedelta(seconds=1)),  # type: ignore[reportArgumentType]
+        )
+
+    def test_can_accept_package_unscheduled_route_ignores_pickup_passed_rule(self, *_):
+        route = DeliveryRoute("A", "B", "C", route_id=1)
+        package = _Pkg(1, "B", "C", 5)
+
+        self.assertIsNone(route.can_accept_package(package, now=datetime(2025, 1, 1, 8, 0)))  # type: ignore[reportArgumentType]
+
     def test_assign_package_sets_links_and_expected_arrival_when_scheduled(self, *_):
         base = datetime(2025, 1, 1, 6, 0)
         r = DeliveryRoute("A", "B", "C", route_id=1)

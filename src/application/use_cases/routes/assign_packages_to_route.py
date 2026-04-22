@@ -1,3 +1,6 @@
+from collections.abc import Callable
+from datetime import datetime
+
 from src.application.results.assign_packages_to_route_result import (
     AssignPackagesToRouteResult,
     PackageAssignmentError,
@@ -10,9 +13,15 @@ from src.ports.output.route_repository import RouteRepositoryPort
 
 
 class AssignPackagesToRouteUseCase:
-    def __init__(self, routes: RouteRepositoryPort, packages: PackageRepositoryPort) -> None:
+    def __init__(
+        self,
+        routes: RouteRepositoryPort,
+        packages: PackageRepositoryPort,
+        clock: Callable[[], datetime] = datetime.now,
+    ) -> None:
         self._routes = routes
         self._packages = packages
+        self._clock = clock
 
     def execute(self, route_id: int, package_ids: list[int]) -> AssignPackagesToRouteResult:
         route = self._routes.get_by_id(route_id)
@@ -21,6 +30,7 @@ class AssignPackagesToRouteUseCase:
 
         result = AssignPackagesToRouteResult(successes=[], errors=[])
         seen_package_ids: set[int] = set()
+        now = self._clock()
 
         for package_id in package_ids:
             if package_id in seen_package_ids:
@@ -44,7 +54,7 @@ class AssignPackagesToRouteUseCase:
                 continue
 
             try:
-                route.assign_package(package)
+                route.assign_package(package, now=now)
                 result.successes.append(
                     PackageAssignmentSuccess(
                         package_id=package.package_id,
