@@ -1,0 +1,6 @@
+from typing import Any, Protocol
+
+
+class WorldStatePersistencePort(Protocol):
+    def write(self, path: str, snapshot: dict[str, Any]) -> str: ...
+    def read(self, path: str) -> dict[str, Any]: ...

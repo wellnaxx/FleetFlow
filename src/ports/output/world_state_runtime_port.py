@@ -1,0 +1,13 @@
+from typing import Protocol
+
+from src.application.dto.truck_binding_dto import TruckBinding
+from src.domain.entities.customer import Customer
+from src.domain.entities.delivery_package import DeliveryPackage
+from src.domain.entities.delivery_route import DeliveryRoute
+
+
+class WorldStateRuntimePort(Protocol):
+    def replace_customers(self, customers_by_id: dict[int, Customer], next_id: int) -> None: ...
+    def replace_packages(self, packages_by_id: dict[int, DeliveryPackage], next_id: int) -> None: ...
+    def replace_routes(self, routes_by_id: dict[int, DeliveryRoute], next_id: int) -> None: ...
+    def replace_truck_bindings(self, bindings: list[TruckBinding]) -> None: ...

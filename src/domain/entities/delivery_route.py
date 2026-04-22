@@ -235,6 +235,14 @@ class DeliveryRoute:
         with contextlib.suppress(ValueError):
             package.expected_arrival = self.arrival_time_at(package.end_location)
 
+    def restore_package_link(self, package: DeliveryPackage) -> None:
+        if package in self._packages:
+            return
+
+        self._packages.append(package)
+        package.route = self
+        self._update_expected_arrival(package)
+
     def info(self) -> str:
         lines: list[str] = []
         lines.append(f"Route ID: {self.route_id}")

@@ -1,5 +1,7 @@
+from src.application.dto.truck_binding_dto import TruckBinding
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.entities.truck import Truck
+from src.domain.enums.truck_status import TruckStatus
 from src.domain.services.map import Map
 from src.ports.output.vehicle_manager import RouteSuitabilityView
 
@@ -62,3 +64,18 @@ class VehicleManager:
                 result.append(t)
         result.sort(key=lambda t: t.vehicle_id)
         return result
+    
+    def replace_truck_bindings(self, bindings: list[TruckBinding]) -> None:
+        for truck in self.vehicles:
+            truck.route = None
+            truck.status = TruckStatus.FREE
+            truck.busy_from = None
+            truck.busy_until = None
+            truck.in_transit_to = None
+
+        for binding in bindings:
+            truck = binding.truck
+            route = binding.route
+
+            truck.assign(route)
+            route.truck = truck

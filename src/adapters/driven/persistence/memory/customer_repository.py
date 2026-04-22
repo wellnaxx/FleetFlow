@@ -2,15 +2,16 @@ from src.domain.entities.customer import Customer
 
 
 class InMemoryCustomerRepository:
+    
+    
     def __init__(self) -> None:
         self._customers_by_id: dict[int, Customer] = {}
         self._id_by_email: dict[str, int] = {}
         self._id_by_phone: dict[str, int] = {}
+        self._next_id: int = 1
 
     def next_id(self) -> int:
-        if not self._customers_by_id:
-            return 1
-        return max(self._customers_by_id.keys()) + 1
+        return self._next_id
 
     def add(self, customer: Customer) -> None:
         if customer.customer_id in self._customers_by_id:
@@ -28,6 +29,8 @@ class InMemoryCustomerRepository:
             self._id_by_email[customer.email] = customer.customer_id
         if customer.phone_number:
             self._id_by_phone[customer.phone_number] = customer.customer_id
+
+        self._next_id = max(self._next_id, customer.customer_id + 1)
 
     def remove(self, customer_id: int) -> None:
         customer = self._customers_by_id.get(customer_id)
@@ -66,3 +69,17 @@ class InMemoryCustomerRepository:
 
     def list_all(self) -> list[Customer]:
         return list(self._customers_by_id.values())
+    
+    def replace_customers(self, customers_by_id: dict[int, Customer], next_id: int) -> None:
+        self._customers_by_id = dict(customers_by_id)
+        self._id_by_email = {
+            customer.email: customer.customer_id
+            for customer in customers_by_id.values()
+            if customer.email
+        }
+        self._id_by_phone = {
+            customer.phone_number: customer.customer_id
+            for customer in customers_by_id.values()
+            if customer.phone_number
+        }
+        self._next_id = next_id
