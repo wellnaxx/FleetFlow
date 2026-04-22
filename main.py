@@ -39,7 +39,8 @@ def main() -> None:
         cmd_factory,
         auth,
         container.authz,
-        container.autosave_world_state,
+        container.save_world_state_use_case,
+        container.default_world_state_path,
         container.advance_world_state_use_case,
     ).start()
 

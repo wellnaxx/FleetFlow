@@ -4,7 +4,7 @@ from src.adapters.driving.cli.command_factory import CommandFactory
 from src.application.services.auth_service import AuthService
 from src.application.services.authorization_service import AuthorizationService
 from src.application.use_cases.state.advance_world_state import AdvanceWorldStateUseCase
-from src.application.use_cases.state.auto_save_world import AutosaveWorldState
+from src.application.use_cases.state.save_world import SaveWorldStateUseCase
 
 
 class Engine:
@@ -13,13 +13,15 @@ class Engine:
         factory: CommandFactory,
         auth: AuthService,
         authz: AuthorizationService,
-        autosave_world_state: AutosaveWorldState,
+        save_world_state: SaveWorldStateUseCase,
+        autosave_path: str,
         advance_world_state: AdvanceWorldStateUseCase,
     ) -> None:
         self._factory = factory
         self.auth = auth
         self.authz = authz
-        self._autosave_world_state = autosave_world_state
+        self._save_world_state = save_world_state
+        self._autosave_path = autosave_path
         self._advance_world_state = advance_world_state
         self._running: bool = False
 
@@ -278,7 +280,7 @@ class Engine:
 
             if getattr(cmd, "mutates_state", False):
                 try:
-                    self._autosave_world_state.execute()
+                    self._save_world_state.execute(self._autosave_path)
                 except Exception as se:
                     print(f"Warning: autosave failed: {se}")
 

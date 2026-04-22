@@ -31,7 +31,6 @@ from src.application.use_cases.routes.view_all_routes import ViewAllRoutesUseCas
 from src.application.use_cases.routes.view_route import ViewRouteUseCase
 from src.application.use_cases.routes.view_routes_in_progress import ViewRoutesInProgressUseCase
 from src.application.use_cases.state.advance_world_state import AdvanceWorldStateUseCase
-from src.application.use_cases.state.auto_save_world import AutosaveWorldState
 from src.application.use_cases.state.load_world import LoadWorldStateUseCase
 from src.application.use_cases.state.save_world import SaveWorldStateUseCase
 from src.application.use_cases.trucks.view_all_trucks import ViewAllTrucksUseCase
@@ -73,11 +72,7 @@ class Container:
             self.world_state_persistence,
             self.advance_world_state_use_case,
         )
-        self.autosave_world_state = AutosaveWorldState(
-            self.world_state_gateway,
-            self.world_state_persistence,
-            DEFAULT_WORLD_STATE_PATH,
-        )
+        self.default_world_state_path = DEFAULT_WORLD_STATE_PATH
 
         self.login_use_case = LoginUseCase(self.auth)
         self.logout_use_case = LogoutUseCase(self.auth)
