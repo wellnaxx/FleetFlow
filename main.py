@@ -28,11 +28,12 @@ def main() -> None:
 
     container = Container(auth)
 
-    try:
-        if os.path.exists(DEFAULT_WORLD_STATE_PATH):
+    if os.path.exists(DEFAULT_WORLD_STATE_PATH):
+        try:
             container.load_world_state_use_case.execute(DEFAULT_WORLD_STATE_PATH)
-    except Exception:
-        pass
+        except Exception as exc:
+            message = f"Startup failed while loading world state from {DEFAULT_WORLD_STATE_PATH}: {exc}"
+            raise SystemExit(message) from exc
 
     cmd_factory = CommandFactory(auth, container.authz, container)
     Engine(

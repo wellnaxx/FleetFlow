@@ -1,12 +1,14 @@
 import json
 import os
 import tempfile
-from dataclasses import asdict
-from typing import Any
+import warnings
+from dataclasses import asdict, replace
+from typing import Any, cast
 
 from src.adapters.driven.persistence.json.paths import ensure_data_dir, resolve_data_path
 from src.adapters.driven.security.password_hasher import PasswordHash
 from src.application.models.user_record import UserRecord
+from src.domain.enums.auth import Role
 from src.domain.value_objects.contact_info import ContactInfo
 
 
@@ -24,18 +26,103 @@ class UserStore:
         self._load()
 
     def _load(self) -> None:
-        """Load users from disk into memory. Missing file => no users."""
         if not os.path.exists(self.path):
             return
         try:
             with open(self.path, encoding="utf-8") as f:
-                data = json.load(f)
-        except json.JSONDecodeError:
-            return
-        self._next_id = int(data.get("_next_id", 1))
-        for obj in data.get("users", []):
-            rec = UserRecord(**obj)
-            self._by_username[rec.username.lower()] = rec
+                data: object = json.load(f)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Malformed user store JSON: {self.path}") from exc
+
+        try:
+            next_id, users_by_username = self._parse_loaded_payload(data)
+        except (AttributeError, KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"Malformed user store JSON: {self.path}") from exc
+
+        self._next_id = next_id
+        self._by_username = users_by_username
+
+    @staticmethod
+    def _parse_loaded_payload(data: object) -> tuple[int, dict[str, UserRecord]]:
+        if not isinstance(data, dict):
+            raise TypeError("payload must be an object")
+
+        payload = cast(dict[object, object], data)
+        next_id = UserStore._parse_next_id(payload)
+        if "users" not in payload:
+            raise TypeError("'users' is required")
+        users_obj = payload["users"]
+        if not isinstance(users_obj, list):
+            raise TypeError("'users' must be a list")
+        users = cast(list[object], users_obj)
+
+        users_by_username: dict[str, UserRecord] = {}
+        seen_user_ids: set[int] = set()
+        max_user_id = 0
+        for raw_user in users:
+            user = UserStore._parse_raw_user(raw_user)
+            key = user.username.lower()
+            if key in users_by_username:
+                raise ValueError(f"Duplicate username in store: {user.username!r}")
+            user_id = user.user_id
+            if user_id in seen_user_ids:
+                raise ValueError(f"Duplicate user_id in store: {user_id}")
+            seen_user_ids.add(user_id)
+            max_user_id = max(max_user_id, user_id)
+            users_by_username[key] = user
+
+        corrected_next_id = max(next_id, max_user_id + 1)
+        return corrected_next_id, users_by_username
+
+    @staticmethod
+    def _parse_next_id(payload: dict[object, object]) -> int:
+        next_id = payload.get("_next_id", 1)
+        if not isinstance(next_id, int) or isinstance(next_id, bool):
+            raise TypeError(f"_next_id must be int, got {type(next_id).__name__}")
+        return next_id
+
+    @staticmethod
+    def _parse_raw_user(raw_user: object) -> UserRecord:
+        if not isinstance(raw_user, dict):
+            raise TypeError("user record must be an object")
+
+        raw = cast(dict[object, object], raw_user)
+        user_id = raw["user_id"]
+        if not isinstance(user_id, int) or isinstance(user_id, bool):
+            raise TypeError(f"user_id must be int, got {type(user_id).__name__}")
+
+        username = UserStore._parse_string_field(raw, "username")
+        role = UserStore._parse_string_field(raw, "role")
+        name = UserStore._parse_string_field(raw, "name")
+        email = UserStore._parse_string_field(raw, "email")
+        phone_number = UserStore._parse_string_field(raw, "phone_number")
+        password = UserStore._parse_string_field(raw, "password")
+
+        return UserRecord(
+            user_id=user_id,
+            username=username,
+            role=role,
+            name=name,
+            email=email,
+            phone_number=phone_number,
+            password=password,
+        )
+
+    @staticmethod
+    def _parse_string_field(raw: dict[object, object], field: str) -> str:
+        value = raw[field]
+        if not isinstance(value, str):
+            raise TypeError(f"{field!r} must be str, got {type(value).__name__}")
+        return value
+
+    @staticmethod
+    def _normalize_role(role: Role | str) -> str:
+        if isinstance(role, Role):
+            return role.value
+        try:
+            return Role(role.upper()).value
+        except ValueError as exc:
+            raise ValueError(f"Invalid role: {role!r}") from exc
 
     def _atomic_write(self, data: dict[str, Any]) -> str:
         """Write JSON atomically to self.path. Returns absolute path."""
@@ -51,8 +138,11 @@ class UserStore:
             try:
                 if os.path.exists(tmp):
                     os.remove(tmp)
-            except Exception:
-                pass
+            except OSError as exc:
+                warnings.warn(
+                    f"Failed to remove temporary user store file {tmp!r}: {exc}",
+                    stacklevel=2,
+                )
         return self.path
 
     def save(self) -> str:
@@ -71,24 +161,23 @@ class UserStore:
     def create(
         self,
         username: str,
-        role: str,
+        role: Role | str,
         name: str,
         email: str,
         phone_number: str,
         password_hash: PasswordHash,
     ) -> UserRecord:
         """Create and persist a new user. Raises ValueError if username exists."""
-        key = (username or "").strip()
+        key = username.strip()
         norm = key.lower()
         if not norm:
             raise ValueError("Username is required.")
         if norm in self._by_username:
             raise ValueError("Username already exists.")
 
-        role_str: str = getattr(role, "value", role)
-        role_value: str = str(role_str).upper()
+        role_value = UserStore._normalize_role(role)
 
-        ci = ContactInfo(name=name, email=(email or ""), phone_number=(phone_number or ""))
+        ci = ContactInfo(name=name, email=email, phone_number=phone_number)
         clean_name = ci.name
         clean_email = ci.email
         clean_phone = ci.phone_number
@@ -116,9 +205,11 @@ class UserStore:
     def update_password(self, username: str, new_hash: PasswordHash) -> None:
         """Update the password for an existing user."""
         rec = self.get(username)
+
         if not rec:
             raise ValueError("User not found.")
-        rec.password = new_hash.serialize()
+
+        self._by_username[username.lower()] = replace(rec, password=new_hash.serialize())
         self.save()
 
     def list_users(self) -> list[UserRecord]:

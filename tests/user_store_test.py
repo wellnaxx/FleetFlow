@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, mock_open, patch
 
 from src.adapters.driven.persistence.json.user_store import UserStore
 from src.application.models.user_record import UserRecord
+from src.domain.enums.auth import Role
 
 
 def _ph(s: str = "hash") -> SimpleNamespace:
@@ -59,16 +60,224 @@ class UserStore_Load_Save_Should(unittest.TestCase):
         "src.adapters.driven.persistence.json.user_store.json.load",
         side_effect=JSONDecodeError("bad json", "{", 0),
     )
-    def test_init_with_bad_json_fails_open_but_results_in_empty_store(
+    def test_init_with_bad_json_raises_value_error(
         self,
         jload: MagicMock,
         mopen: MagicMock,
         exists: MagicMock,
         resolve: MagicMock,
     ) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            UserStore()
+
+        self.assertIn("Malformed user store JSON", str(ctx.exception))
+
+    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=True)
+    @patch("src.adapters.driven.persistence.json.user_store.open", new_callable=mock_open)
+    @patch("src.adapters.driven.persistence.json.user_store.json.load", return_value=["not", "a", "dict"])
+    def test_init_with_malformed_payload_raises_value_error(
+        self, jload: MagicMock, mopen: MagicMock, exists: MagicMock, resolve: MagicMock
+    ) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            UserStore()
+
+        self.assertIn("Malformed user store JSON", str(ctx.exception))
+
+    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=True)
+    @patch("src.adapters.driven.persistence.json.user_store.open", new_callable=mock_open)
+    @patch("src.adapters.driven.persistence.json.user_store.json.load", return_value={"_next_id": 2})
+    def test_init_with_missing_users_key_raises_value_error(
+        self, jload: MagicMock, mopen: MagicMock, exists: MagicMock, resolve: MagicMock
+    ) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            UserStore()
+
+        self.assertIn("Malformed user store JSON", str(ctx.exception))
+
+    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=True)
+    @patch("src.adapters.driven.persistence.json.user_store.open", new_callable=mock_open)
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.json.load",
+        return_value={
+            "_next_id": True,
+            "users": [],
+        },
+    )
+    def test_init_with_bool_next_id_raises_value_error(
+        self, jload: MagicMock, mopen: MagicMock, exists: MagicMock, resolve: MagicMock
+    ) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            UserStore()
+
+        self.assertIn("Malformed user store JSON", str(ctx.exception))
+
+    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=True)
+    @patch("src.adapters.driven.persistence.json.user_store.open", new_callable=mock_open)
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.json.load",
+        return_value={
+            "_next_id": 3,
+            "users": [
+                {
+                    "user_id": 1,
+                    "username": "Alice",
+                    "role": "EMPLOYEE",
+                    "name": "Alice",
+                    "email": "a@x",
+                    "phone_number": "0412",
+                    "password": "SER(h1)",
+                },
+                {
+                    "user_id": 2,
+                    "username": "alice",
+                    "role": "MANAGER",
+                    "name": "Alice 2",
+                    "email": "b@x",
+                    "phone_number": "0400",
+                    "password": "SER(h2)",
+                },
+            ],
+        },
+    )
+    def test_init_with_duplicate_usernames_raises_value_error(
+        self, jload: MagicMock, mopen: MagicMock, exists: MagicMock, resolve: MagicMock
+    ) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            UserStore()
+
+        self.assertIn("Malformed user store JSON", str(ctx.exception))
+
+    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=True)
+    @patch("src.adapters.driven.persistence.json.user_store.open", new_callable=mock_open)
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.json.load",
+        return_value={
+            "_next_id": True,
+            "users": [],
+        },
+    )
+    def test_init_rejects_bool_next_id(
+        self, jload: MagicMock, mopen: MagicMock, exists: MagicMock, resolve: MagicMock
+    ) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            UserStore()
+
+        self.assertIn("Malformed user store JSON", str(ctx.exception))
+
+    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=True)
+    @patch("src.adapters.driven.persistence.json.user_store.open", new_callable=mock_open)
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.json.load",
+        return_value={
+            "_next_id": 3,
+            "users": [
+                {
+                    "user_id": 1,
+                    "username": "Alice",
+                    "role": "EMPLOYEE",
+                    "name": "Alice",
+                    "email": "a@x",
+                    "phone_number": "0412",
+                    "password": "SER(h1)",
+                },
+                {
+                    "user_id": 2,
+                    "username": "alice",
+                    "role": "MANAGER",
+                    "name": "Alice 2",
+                    "email": "b@x",
+                    "phone_number": "0400",
+                    "password": "SER(h2)",
+                },
+            ],
+        },
+    )
+    def test_init_rejects_duplicate_usernames_case_insensitively(
+        self, jload: MagicMock, mopen: MagicMock, exists: MagicMock, resolve: MagicMock
+    ) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            UserStore()
+
+        self.assertIn("Malformed user store JSON", str(ctx.exception))
+
+    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=True)
+    @patch("src.adapters.driven.persistence.json.user_store.open", new_callable=mock_open)
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.json.load",
+        return_value={
+            "_next_id": 9,
+            "users": [
+                {
+                    "user_id": 1,
+                    "username": "alice",
+                    "role": "EMPLOYEE",
+                    "name": "Alice",
+                    "email": "a@x",
+                    "phone_number": "0412",
+                    "password": "SER(h1)",
+                },
+                {
+                    "user_id": 1,
+                    "username": "bob",
+                    "role": "MANAGER",
+                    "name": "Bob",
+                    "email": "b@x",
+                    "phone_number": "0400",
+                    "password": "SER(h2)",
+                },
+            ],
+        },
+    )
+    def test_init_rejects_duplicate_user_ids(
+        self, jload: MagicMock, mopen: MagicMock, exists: MagicMock, resolve: MagicMock
+    ) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            UserStore()
+
+        self.assertIn("Malformed user store JSON", str(ctx.exception))
+
+    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=True)
+    @patch("src.adapters.driven.persistence.json.user_store.open", new_callable=mock_open)
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.json.load",
+        return_value={
+            "_next_id": 2,
+            "users": [
+                {
+                    "user_id": 1,
+                    "username": "alice",
+                    "role": "EMPLOYEE",
+                    "name": "Alice",
+                    "email": "a@x",
+                    "phone_number": "0412",
+                    "password": "SER(h1)",
+                },
+                {
+                    "user_id": 4,
+                    "username": "bob",
+                    "role": "MANAGER",
+                    "name": "Bob",
+                    "email": "b@x",
+                    "phone_number": "0400",
+                    "password": "SER(h2)",
+                },
+            ],
+        },
+    )
+    def test_init_corrects_stale_next_id_to_follow_max_loaded_user_id(
+        self, jload: MagicMock, mopen: MagicMock, exists: MagicMock, resolve: MagicMock
+    ) -> None:
         store = UserStore()
-        self.assertIsNone(store.get("any"))
-        self.assertEqual(store._next_id, 1)  # type: ignore[reportPrivateUsage]
+
+        self.assertEqual(store._next_id, 5)  # type: ignore[reportPrivateUsage]
 
     @patch.object(UserStore, "_atomic_write", return_value="C:/fake/users.json")
     @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
@@ -138,7 +347,7 @@ class UserStore_Create_Get_Update_Should(unittest.TestCase):
 
     @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
     @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
-    def test_create_accepts_role_enums_with_value_attr(self, exists: MagicMock, resolve: MagicMock) -> None:
+    def test_create_accepts_role_enum(self, exists: MagicMock, resolve: MagicMock) -> None:
         with (
             patch("src.adapters.driven.persistence.json.user_store.ContactInfo") as CI,
             patch.object(UserStore, "_atomic_write", return_value="C:/fake/users.json"),
@@ -147,8 +356,7 @@ class UserStore_Create_Get_Update_Should(unittest.TestCase):
                 name=name, email=email, phone_number=phone_number
             )
             store = UserStore()
-            role_enum_like = SimpleNamespace(value="MANAGER")
-            rec = store.create("bob", role_enum_like, "Bob", "", "", _ph("pw2"))  # type: ignore[reportArgumentType]
+            rec = store.create("bob", Role.MANAGER, "Bob", "", "", _ph("pw2"))  # type: ignore[reportArgumentType]
             self.assertEqual(rec.role, "MANAGER")
 
     @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
@@ -161,6 +369,8 @@ class UserStore_Create_Get_Update_Should(unittest.TestCase):
             store.create("user", "EMPLOYEE", "Name", "", "", _ph("pw"))  # type: ignore[reportArgumentType]
             with self.assertRaises(ValueError):
                 store.create("user", "EMPLOYEE", "Name", "", "", _ph("pw"))  # type: ignore[reportArgumentType]  # duplicate username
+            with self.assertRaises(ValueError):
+                store.create("badrole", "garbage", "Name", "", "", _ph("pw"))  # type: ignore[reportArgumentType]
             with self.assertRaises(TypeError):
                 store.create("v", "EMPLOYEE", "Name", "", "", object())  # type: ignore[reportArgumentType]  # password_hash wrong type
 
