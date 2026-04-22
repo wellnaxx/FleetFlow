@@ -3,6 +3,7 @@ import json
 import os
 import unittest
 import uuid
+from typing import Any
 
 from src.adapters.driven.persistence.json.paths import DATA_DIR
 from src.adapters.driven.persistence.json.world_state_persistence import JsonWorldStatePersistence
@@ -231,3 +232,84 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
                 os.remove(path)
 
         self.assertIn("State file not found", str(ctx.exception))
+
+    def test_write_then_read_round_trips_snapshot(self) -> None:
+        snapshot = self.make_snapshot()
+        filename = f"world-state-{uuid.uuid4().hex}.json"
+        path = os.path.join(DATA_DIR, filename)
+
+        try:
+            written_path = self.persistence.write(path, snapshot)
+            read_path, loaded = self.persistence.read(written_path)
+        finally:
+            with contextlib.suppress(OSError):
+                os.remove(path)
+
+        self.assertEqual(read_path, written_path)
+        self.assertEqual(loaded, snapshot)
+
+    def test_read_malformed_json_raises_value_error(self) -> None:
+        filename = f"world-state-{uuid.uuid4().hex}.json"
+        path = os.path.join(DATA_DIR, filename)
+
+        try:
+            with open(path, "w", encoding="utf-8") as file:
+                file.write("{ bad json")
+
+            with self.assertRaises(ValueError) as ctx:
+                self.persistence.read(path)
+        finally:
+            with contextlib.suppress(OSError):
+                os.remove(path)
+
+        self.assertIn("Malformed world state JSON", str(ctx.exception))
+
+    def test_read_malformed_payload_raises_value_error(self) -> None:
+        raw: dict[str, int | dict[str, dict[str, int] | str | list[Any]]] = {
+            "schema_version": 1,
+            "world": {
+                "counters": {
+                    "next_customer_id": 3,
+                    "next_package_id": 4,
+                    "next_route_id": 5,
+                },
+                "customers": "not-a-list",
+                "packages": [],
+                "routes": [],
+            },
+        }
+
+        filename = f"world-state-{uuid.uuid4().hex}.json"
+        path = os.path.join(DATA_DIR, filename)
+
+        try:
+            with open(path, "w", encoding="utf-8") as file:
+                json.dump(raw, file)
+
+            with self.assertRaises(ValueError) as ctx:
+                self.persistence.read(path)
+        finally:
+            with contextlib.suppress(OSError):
+                os.remove(path)
+
+        self.assertIn("Malformed world state JSON", str(ctx.exception))
+
+    def test_read_payload_without_world_or_legacy_sections_raises_value_error(self) -> None:
+        raw = {
+            "schema_version": 1,
+        }
+
+        filename = f"world-state-{uuid.uuid4().hex}.json"
+        path = os.path.join(DATA_DIR, filename)
+
+        try:
+            with open(path, "w", encoding="utf-8") as file:
+                json.dump(raw, file)
+
+            with self.assertRaises(ValueError) as ctx:
+                self.persistence.read(path)
+        finally:
+            with contextlib.suppress(OSError):
+                os.remove(path)
+
+        self.assertIn("Malformed world state JSON", str(ctx.exception))

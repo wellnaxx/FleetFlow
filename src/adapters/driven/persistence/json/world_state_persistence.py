@@ -2,7 +2,7 @@ import json
 import os
 import tempfile
 from dataclasses import asdict
-from typing import Any
+from typing import Any, cast
 
 from src.adapters.driven.persistence.json.paths import resolve_data_path
 from src.application.dto.world_state_snapshot_dto import (
@@ -20,18 +20,7 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
     """Persist world-state snapshots as JSON files."""
 
     def write(self, path: str, snapshot: WorldStateSnapshot) -> str:
-        """Serialize and atomically write a world-state snapshot.
-
-        Args:
-            path: Target path or filename for the JSON snapshot.
-            snapshot: Snapshot payload to serialize.
-
-        Returns:
-            The resolved absolute path that was written.
-
-        Raises:
-            OSError: If the target file cannot be written.
-        """
+        """Serialize and atomically write a world-state snapshot."""
         abs_path = resolve_data_path(path)
         os.makedirs(os.path.dirname(abs_path) or ".", exist_ok=True)
         raw_snapshot = self._raw_from_snapshot(snapshot)
@@ -55,82 +44,166 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
         return abs_path
 
     def read(self, path: str) -> tuple[str, WorldStateSnapshot]:
-        """Read and deserialize a world-state snapshot from JSON.
-
-        Args:
-            path: Source path or filename to read.
-
-        Returns:
-            A tuple of the resolved absolute path and the deserialized snapshot.
-
-        Raises:
-            ValueError: If the file does not exist.
-            json.JSONDecodeError: If the file is not valid JSON.
-        """
+        """Read and deserialize a world-state snapshot from JSON."""
         abs_path = resolve_data_path(path)
         if not os.path.exists(abs_path):
             raise ValueError(f"State file not found: {abs_path}")
 
-        with open(abs_path, encoding="utf-8") as file:
-            raw = json.load(file)
+        try:
+            with open(abs_path, encoding="utf-8") as file:
+                raw: object = json.load(file)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Malformed world state JSON: {abs_path}") from exc
 
-        return abs_path, self._snapshot_from_raw(raw)
+        try:
+            snapshot = self._snapshot_from_raw(raw)
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"Malformed world state JSON: {abs_path}") from exc
+
+        return abs_path, snapshot
 
     def _raw_from_snapshot(self, snapshot: WorldStateSnapshot) -> dict[str, Any]:
         """Convert a snapshot DTO into its persisted JSON shape."""
         return asdict(snapshot)
 
-    def _snapshot_from_raw(self, raw: dict[str, Any]) -> WorldStateSnapshot:
+    def _snapshot_from_raw(self, raw: object) -> WorldStateSnapshot:
         """Build a snapshot DTO from canonical or legacy JSON payloads."""
-        world = raw.get("world")
-        if world is None:
-            world = {
-                "counters": raw.get("counters", {}),
-                "customers": raw.get("customers", []),
-                "packages": raw.get("packages", []),
-                "routes": raw.get("routes", []),
-            }
+        raw_dict = self._require_mapping(raw)
+        schema_version = self._require_int(raw_dict, "schema_version")
 
-        counters = world.get("counters", {})
+        world_obj = raw_dict.get("world")
+        if world_obj is None:
+            has_legacy_sections = any(
+                key in raw_dict for key in ("counters", "customers", "packages", "routes")
+            )
+            if not has_legacy_sections:
+                raise ValueError("Missing 'world' section and no legacy world sections found.")
+
+            world_dict: dict[str, object] = {
+                "counters": raw_dict.get("counters", {}),
+                "customers": raw_dict.get("customers", []),
+                "packages": raw_dict.get("packages", []),
+                "routes": raw_dict.get("routes", []),
+            }
+        else:
+            world_dict = self._require_mapping(world_obj)
+
+        counters_raw = self._require_mapping(world_dict.get("counters"))
+        customers_raw = self._require_list(world_dict.get("customers"))
+        packages_raw = self._require_list(world_dict.get("packages"))
+        routes_raw = self._require_list(world_dict.get("routes"))
+
         return WorldStateSnapshot(
-            schema_version=int(raw.get("schema_version", 1)),
+            schema_version=schema_version,
             world=WorldSnapshotData(
                 counters=CountersSnapshot(
-                    next_customer_id=int(counters.get("next_customer_id", 1)),
-                    next_package_id=int(counters.get("next_package_id", 1)),
-                    next_route_id=int(counters.get("next_route_id", 1)),
+                    next_customer_id=self._require_int(counters_raw, "next_customer_id"),
+                    next_package_id=self._require_int(counters_raw, "next_package_id"),
+                    next_route_id=self._require_int(counters_raw, "next_route_id"),
                 ),
-                customers=tuple(
-                    CustomerSnapshot(
-                        customer_id=int(customer["customer_id"]),
-                        name=str(customer["name"]),
-                        email=str(customer.get("email", "")),
-                        phone=str(customer.get("phone", "")),
-                    )
-                    for customer in world.get("customers", [])
-                ),
-                packages=tuple(
-                    PackageSnapshot(
-                        package_id=int(package["package_id"]),
-                        start=str(package["start"]),
-                        end=str(package["end"]),
-                        weight=float(package["weight"]),
-                        customer_id=int(package["customer_id"]),
-                        route_id=int(package["route_id"]) if package.get("route_id") is not None else None,
-                    )
-                    for package in world.get("packages", [])
-                ),
-                routes=tuple(
-                    RouteSnapshot(
-                        route_id=int(route["route_id"]),
-                        locations=tuple(str(location) for location in route["locations"]),
-                        departure_time=route.get("departure_time"),
-                        truck_vehicle_id=int(route["truck_vehicle_id"])
-                        if route.get("truck_vehicle_id") is not None
-                        else None,
-                        package_ids=tuple(int(package_id) for package_id in route.get("package_ids", [])),
-                    )
-                    for route in world.get("routes", [])
-                ),
+                customers=tuple(self._customer_snapshot_from_raw(obj) for obj in customers_raw),
+                packages=tuple(self._package_snapshot_from_raw(obj) for obj in packages_raw),
+                routes=tuple(self._route_snapshot_from_raw(obj) for obj in routes_raw),
             ),
+            users=None,
         )
+
+    def _customer_snapshot_from_raw(self, raw: object) -> CustomerSnapshot:
+        data = self._require_mapping(raw)
+        return CustomerSnapshot(
+            customer_id=self._require_int(data, "customer_id"),
+            name=self._require_str(data, "name"),
+            email=self._require_str(data, "email"),
+            phone=self._require_str(data, "phone"),
+        )
+
+    def _package_snapshot_from_raw(self, raw: object) -> PackageSnapshot:
+        data = self._require_mapping(raw)
+
+        weight = data.get("weight")
+        if not isinstance(weight, (int, float)) or isinstance(weight, bool):
+            raise TypeError("weight must be numeric")
+
+        route_id_raw = data.get("route_id")
+        if route_id_raw is not None and (not isinstance(route_id_raw, int) or isinstance(route_id_raw, bool)):
+            raise TypeError("route_id must be int or null")
+
+        return PackageSnapshot(
+            package_id=self._require_int(data, "package_id"),
+            start=self._require_str(data, "start"),
+            end=self._require_str(data, "end"),
+            weight=float(weight),
+            customer_id=self._require_int(data, "customer_id"),
+            route_id=route_id_raw,
+        )
+
+    def _route_snapshot_from_raw(self, raw: object) -> RouteSnapshot:
+        data = self._require_mapping(raw)
+
+        locations_raw = self._require_list(data.get("locations"))
+        package_ids_raw = self._require_list(data.get("package_ids"))
+
+        locations: list[str] = []
+        for item in locations_raw:
+            if not isinstance(item, str):
+                raise TypeError("route location must be str")
+            locations.append(item)
+
+        package_ids: list[int] = []
+        for item in package_ids_raw:
+            if not isinstance(item, int) or isinstance(item, bool):
+                raise TypeError("package id must be int")
+            package_ids.append(item)
+
+        truck_vehicle_id_raw = data.get("truck_vehicle_id")
+        if truck_vehicle_id_raw is not None and (
+            not isinstance(truck_vehicle_id_raw, int) or isinstance(truck_vehicle_id_raw, bool)
+        ):
+            raise TypeError("truck_vehicle_id must be int or null")
+
+        return RouteSnapshot(
+            route_id=self._require_int(data, "route_id"),
+            locations=tuple(locations),
+            departure_time=self._require_str_or_none(data, "departure_time"),
+            truck_vehicle_id=truck_vehicle_id_raw,
+            package_ids=tuple(package_ids),
+        )
+
+    def _require_mapping(self, value: object) -> dict[str, object]:
+        if not isinstance(value, dict):
+            raise TypeError("expected object")
+
+        raw = cast(dict[object, object], value)
+        result: dict[str, object] = {}
+
+        for key, item in raw.items():
+            if not isinstance(key, str):
+                raise TypeError("object keys must be strings")
+            result[key] = item
+
+        return result
+
+    def _require_list(self, value: object) -> list[object]:
+        if not isinstance(value, list):
+            raise TypeError("expected list")
+        return cast(list[object], value)
+
+    def _require_int(self, raw: dict[str, object], field: str) -> int:
+        value = raw.get(field)
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise TypeError(f"{field} must be int")
+        return value
+
+    def _require_str(self, raw: dict[str, object], field: str) -> str:
+        value = raw.get(field)
+        if not isinstance(value, str):
+            raise TypeError(f"{field} must be str")
+        return value
+
+    def _require_str_or_none(self, raw: dict[str, object], field: str) -> str | None:
+        value = raw.get(field)
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise TypeError(f"{field} must be str or null")
+        return value
