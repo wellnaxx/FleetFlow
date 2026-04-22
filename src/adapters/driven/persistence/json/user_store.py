@@ -1,7 +1,7 @@
 import json
+import logging
 import os
 import tempfile
-import warnings
 from dataclasses import asdict, replace
 from typing import Any, cast
 
@@ -10,6 +10,8 @@ from src.adapters.driven.security.password_hasher import PasswordHash
 from src.application.models.user_record import UserRecord
 from src.domain.enums.auth import Role
 from src.domain.value_objects.contact_info import ContactInfo
+
+logger = logging.getLogger(__name__)
 
 
 class UserStore:
@@ -139,10 +141,7 @@ class UserStore:
                 if os.path.exists(tmp):
                     os.remove(tmp)
             except OSError as exc:
-                warnings.warn(
-                    f"Failed to remove temporary user store file {tmp!r}: {exc}",
-                    stacklevel=2,
-                )
+                logger.warning("Failed to remove temporary user store file %r: %s", tmp, exc)
         return self.path
 
     def save(self) -> str:

@@ -428,3 +428,49 @@ class UserStore_AtomicWrite_Should(unittest.TestCase):
         makedirs.assert_called()  # directory ensured
         replace.assert_called_once_with("C:/fake/.users.tmp.json", "C:/fake/users.json")
         cm.write.assert_called()  # JSON was written
+
+    @patch("src.adapters.driven.persistence.json.user_store.logger")
+    @patch("src.adapters.driven.persistence.json.user_store.ensure_data_dir")
+    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.dirname", return_value="C:/fake")
+    @patch("src.adapters.driven.persistence.json.user_store.os.makedirs")
+    @patch("src.adapters.driven.persistence.json.user_store.tempfile.mkstemp", return_value=(123, "C:/fake/.users.tmp.json"))  # noqa: E501
+    @patch("src.adapters.driven.persistence.json.user_store.os.fdopen")
+    @patch("src.adapters.driven.persistence.json.user_store.os.replace")
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.os.remove",
+        side_effect=OSError("locked"),
+    )
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.os.path.exists",
+        side_effect=[False, True],
+    )  # 1) _load -> False, 2) cleanup tmp -> True
+    def test_atomic_write_logs_cleanup_failure(
+        self,
+        exists: MagicMock,
+        remove: MagicMock,
+        replace: MagicMock,
+        fdopen: MagicMock,
+        mkstemp: MagicMock,
+        makedirs: MagicMock,
+        dirname: MagicMock,
+        resolve: MagicMock,
+        ensure: MagicMock,
+        logger: MagicMock,
+    ) -> None:
+        store = UserStore()
+        payload: dict[str, Any] = {"_next_id": 1, "users": []}
+
+        cm = MagicMock()
+        fdopen.return_value.__enter__.return_value = cm
+
+        out_path = store._atomic_write(payload)  # type: ignore[reportPrivateUsage]
+
+        self.assertEqual(out_path, "C:/fake/users.json")
+        replace.assert_called_once_with("C:/fake/.users.tmp.json", "C:/fake/users.json")
+        remove.assert_called_once_with("C:/fake/.users.tmp.json")
+        logger.warning.assert_called_once_with(
+            "Failed to remove temporary user store file %r: %s",
+            "C:/fake/.users.tmp.json",
+            remove.side_effect,
+        )
