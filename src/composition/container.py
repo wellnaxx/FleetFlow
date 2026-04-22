@@ -1,16 +1,13 @@
-from src.adapters.driven.persistence.application_data.customer_repository import (
-    ApplicationDataCustomerRepository,
-)
-from src.adapters.driven.persistence.application_data.package_repository import ApplicationDataPackageRepository
-from src.adapters.driven.persistence.application_data.route_repository import ApplicationDataRouteRepository
-from src.adapters.driven.persistence.application_data.world_state_gateway import (
-    ApplicationDataWorldStateGateway,
-)
 from src.adapters.driven.persistence.json.world_state_persistence import JsonWorldStatePersistence
+from src.adapters.driven.persistence.memory.customer_repository import InMemoryCustomerRepository
+from src.adapters.driven.persistence.memory.package_repository import InMemoryPackageRepository
+from src.adapters.driven.persistence.memory.route_repository import InMemoryRouteRepository
+from src.adapters.driven.persistence.memory.world_state_gateway import InMemoryWorldStateGateway
 from src.application.config.state_persistence import DEFAULT_WORLD_STATE_PATH
 from src.application.services.auth_service import AuthService
 from src.application.services.authorization_service import AuthorizationService
 from src.application.services.customer_service import CustomerService
+from src.application.services.heartbeat_service import HeartbeatService
 from src.application.use_cases.auth.change_password import ChangePasswordUseCase
 from src.application.use_cases.auth.login import LoginUseCase
 from src.application.use_cases.auth.logout import LogoutUseCase
@@ -33,27 +30,25 @@ from src.application.use_cases.routes.remove_route import RemoveRouteUseCase
 from src.application.use_cases.routes.view_all_routes import ViewAllRoutesUseCase
 from src.application.use_cases.routes.view_route import ViewRouteUseCase
 from src.application.use_cases.routes.view_routes_in_progress import ViewRoutesInProgressUseCase
+from src.application.use_cases.state.advance_world_state import AdvanceWorldStateUseCase
 from src.application.use_cases.state.auto_save_world import AutosaveWorldState
 from src.application.use_cases.state.load_world import LoadWorldStateUseCase
 from src.application.use_cases.state.save_world import SaveWorldStateUseCase
 from src.application.use_cases.trucks.view_all_trucks import ViewAllTrucksUseCase
-from src.application.services.heartbeat_service import HeartbeatService
-from src.application.use_cases.state.advance_world_state import AdvanceWorldStateUseCase
-
-from src.core.application_data import ApplicationData
+from src.domain.services.vehicle_manager import VehicleManager
 
 
 class Container:
-    def __init__(self, app_data: ApplicationData, auth: AuthService) -> None:
-        self.package_repo = ApplicationDataPackageRepository(app_data)
-        self.customer_repo = ApplicationDataCustomerRepository(app_data)
-        self.route_repo = ApplicationDataRouteRepository(app_data)
+    def __init__(self, auth: AuthService) -> None:
+        self.package_repo = InMemoryPackageRepository()
+        self.customer_repo = InMemoryCustomerRepository()
+        self.route_repo = InMemoryRouteRepository()
 
         self.customer_service = CustomerService(self.customer_repo)
 
-        self.vehicle_manager = app_data.vehicle_manager
+        self.vehicle_manager = VehicleManager()
         self.auth = auth
-        self.authz: AuthorizationService = app_data.authz
+        self.authz = AuthorizationService(auth.current_user)
 
         self.heartbeat_service = HeartbeatService(
             self.route_repo,
@@ -62,7 +57,12 @@ class Container:
         )
         self.advance_world_state_use_case = AdvanceWorldStateUseCase(self.heartbeat_service)
 
-        self.world_state_gateway = ApplicationDataWorldStateGateway(app_data)
+        self.world_state_gateway = InMemoryWorldStateGateway(
+            customer_repo=self.customer_repo,
+            package_repo=self.package_repo,
+            route_repo=self.route_repo,
+            vehicle_manager=self.vehicle_manager,
+        )
         self.world_state_persistence = JsonWorldStatePersistence()
         self.save_world_state_use_case = SaveWorldStateUseCase(
             self.world_state_gateway,

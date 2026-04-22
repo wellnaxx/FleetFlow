@@ -6,7 +6,6 @@ from src.adapters.driving.cli.engine import Engine
 from src.application.config.state_persistence import DEFAULT_WORLD_STATE_PATH
 from src.application.services.auth_service import AuthService
 from src.composition.container import Container
-from src.core.application_data import ApplicationData
 from src.domain.enums.auth import Role
 
 
@@ -23,13 +22,11 @@ def bootstrap_admin(auth: AuthService, store: UserStore) -> None:
 
 
 def main() -> None:
-    app_data = ApplicationData(current_user=None)
-
     store = UserStore("users.json")
     auth = AuthService(store)
     bootstrap_admin(auth, store)
 
-    container = Container(app_data, auth)
+    container = Container(auth)
 
     try:
         if os.path.exists(DEFAULT_WORLD_STATE_PATH):
