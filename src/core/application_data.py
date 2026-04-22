@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.adapters.driven.persistence.json.paths import resolve_data_path
 from src.adapters.driven.persistence.json.serialization import dt_from_str, dt_to_str
-from src.application.services.authorization import AuthorizationService, requires
+from src.application.services.authorization_service import AuthorizationService, requires
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.entities.delivery_route import DeliveryRoute

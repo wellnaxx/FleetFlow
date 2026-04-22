@@ -1,6 +1,6 @@
 from src.adapters.driving.cli.commands.base_command.base_command import UseCaseCommand
 from src.adapters.driving.cli.commands.validation_helpers import try_parse_int, validate_params_count
-from src.application.services.authorization import requires
+from src.application.services.authorization_service import requires
 from src.application.use_cases.routes.assign_packages_to_route import AssignPackagesToRouteUseCase
 from src.domain.enums.auth import Permission
 

@@ -537,7 +537,7 @@ class Characterization_RBAC_Should(unittest.TestCase):
     """Protected operations must respect role permissions."""
 
     def _app_for_role(self, role: Role) -> ApplicationData:
-        from src.application.services.authorization import AuthorizationService
+        from src.application.services.authorization_service import AuthorizationService
         from src.domain.entities.users.employee import Employee
         from src.domain.entities.users.manager import Manager
 

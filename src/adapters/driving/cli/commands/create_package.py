@@ -1,6 +1,6 @@
 from src.adapters.driving.cli.commands.base_command.base_command import UseCaseCommand
 from src.adapters.driving.cli.commands.validation_helpers import try_parse_float, validate_params_count
-from src.application.services.authorization import requires
+from src.application.services.authorization_service import requires
 from src.application.use_cases.packages.create_package import CreatePackageUseCase
 from src.domain.enums.auth import Permission
 

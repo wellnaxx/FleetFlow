@@ -3,7 +3,7 @@ from src.adapters.driving.cli.commands.validation_helpers import (
     parse_departure_from_tail,
     validate_params_count,
 )
-from src.application.services.authorization import requires
+from src.application.services.authorization_service import requires
 from src.application.use_cases.routes.create_route import CreateRouteUseCase
 from src.domain.enums.auth import Permission
 

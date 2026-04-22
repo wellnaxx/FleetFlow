@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterable
 
 from src.application.services.auth_service import AuthService
-from src.application.services.authorization import AuthorizationService
+from src.application.services.authorization_service import AuthorizationService
 from src.core.application_data import ApplicationData
 
 

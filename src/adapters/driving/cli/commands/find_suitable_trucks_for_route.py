@@ -1,6 +1,6 @@
 from src.adapters.driving.cli.commands.base_command.base_command import UseCaseCommand
 from src.adapters.driving.cli.commands.validation_helpers import try_parse_int, validate_params_exact
-from src.application.services.authorization import requires
+from src.application.services.authorization_service import requires
 from src.application.use_cases.routes.find_suitable_trucks_for_route import FindSuitableTrucksForRouteUseCase
 from src.domain.enums.auth import Permission
 

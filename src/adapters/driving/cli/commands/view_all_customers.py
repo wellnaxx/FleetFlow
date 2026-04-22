@@ -1,5 +1,5 @@
 from src.adapters.driving.cli.commands.base_command.base_command import UseCaseCommand
-from src.application.services.authorization import requires
+from src.application.services.authorization_service import requires
 from src.application.use_cases.customers.view_all_customers import ViewAllCustomersUseCase
 from src.domain.enums.auth import Permission
 
