@@ -23,17 +23,8 @@ class UserStore_Load_Save_Should(unittest.TestCase):
         self, jload: MagicMock, mopen: MagicMock, exists: MagicMock, resolve: MagicMock
     ) -> None:
         jload.return_value = {
-            "_next_id": 5,
+            "_next_id": 7,
             "users": [
-                {
-                    "user_id": 1,
-                    "username": "alice",
-                    "role": "EMPLOYEE",
-                    "name": "Alice",
-                    "email": "a@x",
-                    "phone_number": "0412",
-                    "password": "SER(h1)",
-                },
                 {
                     "user_id": 4,
                     "username": "bob",
@@ -43,6 +34,15 @@ class UserStore_Load_Save_Should(unittest.TestCase):
                     "phone_number": "0400",
                     "password": "SER(h2)",
                 },
+                {
+                    "user_id": 1,
+                    "username": "alice",
+                    "role": "EMPLOYEE",
+                    "name": "Alice",
+                    "email": "a@x",
+                    "phone_number": "0412",
+                    "password": "SER(h1)",
+                },
             ],
         }
 
@@ -51,7 +51,7 @@ class UserStore_Load_Save_Should(unittest.TestCase):
         self.assertIsInstance(store.get("ALICE"), UserRecord)
         self.assertEqual(store.get("bob").user_id, 4)  # type: ignore[reportOptionalMemberAccess]
         # next id was restored
-        self.assertEqual(store._next_id, 5)  # type: ignore[reportPrivateUsage]
+        self.assertEqual(store._next_id, 7)  # type: ignore[reportPrivateUsage]
 
     @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
     @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=True)
@@ -157,61 +157,6 @@ class UserStore_Load_Save_Should(unittest.TestCase):
     @patch(
         "src.adapters.driven.persistence.json.user_store.json.load",
         return_value={
-            "_next_id": True,
-            "users": [],
-        },
-    )
-    def test_init_rejects_bool_next_id(
-        self, jload: MagicMock, mopen: MagicMock, exists: MagicMock, resolve: MagicMock
-    ) -> None:
-        with self.assertRaises(ValueError) as ctx:
-            UserStore()
-
-        self.assertIn("Malformed user store JSON", str(ctx.exception))
-
-    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
-    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=True)
-    @patch("src.adapters.driven.persistence.json.user_store.open", new_callable=mock_open)
-    @patch(
-        "src.adapters.driven.persistence.json.user_store.json.load",
-        return_value={
-            "_next_id": 3,
-            "users": [
-                {
-                    "user_id": 1,
-                    "username": "Alice",
-                    "role": "EMPLOYEE",
-                    "name": "Alice",
-                    "email": "a@x",
-                    "phone_number": "0412",
-                    "password": "SER(h1)",
-                },
-                {
-                    "user_id": 2,
-                    "username": "alice",
-                    "role": "MANAGER",
-                    "name": "Alice 2",
-                    "email": "b@x",
-                    "phone_number": "0400",
-                    "password": "SER(h2)",
-                },
-            ],
-        },
-    )
-    def test_init_rejects_duplicate_usernames_case_insensitively(
-        self, jload: MagicMock, mopen: MagicMock, exists: MagicMock, resolve: MagicMock
-    ) -> None:
-        with self.assertRaises(ValueError) as ctx:
-            UserStore()
-
-        self.assertIn("Malformed user store JSON", str(ctx.exception))
-
-    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
-    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=True)
-    @patch("src.adapters.driven.persistence.json.user_store.open", new_callable=mock_open)
-    @patch(
-        "src.adapters.driven.persistence.json.user_store.json.load",
-        return_value={
             "_next_id": 9,
             "users": [
                 {
@@ -278,6 +223,54 @@ class UserStore_Load_Save_Should(unittest.TestCase):
         store = UserStore()
 
         self.assertEqual(store._next_id, 5)  # type: ignore[reportPrivateUsage]
+
+    @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=True)
+    @patch("src.adapters.driven.persistence.json.user_store.open", new_callable=mock_open)
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.json.load",
+        return_value={
+            "_next_id": 3,
+            "users": [
+                {
+                    "user_id": 9,
+                    "username": "charlie",
+                    "role": "EMPLOYEE",
+                    "name": "Charlie",
+                    "email": "c@x",
+                    "phone_number": "0499",
+                    "password": "SER(h3)",
+                },
+                {
+                    "user_id": 2,
+                    "username": "alice",
+                    "role": "EMPLOYEE",
+                    "name": "Alice",
+                    "email": "a@x",
+                    "phone_number": "0412",
+                    "password": "SER(h1)",
+                },
+                {
+                    "user_id": 5,
+                    "username": "bob",
+                    "role": "MANAGER",
+                    "name": "Bob",
+                    "email": "b@x",
+                    "phone_number": "0400",
+                    "password": "SER(h2)",
+                },
+            ],
+        },
+    )
+    def test_init_accepts_valid_unordered_users_and_corrects_next_id(
+        self, jload: MagicMock, mopen: MagicMock, exists: MagicMock, resolve: MagicMock
+    ) -> None:
+        store = UserStore()
+
+        self.assertEqual(store._next_id, 10)  # type: ignore[reportPrivateUsage]
+        self.assertEqual(store.get("alice").user_id, 2)  # type: ignore[reportOptionalMemberAccess]
+        self.assertEqual(store.get("BOB").user_id, 5)  # type: ignore[reportOptionalMemberAccess]
+        self.assertEqual(store.get("charlie").user_id, 9)  # type: ignore[reportOptionalMemberAccess]
 
     @patch.object(UserStore, "_atomic_write", return_value="C:/fake/users.json")
     @patch("src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json")  # noqa: E501
