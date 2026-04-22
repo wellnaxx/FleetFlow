@@ -36,10 +36,12 @@ class FindSuitableRoutesForPackageUseCase:
 
             results.append(
                 SuitableRouteForPackage(
-                    route=route,
+                    route_id=route.route_id,
+                    start_location=route.start_location,
+                    end_location=route.end_location,
                     eta=eta,
                     capacity_left=capacity_left,
-                    end_city=package.end_location
+                    end_city=package.end_location,
                 )
             )
 

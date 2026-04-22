@@ -22,14 +22,13 @@ class RoutePosition:
 
 
 class DeliveryRoute:
-    _next_id: int = 1
     SPEED_KMPH: int = 87
 
     def __init__(
         self,
         *locations: str,
         departure_time: datetime | None = None,
-        route_id: int | None = None,
+        route_id: int,
     ) -> None:
         if len(locations) < 2:
             raise ValueError("A route must have at least two locations.")
@@ -44,10 +43,6 @@ class DeliveryRoute:
 
         self._locations: list[str] = list(locations)
         self._departure_time: datetime | None = departure_time
-
-        if route_id is None:
-            route_id = DeliveryRoute._next_id
-            DeliveryRoute._next_id += 1
         self.route_id = route_id
 
         self.truck: Truck | None = None

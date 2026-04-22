@@ -48,18 +48,18 @@ class DeliveryRoute_Should(unittest.TestCase):
         self.assertEqual(r.start_location, "A")
         self.assertEqual(r.end_location, "B")
         with self.assertRaises(ValueError):
-            DeliveryRoute("A")  # needs at least two
+            DeliveryRoute("A", route_id=1)  # needs at least two
         with self.assertRaises(ValueError):
-            DeliveryRoute("A", "Z")  # invalid code
+            DeliveryRoute("A", "Z", route_id=1)  # invalid code
 
     def test_init_rejects_duplicate_locations(self, *_):
         with self.assertRaises(ValueError) as ctx:
-            DeliveryRoute("A", "B", "A")
+            DeliveryRoute("A", "B", "A", route_id=1)
         self.assertIn("duplicate", str(ctx.exception).lower())
 
     def test_schedule_builds_segments_and_stop_times_eta_final(self, *_):
         base = datetime(2025, 1, 1, 8, 0, 0)
-        r = DeliveryRoute("A", "B", "C")
+        r = DeliveryRoute("A", "B", "C", route_id=1)
         r.schedule(base)
         # A->B: 100 km, B->C: 200 km @ 87 km/h
         dur_ab = timedelta(hours=100 / DeliveryRoute.SPEED_KMPH)
@@ -70,7 +70,7 @@ class DeliveryRoute_Should(unittest.TestCase):
         self.assertEqual(r.eta_final, base + dur_ab + dur_bc)
 
     def test_total_distance_km_uses_map_sum_and_cached_segments(self, *_):
-        r = DeliveryRoute("A", "B", "C", "D")
+        r = DeliveryRoute("A", "B", "C", "D", route_id=1)
         # unscheduled path: uses Map.get_distance sum
         self.assertEqual(r.total_distance_km, 100 + 200 + 300)
         # scheduled path: uses precomputed segments (still same sum)
@@ -78,7 +78,7 @@ class DeliveryRoute_Should(unittest.TestCase):
         self.assertEqual(r.total_distance_km, 100 + 200 + 300)
 
     def test_arrival_time_at_validations(self, *_):
-        r = DeliveryRoute("A", "B", "C")
+        r = DeliveryRoute("A", "B", "C", route_id=1)
         with self.assertRaises(ValueError):
             _ = r.arrival_time_at("A")  # unscheduled
         r.schedule(datetime(2025, 1, 1, 9, 0))
@@ -87,11 +87,11 @@ class DeliveryRoute_Should(unittest.TestCase):
 
     def test_current_position_all_cases(self, *_):
         base = datetime(2025, 1, 1, 8, 0)
-        r = DeliveryRoute("A", "B", "C")
+        r = DeliveryRoute("A", "B", "C", route_id=1)
         r.schedule(base)
 
         # UNSCHEDULED: separate route
-        r_uns = DeliveryRoute("A", "B")
+        r_uns = DeliveryRoute("A", "B", route_id=2)
         pos_u = r_uns.current_position(base)
         self.assertEqual(pos_u.kind, "UNSCHEDULED")
         self.assertEqual(pos_u.stop_city, "A")
@@ -130,7 +130,7 @@ class DeliveryRoute_Should(unittest.TestCase):
         self.assertEqual(pos_end.stop_city, "C")
 
     def test_includes_in_order(self, *_):
-        r = DeliveryRoute("A", "B", "C", "D")
+        r = DeliveryRoute("A", "B", "C", "D", route_id=1)
         self.assertTrue(r.includes_in_order("A", "D"))
         self.assertTrue(r.includes_in_order("B", "C"))
         self.assertFalse(r.includes_in_order("C", "B"))  # wrong order
@@ -139,7 +139,7 @@ class DeliveryRoute_Should(unittest.TestCase):
 
     def test_can_accept_package_checks_inclusion_capacity_and_range(self, *_):
         base = datetime(2025, 1, 1, 7, 0)
-        r = DeliveryRoute("A", "B", "C", "D")
+        r = DeliveryRoute("A", "B", "C", "D", route_id=1)
         r.schedule(base)
 
         # Truck with limited capacity and range (total route distance: 600 km)
@@ -168,7 +168,7 @@ class DeliveryRoute_Should(unittest.TestCase):
 
     def test_assign_package_sets_links_and_expected_arrival_when_scheduled(self, *_):
         base = datetime(2025, 1, 1, 6, 0)
-        r = DeliveryRoute("A", "B", "C")
+        r = DeliveryRoute("A", "B", "C", route_id=1)
         r.schedule(base)
         p = _Pkg(1, "A", "C", 5)
 
@@ -181,14 +181,14 @@ class DeliveryRoute_Should(unittest.TestCase):
         self.assertEqual(len(r.packages), 1)
 
     def test_assign_package_unscheduled_sets_no_eta(self, *_):
-        r = DeliveryRoute("A", "B")
+        r = DeliveryRoute("A", "B", route_id=1)
         p = _Pkg(1, "A", "B", 1)
         r.assign_package(p)  # type: ignore[reportArgumentType]
         self.assertIs(p.route, r)
         self.assertIsNone(p.expected_arrival)
 
     def test_detach_package_removes_package_and_clears_backref(self, *_):
-        r = DeliveryRoute("A", "B", "C")
+        r = DeliveryRoute("A", "B", "C", route_id=1)
         p = _Pkg(1, "A", "C", 5)
 
         r.assign_package(p)  # type: ignore[reportArgumentType]
@@ -201,7 +201,7 @@ class DeliveryRoute_Should(unittest.TestCase):
         self.assertNotIn(p, r.packages)
 
     def test_detach_package_only_removes_target(self, *_):
-        r = DeliveryRoute("A", "B", "C")
+        r = DeliveryRoute("A", "B", "C", route_id=1)
         p1 = _Pkg(1, "A", "B", 5)
         p2 = _Pkg(2, "A", "C", 7)
 
@@ -218,7 +218,7 @@ class DeliveryRoute_Should(unittest.TestCase):
         self.assertEqual(len(r.packages), 1)
 
     def test_detach_package_raises_when_not_assigned(self, *_):
-        r = DeliveryRoute("A", "B", "C")
+        r = DeliveryRoute("A", "B", "C", route_id=1)
         p = _Pkg(1, "A", "C", 5)
 
         with self.assertRaises(ValueError) as ctx:
@@ -229,8 +229,8 @@ class DeliveryRoute_Should(unittest.TestCase):
         self.assertIsNone(p.route)
 
     def test_detach_package_raises_when_assigned_to_different_route(self, *_):
-        r1 = DeliveryRoute("A", "B", "C")
-        r2 = DeliveryRoute("A", "B", "C")
+        r1 = DeliveryRoute("A", "B", "C", route_id=1)
+        r2 = DeliveryRoute("A", "B", "C", route_id=2)
         p = _Pkg(1, "A", "C", 5)
 
         r2.assign_package(p)  # type: ignore[reportArgumentType]
@@ -245,7 +245,7 @@ class DeliveryRoute_Should(unittest.TestCase):
 
     def test_info_contains_key_lines(self, *_):
         base = datetime(2025, 1, 1, 8, 0)
-        r = DeliveryRoute("A", "B", "C")
+        r = DeliveryRoute("A", "B", "C", route_id=1)
         r.schedule(base)
         info = r.info()
         # Must include route id, truck (none), start/end, departure,

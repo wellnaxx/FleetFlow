@@ -1,12 +1,12 @@
 from dataclasses import dataclass
 from datetime import datetime
 
-from src.domain.entities.delivery_route import DeliveryRoute
-
 
 @dataclass
 class SuitableRouteForPackage:
-    route: DeliveryRoute
+    route_id: int
+    start_location: str
+    end_location: str
     eta: datetime | None
     capacity_left: float | None
     end_city: str

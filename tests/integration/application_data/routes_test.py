@@ -8,6 +8,7 @@ from src.adapters.driven.persistence.application_data.route_repository import (
     ApplicationDataRouteRepository,
 )
 from src.application.use_cases.routes.assign_truck_to_route import (
+    AssignTruckToRouteResult,
     AssignTruckToRouteUseCase,
 )
 from src.application.use_cases.routes.create_route import CreateRouteUseCase
@@ -52,9 +53,9 @@ class _FakeTruck:
         self.in_transit_to: str | None = None
         self.route: Any = None
 
-    def assign(self, route: Any, start_loc: str) -> bool:
+    def assign(self, route: Any) -> bool:
         self.route = route
-        self.current_location = start_loc
+        self.current_location = route.start_location
         return True
 
     def release(self, now: datetime | None = None, force: bool = False) -> bool:
@@ -127,7 +128,7 @@ class ApplicationDataBackedRoutesIntegration_Should(unittest.TestCase):
 
         result = assign_truck.execute(5, 1, now=now)
 
-        self.assertIs(result, route)
+        self.assertEqual(result, AssignTruckToRouteResult(route_id=1, truck_id=5))
         self.assertIs(route.truck, truck)
         self.assertIs(truck.route, route)
         self.assertEqual(route.departure_time, now)

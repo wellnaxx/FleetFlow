@@ -97,18 +97,20 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
         self.mock_packages.get_by_id.assert_called_once_with(8)
         route.assign_package.assert_called_once_with(package)
 
-    def test_raises_when_all_packages_missing(self) -> None:
+    def test_returns_errors_when_all_packages_missing(self) -> None:
         route = self._make_route(route_id=7, departure_time=None)
         self.mock_routes.get_by_id.return_value = route
         self.mock_packages.get_by_id.return_value = None
 
-        with self.assertRaises(ValueError) as ctx:
-            self.use_case.execute(7, [8])
+        result = self.use_case.execute(7, [8])
 
-        self.assertIn("No packages could be assigned:", str(ctx.exception))
-        self.assertIn("Package 8 not found.", str(ctx.exception))
+        self.assertEqual(result.successes, [])
+        self.assertEqual(
+            result.errors,
+            [PackageAssignmentError(package_id=8, message="Package 8 not found.")],
+        )
 
-    def test_raises_when_all_packages_already_assigned(self) -> None:
+    def test_returns_errors_when_all_packages_already_assigned(self) -> None:
         route = self._make_route(route_id=7, departure_time=None)
         other_route = SimpleNamespace(route_id=3)
         package = self._make_package(8, route=other_route)
@@ -116,13 +118,15 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
         self.mock_routes.get_by_id.return_value = route
         self.mock_packages.get_by_id.return_value = package
 
-        with self.assertRaises(ValueError) as ctx:
-            self.use_case.execute(7, [8])
+        result = self.use_case.execute(7, [8])
 
-        self.assertIn("No packages could be assigned:", str(ctx.exception))
-        self.assertIn("Package 8 is already on route 3.", str(ctx.exception))
+        self.assertEqual(result.successes, [])
+        self.assertEqual(
+            result.errors,
+            [PackageAssignmentError(package_id=8, message="Package 8 is already on route 3.")],
+        )
 
-    def test_raises_when_all_assignments_fail_on_route_validation(self) -> None:
+    def test_returns_errors_when_all_assignments_fail_on_route_validation(self) -> None:
         route = self._make_route(route_id=7, departure_time=None)
         package = self._make_package(8)
         route.assign_package.side_effect = ValueError("capacity exceeded")
@@ -130,11 +134,13 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
         self.mock_routes.get_by_id.return_value = route
         self.mock_packages.get_by_id.return_value = package
 
-        with self.assertRaises(ValueError) as ctx:
-            self.use_case.execute(7, [8])
+        result = self.use_case.execute(7, [8])
 
-        self.assertIn("No packages could be assigned:", str(ctx.exception))
-        self.assertIn("capacity exceeded", str(ctx.exception))
+        self.assertEqual(result.successes, [])
+        self.assertEqual(
+            result.errors,
+            [PackageAssignmentError(package_id=8, message="capacity exceeded")],
+        )
 
     def test_partial_success_returns_successes_and_errors(self) -> None:
         route = self._make_route(route_id=7, departure_time=None)

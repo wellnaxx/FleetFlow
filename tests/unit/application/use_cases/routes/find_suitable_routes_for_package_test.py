@@ -28,12 +28,18 @@ class FindSuitableRoutesForPackageUseCase_Should(unittest.TestCase):
         package = SimpleNamespace(package_id=7, start_location="SYD", end_location="MEL", weight=2.0)
 
         route_with_eta = MagicMock()
+        route_with_eta.route_id = 10
+        route_with_eta.start_location = "SYD"
+        route_with_eta.end_location = "MEL"
         route_with_eta.can_accept_package.return_value = None
         route_with_eta.truck = SimpleNamespace(capacity=10.0)
         route_with_eta.total_assigned_weight.return_value = 4.0
         route_with_eta.arrival_time_at.return_value = datetime(2025, 1, 1, 10, 0)
 
         route_no_eta = MagicMock()
+        route_no_eta.route_id = 11
+        route_no_eta.start_location = "SYD"
+        route_no_eta.end_location = "MEL"
         route_no_eta.can_accept_package.return_value = None
         route_no_eta.truck = None
         route_no_eta.total_assigned_weight.return_value = 0.0
@@ -47,7 +53,9 @@ class FindSuitableRoutesForPackageUseCase_Should(unittest.TestCase):
 
         result = self.use_case.execute(7)
 
-        self.assertEqual([item.route for item in result], [route_with_eta, route_no_eta])
+        self.assertEqual([item.route_id for item in result], [route_with_eta.route_id, route_no_eta.route_id])
+        self.assertEqual(result[0].start_location, route_with_eta.start_location)
+        self.assertEqual(result[0].end_location, route_with_eta.end_location)
         self.assertEqual(result[0].eta, datetime(2025, 1, 1, 10, 0))
         self.assertEqual(result[0].capacity_left, 6.0)
         self.assertEqual(result[0].end_city, "MEL")

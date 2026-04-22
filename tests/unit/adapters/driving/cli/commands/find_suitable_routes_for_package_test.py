@@ -2,13 +2,10 @@ from __future__ import annotations
 
 import unittest
 from datetime import datetime
-from types import SimpleNamespace
-from typing import cast
 from unittest.mock import MagicMock, patch
 
 from src.adapters.driving.cli.commands.find_suitable_routes_for_package import FindSuitableRoutesForPackage
 from src.application.results.find_suitable_packages_for_route_result import SuitableRouteForPackage
-from src.domain.entities.delivery_route import DeliveryRoute
 
 
 class FindSuitableRoutesForPackage_Should(unittest.TestCase):
@@ -36,23 +33,19 @@ class FindSuitableRoutesForPackage_Should(unittest.TestCase):
     def test_success_mixed_matches_formats_lines(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
         mock_parse.return_value = 77
         cmd = self.make_cmd(["77"])
-        route_with_truck = cast(
-            DeliveryRoute,
-            SimpleNamespace(route_id=10, start_location="SYD", end_location="MEL", truck=SimpleNamespace()),
-        )
-        route_no_truck = cast(
-            DeliveryRoute,
-            SimpleNamespace(route_id=11, start_location="SYD", end_location="MEL", truck=None),
-        )
         cmd._use_case.execute.return_value = [  # type: ignore[reportAttributeAccessIssue]
             SuitableRouteForPackage(
-                route=route_with_truck,
+                route_id=10,
+                start_location="SYD",
+                end_location="MEL",
                 eta=datetime(2025, 10, 12, 6, 0),
                 capacity_left=123.456,
                 end_city="MEL",
             ),
             SuitableRouteForPackage(
-                route=route_no_truck,
+                route_id=11,
+                start_location="SYD",
+                end_location="MEL",
                 eta=None,
                 capacity_left=None,
                 end_city="MEL",
@@ -66,8 +59,8 @@ class FindSuitableRoutesForPackage_Should(unittest.TestCase):
 
         lines = result.splitlines()
         self.assertEqual(len(lines), 2)
-        self.assertIn("Route 10: SYD → MEL, ETA to MEL: 2025-10-12 06:00, Capacity left: 123.46kg", lines[0])
-        self.assertIn("Route 11: SYD → MEL, ETA to MEL: N/A, Capacity left: No truck", lines[1])
+        self.assertIn("Route 10: SYD -> MEL, ETA to MEL: 2025-10-12 06:00, Capacity left: 123.46kg", lines[0])
+        self.assertIn("Route 11: SYD -> MEL, ETA to MEL: N/A, Capacity left: No truck", lines[1])
 
     @patch("src.adapters.driving.cli.commands.find_suitable_routes_for_package.validate_params_exact")
     @patch("src.adapters.driving.cli.commands.find_suitable_routes_for_package.try_parse_int")
@@ -128,13 +121,15 @@ class FindSuitableRoutesForPackage_Should(unittest.TestCase):
     ) -> None:
         mock_parse.return_value = 9
         cmd = self.make_cmd(["9"])
-
-        r = cast(
-            DeliveryRoute,
-            SimpleNamespace(route_id=3, start_location="A", end_location="B", truck=SimpleNamespace()),
-        )
         cmd._use_case.execute.return_value = [  # type: ignore[reportAttributeAccessIssue]
-            SuitableRouteForPackage(route=r, eta=None, capacity_left=1.2349, end_city="PER")
+            SuitableRouteForPackage(
+                route_id=3,
+                start_location="A",
+                end_location="B",
+                eta=None,
+                capacity_left=1.2349,
+                end_city="PER",
+            )
         ]
 
         out = cmd.execute()

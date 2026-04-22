@@ -55,11 +55,6 @@ class AssignPackagesToRouteUseCase:
             except ValueError as exc:
                 result.errors.append(PackageAssignmentError(package_id=package_id, message=str(exc)))
 
-        if not result.successes and result.errors:
-            raise ValueError(
-                "No packages could be assigned:\n- " + "\n- ".join(e.message for e in result.errors)
-            )
-
         return result
 
     def _format_eta(self, route: DeliveryRoute, package: DeliveryPackage) -> str:
