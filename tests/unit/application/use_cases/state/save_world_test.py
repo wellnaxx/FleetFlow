@@ -15,9 +15,9 @@ class SaveWorldStateUseCaseTests(unittest.TestCase):
             schema_version=1,
             world=WorldSnapshotData(
                 counters=CountersSnapshot(1, 1, 1),
-                customers=[],
-                packages=[],
-                routes=[],
+                customers=(),
+                packages=(),
+                routes=(),
             ),
         )
         gateway = MagicMock()

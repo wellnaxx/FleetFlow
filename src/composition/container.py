@@ -2,12 +2,16 @@ from src.adapters.driven.persistence.json.world_state_persistence import JsonWor
 from src.adapters.driven.persistence.memory.customer_repository import InMemoryCustomerRepository
 from src.adapters.driven.persistence.memory.package_repository import InMemoryPackageRepository
 from src.adapters.driven.persistence.memory.route_repository import InMemoryRouteRepository
-from src.adapters.driven.persistence.memory.world_state_gateway import InMemoryWorldStateGateway
+from src.adapters.driven.persistence.memory.world_state_gateway import (
+    InMemoryWorldStateGateway,
+    InMemoryWorldStateRuntime,
+)
 from src.application.config.state_persistence import DEFAULT_WORLD_STATE_PATH
 from src.application.services.auth_service import AuthService
 from src.application.services.authorization_service import AuthorizationService
 from src.application.services.customer_service import CustomerService
 from src.application.services.heartbeat_service import HeartbeatService
+from src.application.services.world_state_snapshot_service import WorldStateSnapshotService
 from src.application.use_cases.auth.change_password import ChangePasswordUseCase
 from src.application.use_cases.auth.login import LoginUseCase
 from src.application.use_cases.auth.logout import LogoutUseCase
@@ -56,11 +60,21 @@ class Container:
         )
         self.advance_world_state_use_case = AdvanceWorldStateUseCase(self.heartbeat_service)
 
-        self.world_state_gateway = InMemoryWorldStateGateway(
+        self.world_state_runtime = InMemoryWorldStateRuntime(
             customer_repo=self.customer_repo,
             package_repo=self.package_repo,
             route_repo=self.route_repo,
             vehicle_manager=self.vehicle_manager,
+        )
+        self.world_state_snapshot_service = WorldStateSnapshotService(
+            customer_repo=self.customer_repo,
+            package_repo=self.package_repo,
+            route_repo=self.route_repo,
+            vehicle_manager=self.vehicle_manager,
+            runtime_state=self.world_state_runtime,
+        )
+        self.world_state_gateway = InMemoryWorldStateGateway(
+            snapshot_service=self.world_state_snapshot_service,
         )
         self.world_state_persistence = JsonWorldStatePersistence()
         self.save_world_state_use_case = SaveWorldStateUseCase(

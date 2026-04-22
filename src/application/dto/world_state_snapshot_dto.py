@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Any
 
 
 @dataclass(frozen=True)
@@ -30,22 +29,22 @@ class PackageSnapshot:
 @dataclass(frozen=True)
 class RouteSnapshot:
     route_id: int
-    locations: list[str]
+    locations: tuple[str, ...]
     departure_time: str | None
     truck_vehicle_id: int | None
-    package_ids: list[int]
+    package_ids: tuple[int, ...]
 
 
 @dataclass(frozen=True)
 class WorldSnapshotData:
     counters: CountersSnapshot
-    customers: list[CustomerSnapshot]
-    packages: list[PackageSnapshot]
-    routes: list[RouteSnapshot]
+    customers: tuple[CustomerSnapshot, ...]
+    packages: tuple[PackageSnapshot, ...]
+    routes: tuple[RouteSnapshot, ...]
 
 
 @dataclass(frozen=True)
 class WorldStateSnapshot:
     schema_version: int
     world: WorldSnapshotData
-    users: Any | None = None
+    users: None = None

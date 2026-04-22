@@ -106,17 +106,17 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
         *,
         schema_version: int = 1,
         counters: CountersSnapshot | None = None,
-        customers: list[CustomerSnapshot] | None = None,
-        packages: list[PackageSnapshot] | None = None,
-        routes: list[RouteSnapshot] | None = None,
+        customers: tuple[CustomerSnapshot, ...] | None = None,
+        packages: tuple[PackageSnapshot, ...] | None = None,
+        routes: tuple[RouteSnapshot, ...] | None = None,
     ) -> WorldStateSnapshot:
         return WorldStateSnapshot(
             schema_version=schema_version,
             world=WorldSnapshotData(
                 counters=counters or CountersSnapshot(2, 2, 2),
-                customers=customers or [],
-                packages=packages or [],
-                routes=routes or [],
+                customers=customers or (),
+                packages=packages or (),
+                routes=routes or (),
             ),
         )
 
@@ -168,14 +168,14 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
         self.assertEqual(snapshot.world.counters, CountersSnapshot(3, 8, 6))
         self.assertEqual(
             snapshot.world.customers,
-            [
+            (
                 CustomerSnapshot(customer_id=1, name="Alice", email="alice@example.com", phone="0498765432"),
                 CustomerSnapshot(customer_id=2, name="Bobby", email="bob@example.com", phone="0412345678"),
-            ],
+            ),
         )
         self.assertEqual(
             snapshot.world.packages,
-            [
+            (
                 PackageSnapshot(
                     package_id=3,
                     start="A",
@@ -192,19 +192,19 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
                     customer_id=2,
                     route_id=5,
                 ),
-            ],
+            ),
         )
         self.assertEqual(
             snapshot.world.routes,
-            [
+            (
                 RouteSnapshot(
                     route_id=5,
-                    locations=["A", "B", "C"],
+                    locations=("A", "B", "C"),
                     departure_time=dt_to_str(departure_time),
                     truck_vehicle_id=1002,
-                    package_ids=[3, 7],
-                )
-            ],
+                    package_ids=(3, 7),
+                ),
+            ),
         )
 
     def test_apply_snapshot_rejects_unsupported_schema_version(self) -> None:
@@ -236,18 +236,18 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
             (
                 "customer",
                 self.make_snapshot(
-                    customers=[
+                    customers=(
                         CustomerSnapshot(customer_id=1, name="Alice", email="", phone=""),
                         CustomerSnapshot(customer_id=1, name="Bobby", email="", phone=""),
-                    ]
+                    )
                 ),
                 "Duplicate customer ids",
             ),
             (
                 "package",
                 self.make_snapshot(
-                    customers=[CustomerSnapshot(customer_id=1, name="Alice", email="", phone="")],
-                    packages=[
+                    customers=(CustomerSnapshot(customer_id=1, name="Alice", email="", phone=""),),
+                    packages=(
                         PackageSnapshot(
                             package_id=1,
                             start="A",
@@ -264,29 +264,29 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
                             customer_id=1,
                             route_id=None,
                         ),
-                    ],
+                    ),
                 ),
                 "Duplicate package ids",
             ),
             (
                 "route",
                 self.make_snapshot(
-                    routes=[
+                    routes=(
                         RouteSnapshot(
                             route_id=1,
-                            locations=["A", "B"],
+                            locations=("A", "B"),
                             departure_time=None,
                             truck_vehicle_id=None,
-                            package_ids=[],
+                            package_ids=(),
                         ),
                         RouteSnapshot(
                             route_id=1,
-                            locations=["B", "C"],
+                            locations=("B", "C"),
                             departure_time=None,
                             truck_vehicle_id=None,
-                            package_ids=[],
+                            package_ids=(),
                         ),
-                    ]
+                    )
                 ),
                 "Duplicate route ids",
             ),
@@ -301,8 +301,8 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
 
     def test_apply_snapshot_rejects_duplicate_package_ids_within_route(self) -> None:
         snapshot = self.make_snapshot(
-            customers=[CustomerSnapshot(customer_id=1, name="Alice", email="", phone="")],
-            packages=[
+            customers=(CustomerSnapshot(customer_id=1, name="Alice", email="", phone=""),),
+            packages=(
                 PackageSnapshot(
                     package_id=1,
                     start="A",
@@ -310,17 +310,17 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
                     weight=5.0,
                     customer_id=1,
                     route_id=1,
-                )
-            ],
-            routes=[
+                ),
+            ),
+            routes=(
                 RouteSnapshot(
                     route_id=1,
-                    locations=["A", "B"],
+                    locations=("A", "B"),
                     departure_time=None,
                     truck_vehicle_id=None,
-                    package_ids=[1, 1],
-                )
-            ],
+                    package_ids=(1, 1),
+                ),
+            ),
         )
 
         with self.assertRaises(ValueError) as ctx:
@@ -333,7 +333,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
             (
                 "missing customer",
                 self.make_snapshot(
-                    packages=[
+                    packages=(
                         PackageSnapshot(
                             package_id=1,
                             start="A",
@@ -341,16 +341,16 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
                             weight=5.0,
                             customer_id=99,
                             route_id=None,
-                        )
-                    ]
+                        ),
+                    )
                 ),
                 "references missing customer 99",
             ),
             (
                 "missing route",
                 self.make_snapshot(
-                    customers=[CustomerSnapshot(customer_id=1, name="Alice", email="", phone="")],
-                    packages=[
+                    customers=(CustomerSnapshot(customer_id=1, name="Alice", email="", phone=""),),
+                    packages=(
                         PackageSnapshot(
                             package_id=1,
                             start="A",
@@ -358,38 +358,38 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
                             weight=5.0,
                             customer_id=1,
                             route_id=99,
-                        )
-                    ],
+                        ),
+                    ),
                 ),
                 "references missing route 99",
             ),
             (
                 "missing package",
                 self.make_snapshot(
-                    routes=[
+                    routes=(
                         RouteSnapshot(
                             route_id=1,
-                            locations=["A", "B"],
+                            locations=("A", "B"),
                             departure_time=None,
                             truck_vehicle_id=None,
-                            package_ids=[99],
-                        )
-                    ]
+                            package_ids=(99,),
+                        ),
+                    )
                 ),
                 "references missing package 99",
             ),
             (
                 "missing truck",
                 self.make_snapshot(
-                    routes=[
+                    routes=(
                         RouteSnapshot(
                             route_id=1,
-                            locations=["A", "B"],
+                            locations=("A", "B"),
                             departure_time=None,
                             truck_vehicle_id=9999,
-                            package_ids=[],
-                        )
-                    ]
+                            package_ids=(),
+                        ),
+                    )
                 ),
                 "references missing truck 9999",
             ),
@@ -404,8 +404,8 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
 
     def test_apply_snapshot_rejects_package_route_forward_inconsistency(self) -> None:
         snapshot = self.make_snapshot(
-            customers=[CustomerSnapshot(customer_id=1, name="Alice", email="", phone="")],
-            packages=[
+            customers=(CustomerSnapshot(customer_id=1, name="Alice", email="", phone=""),),
+            packages=(
                 PackageSnapshot(
                     package_id=1,
                     start="A",
@@ -413,17 +413,17 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
                     weight=5.0,
                     customer_id=1,
                     route_id=1,
-                )
-            ],
-            routes=[
+                ),
+            ),
+            routes=(
                 RouteSnapshot(
                     route_id=1,
-                    locations=["A", "B"],
+                    locations=("A", "B"),
                     departure_time=None,
                     truck_vehicle_id=None,
-                    package_ids=[],
-                )
-            ],
+                    package_ids=(),
+                ),
+            ),
         )
 
         with self.assertRaises(ValueError) as ctx:
@@ -433,8 +433,8 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
 
     def test_apply_snapshot_restores_customer_package_backrefs(self) -> None:
         snapshot = self.make_snapshot(
-            customers=[CustomerSnapshot(customer_id=1, name="Alice", email="", phone="")],
-            packages=[
+            customers=(CustomerSnapshot(customer_id=1, name="Alice", email="", phone=""),),
+            packages=(
                 PackageSnapshot(
                     package_id=1,
                     start="A",
@@ -442,17 +442,17 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
                     weight=5.0,
                     customer_id=1,
                     route_id=1,
-                )
-            ],
-            routes=[
+                ),
+            ),
+            routes=(
                 RouteSnapshot(
                     route_id=1,
-                    locations=["A", "B"],
+                    locations=("A", "B"),
                     departure_time=None,
                     truck_vehicle_id=None,
-                    package_ids=[1],
-                )
-            ],
+                    package_ids=(1,),
+                ),
+            ),
         )
 
         self.service.apply_snapshot(snapshot)
@@ -473,15 +473,15 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
         departure_time = datetime(2025, 1, 1, 10, 0, 0)
         snapshot = self.make_snapshot(
             counters=CountersSnapshot(1, 1, 2),
-            routes=[
+            routes=(
                 RouteSnapshot(
                     route_id=1,
-                    locations=["A", "B"],
+                    locations=("A", "B"),
                     departure_time=dt_to_str(departure_time),
                     truck_vehicle_id=1001,
-                    package_ids=[],
-                )
-            ],
+                    package_ids=(),
+                ),
+            ),
         )
 
         self.service.apply_snapshot(snapshot)
@@ -501,22 +501,22 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
     def test_apply_snapshot_rejects_duplicate_truck_assignments(self) -> None:
         snapshot = self.make_snapshot(
             counters=CountersSnapshot(1, 1, 3),
-            routes=[
+            routes=(
                 RouteSnapshot(
                     route_id=1,
-                    locations=["A", "B"],
+                    locations=("A", "B"),
                     departure_time=None,
                     truck_vehicle_id=1001,
-                    package_ids=[],
+                    package_ids=(),
                 ),
                 RouteSnapshot(
                     route_id=2,
-                    locations=["B", "C"],
+                    locations=("B", "C"),
                     departure_time=None,
                     truck_vehicle_id=1001,
-                    package_ids=[],
+                    package_ids=(),
                 ),
-            ],
+            ),
         )
 
         with self.assertRaises(ValueError) as ctx:
@@ -526,8 +526,8 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
 
     def test_apply_snapshot_rejects_route_package_reverse_inconsistency(self) -> None:
         snapshot = self.make_snapshot(
-            customers=[CustomerSnapshot(customer_id=1, name="Alice", email="", phone="")],
-            packages=[
+            customers=(CustomerSnapshot(customer_id=1, name="Alice", email="", phone=""),),
+            packages=(
                 PackageSnapshot(
                     package_id=1,
                     start="A",
@@ -535,17 +535,17 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
                     weight=5.0,
                     customer_id=1,
                     route_id=None,
-                )
-            ],
-            routes=[
+                ),
+            ),
+            routes=(
                 RouteSnapshot(
                     route_id=1,
-                    locations=["A", "B"],
+                    locations=("A", "B"),
                     departure_time=None,
                     truck_vehicle_id=None,
-                    package_ids=[1],
-                )
-            ],
+                    package_ids=(1,),
+                ),
+            ),
         )
 
         with self.assertRaises(ValueError) as ctx:
@@ -557,8 +557,8 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
         departure_time = datetime(2025, 1, 1, 10, 0, 0)
         snapshot = self.make_snapshot(
             counters=CountersSnapshot(2, 3, 2),
-            customers=[CustomerSnapshot(customer_id=1, name="Alice", email="", phone="")],
-            packages=[
+            customers=(CustomerSnapshot(customer_id=1, name="Alice", email="", phone=""),),
+            packages=(
                 PackageSnapshot(
                     package_id=1,
                     start="A",
@@ -575,16 +575,16 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
                     customer_id=1,
                     route_id=None,
                 ),
-            ],
-            routes=[
+            ),
+            routes=(
                 RouteSnapshot(
                     route_id=1,
-                    locations=["A", "B", "C"],
+                    locations=("A", "B", "C"),
                     departure_time=dt_to_str(departure_time),
                     truck_vehicle_id=None,
-                    package_ids=[1],
-                )
-            ],
+                    package_ids=(1,),
+                ),
+            ),
         )
 
         self.service.apply_snapshot(snapshot)
@@ -606,14 +606,14 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
     def test_apply_snapshot_updates_repo_indexes_and_next_ids(self) -> None:
         snapshot = self.make_snapshot(
             counters=CountersSnapshot(4, 5, 6),
-            customers=[
+            customers=(
                 CustomerSnapshot(
                     customer_id=3,
                     name="Alice",
                     email="alice@example.com",
                     phone="0412345678",
-                )
-            ],
+                ),
+            ),
         )
 
         self.service.apply_snapshot(snapshot)
@@ -630,15 +630,15 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
     def test_apply_snapshot_rejects_counter_not_greater_than_existing_ids(self) -> None:
         snapshot = self.make_snapshot(
             counters=CountersSnapshot(1, 1, 5),
-            routes=[
+            routes=(
                 RouteSnapshot(
                     route_id=5,
-                    locations=["A", "B"],
+                    locations=("A", "B"),
                     departure_time=None,
                     truck_vehicle_id=None,
-                    package_ids=[],
-                )
-            ],
+                    package_ids=(),
+                ),
+            ),
         )
 
         with self.assertRaises(ValueError) as ctx:
@@ -695,8 +695,8 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
         route.truck = truck
 
         snapshot = self.make_snapshot(
-            customers=[],
-            packages=[
+            customers=(),
+            packages=(
                 PackageSnapshot(
                     package_id=2,
                     start="A",
@@ -704,8 +704,8 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
                     weight=4.0,
                     customer_id=99,
                     route_id=None,
-                )
-            ],
+                ),
+            ),
         )
 
         with self.assertRaises(ValueError):

@@ -50,7 +50,7 @@ class WorldStateSnapshotService:
             packages=packages,
             routes=routes,
         )
-        return WorldStateSnapshot(schema_version=self.SCHEMA_VERSION, world=world, users=None)
+        return WorldStateSnapshot(schema_version=self.SCHEMA_VERSION, world=world)
 
     def _build_counters_snapshot(self) -> CountersSnapshot:
         return CountersSnapshot(
@@ -59,8 +59,8 @@ class WorldStateSnapshotService:
             next_route_id=self._route_repo.next_id(),
         )
 
-    def _build_customer_snapshots(self) -> list[CustomerSnapshot]:
-        return [
+    def _build_customer_snapshots(self) -> tuple[CustomerSnapshot, ...]:
+        return tuple(
             CustomerSnapshot(
                 customer_id=customer.customer_id,
                 name=customer.name,
@@ -68,10 +68,10 @@ class WorldStateSnapshotService:
                 phone=customer.phone_number or "",
             )
             for customer in sorted(self._customer_repo.list_all(), key=lambda customer: customer.customer_id)
-        ]
+        )
 
-    def _build_package_snapshots(self) -> list[PackageSnapshot]:
-        return [
+    def _build_package_snapshots(self) -> tuple[PackageSnapshot, ...]:
+        return tuple(
             PackageSnapshot(
                 package_id=package.package_id,
                 start=package.start_location,
@@ -81,19 +81,19 @@ class WorldStateSnapshotService:
                 route_id=package.route.route_id if package.route is not None else None,
             )
             for package in sorted(self._package_repo.list_all(), key=lambda package: package.package_id)
-        ]
+        )
 
-    def _build_route_snapshots(self) -> list[RouteSnapshot]:
-        return [
+    def _build_route_snapshots(self) -> tuple[RouteSnapshot, ...]:
+        return tuple(
             RouteSnapshot(
                 route_id=route.route_id,
-                locations=list(route.locations),
+                locations=tuple(route.locations),
                 departure_time=dt_to_str(route.departure_time),
                 truck_vehicle_id=route.truck.vehicle_id if route.truck is not None else None,
-                package_ids=sorted(package.package_id for package in route.packages),
+                package_ids=tuple(sorted(package.package_id for package in route.packages)),
             )
             for route in sorted(self._route_repo.list_all(), key=lambda route: route.route_id)
-        ]
+        )
 
     def apply_snapshot(self, snapshot: WorldStateSnapshot) -> None:
         self._validate_schema(snapshot)
@@ -150,7 +150,7 @@ class WorldStateSnapshotService:
                 raise ValueError(f"Route {route.route_id} must contain at least two locations.")
             self._ensure_unique_ids(route.package_ids, f"package ids for route {route.route_id}")
 
-    def _ensure_unique_ids(self, ids: list[int], label: str) -> None:
+    def _ensure_unique_ids(self, ids: tuple[int, ...] | list[int], label: str) -> None:
         seen: set[int] = set()
         duplicates: set[int] = set()
 
@@ -239,7 +239,7 @@ class WorldStateSnapshotService:
                 f"Invalid next_{label}_id in snapshot: {next_id} must be greater than existing {label} ids."
             )
 
-    def _rebuild_customers(self, snapshots: list[CustomerSnapshot]) -> dict[int, Customer]:
+    def _rebuild_customers(self, snapshots: tuple[CustomerSnapshot, ...]) -> dict[int, Customer]:
         return {
             snapshot.customer_id: Customer(
                 customer_id=snapshot.customer_id,
@@ -253,7 +253,7 @@ class WorldStateSnapshotService:
         }
 
     def _rebuild_packages(
-        self, snapshots: list[PackageSnapshot], rebuilt_customers: dict[int, Customer]
+        self, snapshots: tuple[PackageSnapshot, ...], rebuilt_customers: dict[int, Customer]
     ) -> dict[int, DeliveryPackage]:
         rebuilt_packages: dict[int, DeliveryPackage] = {}
 
@@ -270,7 +270,7 @@ class WorldStateSnapshotService:
 
         return rebuilt_packages
 
-    def _rebuild_routes(self, snapshots: list[RouteSnapshot]) -> dict[int, DeliveryRoute]:
+    def _rebuild_routes(self, snapshots: tuple[RouteSnapshot, ...]) -> dict[int, DeliveryRoute]:
         return {
             snapshot.route_id: DeliveryRoute(
                 *snapshot.locations,
@@ -282,7 +282,7 @@ class WorldStateSnapshotService:
 
     def _link_packages_to_routes(
         self,
-        snapshots: list[RouteSnapshot],
+        snapshots: tuple[RouteSnapshot, ...],
         rebuilt_packages: dict[int, DeliveryPackage],
         rebuilt_routes: dict[int, DeliveryRoute],
     ) -> None:
@@ -294,7 +294,7 @@ class WorldStateSnapshotService:
                 route.restore_package_link(package)
 
     def _link_trucks_to_routes(
-        self, snapshots: list[RouteSnapshot], rebuilt_routes: dict[int, DeliveryRoute]
+        self, snapshots: tuple[RouteSnapshot, ...], rebuilt_routes: dict[int, DeliveryRoute]
     ) -> list[TruckBinding]:
         trucks_by_id = {truck.vehicle_id: truck for truck in self._vehicle_manager.list_fleet()}
 

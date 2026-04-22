@@ -75,7 +75,7 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
                     next_package_id=int(counters.get("next_package_id", 1)),
                     next_route_id=int(counters.get("next_route_id", 1)),
                 ),
-                customers=[
+                customers=tuple(
                     CustomerSnapshot(
                         customer_id=int(customer["customer_id"]),
                         name=str(customer["name"]),
@@ -83,8 +83,8 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
                         phone=str(customer.get("phone", "")),
                     )
                     for customer in world.get("customers", [])
-                ],
-                packages=[
+                ),
+                packages=tuple(
                     PackageSnapshot(
                         package_id=int(package["package_id"]),
                         start=str(package["start"]),
@@ -94,19 +94,18 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
                         route_id=int(package["route_id"]) if package.get("route_id") is not None else None,
                     )
                     for package in world.get("packages", [])
-                ],
-                routes=[
+                ),
+                routes=tuple(
                     RouteSnapshot(
                         route_id=int(route["route_id"]),
-                        locations=[str(location) for location in route["locations"]],
+                        locations=tuple(str(location) for location in route["locations"]),
                         departure_time=route.get("departure_time"),
                         truck_vehicle_id=int(route["truck_vehicle_id"])
                         if route.get("truck_vehicle_id") is not None
                         else None,
-                        package_ids=[int(package_id) for package_id in route.get("package_ids", [])],
+                        package_ids=tuple(int(package_id) for package_id in route.get("package_ids", [])),
                     )
                     for route in world.get("routes", [])
-                ],
+                ),
             ),
-            users=raw.get("users"),
         )

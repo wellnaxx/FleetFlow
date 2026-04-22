@@ -5,7 +5,10 @@ from src.adapters.driven.persistence.json.serialization import dt_to_str
 from src.adapters.driven.persistence.memory.customer_repository import InMemoryCustomerRepository
 from src.adapters.driven.persistence.memory.package_repository import InMemoryPackageRepository
 from src.adapters.driven.persistence.memory.route_repository import InMemoryRouteRepository
-from src.adapters.driven.persistence.memory.world_state_gateway import InMemoryWorldStateGateway
+from src.adapters.driven.persistence.memory.world_state_gateway import (
+    InMemoryWorldStateGateway,
+    InMemoryWorldStateRuntime,
+)
 from src.application.dto.world_state_snapshot_dto import (
     CountersSnapshot,
     CustomerSnapshot,
@@ -14,6 +17,7 @@ from src.application.dto.world_state_snapshot_dto import (
     WorldSnapshotData,
     WorldStateSnapshot,
 )
+from src.application.services.world_state_snapshot_service import WorldStateSnapshotService
 from src.domain.services.vehicle_manager import VehicleManager
 
 
@@ -50,25 +54,37 @@ class InMemoryWorldStateGatewayTests(unittest.TestCase):
         self.addCleanup(self.vehicle_map_locations.stop)
 
     def test_apply_snapshot_and_build_snapshot_round_trip(self) -> None:
-        gateway = InMemoryWorldStateGateway(
-            customer_repo=InMemoryCustomerRepository(),
-            package_repo=InMemoryPackageRepository(),
-            route_repo=InMemoryRouteRepository(),
-            vehicle_manager=VehicleManager(),
+        customer_repo = InMemoryCustomerRepository()
+        package_repo = InMemoryPackageRepository()
+        route_repo = InMemoryRouteRepository()
+        vehicle_manager = VehicleManager()
+        runtime_state = InMemoryWorldStateRuntime(
+            customer_repo=customer_repo,
+            package_repo=package_repo,
+            route_repo=route_repo,
+            vehicle_manager=vehicle_manager,
         )
+        snapshot_service = WorldStateSnapshotService(
+            customer_repo=customer_repo,
+            package_repo=package_repo,
+            route_repo=route_repo,
+            vehicle_manager=vehicle_manager,
+            runtime_state=runtime_state,
+        )
+        gateway = InMemoryWorldStateGateway(snapshot_service=snapshot_service)
         snapshot = WorldStateSnapshot(
             schema_version=1,
             world=WorldSnapshotData(
                 counters=CountersSnapshot(2, 2, 2),
-                customers=[
+                customers=(
                     CustomerSnapshot(
                         customer_id=1,
                         name="Alice",
                         email="alice@example.com",
                         phone="0412345678",
-                    )
-                ],
-                packages=[
+                    ),
+                ),
+                packages=(
                     PackageSnapshot(
                         package_id=1,
                         start="A",
@@ -76,17 +92,17 @@ class InMemoryWorldStateGatewayTests(unittest.TestCase):
                         weight=5.0,
                         customer_id=1,
                         route_id=1,
-                    )
-                ],
-                routes=[
+                    ),
+                ),
+                routes=(
                     RouteSnapshot(
                         route_id=1,
-                        locations=["A", "B"],
+                        locations=("A", "B"),
                         departure_time=dt_to_str(None),
                         truck_vehicle_id=1001,
-                        package_ids=[1],
-                    )
-                ],
+                        package_ids=(1,),
+                    ),
+                ),
             ),
         )
 

@@ -25,5 +25,6 @@ class ContainerTests(unittest.TestCase):
         self.assertIsInstance(container.world_state_gateway, InMemoryWorldStateGateway)
         self.assertIsInstance(container.authz, AuthorizationService)
         self.assertIs(container.authz.current_user, auth.current_user)
+        self.assertIs(container.world_state_gateway._snapshot_service, container.world_state_snapshot_service)  # type: ignore[attr-defined]
         self.assertIs(container.save_world_state_use_case._world_state_gateway, container.world_state_gateway)  # type: ignore[attr-defined]
         self.assertEqual(container.default_world_state_path, DEFAULT_WORLD_STATE_PATH)

@@ -12,7 +12,7 @@ from src.ports.output.world_state_gateway import WorldStateGatewayPort
 from src.ports.output.world_state_runtime_port import WorldStateRuntimePort
 
 
-class _InMemoryWorldStateRuntime(WorldStateRuntimePort):
+class InMemoryWorldStateRuntime(WorldStateRuntimePort):
     def __init__(
         self,
         customer_repo: InMemoryCustomerRepository,
@@ -39,27 +39,8 @@ class _InMemoryWorldStateRuntime(WorldStateRuntimePort):
 
 
 class InMemoryWorldStateGateway(WorldStateGatewayPort):
-    def __init__(
-        self,
-        customer_repo: InMemoryCustomerRepository,
-        package_repo: InMemoryPackageRepository,
-        route_repo: InMemoryRouteRepository,
-        vehicle_manager: VehicleManager,
-        snapshot_service: WorldStateSnapshotService | None = None,
-    ) -> None:
-        runtime_state = _InMemoryWorldStateRuntime(
-            customer_repo=customer_repo,
-            package_repo=package_repo,
-            route_repo=route_repo,
-            vehicle_manager=vehicle_manager,
-        )
-        self._snapshot_service = snapshot_service or WorldStateSnapshotService(
-            customer_repo=customer_repo,
-            package_repo=package_repo,
-            route_repo=route_repo,
-            vehicle_manager=vehicle_manager,
-            runtime_state=runtime_state,
-        )
+    def __init__(self, snapshot_service: WorldStateSnapshotService) -> None:
+        self._snapshot_service = snapshot_service
 
     def build_snapshot(self) -> WorldStateSnapshot:
         return self._snapshot_service.build_snapshot()

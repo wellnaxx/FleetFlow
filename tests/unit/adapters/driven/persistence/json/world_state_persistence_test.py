@@ -24,15 +24,15 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
             schema_version=1,
             world=WorldSnapshotData(
                 counters=CountersSnapshot(3, 4, 5),
-                customers=[
+                customers=(
                     CustomerSnapshot(
                         customer_id=1,
                         name="Alice",
                         email="alice@example.com",
                         phone="0412345678",
-                    )
-                ],
-                packages=[
+                    ),
+                ),
+                packages=(
                     PackageSnapshot(
                         package_id=2,
                         start="A",
@@ -40,19 +40,18 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
                         weight=3.5,
                         customer_id=1,
                         route_id=7,
-                    )
-                ],
-                routes=[
+                    ),
+                ),
+                routes=(
                     RouteSnapshot(
                         route_id=7,
-                        locations=["A", "B"],
+                        locations=("A", "B"),
                         departure_time="2025-01-01T10:00:00",
                         truck_vehicle_id=1001,
-                        package_ids=[2],
-                    )
-                ],
+                        package_ids=(2,),
+                    ),
+                ),
             ),
-            users={"ignored": True},
         )
 
         filename = f"world-state-{uuid.uuid4().hex}.json"
