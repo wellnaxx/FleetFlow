@@ -151,7 +151,8 @@ class ApplicationData:
             ci = ContactInfo(name=c["name"], email=c.get("email", ""), phone_number=c.get("phone", ""))
             cust = Customer(customer_id=int(c["customer_id"]), contact=ci)
             customers.append(cust)
-            assert cust.customer_id is not None
+            if cust.customer_id is None:
+                raise ValueError("Customer ID is required when loading application state.")
             id_to_customer[cust.customer_id] = cust
             self._index_customer_record(cust, customers_by_email, customers_by_phone)
 
@@ -171,8 +172,7 @@ class ApplicationData:
         routes: list[DeliveryRoute] = []
         for r in data.get("routes", []):
             dep = dt_from_str(r.get("departure_time"))
-            route = DeliveryRoute(*r["locations"], departure_time=dep)
-            route.route_id = int(r["route_id"])
+            route = DeliveryRoute(*r["locations"], departure_time=dep, route_id=int(r["route_id"]))
             id_to_route[route.route_id] = route
             routes.append(route)
 
@@ -198,7 +198,7 @@ class ApplicationData:
         self._reset_vehicle_manager_state()
         for route, truck in route_truck_pairs:
             route.truck = truck
-            truck.assign(route, route.start_location)
+            truck.assign(route)
 
         self._routes = routes
         self._packages = packages
