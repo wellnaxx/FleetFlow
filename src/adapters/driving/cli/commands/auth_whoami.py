@@ -3,6 +3,8 @@ from src.application.use_cases.auth.who_am_i import WhoAmIUseCase
 
 
 class AuthWhoAmI(BaseCommand[WhoAmIUseCase]):
+    skips_heartbeat = True
+
     def execute(self) -> str:
         u = self._use_case.execute()
         if not u:

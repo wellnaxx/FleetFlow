@@ -15,6 +15,9 @@ class AuthLogin_Should(unittest.TestCase):
     def test_mutates_session_true(self) -> None:
         self.assertTrue(AuthLogin.mutates_session)
 
+    def test_login_skips_heartbeat(self) -> None:
+        self.assertTrue(AuthLogin.skips_heartbeat)
+
     @patch("getpass.getpass")
     def test_execute_with_params_success(self, mock_getpass: MagicMock) -> None:
         # Arrange

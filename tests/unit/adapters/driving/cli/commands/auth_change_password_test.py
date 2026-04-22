@@ -15,6 +15,9 @@ class AuthChangePassword_Should(unittest.TestCase):
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
+    def test_change_password_skips_heartbeat(self) -> None:
+        self.assertTrue(AuthChangePassword.skips_heartbeat)
+
     @patch("src.adapters.driving.cli.commands.auth_change_password.getpass.getpass")
     def test_manager_success_resets_password_and_lowercases_target(self, mock_gp: MagicMock) -> None:
         # Arrange

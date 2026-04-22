@@ -15,6 +15,9 @@ class AuthLogout_Should(unittest.TestCase):
 
     def test_mutates_session_true(self) -> None:
         self.assertTrue(AuthLogout.mutates_session)
+    
+    def test_logout_skips_heartbeat(self) -> None:
+        self.assertTrue(AuthLogout.skips_heartbeat)
 
     def test_execute_calls_logout_and_returns_message(self) -> None:
         cmd = self.make_cmd()

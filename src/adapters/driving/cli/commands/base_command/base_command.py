@@ -12,8 +12,9 @@ class BaseCommand[T](ABC):
     authorization services needed at the command boundary.
     """
 
-    mutates_state = False
-    mutates_session = False
+    mutates_state: bool = False
+    mutates_session: bool = False
+    skips_heartbeat: bool = False
 
     def __init__(
         self,

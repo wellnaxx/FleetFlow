@@ -300,16 +300,18 @@ class Engine:
     def _exec_line(self, line: str) -> None:
         """
         Parse and execute a single command line.
-        - Auto-advances world state via heartbeat() before executing.
+        - Creates the command first.
+        - Runs heartbeat before execution unless the command opts out.
         - Prints command output or a friendly error.
         """
         if not line or not line.strip():
             return
 
         try:
-            self._advance_world_state.execute()
-
             cmd = self._factory.create(line)
+
+            if not cmd.skips_heartbeat:
+                self._advance_world_state.execute()
 
             out = cmd.execute()
             if cmd.mutates_session:
@@ -319,6 +321,7 @@ class Engine:
                 try:
                     self._save_world_state.execute(self._autosave_path)
                 except Exception as se:
+                    logger.exception("Autosave failed after executing %r", line)
                     print(f"Warning: autosave failed: {se}")
 
             if out:

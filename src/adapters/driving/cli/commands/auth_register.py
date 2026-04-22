@@ -13,6 +13,7 @@ class AuthRegisterUser(BaseCommand[RegisterUserUseCase]):
       registeruser <username> <role> <name> [email] [phone]  # hybrid mode
     Roles: 'employee' or 'manager'
     """
+    skips_heartbeat = True
 
     @requires(Permission.ADMIN_USER)
     def execute(self) -> str:

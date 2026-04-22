@@ -15,6 +15,9 @@ class AuthRegisterUser_Should(unittest.TestCase):
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
+    def test_register_skips_heartbeat(self) -> None:
+        self.assertTrue(AuthRegisterUser.skips_heartbeat)
+
     @patch("src.adapters.driving.cli.commands.auth_register.getpass.getpass")
     @patch("builtins.input")
     def test_prompt_mode_success_all_fields(self, mock_input: MagicMock, mock_gp: MagicMock) -> None:
@@ -169,5 +172,3 @@ class AuthRegisterUser_Should(unittest.TestCase):
 
     def test_no_mutates_session_flag_present(self) -> None:
         self.assertFalse(getattr(AuthRegisterUser, "mutates_session", False))
-
-

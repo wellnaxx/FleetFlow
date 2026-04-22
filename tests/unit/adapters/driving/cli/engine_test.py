@@ -25,39 +25,169 @@ class EngineTests(unittest.TestCase):
         engine, _factory, auth, authz, _save_world, _advance = self.make_engine()
         auth.current_user = object()
 
-        engine._rebind_app() # pyright: ignore[reportPrivateUsage]
+        engine._rebind_app()  # pyright: ignore[reportPrivateUsage]
 
         self.assertIs(authz.current_user, auth.current_user)
 
-    def test_exec_line_runs_heartbeat_before_command_and_autosaves_mutating_commands(self) -> None:
-        engine, factory, _auth, _authz, save_world, advance = self.make_engine()
+    def test_exec_line_runs_heartbeat_for_normal_command(self) -> None:
+        engine, factory, _auth, _authz, _save_world, advance = self.make_engine()
+
         cmd = MagicMock()
-        cmd.execute.return_value = "ok"
-        cmd.mutates_state = True
+        cmd.skips_heartbeat = False
+        cmd.mutates_state = False
         cmd.mutates_session = False
+        cmd.execute.return_value = "ok"
         factory.create.return_value = cmd
 
         with patch("builtins.print") as mock_print:
-            engine._exec_line("save state.json") # pyright: ignore[reportPrivateUsage]
+            engine._exec_line("viewroute 1")  # pyright: ignore[reportPrivateUsage]
+
+        factory.create.assert_called_once_with("viewroute 1")
+        advance.execute.assert_called_once_with()
+        cmd.execute.assert_called_once_with()
+        mock_print.assert_called_once_with("ok")
+
+    def test_exec_line_skips_heartbeat_for_opt_out_command(self) -> None:
+        engine, factory, _auth, _authz, _save_world, advance = self.make_engine()
+
+        cmd = MagicMock()
+        cmd.skips_heartbeat = True
+        cmd.mutates_state = False
+        cmd.mutates_session = False
+        cmd.execute.return_value = "ok"
+        factory.create.return_value = cmd
+
+        with patch("builtins.print") as mock_print:
+            engine._exec_line("whoami")  # pyright: ignore[reportPrivateUsage]
+
+        factory.create.assert_called_once_with("whoami")
+        advance.execute.assert_not_called()
+        cmd.execute.assert_called_once_with()
+        mock_print.assert_called_once_with("ok")
+
+    def test_exec_line_autosaves_mutating_commands(self) -> None:
+        engine, factory, _auth, _authz, save_world, advance = self.make_engine()
+
+        cmd = MagicMock()
+        cmd.skips_heartbeat = False
+        cmd.mutates_state = True
+        cmd.mutates_session = False
+        cmd.execute.return_value = "ok"
+        factory.create.return_value = cmd
+
+        with patch("builtins.print") as mock_print:
+            engine._exec_line("save state.json")  # pyright: ignore[reportPrivateUsage]
 
         advance.execute.assert_called_once_with()
-        factory.create.assert_called_once_with("save state.json")
         cmd.execute.assert_called_once_with()
         save_world.execute.assert_called_once_with("state.json")
-        mock_print.assert_called_with("ok")
+        mock_print.assert_called_once_with("ok")
 
     def test_exec_line_does_not_autosave_non_mutating_commands(self) -> None:
         engine, factory, _auth, _authz, save_world, advance = self.make_engine()
+
         cmd = MagicMock()
-        cmd.execute.return_value = ""
+        cmd.skips_heartbeat = False
         cmd.mutates_state = False
         cmd.mutates_session = False
+        cmd.execute.return_value = ""
         factory.create.return_value = cmd
 
-        engine._exec_line("viewallroutes") # pyright: ignore[reportPrivateUsage]
+        engine._exec_line("viewallroutes")  # pyright: ignore[reportPrivateUsage]
 
         advance.execute.assert_called_once_with()
         save_world.execute.assert_not_called()
+
+    def test_exec_line_rebinds_after_session_mutation(self) -> None:
+        engine, factory, auth, authz, _save_world, advance = self.make_engine()
+        auth.current_user = object()
+
+        cmd = MagicMock()
+        cmd.skips_heartbeat = True
+        cmd.mutates_state = False
+        cmd.mutates_session = True
+        cmd.execute.return_value = "logged in"
+        factory.create.return_value = cmd
+
+        with patch("builtins.print") as mock_print:
+            engine._exec_line("login admin")  # pyright: ignore[reportPrivateUsage]
+
+        advance.execute.assert_not_called()
+        self.assertIs(authz.current_user, auth.current_user)
+        mock_print.assert_called_once_with("logged in")
+
+    def test_exec_line_warns_when_autosave_fails(self) -> None:
+        engine, factory, _auth, _authz, save_world, advance = self.make_engine()
+
+        cmd = MagicMock()
+        cmd.skips_heartbeat = False
+        cmd.mutates_state = True
+        cmd.mutates_session = False
+        cmd.execute.return_value = "ok"
+        factory.create.return_value = cmd
+
+        save_world.execute.side_effect = OSError("disk full")
+
+        with (
+            patch("builtins.print") as mock_print,
+            patch("src.adapters.driving.cli.engine.logger") as mock_logger,
+        ):
+            engine._exec_line("createroute A B")  # pyright: ignore[reportPrivateUsage]
+
+        advance.execute.assert_called_once_with()
+        mock_logger.exception.assert_called_once_with(
+            "Autosave failed after executing %r",
+            "createroute A B",
+        )
+        self.assertEqual(
+            [call.args[0] for call in mock_print.call_args_list],
+            ["Warning: autosave failed: disk full", "ok"],
+        )
+
+    def test_exec_line_prints_value_error_cleanly(self) -> None:
+        engine, factory, _auth, _authz, _save_world, advance = self.make_engine()
+
+        factory.create.side_effect = ValueError("bad input")
+
+        with patch("builtins.print") as mock_print:
+            engine._exec_line("broken")  # pyright: ignore[reportPrivateUsage]
+
+        advance.execute.assert_not_called()
+        mock_print.assert_called_once_with("Error: bad input")
+
+    def test_exec_line_prints_permission_error_cleanly(self) -> None:
+        engine, factory, _auth, _authz, _save_world, advance = self.make_engine()
+
+        factory.create.side_effect = PermissionError("forbidden")
+
+        with patch("builtins.print") as mock_print:
+            engine._exec_line("save state.json")  # pyright: ignore[reportPrivateUsage]
+
+        advance.execute.assert_not_called()
+        mock_print.assert_called_once_with("Permission Error: forbidden")
+
+    def test_exec_line_logs_and_prints_unexpected_exception(self) -> None:
+        engine, factory, _auth, _authz, _save_world, advance = self.make_engine()
+
+        cmd = MagicMock()
+        cmd.skips_heartbeat = False
+        cmd.mutates_state = False
+        cmd.mutates_session = False
+        cmd.execute.side_effect = RuntimeError("boom")
+        factory.create.return_value = cmd
+
+        with (
+            patch("builtins.print") as mock_print,
+            patch("src.adapters.driving.cli.engine.logger") as mock_logger,
+        ):
+            engine._exec_line("viewallroutes")  # pyright: ignore[reportPrivateUsage]
+
+        advance.execute.assert_called_once_with()
+        mock_logger.exception.assert_called_once_with(
+            "Unexpected CLI error while executing %r",
+            "viewallroutes",
+        )
+        mock_print.assert_called_once_with("Unexpected error: boom")
 
     def test_menu_state_quotes_save_paths_with_spaces(self) -> None:
         engine, _factory, _auth, _authz, _save_world, _advance = self.make_engine()
@@ -66,7 +196,7 @@ class EngineTests(unittest.TestCase):
             patch.object(engine, "_exec_line") as mock_exec_line,
             patch("builtins.input", side_effect=["1", "my state file.json", "0"]),
         ):
-            engine._menu_state() # pyright: ignore[reportPrivateUsage]
+            engine._menu_state()  # pyright: ignore[reportPrivateUsage]
 
         mock_exec_line.assert_called_once_with("save 'my state file.json'")
 
@@ -77,7 +207,7 @@ class EngineTests(unittest.TestCase):
             patch.object(engine, "_exec_line") as mock_exec_line,
             patch("builtins.input", side_effect=["2", "snapshots/world state.json", "0"]),
         ):
-            engine._menu_state() # pyright: ignore[reportPrivateUsage]
+            engine._menu_state()  # pyright: ignore[reportPrivateUsage]
 
         mock_exec_line.assert_called_once_with("load 'snapshots/world state.json'")
 
@@ -88,7 +218,7 @@ class EngineTests(unittest.TestCase):
             patch.object(engine, "_command_mode") as mock_command_mode,
             patch("builtins.input", side_effect=["cmd", "0"]),
         ):
-            engine._menu_state() # pyright: ignore[reportPrivateUsage]
+            engine._menu_state()  # pyright: ignore[reportPrivateUsage]
 
         mock_command_mode.assert_called_once_with()
 
@@ -102,7 +232,7 @@ class EngineTests(unittest.TestCase):
                 side_effect=["1", "SYD", "MEL", "10.5", "Mary Jane", "mary@example.com", "0412345678", "0"],
             ),
         ):
-            engine._menu_packages() # pyright: ignore[reportPrivateUsage]
+            engine._menu_packages()  # pyright: ignore[reportPrivateUsage]
 
         mock_exec_line.assert_called_once_with(
             "createpackage SYD MEL 10.5 'Mary Jane' mary@example.com 0412345678"
@@ -115,7 +245,7 @@ class EngineTests(unittest.TestCase):
             patch.object(engine, "_exec_line") as mock_exec_line,
             patch("builtins.input", side_effect=["2", "pkg 42", "5", "pkg 99", "0"]),
         ):
-            engine._menu_packages() # pyright: ignore[reportPrivateUsage]
+            engine._menu_packages()  # pyright: ignore[reportPrivateUsage]
 
         self.assertEqual(
             [call.args[0] for call in mock_exec_line.call_args_list],
@@ -129,7 +259,7 @@ class EngineTests(unittest.TestCase):
             patch.object(engine, "_exec_line") as mock_exec_line,
             patch("builtins.input", side_effect=["4", "pkg 77", "0"]),
         ):
-            engine._menu_packages() # pyright: ignore[reportPrivateUsage]
+            engine._menu_packages()  # pyright: ignore[reportPrivateUsage]
 
         mock_exec_line.assert_called_once_with("findsuitableroutesforpackage 'pkg 77'")
 
@@ -140,7 +270,7 @@ class EngineTests(unittest.TestCase):
             patch.object(engine, "_exec_line") as mock_exec_line,
             patch("builtins.input", side_effect=["3", "route-1", "pkg1 pkg2", "0"]),
         ):
-            engine._menu_packages() # pyright: ignore[reportPrivateUsage]
+            engine._menu_packages()  # pyright: ignore[reportPrivateUsage]
 
         mock_exec_line.assert_called_once_with("assignpackagestoroute route-1 pkg1 pkg2")
 
@@ -151,7 +281,7 @@ class EngineTests(unittest.TestCase):
             patch.object(engine, "_exec_line") as mock_exec_line,
             patch("builtins.input", side_effect=["1", "SYD MEL", "2025-10-12 06:00", "0"]),
         ):
-            engine._menu_routes() # pyright: ignore[reportPrivateUsage]
+            engine._menu_routes()  # pyright: ignore[reportPrivateUsage]
 
         mock_exec_line.assert_called_once_with("createroute SYD MEL '2025-10-12 06:00'")
 
@@ -176,7 +306,7 @@ class EngineTests(unittest.TestCase):
                 ],
             ),
         ):
-            engine._menu_routes() # pyright: ignore[reportPrivateUsage]
+            engine._menu_routes()  # pyright: ignore[reportPrivateUsage]
 
         self.assertEqual(
             [call.args[0] for call in mock_exec_line.call_args_list],
@@ -187,24 +317,3 @@ class EngineTests(unittest.TestCase):
                 "findsuitabletrucksforroute 'route 6'",
             ],
         )
-
-    def test_exec_line_warns_on_unexpected_exception(self) -> None:
-        engine, factory, _auth, _authz, _save_world, advance = self.make_engine()
-        cmd = MagicMock()
-        cmd.execute.side_effect = RuntimeError("boom")
-        cmd.mutates_state = False
-        cmd.mutates_session = False
-        factory.create.return_value = cmd
-
-        with (
-            patch("builtins.print") as mock_print,
-            patch("src.adapters.driving.cli.engine.logger") as mock_logger,
-        ):
-            engine._exec_line("viewallroutes") # pyright: ignore[reportPrivateUsage]
-
-        advance.execute.assert_called_once_with()
-        mock_logger.exception.assert_called_once_with(
-            "Unexpected CLI error while executing %r",
-            "viewallroutes",
-        )
-        mock_print.assert_called_with("Unexpected error: boom")

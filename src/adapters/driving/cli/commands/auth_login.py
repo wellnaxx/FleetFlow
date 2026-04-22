@@ -4,6 +4,7 @@ from src.application.use_cases.auth.login import LoginUseCase
 
 class AuthLogin(BaseCommand[LoginUseCase]):
     mutates_session = True
+    skips_heartbeat = True
 
     def execute(self) -> str:
         import getpass
