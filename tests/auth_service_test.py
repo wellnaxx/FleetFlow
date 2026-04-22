@@ -61,6 +61,7 @@ class AuthService_Should(unittest.TestCase):
 
         # Return a record for a manager
         rec = SimpleNamespace(
+            user_id=101,
             username="boss",
             password="stored-hash",
             role="MANAGER",
@@ -77,7 +78,7 @@ class AuthService_Should(unittest.TestCase):
 
         user = svc.login("boss", "CorrectHorse")
         # Constructed as Manager
-        Manager.assert_called_once_with("Bea", "bea@ex.com", "0400")
+        Manager.assert_called_once_with("Bea", "bea@ex.com", "0400", user_id=101)
         self.assertEqual(svc.current_user, Manager.return_value)
         self.assertEqual(user, Manager.return_value)
         self.assertEqual(svc.last_username, "boss")
@@ -91,6 +92,7 @@ class AuthService_Should(unittest.TestCase):
     ) -> None:
         svc, store = self.make_service()
         rec = SimpleNamespace(
+            user_id=202,
             username="alice",
             password="stored-hash",
             role="EMPLOYEE",  # anything not equal to Role.MANAGER.value becomes Employee
@@ -104,7 +106,7 @@ class AuthService_Should(unittest.TestCase):
         )
 
         user = svc.login("alice", "ok")
-        Employee.assert_called_once_with("Alice", "a@x", "0412")
+        Employee.assert_called_once_with("Alice", "a@x", "0412", user_id=202)
         self.assertEqual(user, Employee.return_value)
         self.assertEqual(svc.last_username, "alice")
 
@@ -115,6 +117,7 @@ class AuthService_Should(unittest.TestCase):
     ) -> None:
         svc, store = self.make_service()
         store.get.return_value = SimpleNamespace(
+            user_id=1,
             username="u",
             password="hash",
             role="EMPLOYEE",

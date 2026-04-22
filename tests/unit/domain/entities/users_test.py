@@ -23,26 +23,16 @@ class User_Should(unittest.TestCase):
         self.assertEqual(u.phone_number, "0412345678")
         self.assertEqual(u.role, Role.EMPLOYEE)
 
-    def test_user_id_increments_sequentially(self):
-        # Create two users in this test and ensure sequential IDs.
+    def test_user_defaults_user_id_to_none(self):
         c1 = self.make_contact("Customer1")
-        c2 = self.make_contact("Customer2")
         u1 = User(c1, Role.MANAGER)
-        u2 = User(c2, Role.EMPLOYEE)
 
-        self.assertIsInstance(u1.user_id, int)
-        self.assertIsInstance(u2.user_id, int)
-        self.assertEqual(u2.user_id, u1.user_id + 1)
+        self.assertIsNone(u1.user_id)
 
-    def test_multiple_users_keep_incrementing(self):
-        # Create a few to ensure monotonic growth within test scope.
-        ids: list[int] = []
-        for i in range(5):
-            u = User(self.make_contact(f"Name{i}"), Role.EMPLOYEE)
-            ids.append(u.user_id)
-        # strictly increasing
-        self.assertEqual(ids, sorted(ids))
-        self.assertEqual(len(set(ids)), len(ids))
+    def test_user_preserves_explicit_user_id(self):
+        user = User(self.make_contact("Customer1"), Role.EMPLOYEE, user_id=17)
+
+        self.assertEqual(user.user_id, 17)
 
 
 class Manager_Should(unittest.TestCase):
@@ -57,12 +47,13 @@ class Manager_Should(unittest.TestCase):
         self.assertEqual(m.email, "bob@ex.com")
         self.assertEqual(m.phone_number, "0400123456")
 
-    def test_user_id_increments_sequentially_for_managers(self):
-        m1 = Manager("Customer1")
-        m2 = Manager("Customer2")
-        self.assertIsInstance(m1.user_id, int)
-        self.assertIsInstance(m2.user_id, int)
-        self.assertEqual(m2.user_id, m1.user_id + 1)
+    def test_manager_defaults_user_id_to_none(self):
+        m = Manager("Customer1")
+        self.assertIsNone(m.user_id)
+
+    def test_manager_preserves_explicit_user_id(self):
+        m = Manager("Customer1", user_id=23)
+        self.assertEqual(m.user_id, 23)
 
 
 class Employee_Should(unittest.TestCase):
@@ -77,9 +68,10 @@ class Employee_Should(unittest.TestCase):
         self.assertEqual(e.email, "bob@ex.com")
         self.assertEqual(e.phone_number, "0400123456")
 
-    def test_user_id_increments_sequentially_for_employees(self):
-        e1 = Employee("Customer1")
-        e2 = Employee("Customer2")
-        self.assertIsInstance(e1.user_id, int)
-        self.assertIsInstance(e2.user_id, int)
-        self.assertEqual(e2.user_id, e1.user_id + 1)
+    def test_employee_defaults_user_id_to_none(self):
+        e = Employee("Customer1")
+        self.assertIsNone(e.user_id)
+
+    def test_employee_preserves_explicit_user_id(self):
+        e = Employee("Customer1", user_id=31)
+        self.assertEqual(e.user_id, 31)

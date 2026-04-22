@@ -52,9 +52,19 @@ class AuthService:
 
         contact = ContactInfo(name=rec.name, email=rec.email, phone_number=rec.phone_number)
         if rec.role == Role.MANAGER.value:
-            self._current_user = Manager(contact.name, contact.email, contact.phone_number)
+            self._current_user = Manager(
+                contact.name,
+                contact.email,
+                contact.phone_number,
+                user_id=rec.user_id,
+            )
         else:
-            self._current_user = Employee(contact.name, contact.email, contact.phone_number)
+            self._current_user = Employee(
+                contact.name,
+                contact.email,
+                contact.phone_number,
+                user_id=rec.user_id,
+            )
         self.last_username = rec.username
         return self._current_user
 

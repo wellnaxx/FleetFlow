@@ -4,5 +4,5 @@ from src.domain.value_objects.contact_info import ContactInfo
 
 
 class Manager(User):
-    def __init__(self, name: str, email: str = "", phone_number: str = "") -> None:
-        super().__init__(ContactInfo(name=name, email=email, phone_number=phone_number), Role.MANAGER)
+    def __init__(self, name: str, email: str = "", phone_number: str = "", user_id: int | None = None) -> None:
+        super().__init__(ContactInfo(name=name, email=email, phone_number=phone_number), Role.MANAGER, user_id)
