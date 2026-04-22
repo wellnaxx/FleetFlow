@@ -37,6 +37,9 @@ from src.application.use_cases.state.auto_save_world import AutosaveWorldState
 from src.application.use_cases.state.load_world import LoadWorldStateUseCase
 from src.application.use_cases.state.save_world import SaveWorldStateUseCase
 from src.application.use_cases.trucks.view_all_trucks import ViewAllTrucksUseCase
+from src.application.services.heartbeat_service import HeartbeatService
+from src.application.use_cases.state.advance_world_state import AdvanceWorldStateUseCase
+
 from src.core.application_data import ApplicationData
 
 
@@ -52,6 +55,13 @@ class Container:
         self.auth = auth
         self.authz: AuthorizationService = app_data.authz
 
+        self.heartbeat_service = HeartbeatService(
+            self.route_repo,
+            self.package_repo,
+            self.vehicle_manager,
+        )
+        self.advance_world_state_use_case = AdvanceWorldStateUseCase(self.heartbeat_service)
+
         self.world_state_gateway = ApplicationDataWorldStateGateway(app_data)
         self.world_state_persistence = JsonWorldStatePersistence()
         self.save_world_state_use_case = SaveWorldStateUseCase(
@@ -61,6 +71,7 @@ class Container:
         self.load_world_state_use_case = LoadWorldStateUseCase(
             self.world_state_gateway,
             self.world_state_persistence,
+            self.advance_world_state_use_case,
         )
         self.autosave_world_state = AutosaveWorldState(
             self.world_state_gateway,

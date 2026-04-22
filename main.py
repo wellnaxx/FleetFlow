@@ -1,6 +1,9 @@
+import os
+
 from src.adapters.driven.persistence.json.user_store import UserStore
 from src.adapters.driving.cli.command_factory import CommandFactory
 from src.adapters.driving.cli.engine import Engine
+from src.application.config.state_persistence import DEFAULT_WORLD_STATE_PATH
 from src.application.services.auth_service import AuthService
 from src.composition.container import Container
 from src.core.application_data import ApplicationData
@@ -22,25 +25,26 @@ def bootstrap_admin(auth: AuthService, store: UserStore) -> None:
 def main() -> None:
     app_data = ApplicationData(current_user=None)
 
-    try:
-        import json
-        import os
-
-        if os.path.exists(app_data.AUTOSAVE_PATH):
-            with open(app_data.AUTOSAVE_PATH, encoding="utf-8") as f:
-                data = json.load(f)
-            app_data._apply_state(data)  # pyright: ignore[reportPrivateUsage]; transitional, still ugly
-    except Exception:
-        pass
-
     store = UserStore("users.json")
     auth = AuthService(store)
     bootstrap_admin(auth, store)
 
     container = Container(app_data, auth)
 
-    cmd_factory = CommandFactory(app_data, auth, container)
-    Engine(cmd_factory, app_data, auth).start()
+    try:
+        if os.path.exists(DEFAULT_WORLD_STATE_PATH):
+            container.load_world_state_use_case.execute(DEFAULT_WORLD_STATE_PATH)
+    except Exception:
+        pass
+
+    cmd_factory = CommandFactory(auth, container.authz, container)
+    Engine(
+        cmd_factory,
+        auth,
+        container.authz,
+        container.autosave_world_state,
+        container.advance_world_state_use_case,
+    ).start()
 
 
 if __name__ == "__main__":

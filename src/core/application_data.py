@@ -1,5 +1,4 @@
 import contextlib
-from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from src.adapters.driven.persistence.json.serialization import dt_from_str, dt_to_str
@@ -9,7 +8,6 @@ from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.entities.users.user import User
 from src.domain.enums.auth import Permission
-from src.domain.enums.item_status import ItemStatus
 from src.domain.enums.truck_status import TruckStatus
 from src.domain.services.vehicle_manager import VehicleManager
 
@@ -176,154 +174,6 @@ class ApplicationData:
         self._next_customer_id = next_customer_id
         self._next_package_id = next_package_id
         self._next_route_id = next_route_id
-
-        # refresh derived fields
-        with contextlib.suppress(Exception):
-            self.heartbeat()
-
-    def heartbeat(self, now: datetime | None = None) -> dict[str, int]:
-        """
-        Advance state based on real time:
-        - Update implicit route 'status' (attached dynamically)
-        - Move trucks along routes; auto-release at final arrival
-        - Update package status and current_location
-        Returns summary counts.
-        """
-        now = now or datetime.now()
-        updated_routes = 0
-        moved_trucks = 0
-        released_trucks = 0
-        updated_packages = 0
-
-        for route in self._routes:
-            new_status = self._compute_route_status(route, now)
-            if getattr(route, "status", None) != new_status:
-                route.status = new_status
-                updated_routes += 1
-
-        for truck in self.vehicle_manager.vehicles:
-            r = getattr(truck, "route", None)
-            if not r:
-                continue
-
-            pos = r.current_position(now)
-
-            if pos.kind == "UNSCHEDULED":
-                pass
-
-            elif pos.kind == "BEFORE_START":
-                if truck.current_location != r.start_location or getattr(truck, "in_transit_to", None):
-                    truck.current_location = r.start_location
-                    truck.in_transit_to = None
-                    moved_trucks += 1
-
-            elif pos.kind == "AT_STOP":
-                if pos.stop_city and truck.current_location != pos.stop_city:
-                    truck.current_location = pos.stop_city
-                    truck.in_transit_to = None
-                    moved_trucks += 1
-                if (
-                    pos.stop_city == r.end_location
-                    and r.eta_final
-                    and now >= r.eta_final
-                    and truck.release(now=now, force=False)
-                ):
-                    released_trucks += 1
-
-            elif pos.kind == "IN_TRANSIT":
-                changed = False
-                if pos.from_city and truck.current_location != pos.from_city:
-                    truck.current_location = pos.from_city
-                    changed = True
-                if truck.in_transit_to != pos.to_city:
-                    truck.in_transit_to = pos.to_city
-                    changed |= True
-                if changed:
-                    moved_trucks += 1
-
-            elif pos.kind == "AFTER_END" and truck.release(now=now, force=False):
-                released_trucks += 1
-                moved_trucks += 1
-
-            updated_packages += self._update_packages_for_route(r, now)
-
-        return {
-            "routes_updated": updated_routes,
-            "trucks_moved": moved_trucks,
-            "trucks_released": released_trucks,
-            "packages_updated": updated_packages,
-        }
-
-    def _compute_route_status(self, route: DeliveryRoute, now: datetime) -> str:
-        dt = getattr(route, "departure_time", None)
-        eta = getattr(route, "eta_final", None)
-        if dt is None:
-            return "PLANNED"
-        if now < dt:
-            return "SCHEDULED"
-        if eta is not None and now >= eta:
-            return "COMPLETED"
-        return "IN_PROGRESS"
-
-    def _update_packages_for_route(self, route: DeliveryRoute, now: datetime) -> int:
-        """Update status/current_location for all packages assigned to a route."""
-        changed = 0
-
-        stop_times: dict[str, datetime] = {}
-        if route.departure_time is not None:
-            for city in route.locations:
-                with contextlib.suppress(Exception):
-                    stop_times[city] = route.arrival_time_at(city)
-
-        pos_index = {c: i for i, c in enumerate(route.locations)}
-
-        for p in route.packages:
-            s, e = p.start_location, p.end_location
-
-            if not hasattr(p, "current_location"):
-                p.current_location = s
-
-            if route.departure_time is None:
-                changed += self._set_pkg(p, status=ItemStatus.TODO, current_location=s)
-                continue
-
-            ts = stop_times.get(s)
-            te = stop_times.get(e)
-
-            if ts and now < ts:
-                changed += self._set_pkg(p, status=ItemStatus.TODO, current_location=s)
-
-            elif te and now >= te:
-                changed += self._set_pkg(p, status=ItemStatus.DONE, current_location=e)
-
-            else:
-                last_city = s
-                if ts:
-                    for i in range(pos_index[s], pos_index[e] + 1):
-                        city = route.locations[i]
-                        t_city = stop_times.get(city)
-                        if t_city and now >= t_city:
-                            last_city = city
-                        else:
-                            break
-                changed += self._set_pkg(p, status=ItemStatus.IN_PROGRESS, current_location=last_city)
-
-            if hasattr(p, "expected_arrival"):
-                with contextlib.suppress(Exception):
-                    p.expected_arrival = route.arrival_time_at(e)
-
-        return changed
-
-    @staticmethod
-    def _set_pkg(p: DeliveryPackage, *, status: str, current_location: str) -> int:
-        delta = 0
-        if getattr(p, "status", None) != status:
-            p.status = status
-            delta += 1
-        if getattr(p, "current_location", None) != current_location:
-            p.current_location = current_location
-            delta += 1
-        return delta
 
     def _index_customer(self, c: Customer) -> None:
         self._index_customer_record(c, self._customers_by_email, self._customers_by_phone)

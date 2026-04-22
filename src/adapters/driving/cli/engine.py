@@ -3,24 +3,24 @@ from datetime import datetime
 from src.adapters.driving.cli.command_factory import CommandFactory
 from src.application.services.auth_service import AuthService
 from src.application.services.authorization_service import AuthorizationService
+from src.application.use_cases.state.advance_world_state import AdvanceWorldStateUseCase
 from src.application.use_cases.state.auto_save_world import AutosaveWorldState
-from src.core.application_data import ApplicationData
 
 
 class Engine:
     def __init__(
         self,
         factory: CommandFactory,
-        app: ApplicationData,
         auth: AuthService,
         authz: AuthorizationService,
         autosave_world_state: AutosaveWorldState,
+        advance_world_state: AdvanceWorldStateUseCase,
     ) -> None:
         self._factory = factory
-        self.app = app
         self.auth = auth
         self.authz = authz
         self._autosave_world_state = autosave_world_state
+        self._advance_world_state = advance_world_state
         self._running: bool = False
 
     def _rebind_app(self) -> None:
@@ -268,7 +268,7 @@ class Engine:
             return
 
         try:
-            self.app.heartbeat()
+            self._advance_world_state.execute()
 
             cmd = self._factory.create(line)
 

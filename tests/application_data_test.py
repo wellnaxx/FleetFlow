@@ -1,8 +1,8 @@
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import MagicMock
 
 from src.adapters.driven.persistence.application_data.customer_repository import (
     ApplicationDataCustomerRepository,
@@ -13,13 +13,13 @@ from src.adapters.driven.persistence.application_data.package_repository import 
 from src.adapters.driven.persistence.application_data.route_repository import (
     ApplicationDataRouteRepository,
 )
+from src.adapters.driven.persistence.json.serialization import dt_to_str
 from src.application.services.customer_service import CustomerService
 from src.application.use_cases.packages.create_package import CreatePackageUseCase
 from src.application.use_cases.routes.assign_truck_to_route import AssignTruckToRouteUseCase
 from src.application.use_cases.routes.create_route import CreateRouteUseCase
 from src.core.application_data import ApplicationData
 from src.domain.enums.auth import Role
-from src.domain.enums.item_status import ItemStatus
 
 
 def make_create_route_uc(app: ApplicationData) -> CreateRouteUseCase:
@@ -53,250 +53,6 @@ def _mk_app() -> Any:
     app.vehicle_manager = MagicMock()  # type: ignore[assignment]
     app.vehicle_manager.vehicles = []
     return app
-
-
-class _FakeCustomer:
-    def __init__(
-        self,
-        customer_id: int = 1,
-        name: str = "Name",
-        email: str = "",
-        phone_number: str = "",
-    ) -> None:
-        self.customer_id = customer_id
-        self.name = name
-        self.email = email
-        self.phone_number = phone_number
-        self.packages: list[Any] = []
-
-    def add_package(self, pkg: Any) -> None:
-        old_customer = getattr(pkg, "customer", None)
-        if (
-            old_customer is not None
-            and old_customer is not self
-            and hasattr(old_customer, "_remove_package_link")
-        ):
-            old_customer._remove_package_link(pkg)
-        self._add_package_link(pkg)
-
-    def _add_package_link(self, pkg: Any) -> None:
-        if pkg not in self.packages:
-            self.packages.append(pkg)
-        pkg.customer = self
-
-    def _remove_package_link(self, pkg: Any) -> None:
-        if pkg in self.packages:
-            self.packages.remove(pkg)
-        if getattr(pkg, "customer", None) is self:
-            pkg.customer = None
-
-
-class _FakeTruck:
-    def __init__(self, vehicle_id: int = 1, capacity: float = 100.0, current_location: str = "BASE") -> None:
-        self.vehicle_id = vehicle_id
-        self.capacity = capacity
-        self.current_location = current_location
-        self.in_transit_to: str | None = None
-        self.route: Any = None
-
-    def assign(self, route: Any, start_loc: str) -> bool:
-        self.route = route
-        self.current_location = start_loc
-        return True
-
-    def release(self, now: datetime | None = None, force: bool = False) -> bool:
-        released = self.route is not None
-        self.route = None
-        self.in_transit_to = None
-        return released
-
-
-class _FakeRoute:
-    def __init__(
-        self,
-        route_id: int,
-        locations: list[str],
-        departure_time: datetime | None = None,
-        eta_final: datetime | None = None,
-    ) -> None:
-        self.route_id = route_id
-        self.locations = list(locations)
-        self.start_location = locations[0]
-        self.end_location = locations[-1]
-        self.departure_time = departure_time
-        self.eta_final = eta_final
-        self.truck: _FakeTruck | None = None
-        self.packages: list[Any] = []
-        self.status: str | None = None
-
-    def schedule(self, when: datetime) -> None:
-        self.departure_time = when
-
-    def total_assigned_weight(self) -> float:
-        return sum(getattr(p, "weight", 0.0) for p in self.packages)
-
-    def assign_package(self, pkg: Any) -> None:
-        if pkg not in self.packages:
-            self.packages.append(pkg)
-        pkg.route = self
-
-    def detach_package(self, package: Any) -> None:
-        for i, existing in enumerate(self.packages):
-            if existing.package_id == package.package_id:
-                self.packages.pop(i)
-                if getattr(package, "route", None) is self:
-                    package.route = None
-                return
-        raise ValueError(f"Package with id {package.package_id} is not assigned to this route.")
-
-    def arrival_time_at(self, city: str) -> datetime:
-        idx = self.locations.index(city)
-        if self.departure_time is None:
-            raise ValueError("unscheduled")
-        return self.departure_time + timedelta(hours=idx)
-
-    def current_position(self, now: datetime) -> SimpleNamespace:
-        if self.departure_time is None:
-            return SimpleNamespace(kind="UNSCHEDULED")
-        if now < self.departure_time:
-            return SimpleNamespace(kind="BEFORE_START")
-        if self.eta_final and now >= self.eta_final:
-            return SimpleNamespace(kind="AFTER_END")
-        for i, city in enumerate(self.locations):
-            t = self.arrival_time_at(city)
-            if abs((now - t).total_seconds()) < 1e-6:
-                return SimpleNamespace(kind="AT_STOP", stop_city=city)
-            if now < t:
-                prev = self.locations[i - 1] if i > 0 else self.start_location
-                return SimpleNamespace(
-                    kind="IN_TRANSIT",
-                    from_city=prev,
-                    to_city=city,
-                    next_eta=self.arrival_time_at(city),
-                )
-        return SimpleNamespace(kind="AT_STOP", stop_city=self.end_location)
-
-
-class _FakePackage:
-    def __init__(
-        self,
-        package_id: int,
-        start: str,
-        end: str,
-        weight: float = 1.0,
-        customer: Any = None,
-    ) -> None:
-        self.package_id = package_id
-        self.start_location = start
-        self.end_location = end
-        self.weight = weight
-        self.customer: Any = customer or _FakeCustomer()
-        self.route: Any = None
-        self.status: str | None = None
-
-    def _set_package_id(self, package_id: int) -> None:
-        self.package_id = package_id
-
-
-def _make_contact_info(name: str, email: str, phone_number: str) -> SimpleNamespace:
-    return SimpleNamespace(
-        name=name,
-        email=email,
-        phone_number=phone_number,
-    )
-
-
-def _make_fake_customer(customer_id: int, contact: Any) -> _FakeCustomer:
-    return _FakeCustomer(
-        customer_id=customer_id,
-        name=getattr(contact, "name", "Name"),
-        email=getattr(contact, "email", ""),
-        phone_number=getattr(contact, "phone_number", ""),
-    )
-
-
-def _make_fake_package(*args: Any, **kwargs: Any) -> _FakePackage:
-    customer = kwargs.get("customer")
-    if customer is None and args:
-        customer = args[-1]
-    return _FakePackage(
-        package_id=1,
-        start="SYD",
-        end="MEL",
-        weight=1.0,
-        customer=customer,
-    )
-
-
-def _make_fake_route(*args: Any, **kwargs: Any) -> _FakeRoute:
-    route_id = kwargs.get("route_id", 10)
-    locations = list(args) if args else ["SYD", "MEL"]
-    departure_time = kwargs.get("departure_time")
-    return _FakeRoute(route_id=route_id, locations=locations, departure_time=departure_time)
-
-
-class ApplicationData_Heartbeat_Should(unittest.TestCase):
-    def test_heartbeat_moves_trucks_and_updates_packages(self) -> None:
-        app = _mk_app()
-        base = datetime(2025, 1, 1, 8, 0)
-
-        r1 = _FakeRoute(
-            1,
-            ["S1", "E1"],
-            departure_time=base + timedelta(hours=2),
-            eta_final=base + timedelta(hours=3),
-        )
-        t1 = _FakeTruck(vehicle_id=1)
-        r1.truck = t1
-        t1.route = r1
-        t1.current_location = "X"
-
-        r2 = _FakeRoute(
-            2,
-            ["S2", "E2"],
-            departure_time=base,
-            eta_final=base + timedelta(hours=1),
-        )
-        t2 = _FakeTruck(vehicle_id=2)
-        r2.truck = t2
-        t2.route = r2
-
-        r3 = _FakeRoute(
-            3,
-            ["S3", "M3", "E3"],
-            departure_time=base,
-            eta_final=base + timedelta(hours=2),
-        )
-        t3 = _FakeTruck(vehicle_id=3)
-        r3.truck = t3
-        t3.route = r3
-
-        r4 = _FakeRoute(4, ["S4", "E4"], departure_time=None, eta_final=None)
-
-        p_a = _FakePackage(1, "S3", "M3", weight=1, customer=_FakeCustomer(customer_id=1))
-        p_b = _FakePackage(2, "S3", "E3", weight=1, customer=_FakeCustomer(customer_id=1))
-        r3.assign_package(p_a)
-        r3.assign_package(p_b)
-
-        app._routes = [r1, r2, r3, r4]
-        app.vehicle_manager.vehicles = [t1, t2, t3]
-        app._packages += [p_a, p_b]
-
-        summary1 = app.heartbeat(now=base)
-        self.assertGreaterEqual(summary1["trucks_moved"], 0)
-
-        mid = base + timedelta(minutes=30)
-        summary2 = app.heartbeat(now=mid)
-        self.assertGreaterEqual(summary2["trucks_moved"], 1)
-        self.assertEqual(p_a.status, ItemStatus.IN_PROGRESS)
-        self.assertEqual(p_b.status, ItemStatus.IN_PROGRESS)
-
-        summary3 = app.heartbeat(now=base + timedelta(hours=2))
-        self.assertGreaterEqual(summary3["trucks_released"], 1)
-
-        self.assertIn(app._compute_route_status(r4, base), {"PLANNED"})
-        self.assertEqual(app._compute_route_status(r1, base + timedelta(hours=1)), "SCHEDULED")
-        self.assertEqual(app._compute_route_status(r3, base + timedelta(hours=3)), "COMPLETED")
 
 
 class Characterization_SaveLoadRoundTrip_Should(unittest.TestCase):
@@ -358,6 +114,41 @@ class Characterization_SaveLoadRoundTrip_Should(unittest.TestCase):
         self.assertEqual(len(app2._packages), 1)
         self.assertIsNotNone(app2._packages[0].route)
         self.assertEqual(app2._packages[0].route.route_id, route.route_id)
+
+    def test_apply_state_does_not_run_derived_heartbeat_updates(self) -> None:
+        payload = {
+            "schema_version": 1,
+            "counters": {"next_customer_id": 2, "next_package_id": 2, "next_route_id": 2},
+            "customers": [
+                {"customer_id": 1, "name": "Carl", "email": "carl@test.com", "phone": ""},
+            ],
+            "packages": [
+                {
+                    "package_id": 1,
+                    "start": "SYD",
+                    "end": "MEL",
+                    "weight": 2.0,
+                    "customer_id": 1,
+                    "route_id": 1,
+                }
+            ],
+            "routes": [
+                {
+                    "route_id": 1,
+                    "locations": ["SYD", "MEL"],
+                    "departure_time": dt_to_str(datetime(2027, 1, 1, 10, 0)),
+                    "truck_vehicle_id": None,
+                    "package_ids": [1],
+                }
+            ],
+        }
+
+        app = ApplicationData(current_user=None)
+        app._apply_state(payload)
+
+        self.assertEqual(len(app.package_store), 1)
+        self.assertIsNone(app.route_store[0].status)
+        self.assertIsNone(app.package_store[0].status)
 
     def test_apply_bad_schema_raises(self) -> None:
         app = _mk_app()
