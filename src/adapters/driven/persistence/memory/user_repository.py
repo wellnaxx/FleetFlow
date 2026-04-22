@@ -7,6 +7,13 @@ from src.domain.value_objects.contact_info import ContactInfo
 
 
 class InMemoryUserRepository:
+    """In-memory user repository keyed by normalized username.
+
+    User ids use a create-time allocation model: `create()` assigns and commits
+    the next id directly. Unlike the customer/package/route repos, this
+    repository does not expose a peek-then-add id workflow.
+    """
+
     def __init__(self) -> None:
         self._by_username: dict[str, UserRecord] = {}
         self._next_id = 1

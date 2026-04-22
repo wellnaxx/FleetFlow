@@ -2,24 +2,44 @@ from src.domain.entities.delivery_route import DeliveryRoute
 
 
 class InMemoryRouteRepository:
-    """Store routes in process memory for runtime use."""
+    """In-memory route repository keyed by route id.
+
+    Id allocation uses a peek-then-add model:
+    `peek_next_id()` returns the current candidate id without reserving it, and
+    `add()` commits id advancement by moving `_next_id` past the stored
+    route's id.
+    """
 
     def __init__(self) -> None:
         self._routes: dict[int, DeliveryRoute] = {}
         self._next_id = 1
 
     def peek_next_id(self) -> int:
-        """Return the next route id without incrementing the counter."""
+        """Return the next candidate route id without reserving it.
+
+        This method is read-only. The returned id is not committed until a
+        route with that id is successfully added to the repository.
+
+        Returns:
+            The current next candidate route id.
+        """
         return self._next_id
 
     def add(self, route: DeliveryRoute) -> None:
-        """Add a route to the repository.
+        """Add a route and commit repository id advancement.
+
+        The repository uses a peek-then-add allocation model: callers may inspect
+        `peek_next_id()` to choose an id, but the id is not considered committed
+        until `add()` succeeds.
+
+        On successful add, `_next_id` is advanced so it remains greater than every
+        stored route id.
 
         Args:
             route: Route entity to store.
 
         Raises:
-            ValueError: If the route id already exists.
+            ValueError: If a route with the same id already exists.
         """
         if route.route_id in self._routes:
             raise ValueError(f"Route with ID {route.route_id} already exists")

@@ -2,24 +2,45 @@ from src.domain.entities.delivery_package import DeliveryPackage
 
 
 class InMemoryPackageRepository:
-    """Store packages in process memory for runtime use."""
+    """In-memory package repository keyed by package id.
+
+    Id allocation uses a peek-then-add model:
+    `peek_next_id()` returns the current candidate id without reserving it, and
+    `add()` commits id advancement by moving `_next_id` past the stored
+    package's id.
+    """
 
     def __init__(self) -> None:
         self._packages: dict[int, DeliveryPackage] = {}
         self._next_id: int = 1
 
     def peek_next_id(self) -> int:
-        """Return the next package id without incrementing the counter."""
+        """Return the next candidate package id without reserving it.
+
+        This method is read-only. The returned id is not committed until a
+        package with that id is successfully added to the repository.
+
+        Returns:
+            The current next candidate package id.
+        """
         return self._next_id
 
     def add(self, package: DeliveryPackage) -> None:
-        """Add a package to the repository.
+        """Add a package and commit repository id advancement.
+
+        The repository uses a peek-then-add allocation model: callers may inspect
+        `peek_next_id()` to choose an id, but the id is not considered committed
+        until `add()` succeeds.
+
+        On successful add, `_next_id` is advanced so it remains greater than every
+        stored package id.
 
         Args:
             package: Package entity to store.
 
+
         Raises:
-            ValueError: If the package id already exists.
+            ValueError: If a package with the same id already exists.
         """
         if package.package_id in self._packages:
             raise ValueError(f"Package with id {package.package_id} already exists.")

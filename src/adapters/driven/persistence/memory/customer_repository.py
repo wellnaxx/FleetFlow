@@ -2,7 +2,12 @@ from src.domain.entities.customer import Customer
 
 
 class InMemoryCustomerRepository:
-    """Store customers in process memory for runtime use."""
+    """In-memory customer repository.
+
+    Id allocation uses a peek-then-add model:
+    `peek_next_id()` exposes the current candidate id, and `add()` commits
+    advancement by moving `_next_id` past the added entity's id.
+    """
 
     def __init__(self) -> None:
         self._customers_by_id: dict[int, Customer] = {}
@@ -11,18 +16,31 @@ class InMemoryCustomerRepository:
         self._next_id: int = 1
 
     def peek_next_id(self) -> int:
-        """Return the next customer id without incrementing the counter."""
+        """Return the next candidate id without reserving it.
+
+        This method is read-only. The returned id is not committed until an entity
+        with that id is successfully added to the repository.
+
+        Returns:
+            The current next candidate id.
+        """
         return self._next_id
 
     def add(self, customer: Customer) -> None:
-        """Add a customer and update uniqueness indexes.
+        """Add a customer and commit repository id advancement.
+
+        The repository uses a peek-then-add allocation model:
+        callers may inspect `peek_next_id()` to choose an id, but the id is not
+        considered committed until `add()` succeeds.
+
+        On successful add, the repository advances `_next_id` to remain greater
+        than any stored entity id.
 
         Args:
-            customer: Customer entity to store.
+                customer: Customer entity to store.
 
         Raises:
-            ValueError: If the id already exists or the email/phone is already
-                used by another customer.
+            ValueError: If a customer with the same id already exists.
         """
         if customer.customer_id in self._customers_by_id:
             raise ValueError(f"Customer with id {customer.customer_id} already exists.")
@@ -90,9 +108,7 @@ class InMemoryCustomerRepository:
         """Replace the full customer state from a snapshot load."""
         self._customers_by_id = dict(customers_by_id)
         self._id_by_email = {
-            customer.email: customer.customer_id
-            for customer in customers_by_id.values()
-            if customer.email
+            customer.email: customer.customer_id for customer in customers_by_id.values() if customer.email
         }
         self._id_by_phone = {
             customer.phone_number: customer.customer_id
