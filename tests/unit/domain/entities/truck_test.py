@@ -62,7 +62,7 @@ class TestTruck_Should(unittest.TestCase):
         start_location = "Sofia"
 
         # Act
-        self.truck.assign(mock_route, start_location)
+        self.truck.assign(mock_route)
 
         # Assert
         self.assertEqual(self.truck.route, mock_route)

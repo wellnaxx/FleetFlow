@@ -44,9 +44,7 @@ class AssignTruckToRoute_Should(unittest.TestCase):
         mock_parse.side_effect = [11, 22]
 
         cmd = self.make_cmd(["11", "22"], authorized=True)
-        route_obj = MagicMock()
-        route_obj.route_id = 22
-        cmd._use_case.execute.return_value = route_obj  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = MagicMock(route_id=22)  # type: ignore[reportAttributeAccessIssue]
 
         result = cmd.execute()
 
@@ -68,9 +66,7 @@ class AssignTruckToRoute_Should(unittest.TestCase):
         mock_parse.side_effect = [5, 7]
 
         cmd = self.make_cmd(["5", "7"], authorized=True)
-        route_obj = MagicMock()
-        route_obj.route_id = 999
-        cmd._use_case.execute.return_value = route_obj  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = MagicMock(route_id=999)  # type: ignore[reportAttributeAccessIssue]
 
         result = cmd.execute()
 
@@ -158,9 +154,7 @@ class AssignTruckToRoute_Should(unittest.TestCase):
         mock_parse.side_effect = [10, 20]
 
         cmd = self.make_cmd(["10", "20"], authorized=True)
-        route_obj = MagicMock()
-        route_obj.route_id = 20
-        cmd._use_case.execute.return_value = route_obj  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = MagicMock(route_id=20)  # type: ignore[reportAttributeAccessIssue]
 
         _ = cmd.execute()
 
@@ -180,9 +174,7 @@ class AssignTruckToRoute_Should(unittest.TestCase):
         mock_parse.side_effect = [1, 2]
 
         cmd = self.make_cmd(["1", "2"], authorized=True)
-        route_obj = MagicMock()
-        route_obj.route_id = 2
-        cmd._use_case.execute.return_value = route_obj  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = MagicMock(route_id=2)  # type: ignore[reportAttributeAccessIssue]
 
         _ = cmd.execute()
 

@@ -27,6 +27,6 @@ class AssignTruckToRoute(UseCaseCommand[AssignTruckToRouteUseCase]):
         route_id = try_parse_int(self._params[1])
         now = datetime.now()
 
-        route = self._use_case.execute(truck_id, route_id, now)
-        
-        return f"Assigned truck {truck_id} to route {route.route_id}."
+        result = self._use_case.execute(truck_id, route_id, now)
+
+        return f"Assigned truck {truck_id} to route {result.route_id}."

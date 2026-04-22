@@ -27,7 +27,7 @@ class Truck:
     def is_free(self) -> bool:
         return self.status == TruckStatus.FREE
 
-    def assign(self, route: DeliveryRoute, start_location: str | None = None) -> None:  # noqa: ARG002
+    def assign(self, route: DeliveryRoute) -> None:
         """Record the assignment window."""
         self.route = route
         self.status = TruckStatus.ON_THE_WAY

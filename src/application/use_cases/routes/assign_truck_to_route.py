@@ -1,9 +1,12 @@
 from dataclasses import dataclass
 from datetime import datetime
+from typing import TYPE_CHECKING
 
-from src.domain.entities.delivery_route import DeliveryRoute
 from src.ports.output.route_repository import RouteRepositoryPort
 from src.ports.output.vehicle_manager import VehicleManagerPort
+
+if TYPE_CHECKING:
+    from src.domain.entities.delivery_route import DeliveryRoute
 
 
 @dataclass(frozen=True)
@@ -17,12 +20,18 @@ class _RouteSuitabilityProbe:
         return self.assigned_weight
 
 
+@dataclass(frozen=True)
+class AssignTruckToRouteResult:
+    route_id: int
+    truck_id: int
+
+
 class AssignTruckToRouteUseCase:
     def __init__(self, routes: RouteRepositoryPort, vehicles: VehicleManagerPort) -> None:
         self._routes = routes
         self._vehicles = vehicles
 
-    def execute(self, truck_id: int, route_id: int, now: datetime) -> DeliveryRoute:
+    def execute(self, truck_id: int, route_id: int, now: datetime) -> AssignTruckToRouteResult:
         route = self._routes.get_by_id(route_id)
         if route is None:
             raise ValueError(f"Route with ID {route_id} not found")
@@ -54,6 +63,6 @@ class AssignTruckToRouteUseCase:
         if route.departure_time is None:
             route.schedule(now)
         route.truck = truck
-        truck.assign(route, route.start_location)
+        truck.assign(route)
 
-        return route
+        return AssignTruckToRouteResult(route_id=route.route_id, truck_id=truck.vehicle_id)
