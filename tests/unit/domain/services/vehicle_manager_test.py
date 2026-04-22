@@ -138,6 +138,41 @@ class VehicleManager_Should(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("route not scheduled yet", reason)
 
+    def test_is_suitable_false_when_truck_already_assigned_with_unknown_availability(self) -> None:
+        vm = VehicleManager()
+        dep = datetime(2025, 1, 1, 10, 0)
+        r, _active = self._fake_route(
+            total_distance=100,
+            assigned_weight=0,
+            start_loc="SYD",
+            departure_time=dep,
+            truck_eta_final=None,
+        )
+        active = SimpleNamespace(eta_final=None)
+        t = self._fake_truck(capacity=1000, max_range=1000, current_location="SYD", assigned_route=active)
+
+        ok, reason = vm.is_suitable_for_route(t, r)  # type: ignore[reportArgumentType]
+
+        self.assertFalse(ok)
+        self.assertIn("unknown availability", reason)
+
+    def test_is_suitable_true_when_existing_assignment_ends_before_departure(self) -> None:
+        vm = VehicleManager()
+        dep = datetime(2025, 1, 1, 10, 0)
+        r, active = self._fake_route(
+            total_distance=100,
+            assigned_weight=900,
+            start_loc="SYD",
+            departure_time=dep,
+            truck_eta_final=datetime(2025, 1, 1, 9, 0),
+        )
+        t = self._fake_truck(capacity=1000, max_range=1000, current_location="SYD", assigned_route=active)
+
+        ok, reason = vm.is_suitable_for_route(t, r)  # type: ignore[reportArgumentType]
+
+        self.assertTrue(ok)
+        self.assertEqual(reason, "")
+
     def test_is_suitable_true_when_all_conditions_ok(self) -> None:
         vm = VehicleManager()
         dep = datetime(2025, 1, 1, 10, 0)

@@ -49,11 +49,17 @@ class VehicleManager:
             return False, "insufficient capacity"
         if truck.current_location != route.start_location:
             return False, f"wrong location ({truck.current_location} != {route.start_location})"
-        if truck.route and route.departure_time:
-            if truck.route.eta_final and truck.route.eta_final >= route.departure_time:
+        if truck.route is not None:
+            if route.departure_time is None:
+                return False, "route not scheduled yet"
+
+            current_eta = truck.route.eta_final
+            if current_eta is None:
+                return False, "truck already assigned to a route with unknown availability"
+
+            if current_eta >= route.departure_time:
                 return False, "truck busy in the requested time window"
-        elif truck.route and not route.departure_time:
-            return False, "route not scheduled yet"
+
         return True, ""
 
     def find_available_for_route(self, route: DeliveryRoute) -> list[Truck]:
