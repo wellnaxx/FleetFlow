@@ -299,95 +299,6 @@ class ApplicationData_Heartbeat_Should(unittest.TestCase):
         self.assertEqual(app._compute_route_status(r3, base + timedelta(hours=3)), "COMPLETED")
 
 
-class ApplicationData_SaveLoad_Should(unittest.TestCase):
-    @patch("src.core.application_data.resolve_data_path", return_value="C:/fake/state.json")
-    @patch("src.core.application_data.os.path.exists", return_value=True)
-    @patch("src.core.application_data.open", new_callable=mock_open)
-    @patch("src.core.application_data.json.load")
-    def test_load_reads_and_applies(
-        self,
-        mock_json_load: MagicMock,
-        m_open: MagicMock,
-        _exists: MagicMock,
-        _resolve: MagicMock,
-    ) -> None:
-        app = _mk_app()
-        payload = {
-            "schema_version": 1,
-            "counters": {"next_customer_id": 2, "next_package_id": 3, "next_route_id": 4},
-            "customers": [{"customer_id": 1, "name": "Name", "email": "", "phone": ""}],
-            "packages": [
-                {
-                    "package_id": 1,
-                    "start": "SYD",
-                    "end": "MEL",
-                    "weight": 1.0,
-                    "customer_id": 1,
-                    "route_id": None,
-                }
-            ],
-            "routes": [
-                {
-                    "route_id": 10,
-                    "locations": ["SYD", "MEL"],
-                    "departure_time": None,
-                    "truck_vehicle_id": None,
-                    "package_ids": [],
-                }
-            ],
-        }
-        mock_json_load.return_value = payload
-
-        with (
-            patch("src.domain.value_objects.contact_info.ContactInfo") as CI,
-            patch("src.core.application_data.Customer") as Cust,
-            patch("src.core.application_data.DeliveryPackage") as DP,
-            patch("src.core.application_data.DeliveryRoute") as DR,
-            patch.object(app, "heartbeat", return_value={}),
-        ):
-            CI.side_effect = _make_contact_info
-            Cust.side_effect = _make_fake_customer
-            DP.side_effect = _make_fake_package
-            DR.side_effect = _make_fake_route
-
-            msg = app.load("state.json")
-
-            self.assertIn("Loaded state from", msg)
-            self.assertTrue(app._customers)
-            self.assertTrue(app._packages)
-            self.assertTrue(app._routes)
-
-    @patch("src.core.application_data.resolve_data_path", return_value="C:/fake/missing.json")
-    @patch("src.core.application_data.os.path.exists", return_value=False)
-    def test_load_missing_raises(self, _exists: MagicMock, _resolve: MagicMock) -> None:
-        app = _mk_app()
-        with self.assertRaises(ValueError):
-            app.load("missing.json")
-
-    @patch("src.core.application_data.resolve_data_path", return_value="C:/fake/state.json")
-    @patch("src.core.application_data.tempfile.mkstemp", return_value=(123, "C:/fake/.appstate.tmp.json"))
-    @patch("src.core.application_data.os.fdopen")
-    @patch("src.core.application_data.os.replace")
-    @patch("src.core.application_data.os.path.dirname", return_value="C:/fake")
-    @patch("src.core.application_data.os.makedirs")
-    def test_persist_to_file_writes_atomically(
-        self,
-        makedirs: MagicMock,
-        dirname: MagicMock,
-        replace: MagicMock,
-        fdopen: MagicMock,
-        mkstemp: MagicMock,
-        resolve: MagicMock,
-    ) -> None:
-        app = _mk_app()
-        with patch.object(app, "_dump_state", return_value={"ok": True}):
-            cm = MagicMock()
-            fdopen.return_value.__enter__.return_value = cm
-            path = app._persist_to_file("state.json")
-            self.assertEqual(path, "C:/fake/state.json")
-            makedirs.assert_called_once()
-            replace.assert_called_once()
-
 class Characterization_SaveLoadRoundTrip_Should(unittest.TestCase):
     """_dump_state / _apply_state must round-trip all domain entities."""
 
@@ -546,24 +457,8 @@ class Characterization_RBAC_Should(unittest.TestCase):
         app.authz = AuthorizationService(user)
         return app
 
-    def test_employee_cannot_save_state(self) -> None:
-        app = self._app_for_role(Role.EMPLOYEE)
-        with self.assertRaises(PermissionError):
-            app.save("dummy.json")
-
-    def test_employee_cannot_load_state(self) -> None:
-        app = self._app_for_role(Role.EMPLOYEE)
-        with self.assertRaises(PermissionError):
-            app.load("dummy.json")
-
     def test_employee_cannot_view_all_customers(self) -> None:
         app = self._app_for_role(Role.EMPLOYEE)
         with self.assertRaises(PermissionError):
             app.view_all_customers()
-
-    def test_manager_can_save_state(self) -> None:
-        app = self._app_for_role(Role.MANAGER)
-        with patch.object(app, "_persist_to_file", return_value="/fake/path"):
-            result = app.save("state.json")
-            self.assertIn("/fake/path", result)
 

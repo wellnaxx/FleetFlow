@@ -1,11 +1,7 @@
 import contextlib
-import json
-import os
-import tempfile
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from src.adapters.driven.persistence.json.paths import resolve_data_path
 from src.adapters.driven.persistence.json.serialization import dt_from_str, dt_to_str
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.domain.entities.customer import Customer
@@ -25,8 +21,6 @@ if TYPE_CHECKING:
 
 class ApplicationData:
     """Holds domain objects and implements business operations for the app."""
-
-    AUTOSAVE_PATH: str = resolve_data_path("state.json")
 
     def __init__(self, current_user: User | None = None) -> None:
         self.authz = AuthorizationService(current_user)
@@ -97,32 +91,6 @@ class ApplicationData:
                 for r in self._routes
             ],
         }
-
-    # --- INTERNAL: atomic write, no RBAC (for autosave) ---
-    def _persist_to_file(self, path: str | None = None) -> str:
-        """Atomically write the current state JSON to disk (used by autosave).
-
-        Args:
-            path: Target filename or path. If None, uses AUTOSAVE_PATH.
-                  Bare filenames are placed under data/.
-        Returns:
-            The absolute path written.
-        """
-        data = self._dump_state()
-        path = resolve_data_path(path) or self.AUTOSAVE_PATH
-        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        fd, tmp = tempfile.mkstemp(prefix=".appstate.", suffix=".json", dir=os.path.dirname(path) or ".")
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
-            os.replace(tmp, path)  # atomic on same filesystem
-        finally:
-            try:
-                if os.path.exists(tmp):
-                    os.remove(tmp)
-            except Exception:
-                pass
-        return path
 
     # --- INTERNAL: load dict into current instance (no RBAC) ---
     def _apply_state(self, data: dict[str, Any]) -> None:
@@ -212,38 +180,6 @@ class ApplicationData:
         # refresh derived fields
         with contextlib.suppress(Exception):
             self.heartbeat()
-
-    # --- PUBLIC (manager-only) manual commands remain RBAC-guarded ---
-    @requires(Permission.APP_SAVE_STATE)
-    def save(self, path: str) -> str:
-        """Persist the current application state to a JSON file.
-
-        Args:
-            path: Target filename or path. Bare filenames go to data/.
-        Returns:
-            Human-friendly confirmation message.
-        """
-        abs_path = self._persist_to_file(path)
-        return f"Saved state to {abs_path}"
-
-    @requires(Permission.APP_LOAD_STATE)
-    def load(self, path: str) -> str:
-        """Load application state from a JSON file, replacing current state.
-
-        Args:
-            path: Source filename or path. Bare filenames are looked up in data/.
-        Returns:
-            Human-friendly confirmation message.
-        Raises:
-            ValueError: If the file does not exist or is invalid.
-        """
-        abs_path = resolve_data_path(path)
-        if not os.path.exists(abs_path):
-            raise ValueError(f"State file not found: {abs_path}")
-        with open(abs_path, encoding="utf-8") as f:
-            data = json.load(f)
-        self._apply_state(data)
-        return f"Loaded state from {abs_path}"
 
     def heartbeat(self, now: datetime | None = None) -> dict[str, int]:
         """

@@ -7,7 +7,9 @@ from src.adapters.driven.persistence.application_data.world_state_gateway import
     ApplicationDataWorldStateGateway,
 )
 from src.adapters.driven.persistence.json.world_state_persistence import JsonWorldStatePersistence
+from src.application.config.state_persistence import DEFAULT_WORLD_STATE_PATH
 from src.application.services.auth_service import AuthService
+from src.application.services.authorization_service import AuthorizationService
 from src.application.services.customer_service import CustomerService
 from src.application.use_cases.auth.change_password import ChangePasswordUseCase
 from src.application.use_cases.auth.login import LoginUseCase
@@ -48,6 +50,7 @@ class Container:
 
         self.vehicle_manager = app_data.vehicle_manager
         self.auth = auth
+        self.authz: AuthorizationService = app_data.authz
 
         self.world_state_gateway = ApplicationDataWorldStateGateway(app_data)
         self.world_state_persistence = JsonWorldStatePersistence()
@@ -62,7 +65,7 @@ class Container:
         self.autosave_world_state = AutosaveWorldState(
             self.world_state_gateway,
             self.world_state_persistence,
-            app_data.AUTOSAVE_PATH,
+            DEFAULT_WORLD_STATE_PATH,
         )
 
         self.login_use_case = LoginUseCase(self.auth)
