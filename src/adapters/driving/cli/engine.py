@@ -35,6 +35,8 @@ class Engine:
                 elif choice == "3":
                     self._menu_trucks()
                 elif choice == "4":
+                    self._exec_line("viewallcustomers")
+                elif choice == "5":
                     self._menu_state()
                 elif choice == "login":
                     self._exec_line("login")
@@ -211,15 +213,13 @@ class Engine:
                     if not path:
                         print("No file name entered.")
                         continue
-                    result = self._exec_line(f"save {path}")
-                    print(result)
+                    self._exec_line(f"save {path}")
                 elif choice == "2":
                     path = input("Enter filename to load state: ").strip()
                     if not path:
                         print("No file name entered.")
                         continue
-                    result = self._exec_line(f"load {path}")
-                    print(result)
+                    self._exec_line(f"load {path}")
                 elif choice == "0":
                     break
                 else:
@@ -300,7 +300,8 @@ class Engine:
         print("1) Packages")
         print("2) Routes")
         print("3) Trucks")
-        print("4) State")
+        print("4) Customers")
+        print("5) State")
         print("cmd) Command Mode")
         print("login) Login")
         print("logout) Logout")
@@ -314,7 +315,7 @@ class Engine:
         print("Common commands:")
         print('  createpackage SYD MEL 10 John "" 0412345678')
         print("  createroute SYD MEL 2025-09-12 06:00")
-        print("  assignpackagetoroute <route_id> <pkg1> [pkg2] ...")
+        print("  assignpackagestoroute <route_id> <pkg1> [pkg2] ...")
         print("  assigntrucktoroute <truck_id> <route_id>")
         print("  viewroute <route_id>")
         print("  viewallroutes")

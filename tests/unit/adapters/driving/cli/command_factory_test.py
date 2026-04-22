@@ -578,7 +578,7 @@ class CommandFactory_Should(unittest.TestCase):
             container.find_suitable_routes_for_package_use_case,
         )
 
-    def test_assignpackagetoroute_uses_assign_packages_to_route_use_case_from_container(self) -> None:
+    def test_assignpackagestoroute_uses_assign_packages_to_route_use_case_from_container(self) -> None:
         cf, app, auth, container = self.make_factory()
 
         cmd_cls = MagicMock()
@@ -587,10 +587,10 @@ class CommandFactory_Should(unittest.TestCase):
 
         with patch.dict(
             "src.adapters.driving.cli.command_factory._CONTAINER_COMMANDS",
-            {"assignpackagetoroute": (cmd_cls, _get_assign_packages_to_route_use_case)},
+            {"assignpackagestoroute": (cmd_cls, _get_assign_packages_to_route_use_case)},
             clear=False,
         ):
-            result = cf.create("assignpackagetoroute 5 42 43")
+            result = cf.create("assignpackagestoroute 5 42 43")
 
         self.assertIs(result, sentinel_cmd)
         cmd_cls.assert_called_once_with(
