@@ -8,6 +8,9 @@ from src.application.services.authorization_service import AuthorizationService
 class BaseCommand[T](ABC):
     """Abstract base for all CLI commands."""
 
+    mutates_state = False
+    mutates_session = False
+
     def __init__(
         self,
         params: Iterable[str],

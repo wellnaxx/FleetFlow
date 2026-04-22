@@ -21,3 +21,12 @@ class BaseCommandShould(unittest.TestCase):
         self.assertEqual(cmd.params, ("a", "b"))
         self.assertIs(cmd.auth, auth)
         self.assertIs(cmd.authz, authz)
+
+    def test_defaults_mutation_flags_to_false(self) -> None:
+        auth = MagicMock()
+        authz = MagicMock()
+
+        cmd = _DummyCommand([], auth, authz, object())
+
+        self.assertFalse(cmd.mutates_state)
+        self.assertFalse(cmd.mutates_session)

@@ -1,3 +1,5 @@
+import logging
+import shlex
 from datetime import datetime
 
 from src.adapters.driving.cli.command_factory import CommandFactory
@@ -5,6 +7,8 @@ from src.application.services.auth_service import AuthService
 from src.application.services.authorization_service import AuthorizationService
 from src.application.use_cases.state.advance_world_state import AdvanceWorldStateUseCase
 from src.application.use_cases.state.save_world import SaveWorldStateUseCase
+
+logger = logging.getLogger(__name__)
 
 
 class Engine:
@@ -89,26 +93,43 @@ class Engine:
 
             try:
                 if choice == "1":
-                    info = input("start end weight name [email] [phone]: ").strip()
-                    self._exec_line(f"createpackage {info}")
+                    start = input("Start location: ").strip()
+                    end = input("End location: ").strip()
+                    weight = input("Weight: ").strip()
+                    name = input("Customer name: ").strip()
+                    email = input("Email (optional): ").strip()
+                    phone = input("Phone (optional): ").strip()
+
+                    parts = [
+                        "createpackage",
+                        start,
+                        end,
+                        weight,
+                        name,
+                    ]
+                    if email:
+                        parts.append(email)
+                    if phone:
+                        parts.append(phone)
+                    self._exec_line(self._join_command(parts))
 
                 elif choice == "2":
                     package_id = input("Package ID to remove: ").strip()
-                    self._exec_line(f"removepackage {package_id}")
+                    self._exec_line(self._join_command(["removepackage", package_id]))
 
                 elif choice == "3":
                     route_id = input("Route ID: ").strip()
                     pkg_ids = input("Package IDs (space-separated): ").strip()
                     # One command handles 1..N packages
-                    self._exec_line(f"assignpackagestoroute {route_id} {pkg_ids}")
+                    self._exec_line(self._join_command(["assignpackagestoroute", route_id, *pkg_ids.split()]))
 
                 elif choice == "4":
                     pid = input("Package ID to find suitable routes: ").strip()
-                    self._exec_line(f"findsuitableroutesforpackage {pid}")
+                    self._exec_line(self._join_command(["findsuitableroutesforpackage", pid]))
 
                 elif choice == "5":
                     pid = input("Package ID to view information about: ")
-                    self._exec_line(f"viewpackage {pid}")
+                    self._exec_line(self._join_command(["viewpackage", pid.strip()]))
 
                 elif choice == "6":
                     self._exec_line("viewallpackages")
@@ -149,19 +170,19 @@ class Engine:
                     if dep:
                         try:
                             datetime.strptime(dep, "%Y-%m-%d %H:%M")
-                            self._exec_line(f"createroute {locs} {dep}")
+                            self._exec_line(self._join_command(["createroute", *locs.split(), dep]))
                         except ValueError:
                             print("Invalid date format, must be YYYY-MM-DD HH:MM")
                     else:
-                        self._exec_line(f"createroute {locs}")
+                        self._exec_line(self._join_command(["createroute", *locs.split()]))
 
                 elif choice == "2":
                     rid = input("Route ID: ").strip()
-                    self._exec_line(f"viewroute {rid}")
+                    self._exec_line(self._join_command(["viewroute", rid]))
 
                 elif choice == "3":
                     rid = input("Route ID to remove: ").strip()
-                    self._exec_line(f"removeroute {rid}")
+                    self._exec_line(self._join_command(["removeroute", rid]))
 
                 elif choice == "4":
                     self._exec_line("viewallroutes")
@@ -169,11 +190,11 @@ class Engine:
                 elif choice == "5":
                     truck_id = input("Truck ID: ").strip()
                     route_id = input("Route ID: ").strip()
-                    self._exec_line(f"assigntrucktoroute {truck_id} {route_id}")
+                    self._exec_line(self._join_command(["assigntrucktoroute", truck_id, route_id]))
 
                 elif choice == "6":
                     rid = input("Route ID: ").strip()
-                    self._exec_line(f"findsuitabletrucksforroute {rid}")
+                    self._exec_line(self._join_command(["findsuitabletrucksforroute", rid]))
 
                 elif choice == "7":
                     self._exec_line("viewroutesinprogress")
@@ -214,22 +235,25 @@ class Engine:
             print("\nLogistics App State Menu")
             print("1. Save state")
             print("2. Load state")
+            print(":) Command Mode (type 'cmd')")
             print("0. Back to main menu")
 
             choice = input("> ").strip()
             try:
-                if choice == "1":
+                if choice.lower() in {"cmd", "command", ":"}:
+                    self._command_mode()
+                elif choice == "1":
                     path = input("Enter filename to save state: ").strip()
                     if not path:
                         print("No file name entered.")
                         continue
-                    self._exec_line(f"save {path}")
+                    self._exec_line(self._join_command(["save", path]))
                 elif choice == "2":
                     path = input("Enter filename to load state: ").strip()
                     if not path:
                         print("No file name entered.")
                         continue
-                    self._exec_line(f"load {path}")
+                    self._exec_line(self._join_command(["load", path]))
                 elif choice == "0":
                     break
                 else:
@@ -275,10 +299,10 @@ class Engine:
             cmd = self._factory.create(line)
 
             out = cmd.execute()
-            if getattr(cmd, "mutates_session", False):
+            if cmd.mutates_session:
                 self._rebind_app()
 
-            if getattr(cmd, "mutates_state", False):
+            if cmd.mutates_state:
                 try:
                     self._save_world_state.execute(self._autosave_path)
                 except Exception as se:
@@ -299,7 +323,12 @@ class Engine:
             print("\n(cancelled)")
 
         except Exception as e:
+            logger.exception("Unexpected CLI error while executing %r", line)
             print(f"Unexpected error: {e}")
+
+    @staticmethod
+    def _join_command(parts: list[str]) -> str:
+        return " ".join(shlex.quote(part) for part in parts)
 
     @staticmethod
     def _print_main_menu() -> None:
