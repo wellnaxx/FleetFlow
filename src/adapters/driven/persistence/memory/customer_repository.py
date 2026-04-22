@@ -2,8 +2,6 @@ from src.domain.entities.customer import Customer
 
 
 class InMemoryCustomerRepository:
-    
-    
     def __init__(self) -> None:
         self._customers_by_id: dict[int, Customer] = {}
         self._id_by_email: dict[str, int] = {}
@@ -63,13 +61,13 @@ class InMemoryCustomerRepository:
     def list_by_name(self, name: str) -> list[Customer]:
         return [
             customer
-            for customer in self._customers_by_id.values()
+            for customer in self.list_all()
             if (customer.name or "").strip().casefold() == (name or "").strip().casefold()
         ]
 
     def list_all(self) -> list[Customer]:
-        return list(self._customers_by_id.values())
-    
+        return [self._customers_by_id[customer_id] for customer_id in sorted(self._customers_by_id)]
+
     def replace_customers(self, customers_by_id: dict[int, Customer], next_id: int) -> None:
         self._customers_by_id = dict(customers_by_id)
         self._id_by_email = {

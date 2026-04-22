@@ -22,13 +22,13 @@ class InMemoryPackageRepository:
 
     def get_by_id(self, package_id: int) -> DeliveryPackage | None:
         return self._packages.get(package_id)
-    
+
     def list_all(self) -> list[DeliveryPackage]:
-        return list(self._packages.values())
-    
+        return [self._packages[package_id] for package_id in sorted(self._packages)]
+
     def list_unassigned(self) -> list[DeliveryPackage]:
-        return [package for package in self._packages.values() if package.route is None]
-    
+        return [package for package in self.list_all() if package.route is None]
+
     def replace_packages(self, packages_by_id: dict[int, DeliveryPackage], next_id: int) -> None:
         self._packages = dict(packages_by_id)
         self._next_id = next_id
