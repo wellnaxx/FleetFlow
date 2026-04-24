@@ -975,11 +975,14 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
             ),
         )
 
-        with patch.object(
-            self.service,
-            "_reconcile_candidate_world",
-            side_effect=ValueError("candidate graph is invalid"),
-        ), self.assertRaises(WorldStateCorruptionError) as ctx:
+        with (
+            patch.object(
+                self.service,
+                "_reconcile_candidate_world",
+                side_effect=ValueError("candidate graph is invalid"),
+            ),
+            self.assertRaises(WorldStateCorruptionError) as ctx,
+        ):
             self.service.apply_snapshot(snapshot)
 
         self.assertIn("candidate graph is invalid", str(ctx.exception))
@@ -999,12 +1002,95 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
             ),
         )
 
-        with patch.object(
-            self.runtime_state,
-            "replace_world_state",
-            side_effect=RuntimeError("swap exploded"),
-        ), self.assertRaises(RuntimeError) as ctx:
+        with (
+            patch.object(
+                self.runtime_state,
+                "replace_world_state",
+                side_effect=RuntimeError("swap exploded"),
+            ),
+            self.assertRaises(RuntimeError) as ctx,
+        ):
             self.service.apply_snapshot(snapshot)
 
         self.assertNotIsInstance(ctx.exception, WorldStateCorruptionError)
         self.assertIn("swap exploded", str(ctx.exception))
+
+    def test_apply_snapshot_rejects_truck_assignment_to_unscheduled_route(self) -> None:
+        snapshot = self.make_snapshot(
+            counters=CountersSnapshot(1, 1, 2),
+            routes=(
+                RouteSnapshot(
+                    route_id=1,
+                    locations=("A", "B"),
+                    departure_time=None,
+                    truck_vehicle_id=1001,
+                    package_ids=(),
+                ),
+            ),
+        )
+
+        with self.assertRaises(WorldStateCorruptionError) as ctx:
+            self.service.apply_snapshot(snapshot)
+
+        self.assertIn("has no departure time", str(ctx.exception))
+
+    def test_apply_snapshot_rejects_truck_assignment_when_package_weight_exceeds_capacity(self) -> None:
+        truck = self.vehicle_manager.find_by_id(1001)
+        assert truck is not None
+        truck.capacity = 10
+
+        departure_time = datetime(2099, 1, 1, 10, 0, 0)
+
+        snapshot = self.make_snapshot(
+            counters=CountersSnapshot(2, 2, 2),
+            customers=(CustomerSnapshot(customer_id=1, name="Alice", email="", phone=""),),
+            packages=(
+                PackageSnapshot(
+                    package_id=1,
+                    start="A",
+                    end="B",
+                    weight=11.0,
+                    customer_id=1,
+                    route_id=1,
+                ),
+            ),
+            routes=(
+                RouteSnapshot(
+                    route_id=1,
+                    locations=("A", "B"),
+                    departure_time=dt_to_str(departure_time),
+                    truck_vehicle_id=1001,
+                    package_ids=(1,),
+                ),
+            ),
+        )
+
+        with self.assertRaises(WorldStateCorruptionError) as ctx:
+            self.service.apply_snapshot(snapshot)
+
+        self.assertIn("exceeds capacity", str(ctx.exception))
+
+    def test_apply_snapshot_rejects_truck_assignment_when_route_exceeds_range(self) -> None:
+        truck = self.vehicle_manager.find_by_id(1001)
+        assert truck is not None
+        truck.max_range = 50
+
+        departure_time = datetime(2099, 1, 1, 10, 0, 0)
+
+        snapshot = self.make_snapshot(
+            counters=CountersSnapshot(1, 1, 2),
+            routes=(
+                RouteSnapshot(
+                    route_id=1,
+                    locations=("A", "B"),
+                    departure_time=dt_to_str(departure_time),
+                    truck_vehicle_id=1001,
+                    package_ids=(),
+                ),
+            ),
+        )
+
+        with self.assertRaises(WorldStateCorruptionError) as ctx:
+            self.service.apply_snapshot(snapshot)
+
+        self.assertIn("exceeds range", str(ctx.exception))

@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime
 from unittest.mock import patch
 
 from src.adapters.driven.persistence.json.serialization import dt_to_str
@@ -112,7 +113,7 @@ class InMemoryWorldStateGatewayTests(unittest.TestCase):
                     RouteSnapshot(
                         route_id=1,
                         locations=("A", "B"),
-                        departure_time=dt_to_str(None),
+                        departure_time=dt_to_str(datetime(2099, 1, 1, 10, 0, 0)),
                         truck_vehicle_id=1001,
                         package_ids=(1,),
                     ),

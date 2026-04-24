@@ -1,3 +1,4 @@
+import itertools
 from typing import ClassVar
 
 from src.adapters.driven.persistence.json.serialization import dt_from_str, dt_to_str
@@ -18,6 +19,7 @@ from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.entities.truck import Truck
+from src.domain.services.map import Map
 from src.domain.value_objects.contact_info import ContactInfo
 from src.ports.output.customer_repository import CustomerRepositoryPort
 from src.ports.output.package_repository import PackageRepositoryPort
@@ -119,6 +121,7 @@ class WorldStateSnapshotService:
         self._validate_references(world)
         self._validate_route_package_consistency(world)
         self._validate_route_package_compatibility(world)
+        self._validate_truck_route_compatibility(world)
         self._validate_customer_uniqueness(world.customers)
         self._validate_counter_bounds(world)
 
@@ -242,6 +245,46 @@ class WorldStateSnapshotService:
                         f"Route {route.route_id} includes package {package_id}, "
                         f"but the package points to route {package_route_id}."
                     )
+
+    def _validate_truck_route_compatibility(self, world: WorldSnapshotData) -> None:
+        trucks_by_id = {truck.vehicle_id: truck for truck in self._vehicle_manager.list_fleet()}
+        packages_by_id = {package.package_id: package for package in world.packages}
+
+        for route in world.routes:
+            truck_vehicle_id = route.truck_vehicle_id
+            if truck_vehicle_id is None:
+                continue
+
+            if route.departure_time is None:
+                raise ValueError(
+                    f"Route {route.route_id} assigns truck {truck_vehicle_id}, "
+                    "but the route has no departure time."
+                )
+
+            truck = trucks_by_id[truck_vehicle_id]
+
+            total_weight = sum(packages_by_id[package_id].weight for package_id in route.package_ids)
+            if total_weight > truck.capacity:
+                raise ValueError(
+                    f"Route {route.route_id} assigns truck {truck_vehicle_id}, "
+                    f"but package weight {total_weight} exceeds capacity {truck.capacity}."
+                )
+
+            total_distance = self._route_distance_km(route.locations)
+            if total_distance > truck.max_range:
+                raise ValueError(
+                    f"Route {route.route_id} assigns truck {truck_vehicle_id}, "
+                    f"but route distance {total_distance} exceeds range {truck.max_range}."
+                )
+
+    @staticmethod
+    def _route_distance_km(locations: tuple[str, ...]) -> int:
+        total = 0
+
+        for start, end in itertools.pairwise(locations):
+            total += Map.get_distance(start, end)
+
+        return total
 
     def _validate_customer_uniqueness(self, customers: tuple[CustomerSnapshot, ...]) -> None:
         seen_emails: dict[str, int] = {}
