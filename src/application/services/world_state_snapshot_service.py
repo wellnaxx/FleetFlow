@@ -103,44 +103,46 @@ class WorldStateSnapshotService:
         )
 
     def apply_snapshot(self, snapshot: WorldStateSnapshot) -> None:
-        world = snapshot.world
-
         try:
-            self._validate_schema(snapshot)
-            self._validate_counters(world.counters)
-            self._validate_ids(world)
-            self._validate_references(world)
-            self._validate_route_package_consistency(world)
-            self._validate_route_package_compatibility(world)
-            self._validate_customer_uniqueness(world.customers)
-            self._validate_counter_bounds(world)
-
-            rebuilt_customers = self._rebuild_customers(world.customers)
-            rebuilt_packages = self._rebuild_packages(world.packages, rebuilt_customers)
-            rebuilt_routes = self._rebuild_routes(world.routes)
-
-            self._link_packages_to_routes(
-                snapshots=world.routes,
-                rebuilt_packages=rebuilt_packages,
-                rebuilt_routes=rebuilt_routes,
-            )
-
-            truck_bindings = self._reconcile_candidate_world(
-                snapshots=world.routes,
-                routes=rebuilt_routes,
-            )
-
+            reconciled_world = self._prepare_snapshot_for_swap(snapshot)
         except (KeyError, TypeError, ValueError) as exc:
             raise WorldStateCorruptionError(f"Invalid world state snapshot: {exc}") from exc
 
-        self._swap_runtime_state(
-            ReconciledWorld(
-                customers=rebuilt_customers,
-                packages=rebuilt_packages,
-                routes=rebuilt_routes,
-                counters=world.counters,
-                truck_bindings=truck_bindings,
-            )
+        self._swap_runtime_state(reconciled_world)
+
+    def _prepare_snapshot_for_swap(self, snapshot: WorldStateSnapshot) -> ReconciledWorld:
+        world = snapshot.world
+
+        self._validate_schema(snapshot)
+        self._validate_counters(world.counters)
+        self._validate_ids(world)
+        self._validate_references(world)
+        self._validate_route_package_consistency(world)
+        self._validate_route_package_compatibility(world)
+        self._validate_customer_uniqueness(world.customers)
+        self._validate_counter_bounds(world)
+
+        rebuilt_customers = self._rebuild_customers(world.customers)
+        rebuilt_packages = self._rebuild_packages(world.packages, rebuilt_customers)
+        rebuilt_routes = self._rebuild_routes(world.routes)
+
+        self._link_packages_to_routes(
+            snapshots=world.routes,
+            rebuilt_packages=rebuilt_packages,
+            rebuilt_routes=rebuilt_routes,
+        )
+
+        truck_bindings = self._reconcile_candidate_world(
+            snapshots=world.routes,
+            routes=rebuilt_routes,
+        )
+
+        return ReconciledWorld(
+            customers=rebuilt_customers,
+            packages=rebuilt_packages,
+            routes=rebuilt_routes,
+            counters=world.counters,
+            truck_bindings=truck_bindings,
         )
 
     def _validate_schema(self, snapshot: WorldStateSnapshot) -> None:

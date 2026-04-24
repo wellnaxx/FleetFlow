@@ -960,3 +960,51 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
         self.assertEqual(existing_route.packages, [existing_package])
         self.assertIs(truck.route, existing_route)
         self.assertEqual(truck.status, TruckStatus.ON_THE_WAY)
+
+    def test_apply_snapshot_wraps_candidate_reconciliation_failure_as_corruption(self) -> None:
+        snapshot = self.make_snapshot(
+            counters=CountersSnapshot(1, 1, 2),
+            routes=(
+                RouteSnapshot(
+                    route_id=1,
+                    locations=("A", "B"),
+                    departure_time=dt_to_str(datetime(2099, 1, 1, 10, 0, 0)),
+                    truck_vehicle_id=None,
+                    package_ids=(),
+                ),
+            ),
+        )
+
+        with patch.object(
+            self.service,
+            "_reconcile_candidate_world",
+            side_effect=ValueError("candidate graph is invalid"),
+        ), self.assertRaises(WorldStateCorruptionError) as ctx:
+            self.service.apply_snapshot(snapshot)
+
+        self.assertIn("candidate graph is invalid", str(ctx.exception))
+        self.assertIsNone(self.route_repo.get_by_id(1))
+
+    def test_apply_snapshot_does_not_wrap_runtime_swap_failure_as_corruption(self) -> None:
+        snapshot = self.make_snapshot(
+            counters=CountersSnapshot(1, 1, 2),
+            routes=(
+                RouteSnapshot(
+                    route_id=1,
+                    locations=("A", "B"),
+                    departure_time=None,
+                    truck_vehicle_id=None,
+                    package_ids=(),
+                ),
+            ),
+        )
+
+        with patch.object(
+            self.runtime_state,
+            "replace_world_state",
+            side_effect=RuntimeError("swap exploded"),
+        ), self.assertRaises(RuntimeError) as ctx:
+            self.service.apply_snapshot(snapshot)
+
+        self.assertNotIsInstance(ctx.exception, WorldStateCorruptionError)
+        self.assertIn("swap exploded", str(ctx.exception))

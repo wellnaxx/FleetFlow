@@ -274,7 +274,7 @@ class QuarantineCorruptWorldStateTests(unittest.TestCase):
         datetime_cls.now.return_value.strftime.return_value = "2026-04-22T18-14-03"
 
         original = "C:/fake/state.json"
-        quarantined = main._quarantine_corrupt_world_state(original) # pyright: ignore[reportPrivateUsage]
+        quarantined = main._quarantine_corrupt_world_state(original)  # pyright: ignore[reportPrivateUsage]
 
         expected = "C:/fake/state.json.corrupt.2026-04-22T18-14-03"
         self.assertEqual(quarantined, expected)
@@ -292,7 +292,7 @@ class QuarantineCorruptWorldStateTests(unittest.TestCase):
         datetime_cls.now.return_value.strftime.return_value = "2026-04-22T18-14-03"
 
         original = "C:/fake/state.json"
-        quarantined = main._quarantine_corrupt_world_state(original) # pyright: ignore[reportPrivateUsage]
+        quarantined = main._quarantine_corrupt_world_state(original)  # pyright: ignore[reportPrivateUsage]
 
         self.assertIsNone(quarantined)
         logger.exception.assert_called_once_with(
