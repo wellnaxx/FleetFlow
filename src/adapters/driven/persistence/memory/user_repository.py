@@ -82,11 +82,13 @@ class InMemoryUserRepository:
         return list(self._by_username.values())
 
     @staticmethod
-    def _normalize_role(role: Role | str) -> str:
+    def _normalize_role(role: object) -> str:
         """Normalize a role enum or role string into the persisted role value."""
         if isinstance(role, Role):
             return role.value
+        if not isinstance(role, str):
+            raise TypeError(f"Invalid role: {role!r}")
         try:
-            return Role(role.upper()).value
+            return Role(role.strip().upper()).value
         except ValueError as exc:
             raise ValueError(f"Invalid role: {role!r}") from exc

@@ -1,4 +1,5 @@
 import base64
+import binascii
 import hashlib
 import hmac
 import os
@@ -21,10 +22,45 @@ class PasswordHash:
         return f"pbkdf2_{self.algo}${self.iterations}${self.salt_b64}${self.hash_b64}"
 
     @staticmethod
-    def parse(s: str) -> "PasswordHash":
-        scheme, iters, salt_b64, hash_b64 = s.split("$", 3)
-        algo = scheme.replace("pbkdf2_", "")
-        return PasswordHash(algo=algo, iterations=int(iters), salt_b64=salt_b64, hash_b64=hash_b64)
+    def parse(value: object) -> "PasswordHash":
+        if not isinstance(value, str):
+            raise TypeError("Invalid password hash.")
+
+        parts = value.split("$")
+        if len(parts) != 4:
+            raise ValueError("Invalid password hash.")
+
+        scheme, iterations_text, salt_b64, hash_b64 = parts
+
+        if not scheme.startswith("pbkdf2_"):
+            raise ValueError("Invalid password hash.")
+
+        algo = scheme.removeprefix("pbkdf2_")
+        if not algo or algo not in hashlib.algorithms_available:
+            raise ValueError("Invalid password hash.")
+
+        try:
+            iterations = int(iterations_text)
+        except ValueError as exc:
+            raise ValueError("Invalid password hash.") from exc
+
+        if iterations < 1:
+            raise ValueError("Invalid password hash.")
+
+        try:
+            salt = base64.b64decode(salt_b64, validate=True)
+            hash_value = base64.b64decode(hash_b64, validate=True)
+        except binascii.Error as exc:
+            raise ValueError("Invalid password hash.") from exc
+        if not salt or not hash_value:
+            raise ValueError("Invalid password hash.")
+
+        return PasswordHash(
+            algo=algo,
+            iterations=iterations,
+            salt_b64=salt_b64,
+            hash_b64=hash_b64,
+        )
 
 
 def hash_password(plain: str) -> PasswordHash:

@@ -80,6 +80,19 @@ class Crypto_Should(unittest.TestCase):
         self.assertEqual(ph2, ph)
 
     def test_parse_malformed_raises(self) -> None:
-        with self.assertRaises(ValueError):
-            # Missing parts -> split will produce < 4 items and raise
-            PasswordHash.parse("pbkdf2_sha256$200000$only-two-parts")
+        bad_values = (
+            "pbkdf2_sha256$200000$only-two-parts",
+            "sha256$200000$c2FsdA==$aGFzaA==",
+            "pbkdf2_sha256$0$c2FsdA==$aGFzaA==",
+            "pbkdf2_sha256$not-int$c2FsdA==$aGFzaA==",
+            "pbkdf2_sha256$200000$not base64$aGFzaA==",
+            "pbkdf2_notarealhash$200000$c2FsdA==$aGFzaA==",
+        )
+
+        for value in bad_values:
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    PasswordHash.parse(value)
+
+        with self.assertRaises(TypeError):
+            PasswordHash.parse(123456)

@@ -89,20 +89,29 @@ class AuthService:
             raise ValueError("Invalid username or password.")
 
         contact = ContactInfo(name=rec.name, email=rec.email, phone_number=rec.phone_number)
-        if rec.role == Role.MANAGER.value:
+
+        try:
+            role = Role(rec.role)
+        except ValueError as exc:
+            raise ValueError(f"Invalid persisted role for user {rec.username!r}: {rec.role!r}") from exc
+
+        if role == Role.MANAGER:
             self._current_user = Manager(
                 rec.user_id,
                 contact.name,
                 contact.email,
                 contact.phone_number,
             )
-        else:
+        elif role == Role.EMPLOYEE:
             self._current_user = Employee(
                 rec.user_id,
                 contact.name,
                 contact.email,
                 contact.phone_number,
             )
+        else:
+            raise ValueError(f"Unsupported role: {role}")
+
         self.last_username = rec.username
         return self._current_user
 

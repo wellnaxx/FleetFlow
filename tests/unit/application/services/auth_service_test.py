@@ -309,3 +309,24 @@ class AuthService_Should(unittest.TestCase):
         self.assertEqual(user.name, "Bob")
         self.assertEqual(auth.current_user, user)
         mock_verify.assert_called_once()
+
+    @patch("src.application.services.auth_service.verify_password", return_value=True)
+    def test_login_rejects_unknown_persisted_role(self, mock_verify: MagicMock) -> None:
+        store = MagicMock()
+        auth = AuthService(store)
+        store.get.return_value = UserRecord(
+            user_id=99,
+            username="badrole",
+            role="OWNER",
+            name="Bad Role",
+            email="badrole@example.com",
+            phone_number="0412345678",
+            password="pbkdf2_sha256$200000$salt$hash",
+        )
+
+        with self.assertRaises(ValueError) as ctx:
+            auth.login("badrole", "pw")
+
+        self.assertIn("Invalid persisted role", str(ctx.exception))
+        self.assertIsNone(auth.current_user)
+        mock_verify.assert_called_once()

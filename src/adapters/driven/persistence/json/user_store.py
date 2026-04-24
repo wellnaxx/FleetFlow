@@ -95,6 +95,8 @@ class UserStore:
         next_id = payload.get("_next_id", 1)
         if not isinstance(next_id, int) or isinstance(next_id, bool):
             raise TypeError(f"_next_id must be int, got {type(next_id).__name__}")
+        if next_id < 1:
+            raise ValueError("_next_id must be positive")
         return next_id
 
     @staticmethod
@@ -107,22 +109,30 @@ class UserStore:
         user_id = raw["user_id"]
         if not isinstance(user_id, int) or isinstance(user_id, bool):
             raise TypeError(f"user_id must be int, got {type(user_id).__name__}")
+        if user_id < 1:
+            raise ValueError("user_id must be positive")
 
         username = UserStore._parse_string_field(raw, "username")
+        raw_username = username.strip()
+        if not UserStore._normalize_username(raw_username):
+            raise ValueError("Username is required.")
         role = UserStore._parse_string_field(raw, "role")
+        role_value = UserStore._normalize_role(role)
         name = UserStore._parse_string_field(raw, "name")
         email = UserStore._parse_string_field(raw, "email")
         phone_number = UserStore._parse_string_field(raw, "phone_number")
+        contact = ContactInfo(name=name, email=email, phone_number=phone_number)
         password = UserStore._parse_string_field(raw, "password")
+        password_hash = PasswordHash.parse(password)
 
         return UserRecord(
             user_id=user_id,
-            username=username,
-            role=role,
-            name=name,
-            email=email,
-            phone_number=phone_number,
-            password=password,
+            username=raw_username,
+            role=role_value,
+            name=contact.name,
+            email=contact.email,
+            phone_number=contact.phone_number,
+            password=password_hash.serialize(),
         )
 
     @staticmethod
@@ -134,12 +144,14 @@ class UserStore:
         return value
 
     @staticmethod
-    def _normalize_role(role: Role | str) -> str:
+    def _normalize_role(role: object) -> str:
         """Normalize a role enum or role string into the persisted role value."""
         if isinstance(role, Role):
             return role.value
+        if not isinstance(role, str):
+            raise TypeError(f"Invalid role: {role!r}")
         try:
-            return Role(role.upper()).value
+            return Role(role.strip().upper()).value
         except ValueError as exc:
             raise ValueError(f"Invalid role: {role!r}") from exc
 

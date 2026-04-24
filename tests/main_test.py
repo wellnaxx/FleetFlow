@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import main
 from src.application.exceptions.world_state_errors import WorldStateCorruptionError, WorldStateFileNotFoundError
+from src.domain.enums.auth import Role
 
 
 class MainStartupTests(unittest.TestCase):
@@ -298,3 +299,72 @@ class QuarantineCorruptWorldStateTests(unittest.TestCase):
             "Failed to quarantine corrupt world state file %r.",
             original,
         )
+
+
+class BootstrapAdminTests(unittest.TestCase):
+    def test_bootstrap_admin_does_nothing_when_admin_exists(self) -> None:
+        auth = MagicMock()
+        store = MagicMock()
+        store.get.return_value = object()
+
+        main.bootstrap_admin(auth, store)
+
+        store.get.assert_called_once_with("admin")
+        auth.register_user.assert_not_called()
+
+    @patch("main.getpass.getpass", side_effect=["Secret123!", "Secret123!"])
+    @patch("main.sys.stdin")
+    def test_bootstrap_admin_prompts_and_creates_admin_interactively(
+        self,
+        stdin: MagicMock,
+        getpass_mock: MagicMock,
+    ) -> None:
+        auth = MagicMock()
+        store = MagicMock()
+        store.get.return_value = None
+        stdin.isatty.return_value = True
+
+        main.bootstrap_admin(auth, store)
+
+        auth.register_user.assert_called_once_with(
+            username="admin",
+            role=Role.MANAGER,
+            name="Admin",
+            email="",
+            phone_number="",
+            password="Secret123!",
+        )
+
+    @patch("main.sys.stdin")
+    def test_bootstrap_admin_fails_cleanly_when_non_interactive_and_no_admin(
+        self,
+        stdin: MagicMock,
+    ) -> None:
+        auth = MagicMock()
+        store = MagicMock()
+        store.get.return_value = None
+        stdin.isatty.return_value = False
+
+        with self.assertRaises(RuntimeError) as ctx:
+            main.bootstrap_admin(auth, store)
+
+        self.assertIn("No admin user exists", str(ctx.exception))
+        auth.register_user.assert_not_called()
+
+    @patch("main.getpass.getpass", side_effect=["Secret123!", "Different123!"])
+    @patch("main.sys.stdin")
+    def test_bootstrap_admin_rejects_password_confirmation_mismatch(
+        self,
+        stdin: MagicMock,
+        getpass_mock: MagicMock,
+    ) -> None:
+        auth = MagicMock()
+        store = MagicMock()
+        store.get.return_value = None
+        stdin.isatty.return_value = True
+
+        with self.assertRaises(ValueError) as ctx:
+            main.bootstrap_admin(auth, store)
+
+        self.assertIn("do not match", str(ctx.exception))
+        auth.register_user.assert_not_called()

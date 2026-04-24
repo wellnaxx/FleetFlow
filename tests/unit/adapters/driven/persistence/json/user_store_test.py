@@ -5,8 +5,16 @@ from typing import Any
 from unittest.mock import MagicMock, mock_open, patch
 
 from src.adapters.driven.persistence.json.user_store import UserStore
+from src.adapters.driven.security.password_hasher import PasswordHash
 from src.application.models.user_record import UserRecord
 from src.domain.enums.auth import Role
+
+PERSISTED_PASSWORD = PasswordHash(
+    algo="sha256",
+    iterations=200000,
+    salt_b64="c2FsdA==",
+    hash_b64="aGFzaA==",
+).serialize()
 
 
 def _ph(s: str = "hash") -> SimpleNamespace:
@@ -32,18 +40,18 @@ class UserStore_Load_Save_Should(unittest.TestCase):
                     "username": "bob",
                     "role": "MANAGER",
                     "name": "Bob",
-                    "email": "b@x",
-                    "phone_number": "0400",
-                    "password": "SER(h2)",
+                    "email": "bob@example.com",
+                    "phone_number": "0400123456",
+                    "password": PERSISTED_PASSWORD,
                 },
                 {
                     "user_id": 1,
                     "username": "alice",
                     "role": "EMPLOYEE",
                     "name": "Alice",
-                    "email": "a@x",
-                    "phone_number": "0412",
-                    "password": "SER(h1)",
+                    "email": "alice@example.com",
+                    "phone_number": "0412345678",
+                    "password": PERSISTED_PASSWORD,
                 },
             ],
         }
@@ -139,18 +147,18 @@ class UserStore_Load_Save_Should(unittest.TestCase):
                     "username": "Alice",
                     "role": "EMPLOYEE",
                     "name": "Alice",
-                    "email": "a@x",
-                    "phone_number": "0412",
-                    "password": "SER(h1)",
+                    "email": "alice@example.com",
+                    "phone_number": "0412345678",
+                    "password": PERSISTED_PASSWORD,
                 },
                 {
                     "user_id": 2,
                     "username": "alice",
                     "role": "MANAGER",
                     "name": "Alice 2",
-                    "email": "b@x",
-                    "phone_number": "0400",
-                    "password": "SER(h2)",
+                    "email": "bob@example.com",
+                    "phone_number": "0400123456",
+                    "password": PERSISTED_PASSWORD,
                 },
             ],
         },
@@ -178,18 +186,18 @@ class UserStore_Load_Save_Should(unittest.TestCase):
                     "username": "alice",
                     "role": "EMPLOYEE",
                     "name": "Alice",
-                    "email": "a@x",
-                    "phone_number": "0412",
-                    "password": "SER(h1)",
+                    "email": "alice@example.com",
+                    "phone_number": "0412345678",
+                    "password": PERSISTED_PASSWORD,
                 },
                 {
                     "user_id": 1,
                     "username": "bob",
                     "role": "MANAGER",
                     "name": "Bob",
-                    "email": "b@x",
-                    "phone_number": "0400",
-                    "password": "SER(h2)",
+                    "email": "bob@example.com",
+                    "phone_number": "0400123456",
+                    "password": PERSISTED_PASSWORD,
                 },
             ],
         },
@@ -215,20 +223,110 @@ class UserStore_Load_Save_Should(unittest.TestCase):
                 {
                     "user_id": 1,
                     "username": "alice",
+                    "role": "OWNER",
+                    "name": "Alice",
+                    "email": "alice@example.com",
+                    "phone_number": "0412345678",
+                    "password": PERSISTED_PASSWORD,
+                },
+            ],
+        },
+    )
+    def test_init_rejects_invalid_persisted_role(
+        self, jload: MagicMock, mopen: MagicMock, exists: MagicMock, resolve: MagicMock
+    ) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            UserStore()
+
+        self.assertIn("Malformed user store JSON", str(ctx.exception))
+
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
+    )
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=True)
+    @patch("src.adapters.driven.persistence.json.user_store.open", new_callable=mock_open)
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.json.load",
+        return_value={
+            "_next_id": 2,
+            "users": [
+                {
+                    "user_id": 1,
+                    "username": "alice",
                     "role": "EMPLOYEE",
                     "name": "Alice",
-                    "email": "a@x",
-                    "phone_number": "0412",
-                    "password": "SER(h1)",
+                    "email": "alice@example.com",
+                    "phone_number": "0412345678",
+                    "password": "not-a-password-hash",
+                },
+            ],
+        },
+    )
+    def test_init_rejects_invalid_persisted_password_hash(
+        self, jload: MagicMock, mopen: MagicMock, exists: MagicMock, resolve: MagicMock
+    ) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            UserStore()
+
+        self.assertIn("Malformed user store JSON", str(ctx.exception))
+
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
+    )
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=True)
+    @patch("src.adapters.driven.persistence.json.user_store.open", new_callable=mock_open)
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.json.load",
+        return_value={
+            "_next_id": 2,
+            "users": [
+                {
+                    "user_id": 1,
+                    "username": "alice",
+                    "role": "EMPLOYEE",
+                    "name": "Alice",
+                    "email": "not-an-email",
+                    "phone_number": "0412345678",
+                    "password": PERSISTED_PASSWORD,
+                },
+            ],
+        },
+    )
+    def test_init_rejects_invalid_persisted_contact_info(
+        self, jload: MagicMock, mopen: MagicMock, exists: MagicMock, resolve: MagicMock
+    ) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            UserStore()
+
+        self.assertIn("Malformed user store JSON", str(ctx.exception))
+
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
+    )
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=True)
+    @patch("src.adapters.driven.persistence.json.user_store.open", new_callable=mock_open)
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.json.load",
+        return_value={
+            "_next_id": 2,
+            "users": [
+                {
+                    "user_id": 1,
+                    "username": "alice",
+                    "role": "EMPLOYEE",
+                    "name": "Alice",
+                    "email": "alice@example.com",
+                    "phone_number": "0412345678",
+                    "password": PERSISTED_PASSWORD,
                 },
                 {
                     "user_id": 4,
                     "username": "bob",
                     "role": "MANAGER",
                     "name": "Bob",
-                    "email": "b@x",
-                    "phone_number": "0400",
-                    "password": "SER(h2)",
+                    "email": "bob@example.com",
+                    "phone_number": "0400123456",
+                    "password": PERSISTED_PASSWORD,
                 },
             ],
         },
@@ -255,27 +353,27 @@ class UserStore_Load_Save_Should(unittest.TestCase):
                     "username": "charlie",
                     "role": "EMPLOYEE",
                     "name": "Charlie",
-                    "email": "c@x",
-                    "phone_number": "0499",
-                    "password": "SER(h3)",
+                    "email": "charlie@example.com",
+                    "phone_number": "0499123456",
+                    "password": PERSISTED_PASSWORD,
                 },
                 {
                     "user_id": 2,
                     "username": "alice",
                     "role": "EMPLOYEE",
                     "name": "Alice",
-                    "email": "a@x",
-                    "phone_number": "0412",
-                    "password": "SER(h1)",
+                    "email": "alice@example.com",
+                    "phone_number": "0412345678",
+                    "password": PERSISTED_PASSWORD,
                 },
                 {
                     "user_id": 5,
                     "username": "bob",
                     "role": "MANAGER",
                     "name": "Bob",
-                    "email": "b@x",
-                    "phone_number": "0400",
-                    "password": "SER(h2)",
+                    "email": "bob@example.com",
+                    "phone_number": "0400123456",
+                    "password": PERSISTED_PASSWORD,
                 },
             ],
         },

@@ -1,5 +1,7 @@
+import getpass
 import logging
 import os
+import sys
 from datetime import datetime
 
 from src.adapters.driven.persistence.json.user_store import UserStore
@@ -15,15 +17,27 @@ logger = logging.getLogger(__name__)
 
 
 def bootstrap_admin(auth: AuthService, store: UserStore) -> None:
-    if not store.get("admin"):
-        auth.register_user(
-            username="admin",
-            role=Role.MANAGER,
-            name="Admin",
-            email="",
-            phone_number="",
-            password="ChangeMe123!",
+    if store.get("admin"):
+        return
+
+    if not sys.stdin.isatty():
+        raise RuntimeError(
+            "No admin user exists. Run the application interactively once to create the initial admin password."
         )
+
+    password = getpass.getpass("Create initial manager password: ")
+    confirmation = getpass.getpass("Confirm initial manager password: ")
+    if password != confirmation:
+        raise ValueError("Initial manager passwords do not match.")
+
+    auth.register_user(
+        username="admin",
+        role=Role.MANAGER,
+        name="Admin",
+        email="",
+        phone_number="",
+        password=password,
+    )
 
 
 def _quarantine_corrupt_world_state(path: str) -> str | None:
