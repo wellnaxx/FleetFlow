@@ -12,7 +12,22 @@ exclude = [
     ".mypy_cache",
     ".pytest_cache",
     ".ruff_cache",
+    "data",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = [
+    ".git",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".venv",
+    "build",
+    "data",
+    "dist",
+    "venv",
+]
+pythonpath = ["."]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]

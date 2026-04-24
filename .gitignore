@@ -206,5 +206,12 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# app save state
-data/
+# Runtime state and generated artifacts
+data/*
+!data/.gitkeep
+data/**/*.tmp
+data/**/.tmp*
+data/**/*.corrupt.*
+data/**/state.json.corrupt.*
+data/**/.state.*.json
+data/**/.users.*.json
