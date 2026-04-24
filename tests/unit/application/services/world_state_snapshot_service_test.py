@@ -15,6 +15,7 @@ from src.application.dto.world_state_snapshot_dto import (
     WorldSnapshotData,
     WorldStateSnapshot,
 )
+from src.application.services.world_state_reconciliation_service import WorldStateReconciliationService
 from src.application.services.world_state_snapshot_service import WorldStateSnapshotService
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
@@ -42,17 +43,19 @@ class _RuntimeStateAdapter(WorldStateRuntimePort):
         self._route_repo = route_repo
         self._vehicle_manager = vehicle_manager
 
-    def replace_customers(self, customers_by_id: dict[int, Customer], next_id: int) -> None:
-        self._customer_repo.replace_customers(customers_by_id, next_id)
-
-    def replace_packages(self, packages_by_id: dict[int, DeliveryPackage], next_id: int) -> None:
-        self._package_repo.replace_packages(packages_by_id, next_id)
-
-    def replace_routes(self, routes_by_id: dict[int, DeliveryRoute], next_id: int) -> None:
-        self._route_repo.replace_routes(routes_by_id, next_id)
-
-    def replace_truck_bindings(self, bindings: list[TruckBinding]) -> None:
-        self._vehicle_manager.replace_truck_bindings(bindings)
+    def replace_world_state(
+        self,
+        *,
+        customers_by_id: dict[int, Customer],
+        packages_by_id: dict[int, DeliveryPackage],
+        routes_by_id: dict[int, DeliveryRoute],
+        counters: CountersSnapshot,
+        truck_bindings: list[TruckBinding],
+    ) -> None:
+        self._customer_repo.replace_customers(customers_by_id, counters.next_customer_id)
+        self._package_repo.replace_packages(packages_by_id, counters.next_package_id)
+        self._route_repo.replace_routes(routes_by_id, counters.next_route_id)
+        self._vehicle_manager.replace_truck_bindings(truck_bindings)
 
 
 class WorldStateSnapshotServiceTests(unittest.TestCase):
@@ -99,6 +102,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
             route_repo=self.route_repo,
             vehicle_manager=self.vehicle_manager,
             runtime_state=self.runtime_state,
+            reconciler=WorldStateReconciliationService(),
         )
 
     def make_snapshot(
@@ -151,7 +155,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
         self.package_repo.add(package_b)
         self.package_repo.add(package_a)
 
-        departure_time = datetime(2025, 1, 1, 10, 0, 0)
+        departure_time = datetime(2099, 1, 1, 10, 0, 0)
         route = DeliveryRoute("A", "B", "C", departure_time=departure_time, route_id=5)
         route.assign_package(package_b)
         route.assign_package(package_a)
@@ -470,7 +474,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
         self.assertEqual(route.packages, [package])
 
     def test_apply_snapshot_restores_truck_assignment_state(self) -> None:
-        departure_time = datetime(2025, 1, 1, 10, 0, 0)
+        departure_time = datetime(2099, 1, 1, 10, 0, 0)
         snapshot = self.make_snapshot(
             counters=CountersSnapshot(1, 1, 2),
             routes=(
@@ -496,6 +500,35 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
         self.assertEqual(truck.status, TruckStatus.ON_THE_WAY)
         self.assertEqual(truck.busy_from, departure_time)
         self.assertEqual(truck.busy_until, route.eta_final)
+        self.assertIsNone(truck.in_transit_to)
+
+    def test_apply_snapshot_reconciles_completed_truck_before_swap(self) -> None:
+        snapshot = self.make_snapshot(
+            counters=CountersSnapshot(1, 1, 2),
+            routes=(
+                RouteSnapshot(
+                    route_id=1,
+                    locations=("A", "B"),
+                    departure_time=dt_to_str(datetime(2025, 1, 1, 10, 0, 0)),
+                    truck_vehicle_id=1001,
+                    package_ids=(),
+                ),
+            ),
+        )
+
+        self.service.apply_snapshot(snapshot)
+
+        route = self.route_repo.get_by_id(1)
+        truck = self.vehicle_manager.find_by_id(1001)
+
+        assert route is not None
+        assert truck is not None
+        self.assertIsNone(route.truck)
+        self.assertIsNone(truck.route)
+        self.assertEqual(truck.status, TruckStatus.FREE)
+        self.assertEqual(truck.current_location, "B")
+        self.assertIsNone(truck.busy_from)
+        self.assertIsNone(truck.busy_until)
         self.assertIsNone(truck.in_transit_to)
 
     def test_apply_snapshot_rejects_duplicate_truck_assignments(self) -> None:

@@ -13,6 +13,7 @@ from src.application.services.auth_service import AuthService
 from src.application.services.authorization_service import AuthorizationService
 from src.application.services.customer_service import CustomerService
 from src.application.services.heartbeat_service import HeartbeatService
+from src.application.services.world_state_reconciliation_service import WorldStateReconciliationService
 from src.application.services.world_state_snapshot_service import WorldStateSnapshotService
 from src.application.use_cases.auth.change_password import ChangePasswordUseCase
 from src.application.use_cases.auth.login import LoginUseCase
@@ -63,11 +64,9 @@ class Container:
         self.auth = auth
         self.authz = AuthorizationService(auth.current_user)
 
-        self.heartbeat_service = HeartbeatService(
-            self.route_repo,
-            self.package_repo,
-            self.vehicle_manager,
-        )
+        self.reconciler = WorldStateReconciliationService()
+
+        self.heartbeat_service = HeartbeatService(self.route_repo, self.reconciler)
         self.advance_world_state_use_case = AdvanceWorldStateUseCase(self.heartbeat_service)
 
         self.world_state_runtime = InMemoryWorldStateRuntime(
@@ -82,6 +81,7 @@ class Container:
             route_repo=self.route_repo,
             vehicle_manager=self.vehicle_manager,
             runtime_state=self.world_state_runtime,
+            reconciler=self.reconciler,
         )
         self.world_state_gateway = InMemoryWorldStateGateway(
             snapshot_service=self.world_state_snapshot_service,
@@ -94,7 +94,6 @@ class Container:
         self.load_world_state_use_case = LoadWorldStateUseCase(
             self.world_state_gateway,
             self.world_state_persistence,
-            self.advance_world_state_use_case,
         )
         self.default_world_state_path = DEFAULT_WORLD_STATE_PATH
 

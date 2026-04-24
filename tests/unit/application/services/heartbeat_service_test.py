@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from src.application.services.heartbeat_service import HeartbeatService
+from src.application.services.world_state_reconciliation_service import WorldStateReconciliationService
 from src.domain.enums.item_status import ItemStatus
 from src.domain.enums.truck_status import TruckStatus
 
@@ -128,7 +129,7 @@ class HeartbeatServiceTests(unittest.TestCase):
         route_repo = MagicMock()
         route_repo.list_all.return_value = routes
 
-        service = HeartbeatService(route_repo, MagicMock(), MagicMock())
+        service = HeartbeatService(route_repo, WorldStateReconciliationService())
 
         summary_before_departure = service.advance(now=base)
         summary_mid_route = service.advance(now=base + timedelta(minutes=30))
@@ -167,7 +168,7 @@ class HeartbeatServiceTests(unittest.TestCase):
         route_repo = MagicMock()
         route_repo.list_all.return_value = [route]
 
-        service = HeartbeatService(route_repo, MagicMock(), MagicMock())
+        service = HeartbeatService(route_repo, WorldStateReconciliationService())
 
         summary = service.advance(now=base + timedelta(hours=2))
 
@@ -202,7 +203,7 @@ class HeartbeatServiceTests(unittest.TestCase):
         route_repo = MagicMock()
         route_repo.list_all.return_value = [route]
 
-        service = HeartbeatService(route_repo, MagicMock(), MagicMock())
+        service = HeartbeatService(route_repo, WorldStateReconciliationService())
 
         summary = service.advance(now=base + timedelta(minutes=30))
 

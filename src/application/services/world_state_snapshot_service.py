@@ -1,6 +1,7 @@
 from typing import ClassVar
 
 from src.adapters.driven.persistence.json.serialization import dt_from_str, dt_to_str
+from src.application.dto.reconciled_world_dto import ReconciledWorld
 from src.application.dto.truck_binding_dto import TruckBinding
 from src.application.dto.world_state_snapshot_dto import (
     CountersSnapshot,
@@ -10,9 +11,11 @@ from src.application.dto.world_state_snapshot_dto import (
     WorldSnapshotData,
     WorldStateSnapshot,
 )
+from src.application.services.world_state_reconciliation_service import WorldStateReconciliationService
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.entities.delivery_route import DeliveryRoute
+from src.domain.entities.truck import Truck
 from src.domain.value_objects.contact_info import ContactInfo
 from src.ports.output.customer_repository import CustomerRepositoryPort
 from src.ports.output.package_repository import PackageRepositoryPort
@@ -31,12 +34,14 @@ class WorldStateSnapshotService:
         route_repo: RouteRepositoryPort,
         vehicle_manager: VehicleManagerPort,
         runtime_state: WorldStateRuntimePort,
+        reconciler: WorldStateReconciliationService,
     ) -> None:
         self._customer_repo = customer_repo
         self._package_repo = package_repo
         self._route_repo = route_repo
         self._vehicle_manager = vehicle_manager
         self._runtime_state = runtime_state
+        self._reconciler = reconciler
 
     def build_snapshot(self) -> WorldStateSnapshot:
         counters = self._build_counters_snapshot()
@@ -96,26 +101,39 @@ class WorldStateSnapshotService:
         )
 
     def apply_snapshot(self, snapshot: WorldStateSnapshot) -> None:
+        world = snapshot.world
+
         self._validate_schema(snapshot)
-        self._validate_counters(snapshot.world.counters)
-        self._validate_ids(snapshot.world)
-        self._validate_references(snapshot.world)
-        self._validate_route_package_consistency(snapshot.world)
-        self._validate_counter_bounds(snapshot.world)
+        self._validate_counters(world.counters)
+        self._validate_ids(world)
+        self._validate_references(world)
+        self._validate_route_package_consistency(world)
+        self._validate_customer_uniqueness(world.customers)
+        self._validate_counter_bounds(world)
 
-        rebuilt_customers = self._rebuild_customers(snapshot.world.customers)
-        rebuilt_packages = self._rebuild_packages(snapshot.world.packages, rebuilt_customers)
-        rebuilt_routes = self._rebuild_routes(snapshot.world.routes)
+        rebuilt_customers = self._rebuild_customers(world.customers)
+        rebuilt_packages = self._rebuild_packages(world.packages, rebuilt_customers)
+        rebuilt_routes = self._rebuild_routes(world.routes)
 
-        self._link_packages_to_routes(snapshot.world.routes, rebuilt_packages, rebuilt_routes)
-        candidate_truck_bindings = self._link_trucks_to_routes(snapshot.world.routes, rebuilt_routes)
+        self._link_packages_to_routes(
+            snapshots=world.routes,
+            rebuilt_packages=rebuilt_packages,
+            rebuilt_routes=rebuilt_routes,
+        )
+
+        truck_bindings = self._reconcile_candidate_world(
+            snapshots=world.routes,
+            routes=rebuilt_routes,
+        )
 
         self._swap_runtime_state(
-            customers=rebuilt_customers,
-            packages=rebuilt_packages,
-            routes=rebuilt_routes,
-            counters=snapshot.world.counters,
-            truck_bindings=candidate_truck_bindings,
+            ReconciledWorld(
+                customers=rebuilt_customers,
+                packages=rebuilt_packages,
+                routes=rebuilt_routes,
+                counters=world.counters,
+                truck_bindings=truck_bindings,
+            )
         )
 
     def _validate_schema(self, snapshot: WorldStateSnapshot) -> None:
@@ -216,6 +234,30 @@ class WorldStateSnapshotService:
                         f"but the package points to route {package_route_id}."
                     )
 
+    def _validate_customer_uniqueness(self, customers: tuple[CustomerSnapshot, ...]) -> None:
+        seen_emails: dict[str, int] = {}
+        seen_phones: dict[str, int] = {}
+
+        for customer in customers:
+            email = customer.email.strip().lower()
+            phone = customer.phone.strip()
+
+            if email:
+                if email in seen_emails:
+                    raise ValueError(
+                        f"Duplicate customer email in snapshot: {customer.email!r} "
+                        f"used by customers {seen_emails[email]} and {customer.customer_id}."
+                    )
+                seen_emails[email] = customer.customer_id
+
+            if phone:
+                if phone in seen_phones:
+                    raise ValueError(
+                        f"Duplicate customer phone in snapshot: {customer.phone!r} "
+                        f"used by customers {seen_phones[phone]} and {customer.customer_id}."
+                    )
+                seen_phones[phone] = customer.customer_id
+
     def _validate_counter_bounds(self, world: WorldSnapshotData) -> None:
         self._validate_next_id(
             label="customer",
@@ -295,31 +337,95 @@ class WorldStateSnapshotService:
 
     def _link_trucks_to_routes(
         self, snapshots: tuple[RouteSnapshot, ...], rebuilt_routes: dict[int, DeliveryRoute]
-    ) -> list[TruckBinding]:
+    ) -> dict[int, tuple[Truck, Truck]]:
         trucks_by_id = {truck.vehicle_id: truck for truck in self._vehicle_manager.list_fleet()}
 
+        trucks_by_route_id: dict[int, tuple[Truck, Truck]] = {}
+
+        for snapshot in snapshots:
+            if snapshot.truck_vehicle_id is None:
+                continue
+
+            real_truck = trucks_by_id[snapshot.truck_vehicle_id]
+            candidate_truck = self._clone_truck(real_truck)
+            route = rebuilt_routes[snapshot.route_id]
+            candidate_truck.assign(route)
+            route.truck = candidate_truck
+
+            trucks_by_route_id[snapshot.route_id] = (real_truck, candidate_truck)
+
+        return trucks_by_route_id
+
+    def _reconcile_candidate_world(
+        self,
+        snapshots: tuple[RouteSnapshot, ...],
+        routes: dict[int, DeliveryRoute],
+    ) -> list[TruckBinding]:
+        trucks_by_route_id = self._link_trucks_to_routes(
+            snapshots=snapshots,
+            rebuilt_routes=routes,
+        )
+        self._reconciler.reconcile_routes(
+            routes=list(routes.values()),
+            update_trucks=True,
+        )
+        return self._build_truck_bindings(
+            snapshots=snapshots,
+            routes=routes,
+            trucks_by_route_id=trucks_by_route_id,
+        )
+
+    def _build_truck_bindings(
+        self,
+        *,
+        snapshots: tuple[RouteSnapshot, ...],
+        routes: dict[int, DeliveryRoute],
+        trucks_by_route_id: dict[int, tuple[Truck, Truck]],
+    ) -> list[TruckBinding]:
         bindings: list[TruckBinding] = []
 
         for snapshot in snapshots:
             if snapshot.truck_vehicle_id is None:
                 continue
 
-            truck = trucks_by_id[snapshot.truck_vehicle_id]
-            route = rebuilt_routes[snapshot.route_id]
+            real_truck, candidate_truck = trucks_by_route_id[snapshot.route_id]
+            route = routes[snapshot.route_id]
+            bound_route = route if route.truck is candidate_truck else None
 
-            bindings.append(TruckBinding(truck=truck, route=route))
+            bindings.append(
+                TruckBinding(
+                    truck=real_truck,
+                    route=bound_route,
+                    status=candidate_truck.status,
+                    current_location=candidate_truck.current_location,
+                    busy_from=candidate_truck.busy_from,
+                    busy_until=candidate_truck.busy_until,
+                    in_transit_to=candidate_truck.in_transit_to,
+                )
+            )
 
         return bindings
 
-    def _swap_runtime_state(
-        self,
-        customers: dict[int, Customer],
-        packages: dict[int, DeliveryPackage],
-        routes: dict[int, DeliveryRoute],
-        counters: CountersSnapshot,
-        truck_bindings: list[TruckBinding],
-    ) -> None:
-        self._runtime_state.replace_customers(customers_by_id=customers, next_id=counters.next_customer_id)
-        self._runtime_state.replace_packages(packages_by_id=packages, next_id=counters.next_package_id)
-        self._runtime_state.replace_routes(routes_by_id=routes, next_id=counters.next_route_id)
-        self._runtime_state.replace_truck_bindings(bindings=truck_bindings)
+    @staticmethod
+    def _clone_truck(truck: Truck) -> Truck:
+        clone = Truck(
+            vehicle_id=truck.vehicle_id,
+            name=truck.name,
+            capacity=truck.capacity,
+            max_range=truck.max_range,
+        )
+        clone.status = truck.status
+        clone.current_location = truck.current_location
+        clone.busy_from = truck.busy_from
+        clone.busy_until = truck.busy_until
+        clone.in_transit_to = truck.in_transit_to
+        return clone
+
+    def _swap_runtime_state(self, world: ReconciledWorld) -> None:
+        self._runtime_state.replace_world_state(
+            customers_by_id=world.customers,
+            packages_by_id=world.packages,
+            routes_by_id=world.routes,
+            counters=world.counters,
+            truck_bindings=world.truck_bindings,
+        )

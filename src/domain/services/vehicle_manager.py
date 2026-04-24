@@ -83,5 +83,11 @@ class VehicleManager:
             truck = binding.truck
             route = binding.route
 
-            truck.assign(route)
-            route.truck = truck
+            truck.status = binding.status
+            truck.current_location = binding.current_location
+            truck.busy_from = binding.busy_from
+            truck.busy_until = binding.busy_until
+            truck.in_transit_to = binding.in_transit_to
+            truck.route = route
+            if route is not None:
+                route.truck = truck

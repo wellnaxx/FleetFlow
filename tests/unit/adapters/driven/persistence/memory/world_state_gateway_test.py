@@ -17,8 +17,21 @@ from src.application.dto.world_state_snapshot_dto import (
     WorldSnapshotData,
     WorldStateSnapshot,
 )
+from src.application.services.world_state_reconciliation_service import WorldStateReconciliationService
 from src.application.services.world_state_snapshot_service import WorldStateSnapshotService
+from src.domain.entities.customer import Customer
 from src.domain.services.vehicle_manager import VehicleManager
+from src.domain.value_objects.contact_info import ContactInfo
+
+
+class _FailingVehicleManager(VehicleManager):
+    def __init__(self) -> None:
+        super().__init__()
+        self.replace_attempted = False
+
+    def replace_truck_bindings(self, bindings):  # type: ignore[no-untyped-def]
+        self.replace_attempted = True
+        raise RuntimeError("truck binding failure")
 
 
 def _distance(_start: str, _end: str) -> int:
@@ -70,6 +83,7 @@ class InMemoryWorldStateGatewayTests(unittest.TestCase):
             route_repo=route_repo,
             vehicle_manager=vehicle_manager,
             runtime_state=runtime_state,
+            reconciler=WorldStateReconciliationService(),
         )
         gateway = InMemoryWorldStateGateway(snapshot_service=snapshot_service)
         snapshot = WorldStateSnapshot(
@@ -110,3 +124,33 @@ class InMemoryWorldStateGatewayTests(unittest.TestCase):
         rebuilt_snapshot = gateway.build_snapshot()
 
         self.assertEqual(rebuilt_snapshot, snapshot)
+
+    def test_runtime_replacement_rolls_back_when_truck_binding_fails(self) -> None:
+        customer_repo = InMemoryCustomerRepository()
+        package_repo = InMemoryPackageRepository()
+        route_repo = InMemoryRouteRepository()
+        vehicle_manager = _FailingVehicleManager()
+        runtime_state = InMemoryWorldStateRuntime(
+            customer_repo=customer_repo,
+            package_repo=package_repo,
+            route_repo=route_repo,
+            vehicle_manager=vehicle_manager,
+        )
+        existing_customer = Customer(
+            customer_id=1,
+            contact=ContactInfo(name="Alice", email="alice@example.com", phone_number="0412345678"),
+        )
+        customer_repo.add(existing_customer)
+
+        with self.assertRaises(RuntimeError):
+            runtime_state.replace_world_state(
+                customers_by_id={},
+                packages_by_id={},
+                routes_by_id={},
+                counters=CountersSnapshot(1, 1, 1),
+                truck_bindings=[],
+            )
+
+        self.assertTrue(vehicle_manager.replace_attempted)
+        self.assertIs(customer_repo.get_by_id(1), existing_customer)
+        self.assertEqual(customer_repo.peek_next_id(), 2)
