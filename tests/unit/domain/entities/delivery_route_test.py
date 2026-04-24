@@ -21,6 +21,14 @@ class _Pkg:
         self.weight = weight
         self.route: DeliveryRoute | None = None
         self.expected_arrival: datetime | None = None
+        self.status: str | None = None
+        self.current_location = start
+
+    def reset_assignment_state(self) -> None:
+        self.route = None
+        self.expected_arrival = None
+        self.status = None
+        self.current_location = self.start_location
 
 
 class _Truck:
@@ -37,6 +45,13 @@ class _Truck:
         self.max_range = max_range
         self.current_location = current_location
         self.route = route
+        self.released_force: bool | None = None
+
+    def release(self, *, force: bool = False) -> bool:
+        self.released_force = force
+        released = self.route is not None
+        self.route = None
+        return released
 
 
 @patch("src.domain.entities.delivery_route.Map.get_locations", return_value=LOCATIONS)
@@ -214,17 +229,24 @@ class DeliveryRoute_Should(unittest.TestCase):
         self.assertIs(p.route, r)
         self.assertIsNone(p.expected_arrival)
 
-    def test_detach_package_removes_package_and_clears_backref(self, *_):
+    def test_detach_package_removes_package_and_clears_assignment_state(self, *_):
         r = DeliveryRoute("A", "B", "C", route_id=1)
         p = _Pkg(1, "A", "C", 5)
+        p.status = "IN_TRANSIT"
+        p.current_location = "B"
 
+        r.schedule(datetime(2025, 1, 1, 6, 0))
         r.assign_package(p)  # type: ignore[reportArgumentType]
         self.assertIs(p.route, r)
         self.assertIn(p, r.packages)
+        self.assertIsNotNone(p.expected_arrival)
 
         r.detach_package(p)  # type: ignore[reportArgumentType]
 
         self.assertIsNone(p.route)
+        self.assertIsNone(p.expected_arrival)
+        self.assertIsNone(p.status)
+        self.assertEqual(p.current_location, p.start_location)
         self.assertNotIn(p, r.packages)
 
     def test_detach_package_only_removes_target(self, *_):
@@ -269,6 +291,26 @@ class DeliveryRoute_Should(unittest.TestCase):
         self.assertIs(p.route, r2)
         self.assertIn(p, r2.packages)
         self.assertNotIn(p, r1.packages)
+
+    def test_release_truck_releases_and_clears_route_truck(self, *_):
+        route = DeliveryRoute("A", "B", route_id=1)
+        truck = _Truck(route=route)
+        route.truck = truck  # type: ignore[reportAttributeAccessIssue]
+
+        released = route.release_truck(force=True)
+
+        self.assertTrue(released)
+        self.assertTrue(truck.released_force)
+        self.assertIsNone(truck.route)
+        self.assertIsNone(route.truck)
+
+    def test_release_truck_without_truck_is_noop(self, *_):
+        route = DeliveryRoute("A", "B", route_id=1)
+
+        released = route.release_truck(force=True)
+
+        self.assertFalse(released)
+        self.assertIsNone(route.truck)
 
     def test_info_contains_key_lines(self, *_):
         base = datetime(2025, 1, 1, 8, 0)

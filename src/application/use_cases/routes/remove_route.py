@@ -24,11 +24,10 @@ class RemoveRouteUseCase:
         if not route:
             raise ValueError(f"Route with ID {route_id} not found")
 
-        for package in list(getattr(route, "packages", [])):
+        for package in list(route.packages):
             route.detach_package(package)
 
-        if route.truck is not None:
-            route.truck.release(force=True)
+        route.release_truck(force=True)
 
         self._routes.remove(route_id)
         return route

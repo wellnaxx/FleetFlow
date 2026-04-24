@@ -30,37 +30,33 @@ class RemoveRouteUseCase_Should(unittest.TestCase):
 
         self.assertIs(result, route)
         self.mock_routes.get_by_id.assert_called_once_with(42)
+        route.release_truck.assert_called_once_with(force=True)
         self.mock_routes.remove.assert_called_once_with(42)
 
     def test_releases_truck_before_removal(self) -> None:
-        truck = MagicMock()
         route = MagicMock()
         route.route_id = 42
-        route.truck = truck
         route.packages = []
         self.mock_routes.get_by_id.return_value = route
 
         result = self.use_case.execute(42)
 
         self.assertIs(result, route)
-        truck.release.assert_called_once_with(force=True)
+        route.release_truck.assert_called_once_with(force=True)
         self.mock_routes.remove.assert_called_once_with(42)
 
     def test_release_error_stops_removal(self) -> None:
-        truck = MagicMock()
-        truck.release.side_effect = RuntimeError("truck release failed")
-
         route = MagicMock()
         route.route_id = 42
-        route.truck = truck
         route.packages = []
+        route.release_truck.side_effect = RuntimeError("truck release failed")
         self.mock_routes.get_by_id.return_value = route
 
         with self.assertRaises(RuntimeError) as ctx:
             self.use_case.execute(42)
 
         self.assertIn("truck release failed", str(ctx.exception))
-        truck.release.assert_called_once_with(force=True)
+        route.release_truck.assert_called_once_with(force=True)
         self.mock_routes.remove.assert_not_called()
 
     def test_detaches_assigned_packages_before_removal(self) -> None:
@@ -77,6 +73,7 @@ class RemoveRouteUseCase_Should(unittest.TestCase):
         route.detach_package.assert_any_call(package1)
         route.detach_package.assert_any_call(package2)
         self.assertEqual(route.detach_package.call_count, 2)
+        route.release_truck.assert_called_once_with(force=True)
         self.mock_routes.remove.assert_called_once_with(42)
 
     def test_detach_error_stops_removal(self) -> None:

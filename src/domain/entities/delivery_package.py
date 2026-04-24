@@ -47,6 +47,12 @@ class DeliveryPackage:
     def _set_package_id(self, value: int) -> None:
         self._package_id = value
 
+    def reset_assignment_state(self) -> None:
+        self.route = None
+        self.expected_arrival = None
+        self.status = None
+        self.current_location = self.start_location
+
     def info(self) -> str:
         """Return a human-readable description of the package."""
         cname = self.customer.name

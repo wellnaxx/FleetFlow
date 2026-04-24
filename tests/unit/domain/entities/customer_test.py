@@ -60,8 +60,18 @@ class Customer_Should(unittest.TestCase):
         self.assertIn(p, new.delivery_packages)
         self.assertNotIn(p, old.delivery_packages)
 
+    def test_remove_package_unlinks_existing_package(self) -> None:
+        c = Customer(self.make_contact("Frank"), 7)
+        p = _FakePackage(11, c)
+        c.add_package(p)  # type: ignore[reportArgumentType]
+
+        c.remove_package(p)  # type: ignore[reportArgumentType]
+
+        self.assertNotIn(p, c.delivery_packages)
+        self.assertIs(p.customer, c)
+
     def test_remove_package_missing_raises(self) -> None:
         c = Customer(self.make_contact("Frank"), 7)
         p = _FakePackage(11, c)
         with self.assertRaises(ValueError):
-            c._remove_package_link(p)  # type: ignore[reportArgumentType]
+            c.remove_package(p)  # type: ignore[reportArgumentType]

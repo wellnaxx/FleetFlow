@@ -1,5 +1,4 @@
 import unittest
-from types import SimpleNamespace
 from typing import Any
 
 from src.adapters.driven.persistence.memory.package_repository import InMemoryPackageRepository
@@ -20,13 +19,23 @@ class _FakeRoute:
         raise ValueError(f"Package with id {package.package_id} is not assigned to this route.")
 
 
+class _FakeCustomer:
+    def __init__(self) -> None:
+        self.packages: list[Any] = []
+        self.customer_id = 1
+
+    def remove_package(self, package: Any) -> None:
+        self.packages = [existing for existing in self.packages if existing.package_id != package.package_id]
+
+
 class _FakePackage:
     def __init__(self, package_id: int) -> None:
         self.package_id = package_id
         self.start_location = "A"
         self.end_location = "B"
         self.weight = 1.0
-        self.customer: Any = SimpleNamespace(customer_id=1)
+        self.customer = _FakeCustomer()
+        self.customer.packages.append(self)
         self.route: Any = None
         self.status: str | None = None
 
@@ -46,3 +55,4 @@ class RuntimePackageRemovalIntegrationTests(unittest.TestCase):
         self.assertIsNone(package_repo.get_by_id(package.package_id))
         self.assertEqual(route.packages, [])
         self.assertIsNone(package.route)
+        self.assertEqual(package.customer.packages, [])

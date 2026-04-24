@@ -190,9 +190,19 @@ class DeliveryRoute:
             if existing.package_id == package.package_id:
                 self._packages.pop(i)
                 if package.route is self:
-                    package.route = None
+                    package.reset_assignment_state()
                 return
         raise ValueError(f"Package with id {package.package_id} is not assigned to route {self.route_id}.")
+
+    def release_truck(self, *, force: bool = False) -> bool:
+        if self.truck is None:
+            return False
+
+        truck = self.truck
+        released = truck.release(force=force)
+        if released or truck.route is None:
+            self.truck = None
+        return released
 
     def total_assigned_weight(self) -> float:
         return sum(package.weight for package in self._packages)

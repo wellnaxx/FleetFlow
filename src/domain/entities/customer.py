@@ -42,12 +42,11 @@ class Customer:
             return
 
         old_customer = package.customer
-        old_customer._remove_package_link(package)
+        old_customer.remove_package(package)
         package.customer = self
         self._delivery_packages.append(package)
 
-
-    def _remove_package_link(self, package: DeliveryPackage) -> None:
+    def remove_package(self, package: DeliveryPackage) -> None:
         for i, p in enumerate(self._delivery_packages):
             if p.package_id == package.package_id:
                 self._delivery_packages.pop(i)

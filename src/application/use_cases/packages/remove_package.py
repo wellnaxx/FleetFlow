@@ -27,5 +27,6 @@ class RemovePackageUseCase:
         if package.route is not None:
             package.route.detach_package(package)
 
+        package.customer.remove_package(package)
         self._packages.remove(package_id)
         return package
