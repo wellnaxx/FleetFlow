@@ -15,6 +15,7 @@ from src.application.dto.world_state_snapshot_dto import (
     WorldSnapshotData,
     WorldStateSnapshot,
 )
+from src.application.exceptions.world_state_errors import WorldStateCorruptionError
 from src.application.services.world_state_reconciliation_service import WorldStateReconciliationService
 from src.application.services.world_state_snapshot_service import WorldStateSnapshotService
 from src.domain.entities.customer import Customer
@@ -214,7 +215,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
     def test_apply_snapshot_rejects_unsupported_schema_version(self) -> None:
         snapshot = self.make_snapshot(schema_version=99)
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(WorldStateCorruptionError) as ctx:
             self.service.apply_snapshot(snapshot)
 
         self.assertIn("Unsupported schema version", str(ctx.exception))
@@ -230,7 +231,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
             with self.subTest(label=label):
                 snapshot = self.make_snapshot(counters=counters)
 
-                with self.assertRaises(ValueError) as ctx:
+                with self.assertRaises(WorldStateCorruptionError) as ctx:
                     self.service.apply_snapshot(snapshot)
 
                 self.assertIn(message, str(ctx.exception))
@@ -298,7 +299,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
 
         for label, snapshot, message in duplicate_cases:
             with self.subTest(label=label):
-                with self.assertRaises(ValueError) as ctx:
+                with self.assertRaises(WorldStateCorruptionError) as ctx:
                     self.service.apply_snapshot(snapshot)
 
                 self.assertIn(message, str(ctx.exception))
@@ -327,7 +328,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
             ),
         )
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(WorldStateCorruptionError) as ctx:
             self.service.apply_snapshot(snapshot)
 
         self.assertIn("Duplicate package ids for route 1", str(ctx.exception))
@@ -401,7 +402,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
 
         for label, snapshot, message in missing_reference_cases:
             with self.subTest(label=label):
-                with self.assertRaises(ValueError) as ctx:
+                with self.assertRaises(WorldStateCorruptionError) as ctx:
                     self.service.apply_snapshot(snapshot)
 
                 self.assertIn(message, str(ctx.exception))
@@ -430,7 +431,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
             ),
         )
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(WorldStateCorruptionError) as ctx:
             self.service.apply_snapshot(snapshot)
 
         self.assertIn("does not include that package", str(ctx.exception))
@@ -552,7 +553,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
             ),
         )
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(WorldStateCorruptionError) as ctx:
             self.service.apply_snapshot(snapshot)
 
         self.assertIn("assigned to multiple routes", str(ctx.exception))
@@ -581,7 +582,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
             ),
         )
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(WorldStateCorruptionError) as ctx:
             self.service.apply_snapshot(snapshot)
 
         self.assertIn("includes package 1", str(ctx.exception))
@@ -674,7 +675,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
             ),
         )
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(WorldStateCorruptionError) as ctx:
             self.service.apply_snapshot(snapshot)
 
         self.assertIn("Invalid next_route_id in snapshot", str(ctx.exception))
@@ -741,7 +742,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
             ),
         )
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(WorldStateCorruptionError):
             self.service.apply_snapshot(snapshot)
 
         self.assertIs(self.customer_repo.get_by_id(1), customer)

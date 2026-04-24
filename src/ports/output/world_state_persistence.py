@@ -11,5 +11,8 @@ class WorldStatePersistencePort(Protocol):
         ...
 
     def read(self, path: str) -> tuple[str, WorldStateSnapshot]:
-        """Read a snapshot and return the resolved absolute path."""
+        """Read a snapshot and return the resolved absolute path.
+
+        Raises world-state exceptions for missing, corrupt, or unreadable files.
+        """
         ...

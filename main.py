@@ -6,6 +6,7 @@ from src.adapters.driven.persistence.json.user_store import UserStore
 from src.adapters.driving.cli.command_factory import CommandFactory
 from src.adapters.driving.cli.engine import Engine
 from src.application.config.state_persistence import DEFAULT_WORLD_STATE_PATH
+from src.application.exceptions.world_state_errors import WorldStateCorruptionError, WorldStateFileNotFoundError
 from src.application.services.auth_service import AuthService
 from src.composition.container import Container
 from src.domain.enums.auth import Role
@@ -51,7 +52,9 @@ def _load_default_world_state(container: Container) -> None:
 
     try:
         container.load_world_state_use_case.execute(DEFAULT_WORLD_STATE_PATH)
-    except Exception:
+    except WorldStateFileNotFoundError:
+        return
+    except WorldStateCorruptionError:
         logger.exception(
             "Failed to load default world state from %r.",
             DEFAULT_WORLD_STATE_PATH,

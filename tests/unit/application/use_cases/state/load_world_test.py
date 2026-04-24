@@ -6,6 +6,7 @@ from src.application.dto.world_state_snapshot_dto import (
     WorldSnapshotData,
     WorldStateSnapshot,
 )
+from src.application.exceptions.world_state_errors import WorldStateCorruptionError
 from src.application.use_cases.state.load_world import LoadWorldStateUseCase
 
 
@@ -45,9 +46,9 @@ class LoadWorldStateUseCaseTests(unittest.TestCase):
         gateway = MagicMock()
         persistence = MagicMock()
         persistence.read.return_value = ("/abs/state.json", snapshot)
-        gateway.apply_snapshot.side_effect = ValueError("bad snapshot")
+        gateway.apply_snapshot.side_effect = WorldStateCorruptionError("bad snapshot")
 
         use_case = LoadWorldStateUseCase(gateway, persistence)
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(WorldStateCorruptionError):
             use_case.execute("state.json")

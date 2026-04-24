@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 import main
+from src.application.exceptions.world_state_errors import WorldStateCorruptionError, WorldStateFileNotFoundError
 
 
 class MainStartupTests(unittest.TestCase):
@@ -74,6 +75,47 @@ class MainStartupTests(unittest.TestCase):
         engine.start.assert_called_once_with()
 
     @patch("main.print")
+    @patch("main._quarantine_corrupt_world_state")
+    @patch("main.Engine")
+    @patch("main.CommandFactory")
+    @patch("main.Container")
+    @patch("main.bootstrap_admin")
+    @patch("main.AuthService")
+    @patch("main.UserStore")
+    @patch("main.os.path.exists", return_value=True)
+    def test_main_treats_missing_default_world_state_as_noop_even_after_exists_check(
+        self,
+        exists: MagicMock,
+        user_store_cls: MagicMock,
+        auth_service_cls: MagicMock,
+        bootstrap_admin: MagicMock,
+        container_cls: MagicMock,
+        command_factory_cls: MagicMock,
+        engine_cls: MagicMock,
+        quarantine: MagicMock,
+        print_mock: MagicMock,
+    ) -> None:
+        store = MagicMock()
+        auth = MagicMock()
+        container = MagicMock()
+        command_factory = MagicMock()
+        engine = MagicMock()
+
+        user_store_cls.return_value = store
+        auth_service_cls.return_value = auth
+        container_cls.return_value = container
+        command_factory_cls.return_value = command_factory
+        engine_cls.return_value = engine
+        container.load_world_state_use_case.execute.side_effect = WorldStateFileNotFoundError("missing")
+
+        main.main()
+
+        container.load_world_state_use_case.execute.assert_called_once_with(main.DEFAULT_WORLD_STATE_PATH)
+        quarantine.assert_not_called()
+        print_mock.assert_not_called()
+        engine.start.assert_called_once_with()
+
+    @patch("main.print")
     @patch("main._quarantine_corrupt_world_state", return_value="state.json.corrupt.2026-04-22T18-14-03")
     @patch("main.logger")
     @patch("main.Engine")
@@ -83,7 +125,7 @@ class MainStartupTests(unittest.TestCase):
     @patch("main.AuthService")
     @patch("main.UserStore")
     @patch("main.os.path.exists", return_value=True)
-    def test_main_warns_quarantines_and_continues_when_world_state_load_fails(
+    def test_main_warns_quarantines_and_continues_when_default_world_state_is_corrupt(
         self,
         exists: MagicMock,
         user_store_cls: MagicMock,
@@ -108,7 +150,7 @@ class MainStartupTests(unittest.TestCase):
         command_factory_cls.return_value = command_factory
         engine_cls.return_value = engine
 
-        container.load_world_state_use_case.execute.side_effect = ValueError("bad snapshot")
+        container.load_world_state_use_case.execute.side_effect = WorldStateCorruptionError("bad snapshot")
 
         main.main()
 
@@ -137,7 +179,7 @@ class MainStartupTests(unittest.TestCase):
     @patch("main.AuthService")
     @patch("main.UserStore")
     @patch("main.os.path.exists", return_value=True)
-    def test_main_warns_and_continues_when_world_state_load_fails_and_quarantine_fails(
+    def test_main_warns_and_continues_when_default_world_state_is_corrupt_and_quarantine_fails(
         self,
         exists: MagicMock,
         user_store_cls: MagicMock,
@@ -162,7 +204,7 @@ class MainStartupTests(unittest.TestCase):
         command_factory_cls.return_value = command_factory
         engine_cls.return_value = engine
 
-        container.load_world_state_use_case.execute.side_effect = ValueError("bad snapshot")
+        container.load_world_state_use_case.execute.side_effect = WorldStateCorruptionError("bad snapshot")
 
         main.main()
 
@@ -180,6 +222,44 @@ class MainStartupTests(unittest.TestCase):
         self.assertIn("could not be moved aside automatically", warning_text)
 
         engine.start.assert_called_once_with()
+
+    @patch("main.print")
+    @patch("main._quarantine_corrupt_world_state")
+    @patch("main.Engine")
+    @patch("main.CommandFactory")
+    @patch("main.Container")
+    @patch("main.bootstrap_admin")
+    @patch("main.AuthService")
+    @patch("main.UserStore")
+    @patch("main.os.path.exists", return_value=True)
+    def test_main_does_not_quarantine_non_corruption_startup_errors(
+        self,
+        exists: MagicMock,
+        user_store_cls: MagicMock,
+        auth_service_cls: MagicMock,
+        bootstrap_admin: MagicMock,
+        container_cls: MagicMock,
+        command_factory_cls: MagicMock,
+        engine_cls: MagicMock,
+        quarantine: MagicMock,
+        print_mock: MagicMock,
+    ) -> None:
+        store = MagicMock()
+        auth = MagicMock()
+        container = MagicMock()
+
+        user_store_cls.return_value = store
+        auth_service_cls.return_value = auth
+        container_cls.return_value = container
+        container.load_world_state_use_case.execute.side_effect = RuntimeError("runtime bug")
+
+        with self.assertRaises(RuntimeError):
+            main.main()
+
+        quarantine.assert_not_called()
+        print_mock.assert_not_called()
+        command_factory_cls.assert_not_called()
+        engine_cls.assert_not_called()
 
 
 class QuarantineCorruptWorldStateTests(unittest.TestCase):

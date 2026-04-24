@@ -11,6 +11,7 @@ from src.application.dto.world_state_snapshot_dto import (
     WorldSnapshotData,
     WorldStateSnapshot,
 )
+from src.application.exceptions.world_state_errors import WorldStateCorruptionError
 from src.application.services.world_state_reconciliation_service import WorldStateReconciliationService
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
@@ -103,23 +104,26 @@ class WorldStateSnapshotService:
     def apply_snapshot(self, snapshot: WorldStateSnapshot) -> None:
         world = snapshot.world
 
-        self._validate_schema(snapshot)
-        self._validate_counters(world.counters)
-        self._validate_ids(world)
-        self._validate_references(world)
-        self._validate_route_package_consistency(world)
-        self._validate_customer_uniqueness(world.customers)
-        self._validate_counter_bounds(world)
+        try:
+            self._validate_schema(snapshot)
+            self._validate_counters(world.counters)
+            self._validate_ids(world)
+            self._validate_references(world)
+            self._validate_route_package_consistency(world)
+            self._validate_customer_uniqueness(world.customers)
+            self._validate_counter_bounds(world)
 
-        rebuilt_customers = self._rebuild_customers(world.customers)
-        rebuilt_packages = self._rebuild_packages(world.packages, rebuilt_customers)
-        rebuilt_routes = self._rebuild_routes(world.routes)
+            rebuilt_customers = self._rebuild_customers(world.customers)
+            rebuilt_packages = self._rebuild_packages(world.packages, rebuilt_customers)
+            rebuilt_routes = self._rebuild_routes(world.routes)
 
-        self._link_packages_to_routes(
-            snapshots=world.routes,
-            rebuilt_packages=rebuilt_packages,
-            rebuilt_routes=rebuilt_routes,
-        )
+            self._link_packages_to_routes(
+                snapshots=world.routes,
+                rebuilt_packages=rebuilt_packages,
+                rebuilt_routes=rebuilt_routes,
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise WorldStateCorruptionError(f"Invalid world state snapshot: {exc}") from exc
 
         truck_bindings = self._reconcile_candidate_world(
             snapshots=world.routes,

@@ -13,6 +13,11 @@ from src.application.dto.world_state_snapshot_dto import (
     WorldSnapshotData,
     WorldStateSnapshot,
 )
+from src.application.exceptions.world_state_errors import (
+    WorldStateCorruptionError,
+    WorldStateFileNotFoundError,
+    WorldStatePersistenceError,
+)
 from src.ports.output.world_state_persistence import WorldStatePersistencePort
 
 
@@ -47,18 +52,20 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
         """Read and deserialize a world-state snapshot from JSON."""
         abs_path = resolve_data_path(path)
         if not os.path.exists(abs_path):
-            raise ValueError(f"State file not found: {abs_path}")
+            raise WorldStateFileNotFoundError(f"State file not found: {abs_path}")
 
         try:
             with open(abs_path, encoding="utf-8") as file:
                 raw: object = json.load(file)
         except json.JSONDecodeError as exc:
-            raise ValueError(f"Malformed world state JSON: {abs_path}") from exc
+            raise WorldStateCorruptionError(f"Malformed world state JSON: {abs_path}") from exc
+        except OSError as exc:
+            raise WorldStatePersistenceError(f"Could not read world state file: {abs_path}") from exc
 
         try:
             snapshot = self._snapshot_from_raw(raw)
         except (KeyError, TypeError, ValueError) as exc:
-            raise ValueError(f"Malformed world state JSON: {abs_path}") from exc
+            raise WorldStateCorruptionError(f"Malformed world state JSON: {abs_path}") from exc
 
         return abs_path, snapshot
 

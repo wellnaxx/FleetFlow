@@ -15,6 +15,10 @@ from src.application.dto.world_state_snapshot_dto import (
     WorldSnapshotData,
     WorldStateSnapshot,
 )
+from src.application.exceptions.world_state_errors import (
+    WorldStateCorruptionError,
+    WorldStateFileNotFoundError,
+)
 
 
 class JsonWorldStatePersistenceTests(unittest.TestCase):
@@ -221,11 +225,11 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
         self.assertTrue(read_path.endswith(filename))
         self.assertEqual(loaded, snapshot)
 
-    def test_read_missing_file_raises_value_error(self) -> None:
+    def test_read_missing_file_raises_world_state_file_not_found(self) -> None:
         filename = f"missing-{uuid.uuid4().hex}.json"
         path = os.path.join(DATA_DIR, filename)
         try:
-            with self.assertRaises(ValueError) as ctx:
+            with self.assertRaises(WorldStateFileNotFoundError) as ctx:
                 self.persistence.read(path)
         finally:
             with contextlib.suppress(OSError):
@@ -248,7 +252,7 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
         self.assertEqual(read_path, written_path)
         self.assertEqual(loaded, snapshot)
 
-    def test_read_malformed_json_raises_value_error(self) -> None:
+    def test_read_malformed_json_raises_world_state_corruption_error(self) -> None:
         filename = f"world-state-{uuid.uuid4().hex}.json"
         path = os.path.join(DATA_DIR, filename)
 
@@ -256,7 +260,7 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
             with open(path, "w", encoding="utf-8") as file:
                 file.write("{ bad json")
 
-            with self.assertRaises(ValueError) as ctx:
+            with self.assertRaises(WorldStateCorruptionError) as ctx:
                 self.persistence.read(path)
         finally:
             with contextlib.suppress(OSError):
@@ -264,7 +268,7 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
 
         self.assertIn("Malformed world state JSON", str(ctx.exception))
 
-    def test_read_malformed_payload_raises_value_error(self) -> None:
+    def test_read_malformed_payload_raises_world_state_corruption_error(self) -> None:
         raw: dict[str, int | dict[str, dict[str, int] | str | list[Any]]] = {
             "schema_version": 1,
             "world": {
@@ -286,7 +290,7 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
             with open(path, "w", encoding="utf-8") as file:
                 json.dump(raw, file)
 
-            with self.assertRaises(ValueError) as ctx:
+            with self.assertRaises(WorldStateCorruptionError) as ctx:
                 self.persistence.read(path)
         finally:
             with contextlib.suppress(OSError):
@@ -294,7 +298,7 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
 
         self.assertIn("Malformed world state JSON", str(ctx.exception))
 
-    def test_read_payload_without_world_or_legacy_sections_raises_value_error(self) -> None:
+    def test_read_payload_without_world_or_legacy_sections_raises_world_state_corruption_error(self) -> None:
         raw = {
             "schema_version": 1,
         }
@@ -306,7 +310,7 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
             with open(path, "w", encoding="utf-8") as file:
                 json.dump(raw, file)
 
-            with self.assertRaises(ValueError) as ctx:
+            with self.assertRaises(WorldStateCorruptionError) as ctx:
                 self.persistence.read(path)
         finally:
             with contextlib.suppress(OSError):

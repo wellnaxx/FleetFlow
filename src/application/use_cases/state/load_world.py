@@ -28,8 +28,9 @@ class LoadWorldStateUseCase:
             The resolved absolute path read by the persistence adapter.
 
         Raises:
-            OSError: If the persistence adapter cannot read the snapshot.
-            ValueError: If the file is missing, malformed, or fails validation.
+            WorldStateFileNotFoundError: If the file is missing.
+            WorldStateCorruptionError: If the file is malformed or fails validation.
+            WorldStatePersistenceError: If the persistence adapter cannot read the snapshot.
         """
         abs_path, snapshot = self._persistence.read(path)
         self._world_state_gateway.apply_snapshot(snapshot)
