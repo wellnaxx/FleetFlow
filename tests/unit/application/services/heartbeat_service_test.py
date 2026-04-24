@@ -26,7 +26,7 @@ class _FakeTruck:
             self.busy_until = None
             return False
 
-        eta = getattr(self.route, "eta_final", None)
+        eta = self.route.eta_final
         if not force and (eta is None or now is None or now < eta):
             return False
 
@@ -92,6 +92,16 @@ class _FakeRoute:
         if self.departure_time is None:
             raise ValueError("unscheduled")
         return self.departure_time + timedelta(hours=self.locations.index(city))
+
+    def release_truck(self, *, now: datetime | None = None, force: bool = False) -> bool:
+        if self.truck is None:
+            return False
+
+        truck = self.truck
+        released = truck.release(now=now, force=force)
+        if released or truck.route is None:
+            self.truck = None
+        return released
 
 
 class HeartbeatServiceTests(unittest.TestCase):

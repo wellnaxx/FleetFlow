@@ -380,3 +380,6 @@ class Engine:
         print("  viewallroutes")
         print("  viewallpackages")
         print("  viewalltrucks")
+        print("  save <filename>")
+        print("  load <filename>")
+        print("  login | logout | whoami")

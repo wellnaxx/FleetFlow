@@ -47,7 +47,7 @@ class _Truck:
         self.route = route
         self.released_force: bool | None = None
 
-    def release(self, *, force: bool = False) -> bool:
+    def release(self, *, now: datetime | None = None, force: bool = False) -> bool:
         self.released_force = force
         released = self.route is not None
         self.route = None

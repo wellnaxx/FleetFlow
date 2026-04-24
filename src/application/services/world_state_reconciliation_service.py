@@ -1,4 +1,3 @@
-import contextlib
 from datetime import datetime
 
 from src.application.results.heartbeat_summary_result import HeartbeatSummary
@@ -88,10 +87,9 @@ class WorldStateReconciliationService:
             if self._set_truck_in_transit(truck, route, position):
                 trucks_moved += 1
 
-        elif position.kind == "AFTER_END" and truck.release(now=now, force=False):
+        elif position.kind == "AFTER_END" and route.release_truck(now=now, force=False):
             trucks_moved += 1
             trucks_released += 1
-            route.truck = None
 
         after_state = self._truck_state(truck)
         state_changed = before_state != after_state or trucks_released > 0
@@ -143,11 +141,10 @@ class WorldStateReconciliationService:
             position.stop_city == route.end_location
             and route.eta_final
             and now >= route.eta_final
-            and truck.release(now=now, force=False)
+            and route.release_truck(now=now, force=False)
         ):
             moved = True
             released = True
-            route.truck = None
         return moved, released
 
     def _set_truck_in_transit(
@@ -172,8 +169,7 @@ class WorldStateReconciliationService:
 
         if route.departure_time is not None:
             for city in route.locations:
-                with contextlib.suppress(ValueError):
-                    stop_times[city] = route.arrival_time_at(city)
+                stop_times[city] = route.arrival_time_at(city)
 
         pos_index = {city: index for index, city in enumerate(route.locations)}
 
@@ -212,8 +208,8 @@ class WorldStateReconciliationService:
                     current_location=last_city,
                 )
 
-            with contextlib.suppress(ValueError):
-                expected_arrival = route.arrival_time_at(end)
+            expected_arrival = stop_times.get(end)
+            if expected_arrival is not None:
                 if package.expected_arrival != expected_arrival:
                     package.expected_arrival = expected_arrival
                     changed += 1

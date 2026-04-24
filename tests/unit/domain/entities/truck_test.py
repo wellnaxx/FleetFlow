@@ -181,7 +181,7 @@ class TestTruck_Should(unittest.TestCase):
         """Test release() with force=False when route has no eta_final."""
         # Arrange
         mock_route = Mock()
-        del mock_route.eta_final  # Remove eta_final attribute
+        mock_route.eta_final = None
         self.truck.route = mock_route
         self.truck.status = TruckStatus.ON_THE_WAY
 

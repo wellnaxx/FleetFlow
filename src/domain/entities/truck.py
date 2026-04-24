@@ -52,11 +52,11 @@ class Truck:
 
         if not force:
             now = now or datetime.now()
-            eta = getattr(self.route, "eta_final", None)
+            eta = self.route.eta_final
             if eta is None or now < eta:
                 return False
 
-        end_city = getattr(self.route, "end_location", None)
+        end_city = self.route.end_location
         if end_city:
             self.current_location = end_city
 

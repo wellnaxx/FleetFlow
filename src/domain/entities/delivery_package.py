@@ -66,7 +66,7 @@ class DeliveryPackage:
             arrival_str = "Not assigned"
         return (
             f"Package {self.package_id}: "
-            f"{self.start_location} → {self.end_location}, {self.weight:.1f}kg\n"
+            f"{self.start_location} -> {self.end_location}, {self.weight:.1f}kg\n"
             f"Customer: {contact_info}\n"
             f"Assigned route: {route_str}\n"
             f"Expected arrival: {arrival_str}"

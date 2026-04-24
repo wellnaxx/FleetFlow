@@ -12,7 +12,6 @@ class Permission(Enum):
     PACKAGE_CREATE = auto()
     PACKAGE_VIEW = auto()
     PACKAGE_VIEW_ALL = auto()
-    PACKAGE_ASSIGN = auto()
     PACKAGE_FIND_ROUTE_FOR = auto()
     PACKAGE_VIEW_UNASSIGNED = auto()
     PACKAGE_REMOVE = auto()
@@ -39,7 +38,6 @@ ROLE_PERMISSIONS = {
     Role.EMPLOYEE: {
         Permission.PACKAGE_CREATE,
         Permission.PACKAGE_VIEW,
-        Permission.PACKAGE_ASSIGN,
         Permission.PACKAGE_FIND_ROUTE_FOR,
         Permission.ROUTE_VIEW,
         Permission.ROUTE_CREATE,

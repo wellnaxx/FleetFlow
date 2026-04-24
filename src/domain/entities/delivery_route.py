@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import contextlib
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
@@ -194,12 +193,12 @@ class DeliveryRoute:
                 return
         raise ValueError(f"Package with id {package.package_id} is not assigned to route {self.route_id}.")
 
-    def release_truck(self, *, force: bool = False) -> bool:
+    def release_truck(self, *, now: datetime | None = None, force: bool = False) -> bool:
         if self.truck is None:
             return False
 
         truck = self.truck
-        released = truck.release(force=force)
+        released = truck.release(now=now, force=force)
         if released or truck.route is None:
             self.truck = None
         return released
@@ -281,7 +280,7 @@ class DeliveryRoute:
         if self._departure_time is None:
             return
 
-        with contextlib.suppress(ValueError):
+        if package.end_location in self._stop_times:
             package.expected_arrival = self.arrival_time_at(package.end_location)
 
     def restore_package_link(self, package: DeliveryPackage) -> None:
@@ -320,7 +319,7 @@ class DeliveryRoute:
                 lines.append(f"Status: AT_STOP ({pos.stop_city})")
             elif pos.kind == "IN_TRANSIT":
                 eta_str = pos.next_eta.strftime("%Y-%m-%d %H:%M") if pos.next_eta else "N/A"
-                lines.append(f"Status: IN_TRANSIT ({pos.from_city} → {pos.to_city}), ETA {eta_str}")
+                lines.append(f"Status: IN_TRANSIT ({pos.from_city} -> {pos.to_city}), ETA {eta_str}")
             else:
                 lines.append("Status: AFTER_END")
         else:
