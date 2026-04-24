@@ -1,3 +1,4 @@
+import contextlib
 from datetime import datetime
 
 from src.application.results.heartbeat_summary_result import HeartbeatSummary
@@ -88,7 +89,6 @@ class WorldStateReconciliationService:
                 trucks_moved += 1
 
         elif position.kind == "AFTER_END" and route.release_truck(now=now, force=False):
-            trucks_moved += 1
             trucks_released += 1
 
         after_state = self._truck_state(truck)
@@ -133,18 +133,21 @@ class WorldStateReconciliationService:
         now: datetime,
     ) -> tuple[bool, bool]:
         moved = truck.current_location != position.stop_city
+
         truck.current_location = position.stop_city
         truck.in_transit_to = None
         truck.route = route
+
         released = False
+
         if (
             position.stop_city == route.end_location
             and route.eta_final
             and now >= route.eta_final
             and route.release_truck(now=now, force=False)
         ):
-            moved = True
             released = True
+
         return moved, released
 
     def _set_truck_in_transit(
@@ -164,34 +167,65 @@ class WorldStateReconciliationService:
         return moved
 
     def _update_packages_for_route(self, route: DeliveryRoute, now: datetime) -> int:
-        changed = 0
+        changed_packages = 0
         stop_times: dict[str, datetime] = {}
 
         if route.departure_time is not None:
             for city in route.locations:
-                stop_times[city] = route.arrival_time_at(city)
+                with contextlib.suppress(ValueError):
+                    stop_times[city] = route.arrival_time_at(city)
 
         pos_index = {city: index for index, city in enumerate(route.locations)}
 
         for package in route.packages:
+            package_changed = False
+
             start = package.start_location
             end = package.end_location
 
-            if start not in pos_index or end not in pos_index or pos_index[start] > pos_index[end]:
-                changed += self._set_package_state(package, status=ItemStatus.TODO, current_location=start)
+            if route.departure_time is None:
+                package_changed = self._set_package_state(
+                    package,
+                    status=ItemStatus.TODO,
+                    current_location=start,
+                )
+                if package.expected_arrival is not None:
+                    package.expected_arrival = None
+                    package_changed = True
+
+                if package_changed:
+                    changed_packages += 1
                 continue
 
-            if route.departure_time is None:
-                changed += self._set_package_state(package, status=ItemStatus.TODO, current_location=start)
+            if start not in pos_index or end not in pos_index or pos_index[start] > pos_index[end]:
+                package_changed = self._set_package_state(
+                    package,
+                    status=ItemStatus.TODO,
+                    current_location=start,
+                )
+                if package.expected_arrival is not None:
+                    package.expected_arrival = None
+                    package_changed = True
+
+                if package_changed:
+                    changed_packages += 1
                 continue
 
             start_time = stop_times.get(start)
             end_time = stop_times.get(end)
 
             if start_time and now < start_time:
-                changed += self._set_package_state(package, status=ItemStatus.TODO, current_location=start)
+                package_changed = self._set_package_state(
+                    package,
+                    status=ItemStatus.TODO,
+                    current_location=start,
+                )
             elif end_time and now >= end_time:
-                changed += self._set_package_state(package, status=ItemStatus.DONE, current_location=end)
+                package_changed = self._set_package_state(
+                    package,
+                    status=ItemStatus.DONE,
+                    current_location=end,
+                )
             else:
                 last_city = start
                 if start_time:
@@ -202,18 +236,23 @@ class WorldStateReconciliationService:
                             last_city = city
                         else:
                             break
-                changed += self._set_package_state(
+
+                package_changed = self._set_package_state(
                     package,
                     status=ItemStatus.IN_PROGRESS,
                     current_location=last_city,
                 )
 
-            expected_arrival = stop_times.get(end)
-            if expected_arrival is not None and package.expected_arrival != expected_arrival:
-                package.expected_arrival = expected_arrival
-                changed += 1
+            with contextlib.suppress(ValueError):
+                expected_arrival = route.arrival_time_at(end)
+                if package.expected_arrival != expected_arrival:
+                    package.expected_arrival = expected_arrival
+                    package_changed = True
 
-        return changed
+            if package_changed:
+                changed_packages += 1
+
+        return changed_packages
 
     @staticmethod
     def _set_package_state(
@@ -221,14 +260,17 @@ class WorldStateReconciliationService:
         *,
         status: ItemStatus,
         current_location: str,
-    ) -> int:
-        changed = 0
+    ) -> bool:
+        changed = False
+
         if package.status != status:
             package.status = status
-            changed += 1
+            changed = True
+
         if package.current_location != current_location:
             package.current_location = current_location
-            changed += 1
+            changed = True
+
         return changed
 
     @staticmethod

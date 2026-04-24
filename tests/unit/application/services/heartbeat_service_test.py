@@ -145,14 +145,19 @@ class HeartbeatServiceTests(unittest.TestCase):
         summary_mid_route = service.advance(now=base + timedelta(minutes=30))
 
         self.assertEqual(summary_before_departure.routes_updated, 3)
+        self.assertEqual(summary_before_departure.packages_updated, 2)
         self.assertTrue(summary_before_departure.state_changed)
+
         self.assertEqual(scheduled_route.status, "SCHEDULED")
         self.assertEqual(in_progress_route.status, "IN_PROGRESS")
         self.assertEqual(unscheduled_route.status, "PLANNED")
         self.assertEqual(scheduled_truck.current_location, "S1")
 
         self.assertEqual(summary_mid_route.routes_updated, 0)
+        self.assertEqual(summary_mid_route.packages_updated, 0)
+        self.assertEqual(summary_mid_route.trucks_moved, 1)
         self.assertTrue(summary_mid_route.state_changed)
+
         self.assertEqual(in_progress_truck.current_location, "S3")
         self.assertEqual(in_progress_truck.in_transit_to, "M3")
         self.assertEqual(package_mid.status, ItemStatus.IN_PROGRESS)
@@ -184,8 +189,9 @@ class HeartbeatServiceTests(unittest.TestCase):
 
         self.assertEqual(summary.routes_updated, 1)
         self.assertEqual(summary.trucks_released, 1)
-        self.assertEqual(summary.trucks_moved, 1)
+        self.assertEqual(summary.trucks_moved, 0)
         self.assertTrue(summary.state_changed)
+        self.assertEqual(summary.packages_updated, 1)
         self.assertEqual(route.status, "COMPLETED")
         self.assertIsNone(route.truck)
         self.assertIsNone(truck.route)
