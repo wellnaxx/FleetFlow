@@ -1,6 +1,7 @@
 from typing import ClassVar
 
 from src.adapters.driven.persistence.json.serialization import dt_from_str, dt_to_str
+from src.application.dto.candidate_truck_dto import CandidateTruckLink
 from src.application.dto.reconciled_world_dto import ReconciledWorld
 from src.application.dto.truck_binding_dto import TruckBinding
 from src.application.dto.world_state_snapshot_dto import (
@@ -110,6 +111,7 @@ class WorldStateSnapshotService:
             self._validate_ids(world)
             self._validate_references(world)
             self._validate_route_package_consistency(world)
+            self._validate_route_package_compatibility(world)
             self._validate_customer_uniqueness(world.customers)
             self._validate_counter_bounds(world)
 
@@ -122,13 +124,14 @@ class WorldStateSnapshotService:
                 rebuilt_packages=rebuilt_packages,
                 rebuilt_routes=rebuilt_routes,
             )
+
+            truck_bindings = self._reconcile_candidate_world(
+                snapshots=world.routes,
+                routes=rebuilt_routes,
+            )
+
         except (KeyError, TypeError, ValueError) as exc:
             raise WorldStateCorruptionError(f"Invalid world state snapshot: {exc}") from exc
-
-        truck_bindings = self._reconcile_candidate_world(
-            snapshots=world.routes,
-            routes=rebuilt_routes,
-        )
 
         self._swap_runtime_state(
             ReconciledWorld(
@@ -326,6 +329,33 @@ class WorldStateSnapshotService:
             for snapshot in snapshots
         }
 
+    def _validate_route_package_compatibility(self, world: WorldSnapshotData) -> None:
+        routes_by_id = {route.route_id: route for route in world.routes}
+
+        for package in world.packages:
+            if package.route_id is None:
+                continue
+
+            route = routes_by_id[package.route_id]
+            locations = route.locations
+
+            if package.start not in locations:
+                raise ValueError(
+                    f"Package {package.package_id} starts at {package.start}, "
+                    f"which is not on route {route.route_id}."
+                )
+
+            if package.end not in locations:
+                raise ValueError(
+                    f"Package {package.package_id} ends at {package.end}, "
+                    f"which is not on route {route.route_id}."
+                )
+
+            if locations.index(package.start) >= locations.index(package.end):
+                raise ValueError(
+                    f"Package {package.package_id} has invalid location order on route {route.route_id}."
+                )
+
     def _link_packages_to_routes(
         self,
         snapshots: tuple[RouteSnapshot, ...],
@@ -339,12 +369,12 @@ class WorldStateSnapshotService:
                 package = rebuilt_packages[package_id]
                 route.restore_package_link(package)
 
-    def _link_trucks_to_routes(
+    def _link_candidate_trucks_to_routes(
         self, snapshots: tuple[RouteSnapshot, ...], rebuilt_routes: dict[int, DeliveryRoute]
-    ) -> dict[int, tuple[Truck, Truck]]:
+    ) -> dict[int, CandidateTruckLink]:
         trucks_by_id = {truck.vehicle_id: truck for truck in self._vehicle_manager.list_fleet()}
 
-        trucks_by_route_id: dict[int, tuple[Truck, Truck]] = {}
+        trucks_by_route_id: dict[int, CandidateTruckLink] = {}
 
         for snapshot in snapshots:
             if snapshot.truck_vehicle_id is None:
@@ -356,7 +386,7 @@ class WorldStateSnapshotService:
             candidate_truck.assign(route)
             route.truck = candidate_truck
 
-            trucks_by_route_id[snapshot.route_id] = (real_truck, candidate_truck)
+            trucks_by_route_id[snapshot.route_id] = CandidateTruckLink(real_truck, candidate_truck)
 
         return trucks_by_route_id
 
@@ -365,7 +395,7 @@ class WorldStateSnapshotService:
         snapshots: tuple[RouteSnapshot, ...],
         routes: dict[int, DeliveryRoute],
     ) -> list[TruckBinding]:
-        trucks_by_route_id = self._link_trucks_to_routes(
+        trucks_by_route_id = self._link_candidate_trucks_to_routes(
             snapshots=snapshots,
             rebuilt_routes=routes,
         )
@@ -384,7 +414,7 @@ class WorldStateSnapshotService:
         *,
         snapshots: tuple[RouteSnapshot, ...],
         routes: dict[int, DeliveryRoute],
-        trucks_by_route_id: dict[int, tuple[Truck, Truck]],
+        trucks_by_route_id: dict[int, CandidateTruckLink],
     ) -> list[TruckBinding]:
         bindings: list[TruckBinding] = []
 
@@ -392,7 +422,10 @@ class WorldStateSnapshotService:
             if snapshot.truck_vehicle_id is None:
                 continue
 
-            real_truck, candidate_truck = trucks_by_route_id[snapshot.route_id]
+            candidate_truck_link = trucks_by_route_id[snapshot.route_id]
+            real_truck = candidate_truck_link.real_truck
+            candidate_truck = candidate_truck_link.candidate_truck
+
             route = routes[snapshot.route_id]
             bound_route = route if route.truck is candidate_truck else None
 

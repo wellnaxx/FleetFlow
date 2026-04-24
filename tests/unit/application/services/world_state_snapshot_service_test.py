@@ -755,3 +755,208 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
         self.assertIs(self.customer_repo.get_by_phone("0412345678"), customer)
         self.assertIs(truck.route, route)
         self.assertEqual(truck.status, TruckStatus.ON_THE_WAY)
+
+    def test_apply_snapshot_rejects_assigned_package_when_start_not_on_route(self) -> None:
+        snapshot = self.make_snapshot(
+            counters=CountersSnapshot(2, 2, 2),
+            customers=(CustomerSnapshot(customer_id=1, name="Alice", email="", phone=""),),
+            packages=(
+                PackageSnapshot(
+                    package_id=1,
+                    start="C",
+                    end="B",
+                    weight=5.0,
+                    customer_id=1,
+                    route_id=1,
+                ),
+            ),
+            routes=(
+                RouteSnapshot(
+                    route_id=1,
+                    locations=("A", "B"),
+                    departure_time=None,
+                    truck_vehicle_id=None,
+                    package_ids=(1,),
+                ),
+            ),
+        )
+
+        with self.assertRaises(WorldStateCorruptionError) as ctx:
+            self.service.apply_snapshot(snapshot)
+
+        self.assertIn("starts at C", str(ctx.exception))
+        self.assertIn("which is not on route 1", str(ctx.exception))
+
+    def test_apply_snapshot_rejects_assigned_package_when_end_not_on_route(self) -> None:
+        snapshot = self.make_snapshot(
+            counters=CountersSnapshot(2, 2, 2),
+            customers=(CustomerSnapshot(customer_id=1, name="Alice", email="", phone=""),),
+            packages=(
+                PackageSnapshot(
+                    package_id=1,
+                    start="A",
+                    end="C",
+                    weight=5.0,
+                    customer_id=1,
+                    route_id=1,
+                ),
+            ),
+            routes=(
+                RouteSnapshot(
+                    route_id=1,
+                    locations=("A", "B"),
+                    departure_time=None,
+                    truck_vehicle_id=None,
+                    package_ids=(1,),
+                ),
+            ),
+        )
+
+        with self.assertRaises(WorldStateCorruptionError) as ctx:
+            self.service.apply_snapshot(snapshot)
+
+        self.assertIn("ends at C", str(ctx.exception))
+        self.assertIn("which is not on route 1", str(ctx.exception))
+
+    def test_apply_snapshot_rejects_assigned_package_when_route_order_is_invalid(self) -> None:
+        snapshot = self.make_snapshot(
+            counters=CountersSnapshot(2, 2, 2),
+            customers=(CustomerSnapshot(customer_id=1, name="Alice", email="", phone=""),),
+            packages=(
+                PackageSnapshot(
+                    package_id=1,
+                    start="B",
+                    end="A",
+                    weight=5.0,
+                    customer_id=1,
+                    route_id=1,
+                ),
+            ),
+            routes=(
+                RouteSnapshot(
+                    route_id=1,
+                    locations=("A", "B", "C"),
+                    departure_time=None,
+                    truck_vehicle_id=None,
+                    package_ids=(1,),
+                ),
+            ),
+        )
+
+        with self.assertRaises(WorldStateCorruptionError) as ctx:
+            self.service.apply_snapshot(snapshot)
+
+        self.assertIn("invalid location order", str(ctx.exception))
+        self.assertIn("route 1", str(ctx.exception))
+
+    def test_apply_snapshot_rejects_bidirectionally_consistent_but_structurally_invalid_route_package_link(
+        self,
+    ) -> None:
+        snapshot = self.make_snapshot(
+            counters=CountersSnapshot(2, 2, 2),
+            customers=(CustomerSnapshot(customer_id=1, name="Alice", email="", phone=""),),
+            packages=(
+                PackageSnapshot(
+                    package_id=1,
+                    start="C",
+                    end="A",
+                    weight=5.0,
+                    customer_id=1,
+                    route_id=1,
+                ),
+            ),
+            routes=(
+                RouteSnapshot(
+                    route_id=1,
+                    locations=("A", "B"),
+                    departure_time=None,
+                    truck_vehicle_id=None,
+                    package_ids=(1,),
+                ),
+            ),
+        )
+
+        with self.assertRaises(WorldStateCorruptionError) as ctx:
+            self.service.apply_snapshot(snapshot)
+
+        self.assertIn("Package 1", str(ctx.exception))
+
+    def test_apply_snapshot_does_not_mutate_runtime_when_route_package_compatibility_fails(self) -> None:
+        existing_customer = Customer(
+            customer_id=1,
+            contact=ContactInfo(
+                name="Existing",
+                email="existing@example.com",
+                phone_number="0412345678",
+            ),
+        )
+        self.customer_repo.add(existing_customer)
+
+        existing_package = DeliveryPackage(
+            package_id=1,
+            start_location="A",
+            end_location="B",
+            weight=5.0,
+            customer=existing_customer,
+        )
+        existing_customer.add_package(existing_package)
+        self.package_repo.add(existing_package)
+
+        existing_route = DeliveryRoute(
+            "A",
+            "B",
+            departure_time=datetime(2025, 1, 1, 9, 0, 0),
+            route_id=1,
+        )
+        existing_route.assign_package(existing_package)
+        self.route_repo.add(existing_route)
+
+        truck = self.vehicle_manager.find_by_id(1001)
+        assert truck is not None
+        truck.assign(existing_route)
+        existing_route.truck = truck
+
+        invalid_snapshot = self.make_snapshot(
+            counters=CountersSnapshot(3, 3, 3),
+            customers=(CustomerSnapshot(customer_id=2, name="New", email="", phone=""),),
+            packages=(
+                PackageSnapshot(
+                    package_id=2,
+                    start="C",
+                    end="A",
+                    weight=4.0,
+                    customer_id=2,
+                    route_id=2,
+                ),
+            ),
+            routes=(
+                RouteSnapshot(
+                    route_id=2,
+                    locations=("A", "B"),
+                    departure_time=None,
+                    truck_vehicle_id=None,
+                    package_ids=(2,),
+                ),
+            ),
+        )
+
+        with self.assertRaises(WorldStateCorruptionError):
+            self.service.apply_snapshot(invalid_snapshot)
+
+        self.assertIs(self.customer_repo.get_by_id(1), existing_customer)
+        self.assertIsNone(self.customer_repo.get_by_id(2))
+
+        self.assertIs(self.package_repo.get_by_id(1), existing_package)
+        self.assertIsNone(self.package_repo.get_by_id(2))
+
+        self.assertIs(self.route_repo.get_by_id(1), existing_route)
+        self.assertIsNone(self.route_repo.get_by_id(2))
+
+        self.assertEqual(self.customer_repo.peek_next_id(), 2)
+        self.assertEqual(self.package_repo.peek_next_id(), 2)
+        self.assertEqual(self.route_repo.peek_next_id(), 2)
+
+        self.assertIs(existing_package.route, existing_route)
+        self.assertEqual(existing_route.packages, [existing_package])
+        self.assertIs(truck.route, existing_route)
+        self.assertEqual(truck.status, TruckStatus.ON_THE_WAY)

@@ -209,10 +209,9 @@ class WorldStateReconciliationService:
                 )
 
             expected_arrival = stop_times.get(end)
-            if expected_arrival is not None:
-                if package.expected_arrival != expected_arrival:
-                    package.expected_arrival = expected_arrival
-                    changed += 1
+            if expected_arrival is not None and package.expected_arrival != expected_arrival:
+                package.expected_arrival = expected_arrival
+                changed += 1
 
         return changed
 
