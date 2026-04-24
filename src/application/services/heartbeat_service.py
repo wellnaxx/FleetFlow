@@ -29,48 +29,62 @@ class HeartbeatService:
         packages_updated = 0
         trucks_moved = 0
         trucks_released = 0
+        state_changed = False
 
         for route in self._routes.list_all():
             new_status = self._compute_route_status(route, current_time)
-            if getattr(route, "status", None) != new_status:
+            if route.status != new_status:
                 route.status = new_status
                 routes_updated += 1
+                state_changed = True
 
             truck = route.truck
             position = route.current_position(current_time)
 
             if truck is not None:
                 if position.kind == "UNSCHEDULED":
+                    before_state = self._truck_state(truck)
                     self._set_truck_unscheduled(truck)
+                    state_changed = state_changed or before_state != self._truck_state(truck)
 
                 elif position.kind == "BEFORE_START":
+                    before_state = self._truck_state(truck)
                     if self._set_truck_before_start(truck, route):
                         trucks_moved += 1
+                    state_changed = state_changed or before_state != self._truck_state(truck)
 
                 elif position.kind == "AT_STOP":
+                    before_state = self._truck_state(truck)
                     moved, released = self._set_truck_at_stop(truck, route, position, current_time)
                     if moved:
                         trucks_moved += 1
                     if released:
                         trucks_released += 1
+                    state_changed = state_changed or before_state != self._truck_state(truck) or released
 
                 elif position.kind == "IN_TRANSIT":
+                    before_state = self._truck_state(truck)
                     if self._set_truck_in_transit(truck, route, position):
                         trucks_moved += 1
+                    state_changed = state_changed or before_state != self._truck_state(truck)
 
                 elif position.kind == "AFTER_END":
                     if truck.release(now=current_time, force=False):
                         trucks_released += 1
                         trucks_moved += 1
                         route.truck = None
+                        state_changed = True
 
-            packages_updated += self._update_packages_for_route(route, current_time)
+            package_changes = self._update_packages_for_route(route, current_time)
+            packages_updated += package_changes
+            state_changed = state_changed or package_changes > 0
 
         return HeartbeatSummary(
             routes_updated=routes_updated,
             packages_updated=packages_updated,
             trucks_moved=trucks_moved,
             trucks_released=trucks_released,
+            state_changed=state_changed,
         )
 
     def _compute_route_status(self, route: DeliveryRoute, now: datetime) -> str:
@@ -180,7 +194,10 @@ class HeartbeatService:
                 )
 
             with contextlib.suppress(Exception):
-                package.expected_arrival = route.arrival_time_at(end)
+                expected_arrival = route.arrival_time_at(end)
+                if package.expected_arrival != expected_arrival:
+                    package.expected_arrival = expected_arrival
+                    changed += 1
 
         return changed
 
@@ -199,3 +216,7 @@ class HeartbeatService:
             package.current_location = current_location
             changed += 1
         return changed
+
+    @staticmethod
+    def _truck_state(truck: Truck) -> tuple[str | None, str | None, DeliveryRoute | None]:
+        return (truck.current_location, truck.in_transit_to, truck.route)

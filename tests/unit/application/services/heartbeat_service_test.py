@@ -12,7 +12,7 @@ class _FakeTruck:
     def __init__(self, current_location: str = "BASE") -> None:
         self.current_location = current_location
         self.in_transit_to: str | None = None
-        self.route = None
+        self.route: _FakeRoute | None = None
         self.status = TruckStatus.ON_THE_WAY
         self.busy_from = None
         self.busy_until = None
@@ -44,7 +44,7 @@ class _FakePackage:
         self.end_location = end
         self.current_location = start
         self.expected_arrival = None
-        self.status = None
+        self.status: ItemStatus | None = None
 
 
 class _FakeRoute:
@@ -134,12 +134,14 @@ class HeartbeatServiceTests(unittest.TestCase):
         summary_mid_route = service.advance(now=base + timedelta(minutes=30))
 
         self.assertEqual(summary_before_departure.routes_updated, 3)
+        self.assertTrue(summary_before_departure.state_changed)
         self.assertEqual(scheduled_route.status, "SCHEDULED")
         self.assertEqual(in_progress_route.status, "IN_PROGRESS")
         self.assertEqual(unscheduled_route.status, "PLANNED")
         self.assertEqual(scheduled_truck.current_location, "S1")
 
         self.assertEqual(summary_mid_route.routes_updated, 0)
+        self.assertTrue(summary_mid_route.state_changed)
         self.assertEqual(in_progress_truck.current_location, "S3")
         self.assertEqual(in_progress_truck.in_transit_to, "M3")
         self.assertEqual(package_mid.status, ItemStatus.IN_PROGRESS)
@@ -172,6 +174,7 @@ class HeartbeatServiceTests(unittest.TestCase):
         self.assertEqual(summary.routes_updated, 1)
         self.assertEqual(summary.trucks_released, 1)
         self.assertEqual(summary.trucks_moved, 1)
+        self.assertTrue(summary.state_changed)
         self.assertEqual(route.status, "COMPLETED")
         self.assertIsNone(route.truck)
         self.assertIsNone(truck.route)
@@ -179,3 +182,30 @@ class HeartbeatServiceTests(unittest.TestCase):
         self.assertEqual(truck.current_location, "E3")
         self.assertEqual(package.status, ItemStatus.DONE)
         self.assertEqual(package.current_location, "E3")
+
+    def test_advance_reports_state_changed_for_expected_arrival_only_update(self) -> None:
+        base = datetime(2025, 1, 1, 8, 0)
+        package = _FakePackage("S3", "E3")
+        package.status = ItemStatus.IN_PROGRESS
+        route = _FakeRoute(
+            locations=["S3", "M3", "E3"],
+            departure_time=base,
+            eta_final=base + timedelta(hours=2),
+            packages=[package],
+        )
+        route.status = "IN_PROGRESS"
+        truck = _FakeTruck(current_location="S3")
+        truck.in_transit_to = "M3"
+        route.truck = truck
+        truck.route = route
+
+        route_repo = MagicMock()
+        route_repo.list_all.return_value = [route]
+
+        service = HeartbeatService(route_repo, MagicMock(), MagicMock())
+
+        summary = service.advance(now=base + timedelta(minutes=30))
+
+        self.assertTrue(summary.state_changed)
+        self.assertEqual(summary.packages_updated, 1)
+        self.assertEqual(package.expected_arrival, route.arrival_time_at("E3"))

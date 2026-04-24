@@ -3,6 +3,7 @@ import shlex
 from datetime import datetime
 
 from src.adapters.driving.cli.command_factory import CommandFactory
+from src.application.results.heartbeat_summary_result import HeartbeatSummary
 from src.application.services.auth_service import AuthService
 from src.application.services.authorization_service import AuthorizationService
 from src.application.use_cases.state.advance_world_state import AdvanceWorldStateUseCase
@@ -309,15 +310,17 @@ class Engine:
 
         try:
             cmd = self._factory.create(line)
+            heartbeat_changed = False
 
             if not cmd.skips_heartbeat:
-                self._advance_world_state.execute()
+                heartbeat_summary = self._advance_world_state.execute()
+                heartbeat_changed = self._heartbeat_changed(heartbeat_summary)
 
             out = cmd.execute()
             if cmd.mutates_session:
                 self._rebind_app()
 
-            if cmd.mutates_state and cmd.autosaves_state:
+            if heartbeat_changed or (cmd.mutates_state and cmd.autosaves_state):
                 try:
                     self._save_world_state.execute(self._autosave_path)
                 except Exception as se:
@@ -345,6 +348,10 @@ class Engine:
     @staticmethod
     def _join_command(parts: list[str]) -> str:
         return " ".join(shlex.quote(part) for part in parts)
+
+    @staticmethod
+    def _heartbeat_changed(summary: HeartbeatSummary) -> bool:
+        return summary.state_changed
 
     @staticmethod
     def _print_main_menu() -> None:

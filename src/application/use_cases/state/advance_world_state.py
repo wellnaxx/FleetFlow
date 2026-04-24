@@ -17,6 +17,7 @@ class AdvanceWorldStateUseCase:
             now: Optional clock override for deterministic execution.
 
         Returns:
-            A summary of the changes applied during the heartbeat.
+            A summary of the changes applied during the heartbeat, including
+            whether any state was mutated at all.
         """
         return self._heartbeat_service.advance(now=now)

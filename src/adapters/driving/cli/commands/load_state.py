@@ -10,6 +10,7 @@ class LoadState(BaseCommand[LoadWorldStateUseCase]):
 
     mutates_state = True
     autosaves_state = False
+    skips_heartbeat = True
 
     @requires(Permission.APP_LOAD_STATE)
     def execute(self) -> str:

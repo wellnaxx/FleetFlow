@@ -7,3 +7,4 @@ class HeartbeatSummary:
     packages_updated: int
     trucks_moved: int
     trucks_released: int
+    state_changed: bool

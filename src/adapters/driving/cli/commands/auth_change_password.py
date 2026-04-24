@@ -12,6 +12,7 @@ class AuthChangePassword(BaseCommand[ChangePasswordUseCase]):
       changepassword <username>     # manager override: prompts new/confirm only
     """
     skips_heartbeat = True
+    autosaves_state = False
 
     def execute(self) -> str:
         target = self._params[0].strip().lower() if self._params else None

@@ -13,7 +13,9 @@ class AuthRegisterUser(BaseCommand[RegisterUserUseCase]):
       registeruser <username> <role> <name> [email] [phone]  # hybrid mode
     Roles: 'employee' or 'manager'
     """
+
     skips_heartbeat = True
+    autosaves_state = False
 
     @requires(Permission.ADMIN_USER)
     def execute(self) -> str:
@@ -49,4 +51,3 @@ class AuthRegisterUser(BaseCommand[RegisterUserUseCase]):
             password=password,
         )
         return f"Created {rec.role} user '{rec.username}' (id={rec.user_id})."
-

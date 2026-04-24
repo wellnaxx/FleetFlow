@@ -5,6 +5,7 @@ from src.application.use_cases.auth.login import LoginUseCase
 class AuthLogin(BaseCommand[LoginUseCase]):
     mutates_session = True
     skips_heartbeat = True
+    autosaves_state = False
 
     def execute(self) -> str:
         import getpass
@@ -13,4 +14,3 @@ class AuthLogin(BaseCommand[LoginUseCase]):
         password = getpass.getpass("Password: ")
         user = self._use_case.execute(username, password)
         return f"Logged in as {user.name} [{user.role.value}]"
-

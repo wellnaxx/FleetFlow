@@ -19,6 +19,9 @@ class LoadStateTests(unittest.TestCase):
     def test_autosaves_state_false(self) -> None:
         self.assertFalse(LoadState.autosaves_state)
 
+    def test_skips_heartbeat_true(self) -> None:
+        self.assertTrue(LoadState.skips_heartbeat)
+
     def test_execute_without_permission_raises(self) -> None:
         cmd = self.make_cmd(["state.json"], authorized=False)
 
@@ -61,5 +64,3 @@ class LoadStateTests(unittest.TestCase):
         self.assertIn("not found", str(ctx.exception))
         mock_validate.assert_called_once_with(cmd.params, 0, 1)
         cmd._use_case.execute.assert_called_once_with("missing.json")  # type: ignore[reportUnknownMemberType]
-
-
