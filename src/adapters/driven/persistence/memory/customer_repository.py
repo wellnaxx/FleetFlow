@@ -1,3 +1,5 @@
+from collections.abc import Mapping
+
 from src.domain.entities.customer import Customer
 
 
@@ -104,7 +106,7 @@ class InMemoryCustomerRepository:
         """Return all customers ordered by id."""
         return [self._customers_by_id[customer_id] for customer_id in sorted(self._customers_by_id)]
 
-    def replace_customers(self, customers_by_id: dict[int, Customer], next_id: int) -> None:
+    def replace_customers(self, customers_by_id: Mapping[int, Customer], next_id: int) -> None:
         """Replace the full customer state from a snapshot load."""
         self._customers_by_id = dict(customers_by_id)
         self._id_by_email = {

@@ -1,3 +1,5 @@
+from collections.abc import Mapping
+
 from src.domain.entities.delivery_route import DeliveryRoute
 
 
@@ -60,7 +62,7 @@ class InMemoryRouteRepository:
         """Return all routes ordered by id."""
         return [self._routes[route_id] for route_id in sorted(self._routes)]
 
-    def replace_routes(self, routes_by_id: dict[int, DeliveryRoute], next_id: int) -> None:
+    def replace_routes(self, routes_by_id: Mapping[int, DeliveryRoute], next_id: int) -> None:
         """Replace the full route state from a snapshot load."""
         self._routes = dict(routes_by_id)
         self._next_id = next_id

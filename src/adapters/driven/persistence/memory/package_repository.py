@@ -1,3 +1,5 @@
+from collections.abc import Mapping
+
 from src.domain.entities.delivery_package import DeliveryPackage
 
 
@@ -65,7 +67,7 @@ class InMemoryPackageRepository:
         """Return packages that are not assigned to a route."""
         return [package for package in self.list_all() if package.route is None]
 
-    def replace_packages(self, packages_by_id: dict[int, DeliveryPackage], next_id: int) -> None:
+    def replace_packages(self, packages_by_id: Mapping[int, DeliveryPackage], next_id: int) -> None:
         """Replace the full package state from a snapshot load."""
         self._packages = dict(packages_by_id)
         self._next_id = next_id

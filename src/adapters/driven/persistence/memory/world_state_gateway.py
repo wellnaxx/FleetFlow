@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from datetime import datetime
 
 from src.adapters.driven.persistence.memory.customer_repository import InMemoryCustomerRepository
@@ -33,9 +34,9 @@ class InMemoryWorldStateRuntime(WorldStateRuntimePort):
     def replace_world_state(
         self,
         *,
-        customers_by_id: dict[int, Customer],
-        packages_by_id: dict[int, DeliveryPackage],
-        routes_by_id: dict[int, DeliveryRoute],
+        customers_by_id: Mapping[int, Customer],
+        packages_by_id: Mapping[int, DeliveryPackage],
+        routes_by_id: Mapping[int, DeliveryRoute],
         counters: CountersSnapshot,
         truck_bindings: list[TruckBinding],
     ) -> None:

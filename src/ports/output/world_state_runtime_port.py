@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from typing import Protocol
 
 from src.application.dto.truck_binding_dto import TruckBinding
@@ -11,9 +12,10 @@ class WorldStateRuntimePort(Protocol):
     def replace_world_state(
         self,
         *,
-        customers_by_id: dict[int, Customer],
-        packages_by_id: dict[int, DeliveryPackage],
-        routes_by_id: dict[int, DeliveryRoute],
+        customers_by_id: Mapping[int, Customer],
+        packages_by_id: Mapping[int, DeliveryPackage],
+        routes_by_id: Mapping[int, DeliveryRoute],
         counters: CountersSnapshot,
         truck_bindings: list[TruckBinding],
-    ) -> None: ...
+    ) -> None:
+        ...
