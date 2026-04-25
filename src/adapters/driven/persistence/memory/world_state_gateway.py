@@ -1,10 +1,10 @@
 from collections.abc import Mapping
 
-from application.dto.truck_runtime_snapshot_dto import TruckRuntimeSnapshot
 from src.adapters.driven.persistence.memory.customer_repository import InMemoryCustomerRepository
 from src.adapters.driven.persistence.memory.package_repository import InMemoryPackageRepository
 from src.adapters.driven.persistence.memory.route_repository import InMemoryRouteRepository
 from src.application.dto.truck_binding_dto import TruckBinding
+from src.application.dto.truck_runtime_snapshot_dto import TruckRuntimeSnapshot
 from src.application.dto.world_state_snapshot_dto import CountersSnapshot, WorldStateSnapshot
 from src.application.exceptions.world_state_errors import WorldStateRuntimeSwapError
 from src.application.services.world_state_snapshot_service import WorldStateSnapshotService
