@@ -1,6 +1,6 @@
 from collections.abc import Mapping
-from datetime import datetime
 
+from application.dto.truck_runtime_snapshot_dto import TruckRuntimeSnapshot
 from src.adapters.driven.persistence.memory.customer_repository import InMemoryCustomerRepository
 from src.adapters.driven.persistence.memory.package_repository import InMemoryPackageRepository
 from src.adapters.driven.persistence.memory.route_repository import InMemoryRouteRepository
@@ -10,7 +10,6 @@ from src.application.services.world_state_snapshot_service import WorldStateSnap
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.entities.delivery_route import DeliveryRoute
-from src.domain.entities.truck import Truck
 from src.domain.services.vehicle_manager import VehicleManager
 from src.ports.output.world_state_gateway import WorldStateGatewayPort
 from src.ports.output.world_state_runtime_port import WorldStateRuntimePort
@@ -80,37 +79,28 @@ class InMemoryWorldStateRuntime(WorldStateRuntimePort):
             self._restore_trucks(previous_trucks)
             raise
 
-    def _snapshot_trucks(
-        self,
-    ) -> list[
-        tuple[Truck, str | None, str, DeliveryRoute | None, datetime | None, datetime | None, str | None]
-    ]:
+    def _snapshot_trucks(self) -> list[TruckRuntimeSnapshot]:
         return [
-            (
-                truck,
-                truck.current_location,
-                truck.status,
-                truck.route,
-                truck.busy_from,
-                truck.busy_until,
-                truck.in_transit_to,
+            TruckRuntimeSnapshot(
+                truck=truck,
+                status=truck.status,
+                current_location=truck.current_location,
+                route=truck.route,
+                busy_from=truck.busy_from,
+                busy_until=truck.busy_until,
+                in_transit_to=truck.in_transit_to,
             )
             for truck in self._vehicle_manager.list_fleet()
         ]
 
-    def _restore_trucks(
-        self,
-        truck_states: list[
-            tuple[Truck, str | None, str, DeliveryRoute | None, datetime | None, datetime | None, str | None]
-        ],
-    ) -> None:
-        for truck, current_location, status, route, busy_from, busy_until, in_transit_to in truck_states:
-            truck.current_location = current_location
-            truck.status = status
-            truck.route = route
-            truck.busy_from = busy_from
-            truck.busy_until = busy_until
-            truck.in_transit_to = in_transit_to
+    def _restore_trucks(self, snapshots: list[TruckRuntimeSnapshot]) -> None:
+        for snapshot in snapshots:
+            snapshot.truck.status = snapshot.status
+            snapshot.truck.current_location = snapshot.current_location
+            snapshot.truck.route = snapshot.route
+            snapshot.truck.busy_from = snapshot.busy_from
+            snapshot.truck.busy_until = snapshot.busy_until
+            snapshot.truck.in_transit_to = snapshot.in_transit_to
 
 
 class InMemoryWorldStateGateway(WorldStateGatewayPort):
