@@ -10,6 +10,7 @@ from src.application.dto.world_state_snapshot_dto import (
     CustomerSnapshot,
     PackageSnapshot,
     RouteSnapshot,
+    TruckSnapshot,
     WorldSnapshotData,
     WorldStateSnapshot,
 )
@@ -19,6 +20,7 @@ from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.entities.truck import Truck
+from src.domain.enums.truck_status import TruckStatus
 from src.domain.services.map import Map
 from src.domain.value_objects.contact_info import ContactInfo
 from src.ports.output.customer_repository import CustomerRepositoryPort
@@ -29,7 +31,8 @@ from src.ports.output.world_state_runtime_port import WorldStateRuntimePort
 
 
 class WorldStateSnapshotService:
-    SCHEMA_VERSION: ClassVar[int] = 1
+    SCHEMA_VERSION: ClassVar[int] = 2
+    SUPPORTED_SCHEMA_VERSIONS: ClassVar[frozenset[int]] = frozenset({1, 2})
 
     def __init__(
         self,
@@ -52,12 +55,14 @@ class WorldStateSnapshotService:
         customers = self._build_customer_snapshots()
         packages = self._build_package_snapshots()
         routes = self._build_route_snapshots()
+        trucks = self._build_truck_snapshots()
 
         world = WorldSnapshotData(
             counters=counters,
             customers=customers,
             packages=packages,
             routes=routes,
+            trucks=trucks,
         )
         return WorldStateSnapshot(schema_version=self.SCHEMA_VERSION, world=world)
 
@@ -104,6 +109,20 @@ class WorldStateSnapshotService:
             for route in sorted(self._route_repo.list_all(), key=lambda route: route.route_id)
         )
 
+    def _build_truck_snapshots(self) -> tuple[TruckSnapshot, ...]:
+        return tuple(
+            TruckSnapshot(
+                vehicle_id=truck.vehicle_id,
+                status=truck.status,
+                current_location=truck.current_location,
+                route_id=truck.route.route_id if truck.route is not None else None,
+                busy_from=dt_to_str(truck.busy_from),
+                busy_until=dt_to_str(truck.busy_until),
+                in_transit_to=truck.in_transit_to,
+            )
+            for truck in sorted(self._vehicle_manager.list_fleet(), key=lambda truck: truck.vehicle_id)
+        )
+
     def apply_snapshot(self, snapshot: WorldStateSnapshot) -> None:
         try:
             reconciled_world = self._prepare_snapshot_for_swap(snapshot)
@@ -119,6 +138,7 @@ class WorldStateSnapshotService:
         self._validate_counters(world.counters)
         self._validate_ids(world)
         self._validate_references(world)
+        self._validate_truck_snapshots(world)
         self._validate_route_package_consistency(world)
         self._validate_route_package_compatibility(world)
         self._validate_truck_route_compatibility(world)
@@ -136,7 +156,8 @@ class WorldStateSnapshotService:
         )
 
         truck_bindings = self._reconcile_candidate_world(
-            snapshots=world.routes,
+            route_snapshots=world.routes,
+            truck_snapshots=world.trucks,
             routes=rebuilt_routes,
         )
 
@@ -149,7 +170,7 @@ class WorldStateSnapshotService:
         )
 
     def _validate_schema(self, snapshot: WorldStateSnapshot) -> None:
-        if snapshot.schema_version != self.SCHEMA_VERSION:
+        if snapshot.schema_version not in self.SUPPORTED_SCHEMA_VERSIONS:
             raise ValueError(f"Unsupported schema version: {snapshot.schema_version}")
 
     def _validate_counters(self, counters: CountersSnapshot) -> None:
@@ -222,6 +243,48 @@ class WorldStateSnapshotService:
             if truck_vehicle_id in assigned_truck_ids:
                 raise ValueError(f"Truck {truck_vehicle_id} is assigned to multiple routes in snapshot.")
             assigned_truck_ids.add(truck_vehicle_id)
+
+    def _validate_truck_snapshots(self, world: WorldSnapshotData) -> None:
+        fleet_ids = {truck.vehicle_id for truck in self._vehicle_manager.list_fleet()}
+        route_trucks = {
+            route.truck_vehicle_id: route.route_id
+            for route in world.routes
+            if route.truck_vehicle_id is not None
+        }
+
+        seen_truck_ids: set[int] = set()
+
+        for truck in world.trucks:
+            if truck.vehicle_id < 1:
+                raise ValueError(f"Invalid truck id in snapshot: {truck.vehicle_id}")
+
+            if truck.vehicle_id in seen_truck_ids:
+                raise ValueError(f"Duplicate truck id in snapshot: {truck.vehicle_id}")
+            seen_truck_ids.add(truck.vehicle_id)
+
+            if truck.vehicle_id not in fleet_ids:
+                raise ValueError(f"Snapshot references missing truck {truck.vehicle_id}.")
+
+            if truck.status not in TruckStatus.STATUSES:
+                raise ValueError(f"Truck {truck.vehicle_id} has invalid status {truck.status!r}.")
+
+            if truck.route_id is not None:
+                expected_route_id = route_trucks.get(truck.vehicle_id)
+                if expected_route_id != truck.route_id:
+                    raise ValueError(
+                        f"Truck {truck.vehicle_id} points to route {truck.route_id}, "
+                        f"but route assignment points to {expected_route_id}."
+                    )
+
+        trucks_by_snapshot_id = {truck.vehicle_id: truck for truck in world.trucks}
+
+        for truck_vehicle_id, route_id in route_trucks.items():
+            truck_snapshot = trucks_by_snapshot_id.get(truck_vehicle_id)
+            if truck_snapshot is not None and truck_snapshot.route_id != route_id:
+                raise ValueError(
+                    f"Route {route_id} assigns truck {truck_vehicle_id}, "
+                    f"but truck snapshot points to route {truck_snapshot.route_id}."
+                )
 
     def _validate_route_package_consistency(self, world: WorldSnapshotData) -> None:
         route_packages: dict[int, set[int]] = {route.route_id: set(route.package_ids) for route in world.routes}
@@ -415,78 +478,130 @@ class WorldStateSnapshotService:
                 route.restore_package_link(package)
 
     def _link_candidate_trucks_to_routes(
-        self, snapshots: tuple[RouteSnapshot, ...], rebuilt_routes: dict[int, DeliveryRoute]
+        self,
+        *,
+        route_snapshots: tuple[RouteSnapshot, ...],
+        rebuilt_routes: dict[int, DeliveryRoute],
+        candidate_trucks_by_id: dict[int, CandidateTruckLink],
     ) -> dict[int, CandidateTruckLink]:
-        trucks_by_id = {truck.vehicle_id: truck for truck in self._vehicle_manager.list_fleet()}
+        real_trucks_by_id = {truck.vehicle_id: truck for truck in self._vehicle_manager.list_fleet()}
+        links_by_route_id: dict[int, CandidateTruckLink] = {}
 
-        trucks_by_route_id: dict[int, CandidateTruckLink] = {}
-
-        for snapshot in snapshots:
-            if snapshot.truck_vehicle_id is None:
+        for snapshot in route_snapshots:
+            truck_vehicle_id = snapshot.truck_vehicle_id
+            if truck_vehicle_id is None:
                 continue
 
-            real_truck = trucks_by_id[snapshot.truck_vehicle_id]
-            candidate_truck = self._clone_truck(real_truck)
+            link = candidate_trucks_by_id.get(truck_vehicle_id)
+            if link is None:
+                real_truck = real_trucks_by_id[truck_vehicle_id]
+                candidate_truck = self._clone_truck(real_truck)
+                link = CandidateTruckLink(real_truck=real_truck, candidate_truck=candidate_truck)
+                candidate_trucks_by_id[truck_vehicle_id] = link
+
             route = rebuilt_routes[snapshot.route_id]
-            candidate_truck.assign(route)
-            route.truck = candidate_truck
+            link.candidate_truck.assign(route)
+            route.truck = link.candidate_truck
 
-            trucks_by_route_id[snapshot.route_id] = CandidateTruckLink(real_truck, candidate_truck)
+            links_by_route_id[snapshot.route_id] = link
 
-        return trucks_by_route_id
+        return links_by_route_id
 
     def _reconcile_candidate_world(
         self,
-        snapshots: tuple[RouteSnapshot, ...],
+        *,
+        route_snapshots: tuple[RouteSnapshot, ...],
+        truck_snapshots: tuple[TruckSnapshot, ...],
         routes: dict[int, DeliveryRoute],
     ) -> list[TruckBinding]:
+        candidate_trucks_by_id = self._build_candidate_trucks(truck_snapshots)
+
         trucks_by_route_id = self._link_candidate_trucks_to_routes(
-            snapshots=snapshots,
+            route_snapshots=route_snapshots,
             rebuilt_routes=routes,
+            candidate_trucks_by_id=candidate_trucks_by_id,
         )
+
         self._reconciler.reconcile_routes(
             routes=list(routes.values()),
             update_trucks=True,
         )
+
         return self._build_truck_bindings(
-            snapshots=snapshots,
+            route_snapshots=route_snapshots,
             routes=routes,
             trucks_by_route_id=trucks_by_route_id,
+            candidate_trucks_by_id=candidate_trucks_by_id,
         )
+
+    def _build_candidate_trucks(
+        self,
+        snapshots: tuple[TruckSnapshot, ...],
+    ) -> dict[int, CandidateTruckLink]:
+        real_trucks_by_id = {truck.vehicle_id: truck for truck in self._vehicle_manager.list_fleet()}
+        candidates: dict[int, CandidateTruckLink] = {}
+
+        for snapshot in snapshots:
+            real_truck = real_trucks_by_id[snapshot.vehicle_id]
+            candidate_truck = self._clone_truck(real_truck)
+
+            candidate_truck.status = snapshot.status
+            candidate_truck.current_location = snapshot.current_location
+            candidate_truck.busy_from = dt_from_str(snapshot.busy_from)
+            candidate_truck.busy_until = dt_from_str(snapshot.busy_until)
+            candidate_truck.in_transit_to = snapshot.in_transit_to
+            candidate_truck.route = None
+
+            candidates[snapshot.vehicle_id] = CandidateTruckLink(
+                real_truck=real_truck,
+                candidate_truck=candidate_truck,
+            )
+
+        return candidates
 
     def _build_truck_bindings(
         self,
         *,
-        snapshots: tuple[RouteSnapshot, ...],
+        route_snapshots: tuple[RouteSnapshot, ...],
         routes: dict[int, DeliveryRoute],
         trucks_by_route_id: dict[int, CandidateTruckLink],
+        candidate_trucks_by_id: dict[int, CandidateTruckLink],
     ) -> list[TruckBinding]:
-        bindings: list[TruckBinding] = []
+        bindings_by_truck_id: dict[int, TruckBinding] = {}
 
-        for snapshot in snapshots:
-            if snapshot.truck_vehicle_id is None:
+        for truck_id, link in candidate_trucks_by_id.items():
+            candidate_truck = link.candidate_truck
+            bindings_by_truck_id[truck_id] = TruckBinding(
+                truck=link.real_truck,
+                route=candidate_truck.route,
+                status=candidate_truck.status,
+                current_location=candidate_truck.current_location,
+                busy_from=candidate_truck.busy_from,
+                busy_until=candidate_truck.busy_until,
+                in_transit_to=candidate_truck.in_transit_to,
+            )
+
+        for snapshot in route_snapshots:
+            truck_vehicle_id = snapshot.truck_vehicle_id
+            if truck_vehicle_id is None:
                 continue
 
-            candidate_truck_link = trucks_by_route_id[snapshot.route_id]
-            real_truck = candidate_truck_link.real_truck
-            candidate_truck = candidate_truck_link.candidate_truck
-
+            link = trucks_by_route_id[snapshot.route_id]
+            candidate_truck = link.candidate_truck
             route = routes[snapshot.route_id]
             bound_route = route if route.truck is candidate_truck else None
 
-            bindings.append(
-                TruckBinding(
-                    truck=real_truck,
-                    route=bound_route,
-                    status=candidate_truck.status,
-                    current_location=candidate_truck.current_location,
-                    busy_from=candidate_truck.busy_from,
-                    busy_until=candidate_truck.busy_until,
-                    in_transit_to=candidate_truck.in_transit_to,
-                )
+            bindings_by_truck_id[truck_vehicle_id] = TruckBinding(
+                truck=link.real_truck,
+                route=bound_route,
+                status=candidate_truck.status,
+                current_location=candidate_truck.current_location,
+                busy_from=candidate_truck.busy_from,
+                busy_until=candidate_truck.busy_until,
+                in_transit_to=candidate_truck.in_transit_to,
             )
 
-        return bindings
+        return [bindings_by_truck_id[truck_id] for truck_id in sorted(bindings_by_truck_id)]
 
     @staticmethod
     def _clone_truck(truck: Truck) -> Truck:

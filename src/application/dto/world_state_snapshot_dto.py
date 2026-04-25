@@ -36,11 +36,23 @@ class RouteSnapshot:
 
 
 @dataclass(frozen=True)
+class TruckSnapshot:
+    vehicle_id: int
+    status: str
+    current_location: str | None
+    route_id: int | None
+    busy_from: str | None
+    busy_until: str | None
+    in_transit_to: str | None
+
+
+@dataclass(frozen=True)
 class WorldSnapshotData:
     counters: CountersSnapshot
     customers: tuple[CustomerSnapshot, ...]
     packages: tuple[PackageSnapshot, ...]
     routes: tuple[RouteSnapshot, ...]
+    trucks: tuple[TruckSnapshot, ...] = ()
 
 
 @dataclass(frozen=True)

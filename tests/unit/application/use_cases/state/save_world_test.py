@@ -12,7 +12,7 @@ from src.application.use_cases.state.save_world import SaveWorldStateUseCase
 class SaveWorldStateUseCaseTests(unittest.TestCase):
     def test_execute_builds_snapshot_and_writes_it(self) -> None:
         snapshot = WorldStateSnapshot(
-            schema_version=1,
+            schema_version=2,
             world=WorldSnapshotData(
                 counters=CountersSnapshot(1, 1, 1),
                 customers=(),

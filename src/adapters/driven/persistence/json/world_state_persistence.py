@@ -10,6 +10,7 @@ from src.application.dto.world_state_snapshot_dto import (
     CustomerSnapshot,
     PackageSnapshot,
     RouteSnapshot,
+    TruckSnapshot,
     WorldSnapshotData,
     WorldStateSnapshot,
 )
@@ -99,6 +100,7 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
         customers_raw = self._require_list(world_dict.get("customers"))
         packages_raw = self._require_list(world_dict.get("packages"))
         routes_raw = self._require_list(world_dict.get("routes"))
+        trucks_raw = self._require_list(world_dict.get("trucks", []))
 
         return WorldStateSnapshot(
             schema_version=schema_version,
@@ -111,6 +113,7 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
                 customers=tuple(self._customer_snapshot_from_raw(obj) for obj in customers_raw),
                 packages=tuple(self._package_snapshot_from_raw(obj) for obj in packages_raw),
                 routes=tuple(self._route_snapshot_from_raw(obj) for obj in routes_raw),
+                trucks=tuple(self._truck_snapshot_from_raw(obj) for obj in trucks_raw),
             ),
             users=None,
         )
@@ -174,6 +177,23 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
             departure_time=self._require_str_or_none(data, "departure_time"),
             truck_vehicle_id=truck_vehicle_id_raw,
             package_ids=tuple(package_ids),
+        )
+
+    def _truck_snapshot_from_raw(self, raw: object) -> TruckSnapshot:
+        data = self._require_mapping(raw)
+
+        route_id_raw = data.get("route_id")
+        if route_id_raw is not None and (not isinstance(route_id_raw, int) or isinstance(route_id_raw, bool)):
+            raise TypeError("route_id must be int or null")
+
+        return TruckSnapshot(
+            vehicle_id=self._require_int(data, "vehicle_id"),
+            status=self._require_str(data, "status"),
+            current_location=self._require_str_or_none(data, "current_location"),
+            route_id=route_id_raw,
+            busy_from=self._require_str_or_none(data, "busy_from"),
+            busy_until=self._require_str_or_none(data, "busy_until"),
+            in_transit_to=self._require_str_or_none(data, "in_transit_to"),
         )
 
     def _require_mapping(self, value: object) -> dict[str, object]:

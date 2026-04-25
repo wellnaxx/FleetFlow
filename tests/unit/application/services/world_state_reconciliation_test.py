@@ -188,7 +188,7 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
         self.assertEqual(summary.packages_updated, 2)
         self.assertTrue(summary.state_changed)
 
-    def test_reconcile_routes_counts_truck_release_without_counting_movement(self) -> None:
+    def test_reconcile_routes_counts_after_end_release_location_change_as_movement(self) -> None:
         route = DeliveryRoute(
             "A",
             "B",
@@ -203,6 +203,7 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
             max_range=8000,
         )
         truck.assign(route)
+        truck.current_location = "A"
         route.truck = truck
 
         summary = self.reconciler.reconcile_routes(
@@ -212,11 +213,12 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
         )
 
         self.assertEqual(summary.trucks_released, 1)
-        self.assertEqual(summary.trucks_moved, 0)
+        self.assertEqual(summary.trucks_moved, 1)
         self.assertTrue(summary.state_changed)
         self.assertIsNone(route.truck)
         self.assertIsNone(truck.route)
         self.assertEqual(truck.status, TruckStatus.FREE)
+        self.assertEqual(truck.current_location, "B")
 
     def test_reconcile_routes_counts_truck_location_change_as_movement(self) -> None:
         route = DeliveryRoute(
@@ -296,8 +298,8 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
         self.assertTrue(summary.state_changed)
 
     def test_reconcile_routes_final_stop_release_does_not_count_as_movement_when_location_unchanged(
-    self,
-) -> None:
+        self,
+    ) -> None:
         route = DeliveryRoute(
             "A",
             "B",
@@ -334,6 +336,46 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
         self.assertIsNone(truck.route)
         self.assertEqual(truck.status, TruckStatus.FREE)
         self.assertEqual(truck.current_location, "B")
+
+    def test_reconcile_routes_at_stop_counts_clearing_stale_in_transit_as_movement(self) -> None:
+        route = DeliveryRoute(
+            "A",
+            "B",
+            "C",
+            departure_time=datetime(2025, 1, 1, 10, 0, 0),
+            route_id=1,
+        )
+
+        truck = Truck(
+            vehicle_id=1001,
+            name="Scania",
+            capacity=42000,
+            max_range=8000,
+        )
+        truck.assign(route)
+        truck.current_location = "B"
+        truck.in_transit_to = "C"
+        route.truck = truck
+
+        with patch.object(route, "current_position") as current_position_mock:
+            current_position_mock.return_value = SimpleNamespace(
+                kind="AT_STOP",
+                stop_city="B",
+            )
+
+            summary = self.reconciler.reconcile_routes(
+                routes=[route],
+                now=datetime(2025, 1, 1, 11, 0, 0),
+                update_trucks=True,
+            )
+
+        self.assertEqual(summary.trucks_moved, 1)
+        self.assertEqual(summary.trucks_released, 0)
+        self.assertTrue(summary.state_changed)
+        self.assertIs(route.truck, truck)
+        self.assertIs(truck.route, route)
+        self.assertEqual(truck.current_location, "B")
+        self.assertIsNone(truck.in_transit_to)
 
     def test_reconcile_routes_does_not_mutate_truck_when_truck_updates_are_disabled(self) -> None:
         route = DeliveryRoute(

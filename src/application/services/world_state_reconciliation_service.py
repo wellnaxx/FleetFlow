@@ -88,8 +88,14 @@ class WorldStateReconciliationService:
             if self._set_truck_in_transit(truck, route, position):
                 trucks_moved += 1
 
-        elif position.kind == "AFTER_END" and route.release_truck(now=now, force=False):
-            trucks_released += 1
+        elif position.kind == "AFTER_END":
+            before_location = truck.current_location
+            before_in_transit_to = truck.in_transit_to
+
+            if route.release_truck(now=now, force=False):
+                trucks_released += 1
+                if truck.current_location != before_location or truck.in_transit_to != before_in_transit_to:
+                    trucks_moved += 1
 
         after_state = self._truck_state(truck)
         state_changed = before_state != after_state or trucks_released > 0
@@ -132,7 +138,10 @@ class WorldStateReconciliationService:
         position: RoutePosition,
         now: datetime,
     ) -> tuple[bool, bool]:
-        moved = truck.current_location != position.stop_city
+        moved = (
+            truck.current_location != position.stop_city
+            or truck.in_transit_to is not None
+        )
 
         truck.current_location = position.stop_city
         truck.in_transit_to = None

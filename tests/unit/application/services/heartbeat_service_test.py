@@ -189,7 +189,7 @@ class HeartbeatServiceTests(unittest.TestCase):
 
         self.assertEqual(summary.routes_updated, 1)
         self.assertEqual(summary.trucks_released, 1)
-        self.assertEqual(summary.trucks_moved, 0)
+        self.assertEqual(summary.trucks_moved, 1)
         self.assertTrue(summary.state_changed)
         self.assertEqual(summary.packages_updated, 1)
         self.assertEqual(route.status, "COMPLETED")

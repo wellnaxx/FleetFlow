@@ -12,6 +12,7 @@ from src.application.dto.world_state_snapshot_dto import (
     CustomerSnapshot,
     PackageSnapshot,
     RouteSnapshot,
+    TruckSnapshot,
     WorldSnapshotData,
     WorldStateSnapshot,
 )
@@ -25,9 +26,9 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
     def setUp(self) -> None:
         self.persistence = JsonWorldStatePersistence()
 
-    def make_snapshot(self) -> WorldStateSnapshot:
+    def make_snapshot(self, *, schema_version: int = 2) -> WorldStateSnapshot:
         return WorldStateSnapshot(
-            schema_version=1,
+            schema_version=schema_version,
             world=WorldSnapshotData(
                 counters=CountersSnapshot(3, 4, 5),
                 customers=(
@@ -57,6 +58,7 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
                         package_ids=(2,),
                     ),
                 ),
+                trucks=(),
             ),
         )
 
@@ -77,7 +79,7 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
         self.assertEqual(
             raw,
             {
-                "schema_version": 1,
+                "schema_version": 2,
                 "world": {
                     "counters": {
                         "next_customer_id": 3,
@@ -111,6 +113,7 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
                             "package_ids": [2],
                         }
                     ],
+                    "trucks": [],
                 },
                 "users": None,
             },
@@ -123,7 +126,7 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
     def test_read_supports_nested_world_schema(self) -> None:
         snapshot = self.make_snapshot()
         raw = {
-            "schema_version": 1,
+            "schema_version": 2,
             "world": {
                 "counters": {
                     "next_customer_id": 3,
@@ -173,8 +176,85 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
 
         self.assertEqual(loaded, snapshot)
 
+    def test_read_supports_truck_snapshots(self) -> None:
+        snapshot = WorldStateSnapshot(
+            schema_version=2,
+            world=WorldSnapshotData(
+                counters=CountersSnapshot(1, 1, 1),
+                customers=(),
+                packages=(),
+                routes=(),
+                trucks=(
+                    TruckSnapshot(
+                        vehicle_id=1001,
+                        status="Free",
+                        current_location="MEL",
+                        route_id=None,
+                        busy_from=None,
+                        busy_until=None,
+                        in_transit_to=None,
+                    ),
+                    TruckSnapshot(
+                        vehicle_id=1002,
+                        status="On the way",
+                        current_location="SYD",
+                        route_id=7,
+                        busy_from="2025-01-01T10:00:00",
+                        busy_until="2025-01-01T11:00:00",
+                        in_transit_to="MEL",
+                    ),
+                ),
+            ),
+        )
+        raw = {
+            "schema_version": 2,
+            "world": {
+                "counters": {
+                    "next_customer_id": 1,
+                    "next_package_id": 1,
+                    "next_route_id": 1,
+                },
+                "customers": [],
+                "packages": [],
+                "routes": [],
+                "trucks": [
+                    {
+                        "vehicle_id": 1001,
+                        "status": "Free",
+                        "current_location": "MEL",
+                        "route_id": None,
+                        "busy_from": None,
+                        "busy_until": None,
+                        "in_transit_to": None,
+                    },
+                    {
+                        "vehicle_id": 1002,
+                        "status": "On the way",
+                        "current_location": "SYD",
+                        "route_id": 7,
+                        "busy_from": "2025-01-01T10:00:00",
+                        "busy_until": "2025-01-01T11:00:00",
+                        "in_transit_to": "MEL",
+                    },
+                ],
+            },
+        }
+
+        filename = f"world-state-{uuid.uuid4().hex}.json"
+        path = os.path.join(DATA_DIR, filename)
+        try:
+            with open(path, "w", encoding="utf-8") as file:
+                json.dump(raw, file)
+
+            _read_path, loaded = self.persistence.read(path)
+        finally:
+            with contextlib.suppress(OSError):
+                os.remove(path)
+
+        self.assertEqual(loaded, snapshot)
+
     def test_read_supports_legacy_flat_world_schema(self) -> None:
-        snapshot = self.make_snapshot()
+        snapshot = self.make_snapshot(schema_version=1)
         raw = {
             "schema_version": 1,
             "counters": {
@@ -267,6 +347,58 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
                 os.remove(path)
 
         self.assertIn("Malformed world state JSON", str(ctx.exception))
+
+    def test_read_malformed_truck_snapshot_raises_world_state_corruption_error(self) -> None:
+        malformed_truck_cases = (
+            ("vehicle_id", {"vehicle_id": True}),
+            ("status", {"status": None}),
+            ("current_location", {"current_location": 100}),
+            ("route_id", {"route_id": "1"}),
+            ("busy_from", {"busy_from": 100}),
+            ("busy_until", {"busy_until": 100}),
+            ("in_transit_to", {"in_transit_to": 100}),
+        )
+
+        for label, override in malformed_truck_cases:
+            with self.subTest(label=label):
+                truck = {
+                    "vehicle_id": 1001,
+                    "status": "Free",
+                    "current_location": "MEL",
+                    "route_id": None,
+                    "busy_from": None,
+                    "busy_until": None,
+                    "in_transit_to": None,
+                }
+                truck.update(override)
+                raw = {
+                    "schema_version": 1,
+                    "world": {
+                        "counters": {
+                            "next_customer_id": 1,
+                            "next_package_id": 1,
+                            "next_route_id": 1,
+                        },
+                        "customers": [],
+                        "packages": [],
+                        "routes": [],
+                        "trucks": [truck],
+                    },
+                }
+
+                filename = f"world-state-{uuid.uuid4().hex}.json"
+                path = os.path.join(DATA_DIR, filename)
+                try:
+                    with open(path, "w", encoding="utf-8") as file:
+                        json.dump(raw, file)
+
+                    with self.assertRaises(WorldStateCorruptionError) as ctx:
+                        self.persistence.read(path)
+                finally:
+                    with contextlib.suppress(OSError):
+                        os.remove(path)
+
+                self.assertIn("Malformed world state JSON", str(ctx.exception))
 
     def test_read_malformed_payload_raises_world_state_corruption_error(self) -> None:
         raw: dict[str, int | dict[str, dict[str, int] | str | list[Any]]] = {

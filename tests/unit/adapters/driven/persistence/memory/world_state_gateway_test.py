@@ -15,12 +15,14 @@ from src.application.dto.world_state_snapshot_dto import (
     CustomerSnapshot,
     PackageSnapshot,
     RouteSnapshot,
+    TruckSnapshot,
     WorldSnapshotData,
     WorldStateSnapshot,
 )
 from src.application.services.world_state_reconciliation_service import WorldStateReconciliationService
 from src.application.services.world_state_snapshot_service import WorldStateSnapshotService
 from src.domain.entities.customer import Customer
+from src.domain.enums.truck_status import TruckStatus
 from src.domain.services.vehicle_manager import VehicleManager
 from src.domain.value_objects.contact_info import ContactInfo
 
@@ -88,7 +90,7 @@ class InMemoryWorldStateGatewayTests(unittest.TestCase):
         )
         gateway = InMemoryWorldStateGateway(snapshot_service=snapshot_service)
         snapshot = WorldStateSnapshot(
-            schema_version=1,
+            schema_version=2,
             world=WorldSnapshotData(
                 counters=CountersSnapshot(2, 2, 2),
                 customers=(
@@ -124,7 +126,31 @@ class InMemoryWorldStateGatewayTests(unittest.TestCase):
         gateway.apply_snapshot(snapshot)
         rebuilt_snapshot = gateway.build_snapshot()
 
-        self.assertEqual(rebuilt_snapshot, snapshot)
+        self.assertEqual(rebuilt_snapshot.schema_version, 2)
+        self.assertEqual(rebuilt_snapshot.world.counters, snapshot.world.counters)
+        self.assertEqual(rebuilt_snapshot.world.customers, snapshot.world.customers)
+        self.assertEqual(rebuilt_snapshot.world.packages, snapshot.world.packages)
+        self.assertEqual(rebuilt_snapshot.world.routes, snapshot.world.routes)
+        self.assertEqual(len(rebuilt_snapshot.world.trucks), len(vehicle_manager.list_fleet()))
+
+        truck_snapshot = next(
+            truck for truck in rebuilt_snapshot.world.trucks if truck.vehicle_id == 1001
+        )
+        route = route_repo.get_by_id(1)
+        assert route is not None
+
+        self.assertEqual(
+            truck_snapshot,
+            TruckSnapshot(
+                vehicle_id=1001,
+                status=TruckStatus.ON_THE_WAY,
+                current_location="A",
+                route_id=1,
+                busy_from=dt_to_str(datetime(2099, 1, 1, 10, 0, 0)),
+                busy_until=dt_to_str(route.eta_final),
+                in_transit_to=None,
+            ),
+        )
 
     def test_runtime_replacement_rolls_back_when_truck_binding_fails(self) -> None:
         customer_repo = InMemoryCustomerRepository()
