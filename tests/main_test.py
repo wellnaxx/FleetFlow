@@ -2,7 +2,11 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 import main
-from src.application.exceptions.world_state_errors import WorldStateCorruptionError, WorldStateFileNotFoundError
+from src.application.exceptions.world_state_errors import (
+    WorldStateCorruptionError,
+    WorldStateFileNotFoundError,
+    WorldStateRuntimeSwapError,
+)
 from src.domain.enums.auth import Role
 
 
@@ -299,6 +303,47 @@ class QuarantineCorruptWorldStateTests(unittest.TestCase):
             "Failed to quarantine corrupt world state file %r.",
             original,
         )
+
+    @patch("main.print")
+    @patch("main._quarantine_corrupt_world_state")
+    @patch("main.Engine")
+    @patch("main.CommandFactory")
+    @patch("main.Container")
+    @patch("main.bootstrap_admin")
+    @patch("main.AuthService")
+    @patch("main.UserStore")
+    @patch("main.os.path.exists", return_value=True)
+    def test_main_does_not_quarantine_runtime_swap_errors(
+        self,
+        exists: MagicMock,
+        user_store_cls: MagicMock,
+        auth_service_cls: MagicMock,
+        bootstrap_admin: MagicMock,
+        container_cls: MagicMock,
+        command_factory_cls: MagicMock,
+        engine_cls: MagicMock,
+        quarantine: MagicMock,
+        print_mock: MagicMock,
+    ) -> None:
+        store = MagicMock()
+        auth = MagicMock()
+        container = MagicMock()
+
+        user_store_cls.return_value = store
+        auth_service_cls.return_value = auth
+        container_cls.return_value = container
+        container.load_world_state_use_case.execute.side_effect = WorldStateRuntimeSwapError(
+            "Failed to replace runtime world state."
+        )
+
+        with self.assertRaises(WorldStateRuntimeSwapError):
+            main.main()
+
+        container.load_world_state_use_case.execute.assert_called_once_with(main.DEFAULT_WORLD_STATE_PATH)
+        quarantine.assert_not_called()
+        print_mock.assert_not_called()
+        command_factory_cls.assert_not_called()
+        engine_cls.assert_not_called()
 
 
 class BootstrapAdminTests(unittest.TestCase):

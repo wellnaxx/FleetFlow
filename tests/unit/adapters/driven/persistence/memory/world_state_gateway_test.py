@@ -19,9 +19,12 @@ from src.application.dto.world_state_snapshot_dto import (
     WorldSnapshotData,
     WorldStateSnapshot,
 )
+from src.application.exceptions.world_state_errors import WorldStateRuntimeSwapError
 from src.application.services.world_state_reconciliation_service import WorldStateReconciliationService
 from src.application.services.world_state_snapshot_service import WorldStateSnapshotService
 from src.domain.entities.customer import Customer
+from src.domain.entities.delivery_package import DeliveryPackage
+from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.enums.truck_status import TruckStatus
 from src.domain.services.vehicle_manager import VehicleManager
 from src.domain.value_objects.contact_info import ContactInfo
@@ -157,19 +160,59 @@ class InMemoryWorldStateGatewayTests(unittest.TestCase):
         package_repo = InMemoryPackageRepository()
         route_repo = InMemoryRouteRepository()
         vehicle_manager = _FailingVehicleManager()
+
         runtime_state = InMemoryWorldStateRuntime(
             customer_repo=customer_repo,
             package_repo=package_repo,
             route_repo=route_repo,
             vehicle_manager=vehicle_manager,
         )
+
         existing_customer = Customer(
             customer_id=1,
-            contact=ContactInfo(name="Alice", email="alice@example.com", phone_number="0412345678"),
+            contact=ContactInfo(
+                name="Alice",
+                email="alice@example.com",
+                phone_number="0412345678",
+            ),
         )
         customer_repo.add(existing_customer)
 
-        with self.assertRaises(RuntimeError):
+        existing_package = DeliveryPackage(
+            package_id=1,
+            start_location="A",
+            end_location="B",
+            weight=5.0,
+            customer=existing_customer,
+        )
+        existing_customer.add_package(existing_package)
+        package_repo.add(existing_package)
+
+        existing_route = DeliveryRoute(
+            "A",
+            "B",
+            departure_time=datetime(2099, 1, 1, 10, 0, 0),
+            route_id=1,
+        )
+        existing_route.assign_package(existing_package)
+        route_repo.add(existing_route)
+
+        truck = vehicle_manager.find_by_id(1001)
+        assert truck is not None
+
+        truck.assign(existing_route)
+        truck.current_location = "A"
+        truck.in_transit_to = "B"
+        existing_route.truck = truck
+
+        previous_status = truck.status
+        previous_location = truck.current_location
+        previous_route = truck.route
+        previous_busy_from = truck.busy_from
+        previous_busy_until = truck.busy_until
+        previous_in_transit_to = truck.in_transit_to
+
+        with self.assertRaises(WorldStateRuntimeSwapError) as ctx:
             runtime_state.replace_world_state(
                 customers_by_id={},
                 packages_by_id={},
@@ -178,6 +221,24 @@ class InMemoryWorldStateGatewayTests(unittest.TestCase):
                 truck_bindings=[],
             )
 
+        self.assertIsInstance(ctx.exception.__cause__, RuntimeError)
+
         self.assertTrue(vehicle_manager.replace_attempted)
+
         self.assertIs(customer_repo.get_by_id(1), existing_customer)
+        self.assertIs(package_repo.get_by_id(1), existing_package)
+        self.assertIs(route_repo.get_by_id(1), existing_route)
+
         self.assertEqual(customer_repo.peek_next_id(), 2)
+        self.assertEqual(package_repo.peek_next_id(), 2)
+        self.assertEqual(route_repo.peek_next_id(), 2)
+
+        self.assertEqual(truck.status, previous_status)
+        self.assertEqual(truck.current_location, previous_location)
+        self.assertIs(truck.route, previous_route)
+        self.assertEqual(truck.busy_from, previous_busy_from)
+        self.assertEqual(truck.busy_until, previous_busy_until)
+        self.assertEqual(truck.in_transit_to, previous_in_transit_to)
+
+        self.assertIs(existing_route.truck, truck)
+        self.assertIs(existing_package.route, existing_route)

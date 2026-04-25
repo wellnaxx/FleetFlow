@@ -6,6 +6,7 @@ from src.adapters.driven.persistence.memory.package_repository import InMemoryPa
 from src.adapters.driven.persistence.memory.route_repository import InMemoryRouteRepository
 from src.application.dto.truck_binding_dto import TruckBinding
 from src.application.dto.world_state_snapshot_dto import CountersSnapshot, WorldStateSnapshot
+from src.application.exceptions.world_state_errors import WorldStateRuntimeSwapError
 from src.application.services.world_state_snapshot_service import WorldStateSnapshotService
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
@@ -63,7 +64,7 @@ class InMemoryWorldStateRuntime(WorldStateRuntimePort):
                 next_id=counters.next_route_id,
             )
             self._vehicle_manager.replace_truck_bindings(bindings=truck_bindings)
-        except Exception:
+        except Exception as exc:
             self._customer_repo.replace_customers(
                 customers_by_id=previous_customers,
                 next_id=previous_counters.next_customer_id,
@@ -77,7 +78,7 @@ class InMemoryWorldStateRuntime(WorldStateRuntimePort):
                 next_id=previous_counters.next_route_id,
             )
             self._restore_trucks(previous_trucks)
-            raise
+            raise WorldStateRuntimeSwapError("Failed to replace runtime world state.") from exc
 
     def _snapshot_trucks(self) -> list[TruckRuntimeSnapshot]:
         return [
