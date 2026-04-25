@@ -7,6 +7,8 @@ from src.application.services.auth_service import AuthService
 from src.domain.entities.users.employee import Employee
 from src.domain.entities.users.manager import Manager
 
+VALID_PASSWORD_HASH = "pbkdf2_sha256$200000$U0FMVFNBTFRTQUxUU0FMVA==$SEFTSEhBU0hIQVNI"
+
 
 class AuthService_Should(unittest.TestCase):
     def make_service(self) -> tuple[AuthService, MagicMock]:
@@ -276,7 +278,7 @@ class AuthService_Should(unittest.TestCase):
             name="Alice",
             email="alice@example.com",
             phone_number="0412345678",
-            password="pbkdf2_sha256$200000$salt$hash",
+            password=VALID_PASSWORD_HASH,
         )
 
         user = auth.login("alice", "pw")
@@ -299,7 +301,7 @@ class AuthService_Should(unittest.TestCase):
             name="Bob",
             email="bob@example.com",
             phone_number="0400123456",
-            password="pbkdf2_sha256$200000$salt$hash",
+            password=VALID_PASSWORD_HASH,
         )
 
         user = auth.login("bob", "pw")
@@ -321,7 +323,7 @@ class AuthService_Should(unittest.TestCase):
             name="Bad Role",
             email="badrole@example.com",
             phone_number="0412345678",
-            password="pbkdf2_sha256$200000$salt$hash",
+            password=VALID_PASSWORD_HASH,
         )
 
         with self.assertRaises(ValueError) as ctx:

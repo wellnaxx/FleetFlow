@@ -12,8 +12,8 @@ from src.domain.enums.auth import Role
 PERSISTED_PASSWORD = PasswordHash(
     algo="sha256",
     iterations=200000,
-    salt_b64="c2FsdA==",
-    hash_b64="aGFzaA==",
+    salt_b64="U0FMVFNBTFRTQUxUU0FMVA==",
+    hash_b64="SEFTSEhBU0hIQVNI",
 ).serialize()
 
 

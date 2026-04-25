@@ -4,6 +4,8 @@ from typing import Any
 from unittest.mock import patch
 
 from src.adapters.driven.security.password_hasher import (
+    PBKDF2_ITERATIONS,
+    SALT_BYTES,
     PasswordHash,
     hash_password,
     verify_password,
@@ -71,28 +73,38 @@ class Crypto_Should(unittest.TestCase):
     def test_passwordhash_serialize_and_parse_roundtrip(self) -> None:
         ph = PasswordHash(
             algo="sha256",
-            iterations=200000,
-            salt_b64=self._b64(b"X" * 16),
+            iterations=PBKDF2_ITERATIONS,
+            salt_b64=self._b64(b"X" * SALT_BYTES),
             hash_b64=self._b64(b"Y" * 32),
         )
         s = ph.serialize()
         ph2 = PasswordHash.parse(s)
         self.assertEqual(ph2, ph)
 
+    def test_generated_password_hash_parses(self) -> None:
+        ph = hash_password("CorrectHorse1")
+
+        parsed = PasswordHash.parse(ph.serialize())
+
+        self.assertEqual(parsed, ph)
+
     def test_parse_malformed_raises(self) -> None:
+        valid_salt = self._b64(b"X" * SALT_BYTES)
+        valid_hash = self._b64(b"Y" * 32)
         bad_values = (
-            "pbkdf2_sha256$200000$only-two-parts",
-            "sha256$200000$c2FsdA==$aGFzaA==",
-            "pbkdf2_sha256$0$c2FsdA==$aGFzaA==",
-            "pbkdf2_sha256$not-int$c2FsdA==$aGFzaA==",
-            "pbkdf2_sha256$200000$not base64$aGFzaA==",
-            "pbkdf2_notarealhash$200000$c2FsdA==$aGFzaA==",
+            f"pbkdf2_sha256${PBKDF2_ITERATIONS}$only-two-parts",
+            f"sha256${PBKDF2_ITERATIONS}${valid_salt}${valid_hash}",
+            f"pbkdf2_sha1${PBKDF2_ITERATIONS}${valid_salt}${valid_hash}",
+            f"pbkdf2_sha256${PBKDF2_ITERATIONS - 1}${valid_salt}${valid_hash}",
+            f"pbkdf2_sha256$not-int${valid_salt}${valid_hash}",
+            f"pbkdf2_sha256${PBKDF2_ITERATIONS}$not base64${valid_hash}",
+            f"pbkdf2_sha256${PBKDF2_ITERATIONS}${self._b64(b'too-short')}${valid_hash}",
+            f"pbkdf2_sha256${PBKDF2_ITERATIONS}${valid_salt}$",
         )
 
         for value in bad_values:
-            with self.subTest(value=value):
-                with self.assertRaises(ValueError):
-                    PasswordHash.parse(value)
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                PasswordHash.parse(value)
 
         with self.assertRaises(TypeError):
             PasswordHash.parse(123456)

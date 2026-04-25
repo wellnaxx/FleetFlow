@@ -32,19 +32,18 @@ class PasswordHash:
 
         scheme, iterations_text, salt_b64, hash_b64 = parts
 
-        if not scheme.startswith("pbkdf2_"):
+        expected_scheme = f"pbkdf2_{PBKDF2_ALGO}"
+        if scheme != expected_scheme:
             raise ValueError("Invalid password hash.")
 
-        algo = scheme.removeprefix("pbkdf2_")
-        if not algo or algo not in hashlib.algorithms_available:
-            raise ValueError("Invalid password hash.")
+        algo = PBKDF2_ALGO
 
         try:
             iterations = int(iterations_text)
         except ValueError as exc:
             raise ValueError("Invalid password hash.") from exc
 
-        if iterations < 1:
+        if iterations < PBKDF2_ITERATIONS:
             raise ValueError("Invalid password hash.")
 
         try:
@@ -52,7 +51,7 @@ class PasswordHash:
             hash_value = base64.b64decode(hash_b64, validate=True)
         except binascii.Error as exc:
             raise ValueError("Invalid password hash.") from exc
-        if not salt or not hash_value:
+        if len(salt) != SALT_BYTES or not hash_value:
             raise ValueError("Invalid password hash.")
 
         return PasswordHash(
