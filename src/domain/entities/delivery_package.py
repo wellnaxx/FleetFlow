@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from src.domain.enums.item_status import ItemStatus
 from src.domain.services.map import Map
 
 if TYPE_CHECKING:
@@ -38,19 +39,16 @@ class DeliveryPackage:
 
         self.route: DeliveryRoute | None = None
         self.expected_arrival: datetime | None = None
-        self.status: str | None = None
+        self.status: ItemStatus = ItemStatus.TODO
 
     @property
     def package_id(self) -> int:
         return self._package_id
 
-    def _set_package_id(self, value: int) -> None:
-        self._package_id = value
-
     def reset_assignment_state(self) -> None:
         self.route = None
         self.expected_arrival = None
-        self.status = None
+        self.status = ItemStatus.TODO
         self.current_location = self.start_location
 
     def info(self) -> str:

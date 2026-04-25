@@ -7,6 +7,7 @@ from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.entities.delivery_route import DeliveryRoute, RoutePosition
 from src.domain.entities.truck import Truck
 from src.domain.enums.item_status import ItemStatus
+from src.domain.enums.route_status import RouteStatus
 
 
 class WorldStateReconciliationService:
@@ -106,20 +107,20 @@ class WorldStateReconciliationService:
             state_changed=state_changed,
         )
 
-    def _compute_route_status(self, route: DeliveryRoute, now: datetime) -> str:
+    def _compute_route_status(self, route: DeliveryRoute, now: datetime) -> RouteStatus:
         if route.departure_time is None:
-            return "PLANNED"
+            return RouteStatus.PLANNED
 
         if route.eta_final is None:
-            return "SCHEDULED"
+            return RouteStatus.SCHEDULED
 
         if now < route.departure_time:
-            return "SCHEDULED"
+            return RouteStatus.SCHEDULED
 
         if now >= route.eta_final:
-            return "COMPLETED"
+            return RouteStatus.COMPLETED
 
-        return "IN_PROGRESS"
+        return RouteStatus.IN_PROGRESS
 
     def _set_truck_unscheduled(self, truck: Truck) -> None:
         truck.in_transit_to = None

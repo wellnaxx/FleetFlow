@@ -3,6 +3,8 @@ from datetime import datetime, timedelta
 from unittest.mock import patch
 
 from src.domain.entities.delivery_route import DeliveryRoute
+from src.domain.enums.item_status import ItemStatus
+from src.domain.enums.route_status import RouteStatus
 
 LOCATIONS = ["A", "B", "C", "D"]
 # distances between consecutive pairs (A->B, B->C, C->D)
@@ -21,13 +23,13 @@ class _Pkg:
         self.weight = weight
         self.route: DeliveryRoute | None = None
         self.expected_arrival: datetime | None = None
-        self.status: str | None = None
+        self.status: ItemStatus = ItemStatus.TODO
         self.current_location = start
 
     def reset_assignment_state(self) -> None:
         self.route = None
         self.expected_arrival = None
-        self.status = None
+        self.status = ItemStatus.TODO
         self.current_location = self.start_location
 
 
@@ -62,6 +64,9 @@ class DeliveryRoute_Should(unittest.TestCase):
         self.assertEqual(r.route_id, 123)
         self.assertEqual(r.start_location, "A")
         self.assertEqual(r.end_location, "B")
+        self.assertEqual(r.status, RouteStatus.PLANNED)
+        scheduled = DeliveryRoute("A", "B", departure_time=datetime(2025, 1, 1, 8, 0), route_id=124)
+        self.assertEqual(scheduled.status, RouteStatus.SCHEDULED)
         with self.assertRaises(ValueError):
             DeliveryRoute("A", route_id=1)  # needs at least two
         with self.assertRaises(ValueError):
@@ -104,6 +109,7 @@ class DeliveryRoute_Should(unittest.TestCase):
         base = datetime(2025, 1, 1, 8, 0)
         r = DeliveryRoute("A", "B", "C", route_id=1)
         r.schedule(base)
+        self.assertEqual(r.status, RouteStatus.SCHEDULED)
 
         # UNSCHEDULED: separate route
         r_uns = DeliveryRoute("A", "B", route_id=2)
@@ -232,7 +238,7 @@ class DeliveryRoute_Should(unittest.TestCase):
     def test_detach_package_removes_package_and_clears_assignment_state(self, *_):
         r = DeliveryRoute("A", "B", "C", route_id=1)
         p = _Pkg(1, "A", "C", 5)
-        p.status = "IN_TRANSIT"
+        p.status = ItemStatus.IN_PROGRESS
         p.current_location = "B"
 
         r.schedule(datetime(2025, 1, 1, 6, 0))
@@ -245,7 +251,7 @@ class DeliveryRoute_Should(unittest.TestCase):
 
         self.assertIsNone(p.route)
         self.assertIsNone(p.expected_arrival)
-        self.assertIsNone(p.status)
+        self.assertEqual(p.status, ItemStatus.TODO)
         self.assertEqual(p.current_location, p.start_location)
         self.assertNotIn(p, r.packages)
 

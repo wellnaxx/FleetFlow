@@ -9,6 +9,7 @@ from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.entities.truck import Truck
 from src.domain.enums.item_status import ItemStatus
+from src.domain.enums.route_status import RouteStatus
 from src.domain.enums.truck_status import TruckStatus
 from src.domain.value_objects.contact_info import ContactInfo
 
@@ -119,7 +120,7 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
         package.status = ItemStatus.DONE
         package.current_location = "B"
         package.expected_arrival = expected_arrival
-        route.status = "COMPLETED"
+        route.status = RouteStatus.COMPLETED
 
         def arrival_time_at(city: str) -> datetime:
             return {
@@ -273,7 +274,7 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
         package.status = ItemStatus.IN_PROGRESS
         package.current_location = "B"
         package.expected_arrival = None
-        route.status = "IN_PROGRESS"
+        route.status = RouteStatus.IN_PROGRESS
 
         def arrival_time_at(city: str) -> datetime:
             return {

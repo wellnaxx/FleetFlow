@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 from src.application.services.heartbeat_service import HeartbeatService
 from src.application.services.world_state_reconciliation_service import WorldStateReconciliationService
 from src.domain.enums.item_status import ItemStatus
+from src.domain.enums.route_status import RouteStatus
 from src.domain.enums.truck_status import TruckStatus
 
 
@@ -64,7 +65,7 @@ class _FakeRoute:
         self.eta_final = eta_final
         self.truck: _FakeTruck | None = None
         self.packages = packages or []
-        self.status: str | None = None
+        self.status: RouteStatus | None = None
 
     def current_position(self, now: datetime) -> SimpleNamespace:
         if self.departure_time is None:
@@ -148,9 +149,9 @@ class HeartbeatServiceTests(unittest.TestCase):
         self.assertEqual(summary_before_departure.packages_updated, 2)
         self.assertTrue(summary_before_departure.state_changed)
 
-        self.assertEqual(scheduled_route.status, "SCHEDULED")
-        self.assertEqual(in_progress_route.status, "IN_PROGRESS")
-        self.assertEqual(unscheduled_route.status, "PLANNED")
+        self.assertEqual(scheduled_route.status, RouteStatus.SCHEDULED)
+        self.assertEqual(in_progress_route.status, RouteStatus.IN_PROGRESS)
+        self.assertEqual(unscheduled_route.status, RouteStatus.PLANNED)
         self.assertEqual(scheduled_truck.current_location, "S1")
 
         self.assertEqual(summary_mid_route.routes_updated, 0)
@@ -192,7 +193,7 @@ class HeartbeatServiceTests(unittest.TestCase):
         self.assertEqual(summary.trucks_moved, 1)
         self.assertTrue(summary.state_changed)
         self.assertEqual(summary.packages_updated, 1)
-        self.assertEqual(route.status, "COMPLETED")
+        self.assertEqual(route.status, RouteStatus.COMPLETED)
         self.assertIsNone(route.truck)
         self.assertIsNone(truck.route)
         self.assertEqual(truck.status, TruckStatus.FREE)
@@ -210,7 +211,7 @@ class HeartbeatServiceTests(unittest.TestCase):
             eta_final=base + timedelta(hours=2),
             packages=[package],
         )
-        route.status = "IN_PROGRESS"
+        route.status = RouteStatus.IN_PROGRESS
         truck = _FakeTruck(current_location="S3")
         truck.in_transit_to = "M3"
         route.truck = truck

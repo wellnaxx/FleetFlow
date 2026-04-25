@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
+from src.domain.enums.route_status import RouteStatus
 from src.domain.services.map import Map
 
 if TYPE_CHECKING:
@@ -46,7 +47,7 @@ class DeliveryRoute:
 
         self.truck: Truck | None = None
         self._packages: list[DeliveryPackage] = []
-        self.status: str | None = None
+        self.status: RouteStatus = RouteStatus.SCHEDULED if departure_time is not None else RouteStatus.PLANNED
 
         self._segments: list[tuple[str, str, int, timedelta]] = []
         self._stop_times: dict[str, datetime] = {}
@@ -93,6 +94,7 @@ class DeliveryRoute:
     def schedule(self, departure_time: datetime) -> None:
         self._departure_time = departure_time
         self._build_schedule()
+        self.status = RouteStatus.SCHEDULED
 
     def _build_schedule(self) -> None:
         if self._departure_time is None:
