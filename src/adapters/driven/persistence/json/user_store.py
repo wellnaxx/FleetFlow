@@ -1,3 +1,5 @@
+"""JSON-backed user store with strict persisted-user validation."""
+
 import json
 import logging
 import os

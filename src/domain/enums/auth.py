@@ -1,7 +1,11 @@
+"""Authentication roles, permissions, and role-permission mapping."""
+
 from enum import Enum, auto
 
 
 class Role(Enum):
+    """Runtime authorization roles."""
+
     EMPLOYEE = "EMPLOYEE"
     MANAGER = "MANAGER"
 

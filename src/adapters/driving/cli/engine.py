@@ -1,3 +1,5 @@
+"""Interactive CLI engine and command execution loop."""
+
 import logging
 import shlex
 from datetime import datetime

@@ -1,3 +1,5 @@
+"""Application-layer exception types."""
+
 class ApplicationError(Exception):
     """Base class for application/use-case failures."""
 

@@ -1,3 +1,5 @@
+"""DTO for applying prepared truck state to the live fleet."""
+
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -7,6 +9,8 @@ from src.domain.entities.truck import Truck
 
 @dataclass(frozen=True)
 class TruckBinding:
+    """Prepared runtime state for one real truck."""
+
     truck: Truck
     route: DeliveryRoute | None
     status: str

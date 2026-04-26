@@ -1,3 +1,5 @@
+"""In-memory customer repository implementation."""
+
 from collections.abc import Mapping
 
 from src.domain.entities.customer import Customer
@@ -12,6 +14,7 @@ class InMemoryCustomerRepository:
     """
 
     def __init__(self) -> None:
+        """Initialize an empty customer repository."""
         self._customers_by_id: dict[int, Customer] = {}
         self._id_by_email: dict[str, int] = {}
         self._id_by_phone: dict[str, int] = {}
@@ -39,7 +42,7 @@ class InMemoryCustomerRepository:
         than any stored entity id.
 
         Args:
-                customer: Customer entity to store.
+            customer: Customer entity to store.
 
         Raises:
             ValueError: If a customer with the same id already exists.
@@ -63,7 +66,11 @@ class InMemoryCustomerRepository:
         self._next_id = max(self._next_id, customer.customer_id + 1)
 
     def remove(self, customer_id: int) -> None:
-        """Remove a customer and any email/phone indexes for that record."""
+        """Remove a customer and any email/phone indexes for that record.
+
+        Args:
+            customer_id: Customer id to remove.
+        """
         customer = self._customers_by_id.get(customer_id)
         if customer is None:
             return
@@ -77,25 +84,53 @@ class InMemoryCustomerRepository:
         self._customers_by_id.pop(customer_id, None)
 
     def get_by_id(self, customer_id: int) -> Customer | None:
-        """Return a customer by id, if present."""
+        """Return a customer by id, if present.
+
+        Args:
+            customer_id: Customer id to look up.
+
+        Returns:
+            Matching customer, or `None`.
+        """
         return self._customers_by_id.get(customer_id, None)
 
     def get_by_email(self, email: str) -> Customer | None:
-        """Return a customer by email, if present."""
+        """Return a customer by email, if present.
+
+        Args:
+            email: Normalized email address to look up.
+
+        Returns:
+            Matching customer, or `None`.
+        """
         customer_id = self._id_by_email.get(email, None)
         if customer_id is None:
             return None
         return self._customers_by_id[customer_id]
 
     def get_by_phone(self, phone: str) -> Customer | None:
-        """Return a customer by phone number, if present."""
+        """Return a customer by phone number, if present.
+
+        Args:
+            phone: Normalized phone number to look up.
+
+        Returns:
+            Matching customer, or `None`.
+        """
         customer_id = self._id_by_phone.get(phone, None)
         if customer_id is None:
             return None
         return self._customers_by_id[customer_id]
 
     def list_by_name(self, name: str) -> list[Customer]:
-        """Return customers whose normalized names match the input."""
+        """Return customers whose normalized names match the input.
+
+        Args:
+            name: Name to match case-insensitively.
+
+        Returns:
+            Customers with the same normalized name.
+        """
         return [
             customer
             for customer in self.list_all()
@@ -107,7 +142,12 @@ class InMemoryCustomerRepository:
         return [self._customers_by_id[customer_id] for customer_id in sorted(self._customers_by_id)]
 
     def replace_customers(self, customers_by_id: Mapping[int, Customer], next_id: int) -> None:
-        """Replace the full customer state from a snapshot load."""
+        """Replace the full customer state from a snapshot load.
+
+        Args:
+            customers_by_id: Replacement customers keyed by id.
+            next_id: Next customer id counter to restore.
+        """
         self._customers_by_id = dict(customers_by_id)
         self._id_by_email = {
             customer.email: customer.customer_id for customer in customers_by_id.values() if customer.email

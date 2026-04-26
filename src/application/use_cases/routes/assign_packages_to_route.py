@@ -1,3 +1,5 @@
+"""Use case for assigning one or more packages to a route."""
+
 from collections.abc import Callable
 from datetime import datetime
 
@@ -21,6 +23,13 @@ class AssignPackagesToRouteUseCase:
         packages: PackageRepositoryPort,
         clock: Callable[[], datetime] = datetime.now,
     ) -> None:
+        """Initialize assignment dependencies.
+
+        Args:
+            routes: Repository used to fetch the target route.
+            packages: Repository used to fetch requested packages.
+            clock: Clock provider for assignment-time validation.
+        """
         self._routes = routes
         self._packages = packages
         self._clock = clock

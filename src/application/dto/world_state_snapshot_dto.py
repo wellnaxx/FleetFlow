@@ -1,8 +1,12 @@
+"""DTOs for persisted world-state snapshots."""
+
 from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
 class CountersSnapshot:
+    """Repository id counters captured in a world snapshot."""
+
     next_customer_id: int
     next_package_id: int
     next_route_id: int
@@ -10,6 +14,8 @@ class CountersSnapshot:
 
 @dataclass(frozen=True)
 class CustomerSnapshot:
+    """Persisted customer state."""
+
     customer_id: int
     name: str
     email: str
@@ -18,6 +24,8 @@ class CustomerSnapshot:
 
 @dataclass(frozen=True)
 class PackageSnapshot:
+    """Persisted package state and optional route assignment."""
+
     package_id: int
     start: str
     end: str
@@ -28,6 +36,8 @@ class PackageSnapshot:
 
 @dataclass(frozen=True)
 class RouteSnapshot:
+    """Persisted route state and package/truck references."""
+
     route_id: int
     locations: tuple[str, ...]
     departure_time: str | None
@@ -37,6 +47,8 @@ class RouteSnapshot:
 
 @dataclass(frozen=True)
 class TruckSnapshot:
+    """Persisted truck runtime state."""
+
     vehicle_id: int
     status: str
     current_location: str | None
@@ -48,6 +60,8 @@ class TruckSnapshot:
 
 @dataclass(frozen=True)
 class WorldSnapshotData:
+    """Canonical world payload inside a persisted snapshot."""
+
     counters: CountersSnapshot
     customers: tuple[CustomerSnapshot, ...]
     packages: tuple[PackageSnapshot, ...]
@@ -57,6 +71,8 @@ class WorldSnapshotData:
 
 @dataclass(frozen=True)
 class WorldStateSnapshot:
+    """Versioned world-state save payload."""
+
     schema_version: int
     world: WorldSnapshotData
     users: None = None

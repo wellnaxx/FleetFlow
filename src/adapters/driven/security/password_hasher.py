@@ -1,3 +1,5 @@
+"""Password hashing and persisted hash validation."""
+
 import base64
 import binascii
 import hashlib
@@ -12,17 +14,36 @@ SALT_BYTES = 16
 
 @dataclass(frozen=True)
 class PasswordHash:
+    """Serialized PBKDF2 password hash components."""
+
     algo: str
     iterations: int
     salt_b64: str
     hash_b64: str
 
     def serialize(self) -> str:
+        """Return the persisted password hash string.
+
+        Returns:
+            Hash string in the application storage format.
+        """
         # e.g. pbkdf2_sha256$200000$<salt>$<hash>
         return f"pbkdf2_{self.algo}${self.iterations}${self.salt_b64}${self.hash_b64}"
 
     @staticmethod
     def parse(value: object) -> "PasswordHash":
+        """Parse and validate a persisted password hash.
+
+        Args:
+            value: Persisted hash value to parse.
+
+        Returns:
+            Parsed password hash object.
+
+        Raises:
+            TypeError: If the value is not a string.
+            ValueError: If the hash does not match the application policy.
+        """
         if not isinstance(value, str):
             raise TypeError("Invalid password hash.")
 
@@ -63,6 +84,17 @@ class PasswordHash:
 
 
 def hash_password(plain: str) -> PasswordHash:
+    """Hash a plaintext password using the application PBKDF2 policy.
+
+    Args:
+        plain: Plaintext password.
+
+    Returns:
+        Password hash ready for persistence.
+
+    Raises:
+        ValueError: If the password is too short.
+    """
     if len(plain) < 8:
         raise ValueError("Password must be at least 8 characters.")
     salt = os.urandom(SALT_BYTES)
@@ -76,6 +108,15 @@ def hash_password(plain: str) -> PasswordHash:
 
 
 def verify_password(plain: str, stored: PasswordHash) -> bool:
+    """Verify a plaintext password against a stored password hash.
+
+    Args:
+        plain: Plaintext password to verify.
+        stored: Parsed persisted hash.
+
+    Returns:
+        True when the password matches the stored hash.
+    """
     salt = base64.b64decode(stored.salt_b64)
     dk2 = hashlib.pbkdf2_hmac(stored.algo, plain.encode("utf-8"), salt, stored.iterations)
     return hmac.compare_digest(base64.b64encode(dk2).decode("ascii"), stored.hash_b64)

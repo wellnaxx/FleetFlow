@@ -1,3 +1,5 @@
+"""World-state persistence and loading exception types."""
+
 from src.application.exceptions.application_errors import ApplicationError
 
 

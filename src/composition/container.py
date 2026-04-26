@@ -1,3 +1,5 @@
+"""Application composition root for CLI runtime dependencies."""
+
 from datetime import datetime
 
 from src.adapters.driven.persistence.json.world_state_persistence import JsonWorldStatePersistence

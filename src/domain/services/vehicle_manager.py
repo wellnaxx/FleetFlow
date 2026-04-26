@@ -1,3 +1,5 @@
+"""Fleet inventory and truck suitability service."""
+
 from src.application.dto.truck_binding_dto import TruckBinding
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.entities.truck import Truck
@@ -7,7 +9,10 @@ from src.ports.output.vehicle_manager import RouteSuitabilityView
 
 
 class VehicleManager:
+    """Manage fleet vehicles, availability checks, and snapshot binding restore."""
+
     def __init__(self) -> None:
+        """Create the default fixed fleet and disperse trucks across locations."""
         self.vehicles: list[Truck] = (
             [Truck(vehicle_id, "Scania", 42000, 8000) for vehicle_id in range(1001, 1011)]
             + [Truck(vehicle_id, "Man", 37000, 10000) for vehicle_id in range(1011, 1026)]
@@ -34,15 +39,38 @@ class VehicleManager:
                     i += 1
 
     def list_fleet(self) -> list[Truck]:
+        """Return the fleet as a copy of the manager's vehicle list.
+
+        Returns:
+            Trucks currently managed by the fleet service.
+        """
         return list(self.vehicles)
 
     def find_by_id(self, vehicle_id: int) -> Truck | None:
+        """Return a truck by vehicle id, if it exists.
+
+        Args:
+            vehicle_id: Truck identifier to look up.
+
+        Returns:
+            Matching truck, or None when no truck exists.
+        """
         for v in self.vehicles:
             if v.vehicle_id == vehicle_id:
                 return v
         return None
 
     def is_suitable_for_route(self, truck: Truck, route: RouteSuitabilityView) -> tuple[bool, str]:
+        """Check structural and schedule suitability for assigning a truck.
+
+        Args:
+            truck: Candidate truck.
+            route: Route view used for capacity, range, location, and timing checks.
+
+        Returns:
+            Pair of suitability flag and failure reason. The reason is empty
+            when the truck is suitable.
+        """
         if truck.max_range < route.total_distance_km:
             return False, "range too short"
         if truck.capacity < route.total_assigned_weight():
@@ -63,6 +91,14 @@ class VehicleManager:
         return True, ""
 
     def find_available_for_route(self, route: DeliveryRoute) -> list[Truck]:
+        """Return trucks that can serve a route, ordered by vehicle id.
+
+        Args:
+            route: Route needing a truck.
+
+        Returns:
+            Suitable trucks sorted by vehicle id.
+        """
         result: list[Truck] = []
         for t in self.vehicles:
             ok, _ = self.is_suitable_for_route(t, route)
@@ -72,6 +108,11 @@ class VehicleManager:
         return result
     
     def replace_truck_bindings(self, bindings: list[TruckBinding]) -> None:
+        """Replace runtime truck assignment state from prepared bindings.
+
+        Args:
+            bindings: Prepared truck state produced by snapshot reconciliation.
+        """
         for truck in self.vehicles:
             truck.route = None
             truck.status = TruckStatus.FREE

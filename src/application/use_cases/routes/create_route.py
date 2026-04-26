@@ -1,3 +1,5 @@
+"""Use case for creating a delivery route."""
+
 from datetime import datetime
 
 from src.domain.entities.delivery_route import DeliveryRoute
@@ -9,6 +11,11 @@ class CreateRouteUseCase:
     """Create and persist delivery routes."""
 
     def __init__(self, routes: RouteRepositoryPort) -> None:
+        """Initialize the use case.
+
+        Args:
+            routes: Repository used to allocate and persist routes.
+        """
         self._routes = routes
 
     def execute(self, locations: list[str], departure_time: datetime | None) -> DeliveryRoute:

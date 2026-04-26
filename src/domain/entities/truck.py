@@ -1,3 +1,5 @@
+"""Truck entity and route assignment state."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -10,7 +12,20 @@ if TYPE_CHECKING:
 
 
 class Truck:
+    """Fleet vehicle with capacity, range, location, and assignment state."""
+
     def __init__(self, vehicle_id: int, name: str, capacity: int, max_range: int) -> None:
+        """Create a fleet truck.
+
+        Args:
+            vehicle_id: Stable fleet vehicle id.
+            name: Supported truck model name.
+            capacity: Maximum cargo capacity in kilograms.
+            max_range: Maximum route distance in kilometers.
+
+        Raises:
+            ValueError: If the truck model name is unsupported.
+        """
         if name not in ("Scania", "Man", "Actros"):
             raise ValueError("Truck name must be Scania, Man or Actros")
         self.vehicle_id: int = vehicle_id
@@ -25,10 +40,19 @@ class Truck:
         self.in_transit_to: str | None = None
 
     def is_free(self) -> bool:
+        """Return whether the truck is available for assignment.
+
+        Returns:
+            True when the truck status is free.
+        """
         return self.status == TruckStatus.FREE
 
     def assign(self, route: DeliveryRoute) -> None:
-        """Record the assignment window."""
+        """Record the assignment window.
+
+        Args:
+            route: Route assigned to this truck.
+        """
         self.route = route
         self.status = TruckStatus.ON_THE_WAY
         self.busy_from = route.departure_time
@@ -36,12 +60,15 @@ class Truck:
         self.in_transit_to = None
 
     def release(self, *, now: datetime | None = None, force: bool = False) -> bool:
-        """
-        Finish the current route (if any), moving the truck to the route's end city
-        and marking it FREE. Returns True if a change was made, False otherwise.
+        """Finish the current route and mark the truck free.
 
-        - If force=False (default), only releases when now >= route.eta_final.
-        - If force=True, releases immediately (admin override).
+        Args:
+            now: Time used to decide whether the truck has reached the final ETA.
+            force: When true, release immediately regardless of ETA.
+
+        Returns:
+            True when an assigned route was released; false when no release
+            occurred.
         """
         if self.route is None:
             self.status = TruckStatus.FREE
@@ -68,6 +95,11 @@ class Truck:
         return True
 
     def info(self) -> str:
+        """Return a human-readable truck summary.
+
+        Returns:
+            Multi-line truck summary for CLI display.
+        """
         return (
             f"Vehicle ID: {self.vehicle_id}\n"
             f"Name: {self.name}\n"

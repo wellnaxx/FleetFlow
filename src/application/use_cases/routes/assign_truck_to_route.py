@@ -1,3 +1,5 @@
+"""Use case for assigning a truck to a route."""
+
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -17,11 +19,14 @@ class _RouteSuitabilityProbe:
     assigned_weight: float
 
     def total_assigned_weight(self) -> float:
+        """Return package weight assigned to the probed route."""
         return self.assigned_weight
 
 
 @dataclass(frozen=True)
 class AssignTruckToRouteResult:
+    """Result returned after a truck is assigned to a route."""
+
     route_id: int
     truck_id: int
 
@@ -30,6 +35,12 @@ class AssignTruckToRouteUseCase:
     """Assign a truck to a route after suitability checks."""
 
     def __init__(self, routes: RouteRepositoryPort, vehicles: VehicleManagerPort) -> None:
+        """Initialize assignment dependencies.
+
+        Args:
+            routes: Repository used to fetch the target route.
+            vehicles: Vehicle manager used to fetch and validate trucks.
+        """
         self._routes = routes
         self._vehicles = vehicles
 

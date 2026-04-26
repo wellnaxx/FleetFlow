@@ -1,3 +1,5 @@
+"""Use case for registering a new user."""
+
 from src.application.models.user_record import UserRecord
 from src.application.services.auth_service import AuthService
 from src.domain.enums.auth import Role
@@ -7,6 +9,11 @@ class RegisterUserUseCase:
     """Register a new user through the auth service."""
 
     def __init__(self, auth: AuthService) -> None:
+        """Initialize the use case.
+
+        Args:
+            auth: Authentication service used to create users.
+        """
         self._auth = auth
 
     def execute(

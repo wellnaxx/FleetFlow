@@ -1,3 +1,5 @@
+"""DTO for rolling back live truck runtime state after a failed swap."""
+
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -7,6 +9,8 @@ from src.domain.entities.truck import Truck
 
 @dataclass(frozen=True)
 class TruckRuntimeSnapshot:
+    """Captured mutable truck fields used for runtime swap rollback."""
+
     truck: Truck
     status: str
     current_location: str | None

@@ -1,3 +1,5 @@
+"""Delivery route entity, schedule calculations, and assignment rules."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -14,6 +16,8 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class RoutePosition:
+    """Current operational position of a scheduled route."""
+
     kind: str
     from_city: str | None = None
     to_city: str | None = None
@@ -22,6 +26,8 @@ class RoutePosition:
 
 
 class DeliveryRoute:
+    """Route aggregate for packages and an optional assigned truck."""
+
     SPEED_KMPH: int = 87
 
     def __init__(
@@ -30,6 +36,17 @@ class DeliveryRoute:
         departure_time: datetime | None = None,
         route_id: int,
     ) -> None:
+        """Create a delivery route.
+
+        Args:
+            *locations: Ordered location codes from origin to destination.
+            departure_time: Optional scheduled departure time.
+            route_id: Stable route identifier.
+
+        Raises:
+            ValueError: If fewer than two locations are supplied, any location is
+                unknown, or a location is repeated.
+        """
         if len(locations) < 2:
             raise ValueError("A route must have at least two locations.")
 
@@ -58,26 +75,32 @@ class DeliveryRoute:
 
     @property
     def departure_time(self) -> datetime | None:
+        """Scheduled departure time, or None while the route is planned."""
         return self._departure_time
 
     @property
     def locations(self) -> list[str]:
+        """Route locations in travel order."""
         return list(self._locations)
 
     @property
     def start_location(self) -> str:
+        """First location on the route."""
         return self._locations[0]
 
     @property
     def end_location(self) -> str:
+        """Final location on the route."""
         return self._locations[-1]
 
     @property
     def packages(self) -> list[DeliveryPackage]:
+        """Assigned packages as a copy of the internal collection."""
         return list(self._packages)
 
     @property
     def total_distance_km(self) -> int:
+        """Total travel distance in kilometres."""
         if self._segments:
             return int(sum(km for _, _, km, _ in self._segments))
 
@@ -87,11 +110,17 @@ class DeliveryRoute:
 
     @property
     def eta_final(self) -> datetime | None:
+        """Expected arrival time at the final stop, if scheduled."""
         if self._departure_time is None:
             return None
         return self._stop_times[self._locations[-1]]
 
     def schedule(self, departure_time: datetime) -> None:
+        """Schedule the route and rebuild stop timing information.
+
+        Args:
+            departure_time: Departure time for the first route location.
+        """
         self._departure_time = departure_time
         self._build_schedule()
         self.status = RouteStatus.SCHEDULED
@@ -114,6 +143,17 @@ class DeliveryRoute:
             self._stop_times[end] = current_time
 
     def arrival_time_at(self, city: str) -> datetime:
+        """Return the scheduled arrival time for a route city.
+
+        Args:
+            city: Location code on this route.
+
+        Returns:
+            Scheduled arrival time at the requested city.
+
+        Raises:
+            ValueError: If the route is unscheduled or the city is not on it.
+        """
         if self._departure_time is None:
             raise ValueError("Route not scheduled yet (no departure time).")
         if city not in self._stop_times:
@@ -121,7 +161,15 @@ class DeliveryRoute:
         return self._stop_times[city]
 
     def current_position(self, now: datetime | None = None) -> RoutePosition:
-        """Return a snapshot of the route's current position."""
+        """Return a snapshot of the route's current position.
+
+        Args:
+            now: Clock value used to evaluate route progress. Uses current time
+                when omitted.
+
+        Returns:
+            Position descriptor for the route at the requested time.
+        """
         if self._departure_time is None:
             return RoutePosition(kind="UNSCHEDULED", stop_city=self.start_location)
 
@@ -157,6 +205,15 @@ class DeliveryRoute:
         return RoutePosition(kind="AT_STOP", stop_city=first_city, next_eta=first_departure)
 
     def includes_in_order(self, start: str, end: str) -> bool:
+        """Return whether the route visits start before end.
+
+        Args:
+            start: Candidate pickup location code.
+            end: Candidate delivery location code.
+
+        Returns:
+            True when both locations are present and start appears before end.
+        """
         return (
             start in self._pos_index
             and end in self._pos_index
@@ -164,6 +221,16 @@ class DeliveryRoute:
         )
 
     def can_accept_package(self, package: DeliveryPackage, now: datetime | None = None) -> str | None:
+        """Validate whether a package can be assigned to this route.
+
+        Args:
+            package: Package being evaluated.
+            now: Clock value used for live pickup-pass validation.
+
+        Returns:
+            None when the package is acceptable, otherwise a human-readable
+            rejection reason.
+        """
         if error := self._validate_package_route_compatibility(package):
             return error
 
@@ -176,6 +243,15 @@ class DeliveryRoute:
         return None
 
     def assign_package(self, package: DeliveryPackage, now: datetime | None = None) -> None:
+        """Assign a package after validating route compatibility.
+
+        Args:
+            package: Package to assign.
+            now: Clock value used for live pickup-pass validation.
+
+        Raises:
+            ValueError: If the package is incompatible with the route.
+        """
         if error := self.can_accept_package(package, now=now):
             raise ValueError(error)
 
@@ -187,6 +263,14 @@ class DeliveryRoute:
         self._update_expected_arrival(package)
 
     def detach_package(self, package: DeliveryPackage) -> None:
+        """Detach a package and clear its route-derived assignment state.
+
+        Args:
+            package: Package to detach from this route.
+
+        Raises:
+            ValueError: If the package is not assigned to this route.
+        """
         for i, existing in enumerate(self._packages):
             if existing.package_id == package.package_id:
                 self._packages.pop(i)
@@ -196,6 +280,15 @@ class DeliveryRoute:
         raise ValueError(f"Package with id {package.package_id} is not assigned to route {self.route_id}.")
 
     def release_truck(self, *, now: datetime | None = None, force: bool = False) -> bool:
+        """Release the assigned truck if its route is complete or forced.
+
+        Args:
+            now: Clock value used to decide whether the final ETA has passed.
+            force: Release immediately even if the final ETA has not passed.
+
+        Returns:
+            True when a truck was released, false otherwise.
+        """
         if self.truck is None:
             return False
 
@@ -206,6 +299,7 @@ class DeliveryRoute:
         return released
 
     def total_assigned_weight(self) -> float:
+        """Total weight of currently assigned packages."""
         return sum(package.weight for package in self._packages)
 
     def _validate_package_route_compatibility(self, package: DeliveryPackage) -> str | None:
@@ -286,6 +380,11 @@ class DeliveryRoute:
             package.expected_arrival = self.arrival_time_at(package.end_location)
 
     def restore_package_link(self, package: DeliveryPackage) -> None:
+        """Restore a package-route link while rebuilding candidate snapshot state.
+
+        Args:
+            package: Candidate package to link to this candidate route.
+        """
         if package in self._packages:
             return
 
@@ -294,6 +393,11 @@ class DeliveryRoute:
         self._update_expected_arrival(package)
 
     def info(self) -> str:
+        """Return a human-readable route summary.
+
+        Returns:
+            Multi-line route description for CLI display.
+        """
         lines: list[str] = []
         lines.append(f"Route ID: {self.route_id}")
         lines.append(f"Truck ID: {self.truck.vehicle_id if self.truck else 'Not assigned'}")

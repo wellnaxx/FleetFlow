@@ -1,3 +1,5 @@
+"""Permission checks and decorators for command authorization."""
+
 from collections.abc import Callable
 from functools import wraps
 from typing import Any
@@ -10,9 +12,22 @@ class AuthorizationService:
     """Tracks current user and exposes permission checks."""
 
     def __init__(self, current_user: User | None) -> None:
+        """Initialize authorization state.
+
+        Args:
+            current_user: Current runtime user, or `None` when unauthenticated.
+        """
         self.current_user: User | None = current_user
 
     def has(self, perm: Permission) -> bool:
+        """Return whether the current user has a permission.
+
+        Args:
+            perm: Permission to check.
+
+        Returns:
+            True when a current user exists and their role grants the permission.
+        """
         if not self.current_user:
             return False
         role: Role | None = getattr(self.current_user, "role", None)
@@ -23,11 +38,28 @@ class AuthorizationService:
 
 
 def requires(permission: Permission) -> Callable[..., Any]:
-    """Decorator: ensure the current user has the given permission."""
+    """Build a decorator that requires one permission.
+
+    Args:
+        permission: Permission required before the wrapped command can run.
+
+    Returns:
+        Decorator that raises PermissionError when authorization fails.
+    """
 
     def deco(fn: Callable[..., Any]) -> Callable[..., Any]:
+        """Decorate a command method with a single-permission check.
+
+        Args:
+            fn: Command method to wrap.
+
+        Returns:
+            Wrapped command method.
+        """
+
         @wraps(fn)
         def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
+            """Authorize and invoke the wrapped command method."""
             authz: AuthorizationService | None = getattr(self, "authz", None)
             if not authz or not authz.has(permission):
                 raise PermissionError(f"Missing permission: {permission.name}")
@@ -39,11 +71,28 @@ def requires(permission: Permission) -> Callable[..., Any]:
 
 
 def requires_all(*permissions: Permission) -> Callable[..., Any]:
-    """Decorator: ensure the current user has all of the given permissions."""
+    """Build a decorator that requires all permissions.
+
+    Args:
+        permissions: Permissions required before the wrapped command can run.
+
+    Returns:
+        Decorator that raises PermissionError when authorization fails.
+    """
 
     def deco(fn: Callable[..., Any]) -> Callable[..., Any]:
+        """Decorate a command method with an all-permissions check.
+
+        Args:
+            fn: Command method to wrap.
+
+        Returns:
+            Wrapped command method.
+        """
+
         @wraps(fn)
         def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
+            """Authorize and invoke the wrapped command method."""
             authz: AuthorizationService | None = getattr(self, "authz", None)
             if not authz:
                 raise PermissionError("Not authenticated")

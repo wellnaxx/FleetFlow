@@ -1,3 +1,5 @@
+"""CLI command for finding suitable routes for a package."""
+
 from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
 from src.adapters.driving.cli.commands.validation_helpers import try_parse_int, validate_params_exact
 from src.application.services.authorization_service import requires_all
@@ -12,6 +14,15 @@ class FindSuitableRoutesForPackage(BaseCommand[FindSuitableRoutesForPackageUseCa
 
     @requires_all(Permission.PACKAGE_FIND_ROUTE_FOR, Permission.PACKAGE_VIEW, Permission.ROUTE_VIEW)
     def execute(self) -> str:
+        """List route candidates for a package.
+
+        Returns:
+            CLI table-like summary, or a no-match message.
+
+        Raises:
+            PermissionError: If the caller lacks required view/search permissions.
+            ValueError: If the package id is invalid or missing.
+        """
         validate_params_exact(self._params, 1)
         package_id = try_parse_int(self._params[0])
 

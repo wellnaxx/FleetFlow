@@ -1,3 +1,5 @@
+"""CLI command for creating delivery routes."""
+
 from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
 from src.adapters.driving.cli.commands.validation_helpers import (
     parse_departure_from_tail,
@@ -9,15 +11,16 @@ from src.domain.enums.auth import Permission
 
 
 class CreateRoute(BaseCommand[CreateRouteUseCase]):
-    """
+    """Create a route from location tokens and an optional departure time.
+
     Usage:
-      createroute <LOC1> <LOC2> [LOC3 ...] [YYYY-MM-DD HH:MM]
+        createroute <LOC1> <LOC2> [LOC3 ...] [YYYY-MM-DD HH:MM]
 
     Examples:
-      createroute SYD MEL
-      createroute SYD MEL ADL
-      createroute SYD MEL "2025-10-12 06:00"
-      createroute SYD MEL 2025-10-12 06:00
+        createroute SYD MEL
+        createroute SYD MEL ADL
+        createroute SYD MEL "2025-10-12 06:00"
+        createroute SYD MEL 2025-10-12 06:00
     """
 
     mutates_state = True
@@ -25,6 +28,15 @@ class CreateRoute(BaseCommand[CreateRouteUseCase]):
 
     @requires(Permission.ROUTE_CREATE)
     def execute(self) -> str:
+        """Create a route and return CLI confirmation text.
+
+        Returns:
+            Summary of the created route.
+
+        Raises:
+            PermissionError: If the caller lacks route creation permission.
+            ValueError: If parameter validation or route creation fails.
+        """
         validate_params_count(self._params, 2)
         loc_tokens, departure = parse_departure_from_tail(list(self._params))
         route = self._use_case.execute(loc_tokens, departure)

@@ -1,3 +1,5 @@
+"""Shared command base class and command-state flag contract."""
+
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 
@@ -10,6 +12,12 @@ class BaseCommand[T](ABC):
 
     Concrete commands expose one application use case plus the shared auth and
     authorization services needed at the command boundary.
+
+    Class flags describe command side effects for the CLI engine:
+    `mutates_state` means the command changes runtime world state,
+    `autosaves_state` means a successful command should trigger default
+    world-state autosave, `skips_heartbeat` means pre-command heartbeat should
+    not run, and `mutates_session` means auth/session state may change.
     """
 
     mutates_state: bool = False

@@ -1,3 +1,5 @@
+"""In-memory package repository implementation."""
+
 from collections.abc import Mapping
 
 from src.domain.entities.delivery_package import DeliveryPackage
@@ -13,6 +15,7 @@ class InMemoryPackageRepository:
     """
 
     def __init__(self) -> None:
+        """Initialize an empty package repository."""
         self._packages: dict[int, DeliveryPackage] = {}
         self._next_id: int = 1
 
@@ -51,12 +54,23 @@ class InMemoryPackageRepository:
         self._next_id = max(self._next_id, package.package_id + 1)
 
     def remove(self, package_id: int) -> None:
-        """Remove a package by id if it exists."""
+        """Remove a package by id if it exists.
+
+        Args:
+            package_id: Package id to remove.
+        """
         if package_id in self._packages:
             del self._packages[package_id]
 
     def get_by_id(self, package_id: int) -> DeliveryPackage | None:
-        """Return a package by id, if present."""
+        """Return a package by id, if present.
+
+        Args:
+            package_id: Package id to look up.
+
+        Returns:
+            Matching package, or `None`.
+        """
         return self._packages.get(package_id)
 
     def list_all(self) -> list[DeliveryPackage]:
@@ -68,6 +82,11 @@ class InMemoryPackageRepository:
         return [package for package in self.list_all() if package.route is None]
 
     def replace_packages(self, packages_by_id: Mapping[int, DeliveryPackage], next_id: int) -> None:
-        """Replace the full package state from a snapshot load."""
+        """Replace the full package state from a snapshot load.
+
+        Args:
+            packages_by_id: Replacement packages keyed by id.
+            next_id: Next package id counter to restore.
+        """
         self._packages = dict(packages_by_id)
         self._next_id = next_id

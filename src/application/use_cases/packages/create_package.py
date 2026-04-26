@@ -1,3 +1,5 @@
+"""Use case for creating a delivery package."""
+
 from src.application.services.customer_service import CustomerService
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.enums.item_status import ItemStatus
@@ -9,6 +11,12 @@ class CreatePackageUseCase:
     """Create a package and attach it to an existing or new customer."""
 
     def __init__(self, customers: CustomerService, packages: PackageRepositoryPort) -> None:
+        """Initialize package creation dependencies.
+
+        Args:
+            customers: Service used to resolve or create customers.
+            packages: Repository used to persist the new package.
+        """
         self._customers = customers
         self._packages = packages
 

@@ -1,3 +1,5 @@
+"""Persistence model for auth users."""
+
 from dataclasses import dataclass
 
 

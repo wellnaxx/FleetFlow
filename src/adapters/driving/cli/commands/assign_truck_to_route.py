@@ -1,3 +1,5 @@
+"""CLI command for assigning a truck to a route."""
+
 from datetime import datetime
 
 from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
@@ -8,20 +10,22 @@ from src.domain.enums.auth import Permission
 
 
 class AssignTruckToRoute(BaseCommand[AssignTruckToRouteUseCase]):
-    """Assign a truck and start the route immediately (intended behavior).
-
-    Preconditions:
-        - The truck's current location must match the route's start location.
-        - The route must have a valid schedule (or is auto-scheduled at now).
-    Raises:
-        ValueError: If entities are missing or preconditions fail.
-    """
+    """Assign a truck to a route, scheduling unscheduled routes at command time."""
 
     mutates_state = True
     autosaves_state = True
 
     @requires(Permission.ROUTE_ASSIGN_TRUCK)
     def execute(self) -> str:
+        """Assign the requested truck to the requested route.
+
+        Returns:
+            CLI confirmation text.
+
+        Raises:
+            PermissionError: If the caller lacks truck-assignment permission.
+            ValueError: If parameters are invalid or assignment fails.
+        """
         validate_params_exact(self._params, 2)
 
         truck_id = try_parse_int(self._params[0])

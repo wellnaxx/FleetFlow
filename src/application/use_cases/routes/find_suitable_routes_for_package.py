@@ -1,3 +1,5 @@
+"""Use case for finding routes that can carry a package."""
+
 from collections.abc import Callable
 from datetime import datetime
 
@@ -19,6 +21,13 @@ class FindSuitableRoutesForPackageUseCase:
         packages: PackageRepositoryPort,
         clock: Callable[[], datetime] = datetime.now,
     ) -> None:
+        """Initialize route-search dependencies.
+
+        Args:
+            routes: Repository used to list candidate routes.
+            packages: Repository used to fetch the target package.
+            clock: Clock provider for route acceptance checks.
+        """
         self._routes = routes
         self._packages = packages
         self._clock = clock

@@ -1,3 +1,5 @@
+"""Factory for parsing CLI input into command instances."""
+
 import shlex
 from collections.abc import Callable
 from typing import Any

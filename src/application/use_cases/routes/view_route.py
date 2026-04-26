@@ -1,3 +1,5 @@
+"""Use case for viewing one route."""
+
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.ports.output.route_repository import RouteRepositoryPort
 
@@ -6,6 +8,11 @@ class ViewRouteUseCase:
     """Fetch one route by id."""
 
     def __init__(self, routes: RouteRepositoryPort) -> None:
+        """Initialize the use case.
+
+        Args:
+            routes: Repository used to fetch routes.
+        """
         self._routes = routes
 
     def execute(self, route_id: int) -> DeliveryRoute:

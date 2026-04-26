@@ -1,3 +1,5 @@
+"""Delivery package entity and assignment state."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -13,6 +15,7 @@ if TYPE_CHECKING:
 
 
 class DeliveryPackage:
+    """Package shipment tracked from pickup to delivery."""
 
     def __init__(
         self,
@@ -22,6 +25,19 @@ class DeliveryPackage:
         customer: Customer,
         package_id: int,
     ) -> None:
+        """Create a package shipment.
+
+        Args:
+            start_location: Pickup location code.
+            end_location: Delivery location code.
+            weight: Package weight in kilograms.
+            customer: Owning customer.
+            package_id: Stable package identifier.
+
+        Raises:
+            ValueError: If locations are invalid, equal, or the weight is not
+                positive.
+        """
         if not Map.is_valid_location(start_location):
             raise ValueError(f"Invalid start location: {start_location}")
         if not Map.is_valid_location(end_location):
@@ -43,16 +59,22 @@ class DeliveryPackage:
 
     @property
     def package_id(self) -> int:
+        """Stable package identifier."""
         return self._package_id
 
     def reset_assignment_state(self) -> None:
+        """Clear route-derived state and return the package to the unassigned baseline."""
         self.route = None
         self.expected_arrival = None
         self.status = ItemStatus.TODO
         self.current_location = self.start_location
 
     def info(self) -> str:
-        """Return a human-readable description of the package."""
+        """Return a human-readable description of the package.
+
+        Returns:
+            Multi-line package summary for CLI display.
+        """
         cname = self.customer.name
         cemail = self.customer.contact.display_email()
         cphone = self.customer.contact.display_phone()

@@ -1,3 +1,5 @@
+"""JSON persistence adapter for world-state snapshots."""
+
 import json
 import os
 import tempfile
@@ -26,7 +28,18 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
     """Persist world-state snapshots as JSON files."""
 
     def write(self, path: str, snapshot: WorldStateSnapshot) -> str:
-        """Serialize and atomically write a world-state snapshot."""
+        """Serialize and atomically write a world-state snapshot.
+
+        Args:
+            path: Target filename or path.
+            snapshot: Snapshot DTO to serialize.
+
+        Returns:
+            Resolved absolute path written.
+
+        Raises:
+            OSError: If the target file cannot be written.
+        """
         abs_path = resolve_data_path(path)
         os.makedirs(os.path.dirname(abs_path) or ".", exist_ok=True)
         raw_snapshot = self._raw_from_snapshot(snapshot)
@@ -50,7 +63,19 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
         return abs_path
 
     def read(self, path: str) -> tuple[str, WorldStateSnapshot]:
-        """Read and deserialize a world-state snapshot from JSON."""
+        """Read and deserialize a world-state snapshot from JSON.
+
+        Args:
+            path: Source filename or path.
+
+        Returns:
+            Resolved absolute path and parsed snapshot DTO.
+
+        Raises:
+            WorldStateFileNotFoundError: If the file does not exist.
+            WorldStateCorruptionError: If JSON parsing or DTO conversion fails.
+            WorldStatePersistenceError: If the file cannot be read.
+        """
         abs_path = resolve_data_path(path)
         if not os.path.exists(abs_path):
             raise WorldStateFileNotFoundError(f"State file not found: {abs_path}")

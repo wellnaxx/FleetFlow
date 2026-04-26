@@ -1,3 +1,5 @@
+"""CLI command for removing delivery packages."""
+
 from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
 from src.adapters.driving.cli.commands.validation_helpers import try_parse_int, validate_params_exact
 from src.application.services.authorization_service import requires_all
@@ -6,16 +8,13 @@ from src.domain.enums.auth import Permission
 
 
 class RemovePackage(BaseCommand[RemovePackageUseCase]):
-    """
-    Remove a delivery package by ID.
+    """Remove a delivery package by id.
 
     Usage:
-      removepackage <package_id>
-      removepackage <package_id>
+        removepackage <package_id>
 
     Examples:
-      removepackage 42
-      removepackage 42
+        removepackage 42
     """
 
     mutates_state = True
@@ -23,6 +22,15 @@ class RemovePackage(BaseCommand[RemovePackageUseCase]):
 
     @requires_all(Permission.PACKAGE_REMOVE, Permission.PACKAGE_VIEW)
     def execute(self) -> str:
+        """Remove the requested package.
+
+        Returns:
+            CLI confirmation text.
+
+        Raises:
+            PermissionError: If the caller lacks required package permissions.
+            ValueError: If the package id is invalid or the package is missing.
+        """
         validate_params_exact(self._params, 1)
         package_id = try_parse_int(self._params[0])
         self._use_case.execute(package_id)

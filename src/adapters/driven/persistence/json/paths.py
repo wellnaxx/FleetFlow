@@ -1,3 +1,5 @@
+"""Path helpers for repository-owned runtime data files."""
+
 import os
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", ".."))
@@ -12,9 +14,14 @@ def ensure_data_dir() -> None:
 def resolve_data_path(name_or_path: str | None) -> str:
     """Resolve a filename or path to an absolute path, defaulting to data/.
 
-    - Bare filenames like "state.json" become "<project>/data/state.json".
-    - Paths with separators (e.g., "backups/foo.json" or "/abs/path.json")
-      are normalized relative to project root and returned absolute.
+    Bare filenames like `state.json` resolve under `<project>/data`. Paths with
+    separators are normalized relative to the project root and returned absolute.
+
+    Args:
+        name_or_path: Bare filename, relative path, absolute path, or `None`.
+
+    Returns:
+        Absolute path for the requested runtime data file.
     """
     ensure_data_dir()
     if not name_or_path:

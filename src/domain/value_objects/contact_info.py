@@ -1,3 +1,5 @@
+"""Validated contact information value object."""
+
 import re
 from dataclasses import dataclass
 from typing import Any
@@ -12,17 +14,35 @@ class ContactInfo:
     phone_number: str = ""
 
     def display_email(self) -> str:
+        """Return a display-safe email string."""
         return self.email or "No email provided"
 
     def display_phone(self) -> str:
+        """Return a display-safe phone number string."""
         return self.phone_number or "No phone number provided"
 
     def __post_init__(self) -> None:
+        """Normalize and validate contact fields after dataclass initialization.
+
+        Raises:
+            TypeError: If a field has an invalid type.
+            ValueError: If a field violates contact validation rules.
+        """
         object.__setattr__(self, "name", self._clean_name(self.name))
         object.__setattr__(self, "email", self._clean_email(self.email))
         object.__setattr__(self, "phone_number", self._clean_phone(self.phone_number))
 
     def __setattr__(self, key: str, value: Any) -> None:
+        """Validate contact fields assigned after construction.
+
+        Args:
+            key: Field name being assigned.
+            value: New field value.
+
+        Raises:
+            TypeError: If a field has an invalid type.
+            ValueError: If a field violates contact validation rules.
+        """
         if key == "name":
             value = self._clean_name(value)
         elif key == "email":

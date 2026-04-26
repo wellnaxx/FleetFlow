@@ -1,3 +1,5 @@
+"""In-memory world-state snapshot gateway and runtime swap adapter."""
+
 from collections.abc import Mapping
 
 from src.adapters.driven.persistence.memory.customer_repository import InMemoryCustomerRepository
@@ -26,6 +28,14 @@ class InMemoryWorldStateRuntime(WorldStateRuntimePort):
         route_repo: InMemoryRouteRepository,
         vehicle_manager: VehicleManager,
     ) -> None:
+        """Initialize the runtime swap adapter.
+
+        Args:
+            customer_repo: Live customer repository.
+            package_repo: Live package repository.
+            route_repo: Live route repository.
+            vehicle_manager: Live fleet manager.
+        """
         self._customer_repo = customer_repo
         self._package_repo = package_repo
         self._route_repo = route_repo
@@ -40,6 +50,19 @@ class InMemoryWorldStateRuntime(WorldStateRuntimePort):
         counters: CountersSnapshot,
         truck_bindings: list[TruckBinding],
     ) -> None:
+        """Replace repository and fleet state, rolling back on failure.
+
+        Args:
+            customers_by_id: Prepared customer objects keyed by id.
+            packages_by_id: Prepared package objects keyed by id.
+            routes_by_id: Prepared route objects keyed by id.
+            counters: Repository id counters to restore.
+            truck_bindings: Prepared live truck state.
+
+        Raises:
+            WorldStateRuntimeSwapError: If any replacement step fails after
+                rollback.
+        """
         previous_customers = {customer.customer_id: customer for customer in self._customer_repo.list_all()}
         previous_packages = {package.package_id: package for package in self._package_repo.list_all()}
         previous_routes = {route.route_id: route for route in self._route_repo.list_all()}
@@ -116,9 +139,17 @@ class InMemoryWorldStateGateway(WorldStateGatewayPort):
         self._snapshot_service = snapshot_service
 
     def build_snapshot(self) -> WorldStateSnapshot:
-        """Build a snapshot from the current in-memory runtime state."""
+        """Build a snapshot from the current in-memory runtime state.
+
+        Returns:
+            Current world-state snapshot.
+        """
         return self._snapshot_service.build_snapshot()
 
     def apply_snapshot(self, snapshot: WorldStateSnapshot) -> None:
-        """Replace in-memory runtime state from a snapshot payload."""
+        """Replace in-memory runtime state from a snapshot payload.
+
+        Args:
+            snapshot: Validated or loadable world-state snapshot.
+        """
         self._snapshot_service.apply_snapshot(snapshot)

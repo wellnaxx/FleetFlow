@@ -1,3 +1,5 @@
+"""CLI command for listing routes currently in progress."""
+
 from datetime import datetime
 
 from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
@@ -11,6 +13,14 @@ class ViewRoutesInProgress(BaseCommand[ViewRoutesInProgressUseCase]):
 
     @requires(Permission.ROUTE_VIEW_IN_PROGRESS)
     def execute(self) -> str:
+        """Return routes that are currently active.
+
+        Returns:
+            CLI listing of active routes, or an empty-state message.
+
+        Raises:
+            PermissionError: If the caller lacks in-progress route permission.
+        """
         now = datetime.now()
         active = self._use_case.execute(now)
         if not active:

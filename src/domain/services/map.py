@@ -1,7 +1,11 @@
+"""Static map data used for route validation and distance calculation."""
+
 from typing import ClassVar
 
 
 class Map:
+    """Lookup service for supported city codes and intercity distances."""
+
     _locations: ClassVar[list[str]] = ["SYD", "MEL", "ADL", "ASP", "BRI", "DAR", "PER"]
 
     _distances: ClassVar[dict[str, dict[str, int]]] = {
@@ -16,14 +20,39 @@ class Map:
 
     @classmethod
     def get_locations(cls) -> list[str]:
+        """Return supported location codes.
+
+        Returns:
+            Copy of supported location codes.
+        """
         return list(cls._locations)
 
     @classmethod
     def is_valid_location(cls, code: str) -> bool:
+        """Return whether a location code is supported.
+
+        Args:
+            code: Location code to validate.
+
+        Returns:
+            True when the code is known to the map.
+        """
         return code in cls._locations
 
     @classmethod
     def get_distance(cls, a: str, b: str) -> int:
+        """Return the distance between two supported location codes.
+
+        Args:
+            a: First location code.
+            b: Second location code.
+
+        Returns:
+            Distance in kilometres.
+
+        Raises:
+            ValueError: If no distance is known for the pair.
+        """
         if a == b:
             return 0
         if b in cls._distances.get(a, {}):

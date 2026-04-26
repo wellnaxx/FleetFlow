@@ -1,3 +1,5 @@
+"""CLI command for loading world state."""
+
 from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
 from src.adapters.driving.cli.commands.validation_helpers import validate_params_count
 from src.application.services.authorization_service import requires

@@ -1,3 +1,5 @@
+"""In-memory route repository implementation."""
+
 from collections.abc import Mapping
 
 from src.domain.entities.delivery_route import DeliveryRoute
@@ -13,6 +15,7 @@ class InMemoryRouteRepository:
     """
 
     def __init__(self) -> None:
+        """Initialize an empty route repository."""
         self._routes: dict[int, DeliveryRoute] = {}
         self._next_id = 1
 
@@ -50,12 +53,23 @@ class InMemoryRouteRepository:
         self._next_id = max(self._next_id, route.route_id + 1)
 
     def remove(self, route_id: int) -> None:
-        """Remove a route by id if it exists."""
+        """Remove a route by id if it exists.
+
+        Args:
+            route_id: Route id to remove.
+        """
         if route_id in self._routes:
             del self._routes[route_id]
 
     def get_by_id(self, route_id: int) -> DeliveryRoute | None:
-        """Return a route by id, if present."""
+        """Return a route by id, if present.
+
+        Args:
+            route_id: Route id to look up.
+
+        Returns:
+            Matching route, or `None`.
+        """
         return self._routes.get(route_id)
 
     def list_all(self) -> list[DeliveryRoute]:
@@ -63,6 +77,11 @@ class InMemoryRouteRepository:
         return [self._routes[route_id] for route_id in sorted(self._routes)]
 
     def replace_routes(self, routes_by_id: Mapping[int, DeliveryRoute], next_id: int) -> None:
-        """Replace the full route state from a snapshot load."""
+        """Replace the full route state from a snapshot load.
+
+        Args:
+            routes_by_id: Replacement routes keyed by id.
+            next_id: Next route id counter to restore.
+        """
         self._routes = dict(routes_by_id)
         self._next_id = next_id

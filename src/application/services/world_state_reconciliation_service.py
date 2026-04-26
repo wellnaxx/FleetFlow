@@ -1,3 +1,5 @@
+"""Runtime reconciliation of routes, packages, and truck state."""
+
 import contextlib
 from datetime import datetime
 
@@ -11,6 +13,8 @@ from src.domain.enums.route_status import RouteStatus
 
 
 class WorldStateReconciliationService:
+    """Derive current world state from route schedules and package assignments."""
+
     def reconcile_routes(
         self,
         routes: list[DeliveryRoute],
@@ -18,6 +22,16 @@ class WorldStateReconciliationService:
         *,
         update_trucks: bool = True,
     ) -> HeartbeatSummary:
+        """Reconcile route status, package state, and optional truck state.
+
+        Args:
+            routes: Routes to reconcile.
+            now: Optional reconciliation time. Defaults to current time.
+            update_trucks: Whether truck runtime state should be mutated.
+
+        Returns:
+            Summary of entity-level changes made during reconciliation.
+        """
         current_time = now or datetime.now()
 
         routes_updated = 0

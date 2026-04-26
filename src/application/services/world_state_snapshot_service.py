@@ -1,3 +1,5 @@
+"""Build, validate, reconcile, and apply world-state snapshots."""
+
 import itertools
 from typing import ClassVar
 
@@ -31,6 +33,8 @@ from src.ports.output.world_state_runtime_port import WorldStateRuntimePort
 
 
 class WorldStateSnapshotService:
+    """Coordinates snapshot creation and atomic snapshot application."""
+
     SCHEMA_VERSION: ClassVar[int] = 2
     SUPPORTED_SCHEMA_VERSIONS: ClassVar[frozenset[int]] = frozenset({1, 2})
 
@@ -43,6 +47,16 @@ class WorldStateSnapshotService:
         runtime_state: WorldStateRuntimePort,
         reconciler: WorldStateReconciliationService,
     ) -> None:
+        """Initialize snapshot service dependencies.
+
+        Args:
+            customer_repo: Repository containing live customer aggregates.
+            package_repo: Repository containing live package aggregates.
+            route_repo: Repository containing live route aggregates.
+            vehicle_manager: Fleet service used to snapshot and validate trucks.
+            runtime_state: Runtime boundary used for atomic state replacement.
+            reconciler: Service used to reconcile candidate loaded state.
+        """
         self._customer_repo = customer_repo
         self._package_repo = package_repo
         self._route_repo = route_repo
@@ -51,6 +65,12 @@ class WorldStateSnapshotService:
         self._reconciler = reconciler
 
     def build_snapshot(self) -> WorldStateSnapshot:
+        """Build a canonical snapshot from current runtime state.
+
+        Returns:
+            Versioned world-state snapshot containing customers, packages,
+            routes, counters, and truck runtime state.
+        """
         counters = self._build_counters_snapshot()
         customers = self._build_customer_snapshots()
         packages = self._build_package_snapshots()
@@ -124,6 +144,15 @@ class WorldStateSnapshotService:
         )
 
     def apply_snapshot(self, snapshot: WorldStateSnapshot) -> None:
+        """Validate and apply a snapshot through one runtime replacement boundary.
+
+        Args:
+            snapshot: Persisted or in-memory snapshot to apply.
+
+        Raises:
+            WorldStateCorruptionError: If snapshot data is malformed or violates
+                load-time invariants before runtime replacement.
+        """
         try:
             reconciled_world = self._prepare_snapshot_for_swap(snapshot)
         except (KeyError, TypeError, ValueError) as exc:

@@ -1,3 +1,5 @@
+"""Authentication service for persisted users and runtime sessions."""
+
 from src.adapters.driven.security.password_hasher import PasswordHash, hash_password, verify_password
 from src.application.models.user_record import UserRecord
 from src.domain.entities.users.employee import Employee

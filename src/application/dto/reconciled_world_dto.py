@@ -1,3 +1,5 @@
+"""DTO for a validated candidate world ready for runtime replacement."""
+
 from dataclasses import dataclass
 
 from src.application.dto.truck_binding_dto import TruckBinding
@@ -9,6 +11,8 @@ from src.domain.entities.delivery_route import DeliveryRoute
 
 @dataclass(frozen=True)
 class ReconciledWorld:
+    """Fully rebuilt world graph plus prepared truck bindings."""
+
     customers: dict[int, Customer]
     routes: dict[int, DeliveryRoute]
     packages: dict[int, DeliveryPackage]

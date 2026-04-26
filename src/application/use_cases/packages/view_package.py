@@ -1,3 +1,5 @@
+"""Use case for viewing one package."""
+
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.ports.output.package_repository import PackageRepositoryPort
 
@@ -6,6 +8,11 @@ class ViewPackageUseCase:
     """Fetch one package by id."""
 
     def __init__(self, packages: PackageRepositoryPort) -> None:
+        """Initialize the use case.
+
+        Args:
+            packages: Repository used to fetch packages.
+        """
         self._packages = packages
 
     def execute(self, package_id: int) -> DeliveryPackage:

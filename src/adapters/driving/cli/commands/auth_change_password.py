@@ -1,3 +1,5 @@
+"""CLI command for self-service and manager password changes."""
+
 import getpass
 
 from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
@@ -6,15 +8,25 @@ from src.domain.enums.auth import Permission
 
 
 class AuthChangePassword(BaseCommand[ChangePasswordUseCase]):
-    """
+    """Change the current user's password or reset another user's password.
+
     Usage:
-      changepassword                # self-service: prompts old/new/confirm
-      changepassword <username>     # manager override: prompts new/confirm only
+        changepassword: self-service flow prompting old/new/confirm.
+        changepassword <username>: manager override prompting new/confirm.
     """
     skips_heartbeat = True
     autosaves_state = False
 
     def execute(self) -> str:
+        """Run the password-change flow.
+
+        Returns:
+            CLI confirmation text.
+
+        Raises:
+            PermissionError: If the caller is not authorized.
+            ValueError: If password confirmation or validation fails.
+        """
         target = self._params[0].strip().lower() if self._params else None
 
         # Manager override (requires ADMIN_USER)

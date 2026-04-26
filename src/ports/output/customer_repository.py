@@ -1,3 +1,5 @@
+"""Output port for customer repository adapters."""
+
 from typing import Protocol
 
 from src.domain.entities.customer import Customer
@@ -6,11 +8,70 @@ from src.domain.entities.customer import Customer
 class CustomerRepositoryPort(Protocol):
     """Persist and query customer aggregates."""
 
-    def peek_next_id(self) -> int: ...
-    def add(self, customer: Customer) -> None: ...
-    def remove(self, customer_id: int) -> None: ...
-    def get_by_id(self, customer_id: int) -> Customer | None: ...
-    def get_by_email(self, email: str) -> Customer | None: ...
-    def get_by_phone(self, phone: str) -> Customer | None: ...
-    def list_by_name(self, name: str) -> list[Customer]: ...
-    def list_all(self) -> list[Customer]: ...
+    def peek_next_id(self) -> int:
+        """Return the id that will be assigned to the next customer."""
+        ...
+
+    def add(self, customer: Customer) -> None:
+        """Persist a customer aggregate.
+
+        Args:
+            customer: Customer to store.
+        """
+        ...
+
+    def remove(self, customer_id: int) -> None:
+        """Remove a customer by id.
+
+        Args:
+            customer_id: Customer id to remove.
+        """
+        ...
+
+    def get_by_id(self, customer_id: int) -> Customer | None:
+        """Return a customer by id, or `None` when absent.
+
+        Args:
+            customer_id: Customer id to look up.
+
+        Returns:
+            Matching customer, or `None`.
+        """
+        ...
+
+    def get_by_email(self, email: str) -> Customer | None:
+        """Return a customer by normalized email, or `None` when absent.
+
+        Args:
+            email: Normalized email address to look up.
+
+        Returns:
+            Matching customer, or `None`.
+        """
+        ...
+
+    def get_by_phone(self, phone: str) -> Customer | None:
+        """Return a customer by normalized phone number, or `None` when absent.
+
+        Args:
+            phone: Normalized phone number to look up.
+
+        Returns:
+            Matching customer, or `None`.
+        """
+        ...
+
+    def list_by_name(self, name: str) -> list[Customer]:
+        """Return customers matching a display name.
+
+        Args:
+            name: Display name to match.
+
+        Returns:
+            Customers matching the supplied name.
+        """
+        ...
+
+    def list_all(self) -> list[Customer]:
+        """Return all customers."""
+        ...

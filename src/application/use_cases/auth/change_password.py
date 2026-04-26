@@ -1,3 +1,5 @@
+"""Use case for changing an authenticated user's password."""
+
 from src.application.services.auth_service import AuthService
 
 
@@ -5,6 +7,11 @@ class ChangePasswordUseCase:
     """Change or reset a user's password through the auth service."""
 
     def __init__(self, auth: AuthService) -> None:
+        """Initialize the use case.
+
+        Args:
+            auth: Authentication service used to update passwords.
+        """
         self._auth = auth
 
     def execute(self, username: str, new_password: str, old_password: str | None = None) -> None:

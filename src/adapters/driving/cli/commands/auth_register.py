@@ -1,3 +1,5 @@
+"""CLI command for registering users."""
+
 import getpass
 
 from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
@@ -7,11 +9,11 @@ from src.domain.enums.auth import Permission, Role
 
 
 class AuthRegisterUser(BaseCommand[RegisterUserUseCase]):
-    """
+    """Register employee or manager users from CLI input.
+
     Usage:
-      registeruser                                  # prompts for all fields
-      registeruser <username> <role> <name> [email] [phone]  # hybrid mode
-    Roles: 'employee' or 'manager'
+        registeruser: prompts for all fields.
+        registeruser <username> <role> <name> [email] [phone]: hybrid mode.
     """
 
     skips_heartbeat = True
@@ -19,6 +21,15 @@ class AuthRegisterUser(BaseCommand[RegisterUserUseCase]):
 
     @requires(Permission.ADMIN_USER)
     def execute(self) -> str:
+        """Collect user details and create the persisted user.
+
+        Returns:
+            CLI confirmation text for the created user.
+
+        Raises:
+            PermissionError: If the caller lacks user administration permission.
+            ValueError: If role or password validation fails.
+        """
         # Gather inputs (use prompts for anything missing)
         p = self._params
         username = (p[0] if len(p) >= 1 else input("Username: ")).strip().lower()

@@ -1,3 +1,5 @@
+"""Use case for advancing runtime world state."""
+
 from datetime import datetime
 
 from src.application.results.heartbeat_summary_result import HeartbeatSummary
@@ -8,6 +10,11 @@ class AdvanceWorldStateUseCase:
     """Advance the runtime world state using the heartbeat service."""
 
     def __init__(self, heartbeat_service: HeartbeatService) -> None:
+        """Initialize the use case.
+
+        Args:
+            heartbeat_service: Service that performs reconciliation.
+        """
         self._heartbeat_service = heartbeat_service
 
     def execute(self, now: datetime | None = None) -> HeartbeatSummary:

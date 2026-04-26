@@ -1,3 +1,5 @@
+"""Use case for loading persisted world state into runtime."""
+
 from src.ports.output.world_state_gateway import WorldStateGatewayPort
 from src.ports.output.world_state_persistence import WorldStatePersistencePort
 
@@ -15,6 +17,12 @@ class LoadWorldStateUseCase:
         world_state_gateway: WorldStateGatewayPort,
         persistence: WorldStatePersistencePort,
     ) -> None:
+        """Initialize load dependencies.
+
+        Args:
+            world_state_gateway: Runtime gateway used to apply loaded snapshots.
+            persistence: Persistence adapter used to read snapshots from disk.
+        """
         self._world_state_gateway = world_state_gateway
         self._persistence = persistence
 

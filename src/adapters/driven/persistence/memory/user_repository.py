@@ -1,3 +1,5 @@
+"""In-memory implementation of user persistence for tests and local runtime."""
+
 from dataclasses import replace
 
 from src.adapters.driven.security.password_hasher import PasswordHash
@@ -15,6 +17,7 @@ class InMemoryUserRepository:
     """
 
     def __init__(self) -> None:
+        """Initialize an empty repository with ids starting at one."""
         self._by_username: dict[str, UserRecord] = {}
         self._next_id = 1
 
@@ -23,6 +26,14 @@ class InMemoryUserRepository:
         return (username or "").strip().lower()
 
     def get(self, username: str) -> UserRecord | None:
+        """Fetch a persisted user by username.
+
+        Args:
+            username: Username to look up case-insensitively.
+
+        Returns:
+            The matching user record, or `None` when absent.
+        """
         key = self._normalize_username(username)
         if not key:
             return None
@@ -37,6 +48,23 @@ class InMemoryUserRepository:
         phone_number: str,
         password_hash: PasswordHash,
     ) -> UserRecord:
+        """Create and persist a user record.
+
+        Args:
+            username: Unique login name.
+            role: Role enum or persisted role string.
+            name: User display name.
+            email: Optional email address.
+            phone_number: Optional phone number.
+            password_hash: Serialized-hash value object.
+
+        Returns:
+            The newly created user record.
+
+        Raises:
+            TypeError: If the role or password hash has the wrong type.
+            ValueError: If validation fails or the username already exists.
+        """
         raw_username = (username or "").strip()
         norm = self._normalize_username(username)
 
@@ -68,6 +96,15 @@ class InMemoryUserRepository:
         return rec
 
     def update_password(self, username: str, new_hash: PasswordHash) -> None:
+        """Replace the stored password hash for a user.
+
+        Args:
+            username: Username whose password should change.
+            new_hash: Replacement password hash.
+
+        Raises:
+            ValueError: If the user does not exist.
+        """
         norm = self._normalize_username(username)
         rec = self._by_username.get(norm)
         if rec is None:
@@ -76,9 +113,14 @@ class InMemoryUserRepository:
         self.save()
 
     def save(self) -> None:
-        return None
+        """Persist pending changes.
+
+        The in-memory implementation has no backing store, so this is a no-op.
+        """
+        return
 
     def list_users(self) -> list[UserRecord]:
+        """Return all persisted user records."""
         return list(self._by_username.values())
 
     @staticmethod

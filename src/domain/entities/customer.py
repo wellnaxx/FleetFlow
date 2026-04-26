@@ -1,3 +1,5 @@
+"""Customer aggregate root and package ownership behavior."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -11,6 +13,8 @@ if TYPE_CHECKING:
 
 @dataclass
 class Customer:
+    """Customer contact record with an active package collection."""
+
     contact: ContactInfo
     customer_id: int
     _delivery_packages: list[DeliveryPackage] = field(  # pyright: ignore[reportUnknownVariableType]
@@ -20,24 +24,37 @@ class Customer:
 
     @property
     def name(self) -> str:
+        """Customer display name."""
         return self.contact.name
 
     @property
     def email(self) -> str:
+        """Normalized customer email address, or an empty string."""
         return self.contact.email
 
     @property
     def phone_number(self) -> str:
+        """Normalized customer phone number, or an empty string."""
         return self.contact.phone_number
 
     @property
     def delivery_packages(self) -> tuple[DeliveryPackage, ...]:
+        """Active packages currently linked to this customer."""
         return tuple(self._delivery_packages)
 
     def add_package(self, package: DeliveryPackage) -> None:
-        if package.customer is self:
+        """Link a package to this customer, moving it from any previous customer.
+
+        Args:
+            package: Package to include in this customer's active collection.
+
+        Raises:
+            ValueError: If the package is already linked to this customer.
+        """
+        if package.customer.customer_id == self.customer_id:
             if any(p.package_id == package.package_id for p in self._delivery_packages):
                 raise ValueError(f"Package with id {package.package_id} is already assigned to this customer.")
+            package.customer = self
             self._delivery_packages.append(package)
             return
 
@@ -47,6 +64,18 @@ class Customer:
         self._delivery_packages.append(package)
 
     def remove_package(self, package: DeliveryPackage) -> None:
+        """Remove a package from this customer's active package collection.
+
+        This does not clear package.customer. Removed packages keep their customer
+        reference as historical ownership; this method only updates the customer's
+        active package list.
+
+        Args:
+            package: Package to remove from the active collection.
+
+        Raises:
+            ValueError: If the package is not in this customer's active collection.
+        """
         for i, p in enumerate(self._delivery_packages):
             if p.package_id == package.package_id:
                 self._delivery_packages.pop(i)

@@ -1,3 +1,5 @@
+"""Customer resolution and creation service."""
+
 from src.domain.entities.customer import Customer
 from src.domain.value_objects.contact_info import ContactInfo
 from src.ports.output.customer_repository import CustomerRepositoryPort

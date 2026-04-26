@@ -1,3 +1,5 @@
+"""CLI command for creating delivery packages."""
+
 from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
 from src.adapters.driving.cli.commands.validation_helpers import try_parse_float, validate_params_count
 from src.application.services.authorization_service import requires
@@ -6,11 +8,22 @@ from src.domain.enums.auth import Permission
 
 
 class CreatePackage(BaseCommand[CreatePackageUseCase]):
+    """Create a package from CLI parameters."""
+
     mutates_state = True
     autosaves_state = True
 
     @requires(Permission.PACKAGE_CREATE)
     def execute(self) -> str:
+        """Validate CLI parameters and create a package.
+
+        Returns:
+            CLI confirmation text for the created package.
+
+        Raises:
+            PermissionError: If the caller lacks package creation permission.
+            ValueError: If parameter validation or package creation fails.
+        """
         validate_params_count(self._params, 4, 6)
 
         start = self._params[0]

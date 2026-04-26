@@ -1,3 +1,5 @@
+"""Use case for finding trucks suitable for a route."""
+
 from src.domain.entities.truck import Truck
 from src.ports.output.route_repository import RouteRepositoryPort
 from src.ports.output.vehicle_manager import VehicleManagerPort
@@ -7,6 +9,12 @@ class FindSuitableTrucksForRouteUseCase:
     """Find trucks that can serve a route."""
 
     def __init__(self, routes: RouteRepositoryPort, vehicles: VehicleManagerPort) -> None:
+        """Initialize suitability dependencies.
+
+        Args:
+            routes: Repository used to fetch the route.
+            vehicles: Vehicle manager used to evaluate trucks.
+        """
         self._routes = routes
         self._vehicles = vehicles
 

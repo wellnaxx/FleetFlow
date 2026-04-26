@@ -1,3 +1,5 @@
+"""Use case for listing routes currently in progress."""
+
 from datetime import datetime
 
 from src.domain.entities.delivery_route import DeliveryRoute, RoutePosition
@@ -8,6 +10,11 @@ class ViewRoutesInProgressUseCase:
     """List routes that are currently active at the supplied time."""
 
     def __init__(self, routes: RouteRepositoryPort) -> None:
+        """Initialize the use case.
+
+        Args:
+            routes: Repository used to list routes.
+        """
         self._routes = routes
 
     def execute(self, now: datetime) -> list[tuple[DeliveryRoute, RoutePosition]]:

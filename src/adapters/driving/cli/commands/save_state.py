@@ -1,3 +1,5 @@
+"""CLI command for saving world state."""
+
 from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
 from src.adapters.driving.cli.commands.validation_helpers import validate_params_count
 from src.application.services.authorization_service import requires
@@ -6,7 +8,13 @@ from src.domain.enums.auth import Permission
 
 
 class SaveState(BaseCommand[SaveWorldStateUseCase]):
-    """Save world state through the CLI authorization boundary."""
+    """Save world state through the CLI authorization boundary.
+
+    Manual save writes external state but does not mutate runtime world state,
+    so it must not trigger an additional autosave.
+    """
+
+    autosaves_state = False
 
     @requires(Permission.APP_SAVE_STATE)
     def execute(self) -> str:
