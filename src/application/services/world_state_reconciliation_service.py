@@ -64,7 +64,7 @@ class WorldStateReconciliationService:
             trucks_released=trucks_released,
             state_changed=state_changed,
         )
-    
+
     def _reconcile_truck_for_route(
         self,
         route: DeliveryRoute,
@@ -298,5 +298,6 @@ class WorldStateReconciliationService:
         return changed
 
     @staticmethod
-    def _truck_state(truck: Truck) -> tuple[str | None, str | None, DeliveryRoute | None]:
-        return (truck.current_location, truck.in_transit_to, truck.route)
+    def _truck_state(truck: Truck) -> tuple[str | None, str | None, int | None]:
+        route_identity = id(truck.route) if truck.route is not None else None
+        return (truck.current_location, truck.in_transit_to, route_identity)
