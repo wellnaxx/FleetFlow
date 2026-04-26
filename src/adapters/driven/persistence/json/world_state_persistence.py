@@ -21,6 +21,7 @@ from src.application.exceptions.world_state_errors import (
     WorldStateFileNotFoundError,
     WorldStatePersistenceError,
 )
+from src.domain.value_objects.location_code import LocationCode
 from src.ports.output.world_state_persistence import WorldStatePersistencePort
 
 
@@ -165,8 +166,8 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
 
         return PackageSnapshot(
             package_id=self._require_int(data, "package_id"),
-            start=self._require_str(data, "start"),
-            end=self._require_str(data, "end"),
+            start=LocationCode(self._require_str(data, "start")),
+            end=LocationCode(self._require_str(data, "end")),
             weight=float(weight),
             customer_id=self._require_int(data, "customer_id"),
             route_id=route_id_raw,
@@ -178,11 +179,11 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
         locations_raw = self._require_list(data.get("locations"))
         package_ids_raw = self._require_list(data.get("package_ids"))
 
-        locations: list[str] = []
+        locations: list[LocationCode] = []
         for item in locations_raw:
             if not isinstance(item, str):
                 raise TypeError("route location must be str")
-            locations.append(item)
+            locations.append(LocationCode(item))
 
         package_ids: list[int] = []
         for item in package_ids_raw:
@@ -214,11 +215,11 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
         return TruckSnapshot(
             vehicle_id=self._require_int(data, "vehicle_id"),
             status=self._require_str(data, "status"),
-            current_location=self._require_str_or_none(data, "current_location"),
+            current_location=self._require_location_or_none(data, "current_location"),
             route_id=route_id_raw,
             busy_from=self._require_str_or_none(data, "busy_from"),
             busy_until=self._require_str_or_none(data, "busy_until"),
-            in_transit_to=self._require_str_or_none(data, "in_transit_to"),
+            in_transit_to=self._require_location_or_none(data, "in_transit_to"),
         )
 
     def _require_mapping(self, value: object) -> dict[str, object]:
@@ -259,3 +260,9 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
         if not isinstance(value, str):
             raise TypeError(f"{field} must be str or null")
         return value
+
+    def _require_location_or_none(self, raw: dict[str, object], field: str) -> LocationCode | None:
+        value = self._require_str_or_none(raw, field)
+        if value is None:
+            return None
+        return LocationCode(value)

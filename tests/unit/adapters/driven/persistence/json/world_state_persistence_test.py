@@ -20,6 +20,7 @@ from src.application.exceptions.world_state_errors import (
     WorldStateCorruptionError,
     WorldStateFileNotFoundError,
 )
+from src.domain.value_objects.location_code import LocationCode
 
 
 class JsonWorldStatePersistenceTests(unittest.TestCase):
@@ -42,8 +43,8 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
                 packages=(
                     PackageSnapshot(
                         package_id=2,
-                        start="A",
-                        end="B",
+                        start=LocationCode("A"),
+                        end=LocationCode("B"),
                         weight=3.5,
                         customer_id=1,
                         route_id=7,
@@ -52,7 +53,7 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
                 routes=(
                     RouteSnapshot(
                         route_id=7,
-                        locations=("A", "B"),
+                        locations=(LocationCode("A"), LocationCode("B")),
                         departure_time="2025-01-01T10:00:00",
                         truck_vehicle_id=1001,
                         package_ids=(2,),
@@ -160,6 +161,60 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
                         "package_ids": [2],
                     }
                 ],
+                "trucks": [],
+            },
+        }
+
+        filename = f"world-state-{uuid.uuid4().hex}.json"
+        path = os.path.join(DATA_DIR, filename)
+        try:
+            with open(path, "w", encoding="utf-8") as file:
+                json.dump(raw, file)
+
+            _read_path, loaded = self.persistence.read(path)
+        finally:
+            with contextlib.suppress(OSError):
+                os.remove(path)
+
+        self.assertEqual(loaded, snapshot)
+
+    def test_read_supports_nested_world_schema_without_truck_section_for_compatibility(self) -> None:
+        snapshot = self.make_snapshot()
+        raw = {
+            "schema_version": 2,
+            "world": {
+                "counters": {
+                    "next_customer_id": 3,
+                    "next_package_id": 4,
+                    "next_route_id": 5,
+                },
+                "customers": [
+                    {
+                        "customer_id": 1,
+                        "name": "Alice",
+                        "email": "alice@example.com",
+                        "phone": "0412345678",
+                    }
+                ],
+                "packages": [
+                    {
+                        "package_id": 2,
+                        "start": "A",
+                        "end": "B",
+                        "weight": 3.5,
+                        "customer_id": 1,
+                        "route_id": 7,
+                    }
+                ],
+                "routes": [
+                    {
+                        "route_id": 7,
+                        "locations": ["A", "B"],
+                        "departure_time": "2025-01-01T10:00:00",
+                        "truck_vehicle_id": 1001,
+                        "package_ids": [2],
+                    }
+                ],
             },
         }
 
@@ -188,7 +243,7 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
                     TruckSnapshot(
                         vehicle_id=1001,
                         status="Free",
-                        current_location="MEL",
+                        current_location=LocationCode("MEL"),
                         route_id=None,
                         busy_from=None,
                         busy_until=None,
@@ -197,11 +252,11 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
                     TruckSnapshot(
                         vehicle_id=1002,
                         status="On the way",
-                        current_location="SYD",
+                        current_location=LocationCode("SYD"),
                         route_id=7,
                         busy_from="2025-01-01T10:00:00",
                         busy_until="2025-01-01T11:00:00",
-                        in_transit_to="MEL",
+                        in_transit_to=LocationCode("MEL"),
                     ),
                 ),
             ),
@@ -349,7 +404,7 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
         self.assertIn("Malformed world state JSON", str(ctx.exception))
 
     def test_read_malformed_truck_snapshot_raises_world_state_corruption_error(self) -> None:
-        malformed_truck_cases = (
+        malformed_truck_cases: tuple[tuple[str, dict[str, object]], ...] = (
             ("vehicle_id", {"vehicle_id": True}),
             ("status", {"status": None}),
             ("current_location", {"current_location": 100}),
@@ -361,7 +416,7 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
 
         for label, override in malformed_truck_cases:
             with self.subTest(label=label):
-                truck = {
+                truck: dict[str, object] = {
                     "vehicle_id": 1001,
                     "status": "Free",
                     "current_location": "MEL",
@@ -372,7 +427,7 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
                 }
                 truck.update(override)
                 raw = {
-                    "schema_version": 1,
+                    "schema_version": 2,
                     "world": {
                         "counters": {
                             "next_customer_id": 1,
@@ -401,7 +456,7 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
                 self.assertIn("Malformed world state JSON", str(ctx.exception))
 
     def test_read_malformed_payload_raises_world_state_corruption_error(self) -> None:
-        raw: dict[str, int | dict[str, dict[str, int] | str | list[Any]]] = {
+        raw: dict[str, Any] = {
             "schema_version": 1,
             "world": {
                 "counters": {

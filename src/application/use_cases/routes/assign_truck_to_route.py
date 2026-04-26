@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from src.domain.value_objects.location_code import LocationCode
 from src.ports.output.route_repository import RouteRepositoryPort
 from src.ports.output.vehicle_manager import VehicleManagerPort
 
@@ -14,7 +15,7 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class _RouteSuitabilityProbe:
     total_distance_km: int
-    start_location: str
+    start_location: LocationCode
     departure_time: datetime
     assigned_weight: float
 

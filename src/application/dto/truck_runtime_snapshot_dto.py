@@ -5,6 +5,7 @@ from datetime import datetime
 
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.entities.truck import Truck
+from src.domain.value_objects.location_code import LocationCode
 
 
 @dataclass(frozen=True)
@@ -13,8 +14,8 @@ class TruckRuntimeSnapshot:
 
     truck: Truck
     status: str
-    current_location: str | None
+    current_location: LocationCode | None
     route: DeliveryRoute | None
     busy_from: datetime | None
     busy_until: datetime | None
-    in_transit_to: str | None
+    in_transit_to: LocationCode | None

@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 
+from src.domain.value_objects.location_code import LocationCode
+
 
 @dataclass(frozen=True)
 class CountersSnapshot:
@@ -27,8 +29,8 @@ class PackageSnapshot:
     """Persisted package state and optional route assignment."""
 
     package_id: int
-    start: str
-    end: str
+    start: LocationCode
+    end: LocationCode
     weight: float
     customer_id: int
     route_id: int | None
@@ -39,7 +41,7 @@ class RouteSnapshot:
     """Persisted route state and package/truck references."""
 
     route_id: int
-    locations: tuple[str, ...]
+    locations: tuple[LocationCode, ...]
     departure_time: str | None
     truck_vehicle_id: int | None
     package_ids: tuple[int, ...]
@@ -51,11 +53,11 @@ class TruckSnapshot:
 
     vehicle_id: int
     status: str
-    current_location: str | None
+    current_location: LocationCode | None
     route_id: int | None
     busy_from: str | None
     busy_until: str | None
-    in_transit_to: str | None
+    in_transit_to: LocationCode | None
 
 
 @dataclass(frozen=True)

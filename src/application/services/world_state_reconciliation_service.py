@@ -10,6 +10,7 @@ from src.domain.entities.delivery_route import DeliveryRoute, RoutePosition
 from src.domain.entities.truck import Truck
 from src.domain.enums.item_status import ItemStatus
 from src.domain.enums.route_status import RouteStatus
+from src.domain.value_objects.location_code import LocationCode
 
 
 class WorldStateReconciliationService:
@@ -283,7 +284,7 @@ class WorldStateReconciliationService:
         package: DeliveryPackage,
         *,
         status: ItemStatus,
-        current_location: str,
+        current_location: LocationCode,
     ) -> bool:
         changed = False
 
@@ -298,6 +299,6 @@ class WorldStateReconciliationService:
         return changed
 
     @staticmethod
-    def _truck_state(truck: Truck) -> tuple[str | None, str | None, int | None]:
+    def _truck_state(truck: Truck) -> tuple[LocationCode | None, LocationCode | None, int | None]:
         route_identity = id(truck.route) if truck.route is not None else None
         return (truck.current_location, truck.in_transit_to, route_identity)

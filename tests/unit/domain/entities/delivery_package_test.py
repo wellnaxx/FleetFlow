@@ -1,5 +1,6 @@
 import unittest
 
+from domain.value_objects.location_code import LocationCode
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.value_objects.contact_info import ContactInfo
@@ -9,8 +10,8 @@ class TestDeliveryPackage_Should(unittest.TestCase):
     def test_package_init_and_id_increments(self):
         customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
 
-        p1 = DeliveryPackage("SYD", "BRI", 500, customer, 1)
-        p2 = DeliveryPackage("MEL", "ADL", 250, customer, 2)
+        p1 = DeliveryPackage(LocationCode("SYD"), LocationCode("BRI"), 500, customer, 1)
+        p2 = DeliveryPackage(LocationCode("MEL"), LocationCode("ADL"), 250, customer, 2)
 
         # Field checks for the first package
         self.assertEqual(p1.start_location, "SYD")
@@ -29,41 +30,41 @@ class TestDeliveryPackage_Should(unittest.TestCase):
     def test_package_wrong_start_loc(self):
         customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
         with self.assertRaises(ValueError):
-            DeliveryPackage("SOF", "BRI", 500, customer, 1)
+            DeliveryPackage(LocationCode("SOF"), LocationCode("BRI"), 500, customer, 1)
 
     def test_package_wrong_end_loc(self):
         customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
         with self.assertRaises(ValueError):
-            DeliveryPackage("SYD", "SOF", 500, customer, 1)
+            DeliveryPackage(LocationCode("SYD"), LocationCode("SOF"), 500, customer, 1)
 
     def test_package_empty_start_loc(self):
         customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
         with self.assertRaises(ValueError):
-            DeliveryPackage("", "SOF", 500, customer, 1)
+            DeliveryPackage(LocationCode(""), LocationCode("SOF"), 500, customer, 1)
 
     def test_package_empty_end_loc(self):
         customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
         with self.assertRaises(ValueError):
-            DeliveryPackage("SYD", "", 500, customer, 1)
+            DeliveryPackage(LocationCode("SYD"), LocationCode(""), 500, customer, 1)
 
     def test_package_same_start_end_loc(self):
         customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
         with self.assertRaises(ValueError):
-            DeliveryPackage("SYD", "SYD", 500, customer, 1)
+            DeliveryPackage(LocationCode("SYD"), LocationCode("SYD"), 500, customer, 1)
 
     def test_package_negative_weight(self):
         customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
         with self.assertRaises(ValueError):
-            DeliveryPackage("SYD", "BRI", -500, customer, 1)
+            DeliveryPackage(LocationCode("SYD"), LocationCode("BRI"), -500, customer, 1)
 
     def test_package_zero_weight(self):
         customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
         with self.assertRaises(ValueError):
-            DeliveryPackage("SYD", "BRI", 0, customer, 1)
+            DeliveryPackage(LocationCode("SYD"), LocationCode("BRI"), 0, customer, 1)
 
     def test_package_customer_empty_name(self):
         with self.assertRaises(ValueError):
-            Customer(ContactInfo("", "dan@e.com", "0484568777"), 1)
+            Customer(ContactInfo(LocationCode(""), "dan@e.com", "0484568777"), 1)
 
     def test_package_customer_int_name(self):
         with self.assertRaises(TypeError):

@@ -25,6 +25,7 @@ from src.domain.entities.truck import Truck
 from src.domain.enums.truck_status import TruckStatus
 from src.domain.services.map import Map
 from src.domain.value_objects.contact_info import ContactInfo
+from src.domain.value_objects.location_code import LocationCode
 from src.ports.output.customer_repository import CustomerRepositoryPort
 from src.ports.output.package_repository import PackageRepositoryPort
 from src.ports.output.route_repository import RouteRepositoryPort
@@ -387,7 +388,7 @@ class WorldStateSnapshotService:
         return max(segment_loads, default=0.0)
 
     @staticmethod
-    def _route_distance_km(locations: tuple[str, ...]) -> int:
+    def _route_distance_km(locations: tuple[LocationCode, ...]) -> int:
         total = 0
 
         for start, end in itertools.pairwise(locations):

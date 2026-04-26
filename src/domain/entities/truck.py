@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from src.domain.enums.truck_status import TruckStatus
+from src.domain.value_objects.location_code import LocationCode, location_code_or_none
 
 if TYPE_CHECKING:
     from src.domain.entities.delivery_route import DeliveryRoute
@@ -33,11 +34,29 @@ class Truck:
         self.capacity: int = int(capacity)
         self.max_range: int = int(max_range)
         self.status: str = TruckStatus.FREE
-        self.current_location: str | None = None
+        self._current_location: LocationCode | None = None
         self.route: DeliveryRoute | None = None
         self.busy_from: datetime | None = None
         self.busy_until: datetime | None = None
-        self.in_transit_to: str | None = None
+        self._in_transit_to: LocationCode | None = None
+
+    @property
+    def current_location(self) -> LocationCode | None:
+        """Current truck location, when known."""
+        return self._current_location
+
+    @current_location.setter
+    def current_location(self, value: LocationCode | None) -> None:
+        self._current_location = location_code_or_none(value)
+
+    @property
+    def in_transit_to(self) -> LocationCode | None:
+        """Destination location while the truck is in transit."""
+        return self._in_transit_to
+
+    @in_transit_to.setter
+    def in_transit_to(self, value: LocationCode | None) -> None:
+        self._in_transit_to = location_code_or_none(value)
 
     def is_free(self) -> bool:
         """Return whether the truck is available for assignment.

@@ -10,19 +10,25 @@ from src.application.use_cases.routes.assign_truck_to_route import (
 )
 from src.application.use_cases.routes.create_route import CreateRouteUseCase
 from src.application.use_cases.routes.remove_route import RemoveRouteUseCase
+from src.domain.value_objects.location_code import LocationCode
 
 
 class _FakeTruck:
-    def __init__(self, vehicle_id: int = 1, capacity: float = 100.0, current_location: str = "BASE") -> None:
+    def __init__(
+        self,
+        vehicle_id: int = 1,
+        capacity: float = 100.0,
+        current_location: str | LocationCode = "BASE",
+    ) -> None:
         self.vehicle_id = vehicle_id
         self.capacity = capacity
-        self.current_location = current_location
-        self.in_transit_to: str | None = None
+        self.current_location = LocationCode(current_location)
+        self.in_transit_to: LocationCode | None = None
         self.route: Any = None
 
     def assign(self, route: Any) -> bool:
         self.route = route
-        self.current_location = route.start_location
+        self.current_location = LocationCode(route.start_location)
         return True
 
     def release(self, now: datetime | None = None, force: bool = False) -> bool:
@@ -38,7 +44,7 @@ class RuntimeRoutesIntegrationTests(unittest.TestCase):
         create_route = CreateRouteUseCase(route_repo)
         remove_route = RemoveRouteUseCase(route_repo)
 
-        route = create_route.execute(["SYD", "MEL"], None)
+        route = create_route.execute([LocationCode("SYD"), LocationCode("MEL")], None)
         self.assertIs(route_repo.get_by_id(route.route_id), route)
 
         removed = remove_route.execute(route.route_id)
@@ -48,9 +54,9 @@ class RuntimeRoutesIntegrationTests(unittest.TestCase):
 
     def test_assign_truck_schedules_route_and_links_truck(self) -> None:
         route_repo = InMemoryRouteRepository()
-        route = CreateRouteUseCase(route_repo).execute(["SYD", "MEL"], None)
+        route = CreateRouteUseCase(route_repo).execute([LocationCode("SYD"), LocationCode("MEL")], None)
 
-        truck = _FakeTruck(vehicle_id=5, capacity=10.0)
+        truck = _FakeTruck(vehicle_id=5, capacity=10.0, current_location=LocationCode("SYD"))
         vehicles = MagicMock()
         vehicles.find_by_id.return_value = truck
         vehicles.is_suitable_for_route.return_value = (True, "")
@@ -65,4 +71,4 @@ class RuntimeRoutesIntegrationTests(unittest.TestCase):
         self.assertIs(route.truck, truck)
         self.assertIs(truck.route, route)
         self.assertEqual(route.departure_time, datetime(2025, 1, 1, 10, 0))
-
+        self.assertEqual(truck.current_location, LocationCode("SYD"))

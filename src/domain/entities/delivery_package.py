@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from src.domain.enums.item_status import ItemStatus
 from src.domain.services.map import Map
+from src.domain.value_objects.location_code import LocationCode, location_code_or_none
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -19,8 +20,8 @@ class DeliveryPackage:
 
     def __init__(
         self,
-        start_location: str,
-        end_location: str,
+        start_location: LocationCode,
+        end_location: LocationCode,
         weight: float,
         customer: Customer,
         package_id: int,
@@ -38,6 +39,8 @@ class DeliveryPackage:
             ValueError: If locations are invalid, equal, or the weight is not
                 positive.
         """
+        start_location = LocationCode(start_location)
+        end_location = LocationCode(end_location)
         if not Map.is_valid_location(start_location):
             raise ValueError(f"Invalid start location: {start_location}")
         if not Map.is_valid_location(end_location):
@@ -47,9 +50,9 @@ class DeliveryPackage:
         if float(weight) <= 0:
             raise ValueError("Weight must be positive.")
         self._package_id: int = package_id
-        self.start_location: str = start_location
-        self.end_location: str = end_location
-        self.current_location: str = start_location
+        self.start_location: LocationCode = start_location
+        self.end_location: LocationCode = end_location
+        self._current_location: LocationCode | None = self.start_location
         self.weight: float = float(weight)
         self.customer: Customer = customer
 
@@ -61,6 +64,18 @@ class DeliveryPackage:
     def package_id(self) -> int:
         """Stable package identifier."""
         return self._package_id
+
+    @property
+    def current_location(self) -> LocationCode:
+        """Current package location."""
+        location = self._current_location
+        if location is None:
+            return self.start_location
+        return location
+
+    @current_location.setter
+    def current_location(self, value: LocationCode | None) -> None:
+        self._current_location = location_code_or_none(value)
 
     def reset_assignment_state(self) -> None:
         """Clear route-derived state and return the package to the unassigned baseline."""

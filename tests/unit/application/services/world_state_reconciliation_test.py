@@ -12,6 +12,7 @@ from src.domain.enums.item_status import ItemStatus
 from src.domain.enums.route_status import RouteStatus
 from src.domain.enums.truck_status import TruckStatus
 from src.domain.value_objects.contact_info import ContactInfo
+from src.domain.value_objects.location_code import LocationCode
 
 
 def _distance(_start: str, _end: str) -> int:
@@ -22,7 +23,7 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
     def setUp(self) -> None:
         self.route_map_locations = patch(
             "src.domain.entities.delivery_route.Map.get_locations",
-            return_value=["A", "B", "C"],
+            return_value=[LocationCode("A"), LocationCode("B"), LocationCode("C")],
         )
         self.route_map_distance = patch(
             "src.domain.entities.delivery_route.Map.get_distance",
@@ -58,17 +59,17 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
 
         package = DeliveryPackage(
             package_id=1,
-            start_location="A",
-            end_location="C",
+            start_location=LocationCode("A"),
+            end_location=LocationCode("C"),
             weight=5.0,
             customer=customer,
         )
         customer.add_package(package)
 
         route = DeliveryRoute(
-            "A",
-            "B",
-            "C",
+            LocationCode("A"),
+            LocationCode("B"),
+            LocationCode("C"),
             departure_time=datetime(2025, 1, 1, 10, 0, 0),
             route_id=1,
         )
@@ -76,10 +77,10 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
 
         def arrival_time_at(city: str) -> datetime:
             return {
-                "A": datetime(2025, 1, 1, 10, 0, 0),
-                "B": datetime(2025, 1, 1, 11, 0, 0),
-                "C": datetime(2025, 1, 1, 12, 0, 0),
-            }[city]
+                LocationCode("A"): datetime(2025, 1, 1, 10, 0, 0),
+                LocationCode("B"): datetime(2025, 1, 1, 11, 0, 0),
+                LocationCode("C"): datetime(2025, 1, 1, 12, 0, 0),
+            }[LocationCode(city)]
 
         with patch.object(route, "arrival_time_at") as arrival_time_at_mock:
             arrival_time_at_mock.side_effect = arrival_time_at
@@ -92,7 +93,7 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
 
         self.assertEqual(summary.packages_updated, 1)
         self.assertEqual(package.status, ItemStatus.IN_PROGRESS)
-        self.assertEqual(package.current_location, "B")
+        self.assertEqual(package.current_location, LocationCode("B"))
         self.assertEqual(package.expected_arrival, datetime(2025, 1, 1, 12, 0, 0))
         self.assertTrue(summary.state_changed)
 
@@ -101,16 +102,16 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
 
         package = DeliveryPackage(
             package_id=1,
-            start_location="A",
-            end_location="B",
+            start_location=LocationCode("A"),
+            end_location=LocationCode("B"),
             weight=5.0,
             customer=customer,
         )
         customer.add_package(package)
 
         route = DeliveryRoute(
-            "A",
-            "B",
+            LocationCode("A"),
+            LocationCode("B"),
             departure_time=datetime(2025, 1, 1, 10, 0, 0),
             route_id=1,
         )
@@ -118,15 +119,15 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
 
         expected_arrival = datetime(2025, 1, 1, 11, 0, 0)
         package.status = ItemStatus.DONE
-        package.current_location = "B"
+        package.current_location = LocationCode("B")
         package.expected_arrival = expected_arrival
         route.status = RouteStatus.COMPLETED
 
         def arrival_time_at(city: str) -> datetime:
             return {
-                "A": datetime(2025, 1, 1, 10, 0, 0),
-                "B": expected_arrival,
-            }[city]
+                LocationCode("A"): datetime(2025, 1, 1, 10, 0, 0),
+                LocationCode("B"): expected_arrival,
+            }[LocationCode(city)]
 
         with patch.object(route, "arrival_time_at") as arrival_time_at_mock:
             arrival_time_at_mock.side_effect = arrival_time_at
@@ -144,15 +145,15 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
 
         package_1 = DeliveryPackage(
             package_id=1,
-            start_location="A",
-            end_location="B",
+            start_location=LocationCode("A"),
+            end_location=LocationCode("B"),
             weight=5.0,
             customer=customer,
         )
         package_2 = DeliveryPackage(
             package_id=2,
-            start_location="A",
-            end_location="C",
+            start_location=LocationCode("A"),
+            end_location=LocationCode("C"),
             weight=5.0,
             customer=customer,
         )
@@ -161,9 +162,9 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
         customer.add_package(package_2)
 
         route = DeliveryRoute(
-            "A",
-            "B",
-            "C",
+            LocationCode("A"),
+            LocationCode("B"),
+            LocationCode("C"),
             departure_time=datetime(2025, 1, 1, 10, 0, 0),
             route_id=1,
         )
@@ -172,10 +173,10 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
 
         def arrival_time_at(city: str) -> datetime:
             return {
-                "A": datetime(2025, 1, 1, 10, 0, 0),
-                "B": datetime(2025, 1, 1, 11, 0, 0),
-                "C": datetime(2025, 1, 1, 12, 0, 0),
-            }[city]
+                LocationCode("A"): datetime(2025, 1, 1, 10, 0, 0),
+                LocationCode("B"): datetime(2025, 1, 1, 11, 0, 0),
+                LocationCode("C"): datetime(2025, 1, 1, 12, 0, 0),
+            }[LocationCode(city)]
 
         with patch.object(route, "arrival_time_at") as arrival_time_at_mock:
             arrival_time_at_mock.side_effect = arrival_time_at
@@ -191,8 +192,8 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
 
     def test_reconcile_routes_counts_after_end_release_location_change_as_movement(self) -> None:
         route = DeliveryRoute(
-            "A",
-            "B",
+            LocationCode("A"),
+            LocationCode("B"),
             departure_time=datetime(2025, 1, 1, 10, 0, 0),
             route_id=1,
         )
@@ -204,7 +205,7 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
             max_range=8000,
         )
         truck.assign(route)
-        truck.current_location = "A"
+        truck.current_location = LocationCode("A")
         route.truck = truck
 
         summary = self.reconciler.reconcile_routes(
@@ -219,12 +220,12 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
         self.assertIsNone(route.truck)
         self.assertIsNone(truck.route)
         self.assertEqual(truck.status, TruckStatus.FREE)
-        self.assertEqual(truck.current_location, "B")
+        self.assertEqual(truck.current_location, LocationCode("B"))
 
     def test_reconcile_routes_counts_truck_location_change_as_movement(self) -> None:
         route = DeliveryRoute(
-            "A",
-            "B",
+            LocationCode("A"),
+            LocationCode("B"),
             departure_time=datetime(2099, 1, 1, 10, 0, 0),
             route_id=1,
         )
@@ -235,7 +236,7 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
             capacity=42000,
             max_range=8000,
         )
-        truck.current_location = "C"
+        truck.current_location = LocationCode("C")
         truck.assign(route)
         route.truck = truck
 
@@ -247,7 +248,7 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
 
         self.assertEqual(summary.trucks_moved, 1)
         self.assertEqual(summary.trucks_released, 0)
-        self.assertEqual(truck.current_location, "A")
+        self.assertEqual(truck.current_location, LocationCode("A"))
         self.assertTrue(summary.state_changed)
 
     def test_reconcile_routes_counts_expected_arrival_only_update_as_one_package(self) -> None:
@@ -255,33 +256,33 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
 
         package = DeliveryPackage(
             package_id=1,
-            start_location="A",
-            end_location="C",
+            start_location=LocationCode("A"),
+            end_location=LocationCode("C"),
             weight=5.0,
             customer=customer,
         )
         customer.add_package(package)
 
         route = DeliveryRoute(
-            "A",
-            "B",
-            "C",
+            LocationCode("A"),
+            LocationCode("B"),
+            LocationCode("C"),
             departure_time=datetime(2025, 1, 1, 10, 0, 0),
             route_id=1,
         )
         route.restore_package_link(package)
 
         package.status = ItemStatus.IN_PROGRESS
-        package.current_location = "B"
+        package.current_location = LocationCode("B")
         package.expected_arrival = None
         route.status = RouteStatus.IN_PROGRESS
 
         def arrival_time_at(city: str) -> datetime:
             return {
-                "A": datetime(2025, 1, 1, 10, 0, 0),
-                "B": datetime(2025, 1, 1, 11, 0, 0),
-                "C": datetime(2025, 1, 1, 12, 0, 0),
-            }[city]
+                LocationCode("A"): datetime(2025, 1, 1, 10, 0, 0),
+                LocationCode("B"): datetime(2025, 1, 1, 11, 0, 0),
+                LocationCode("C"): datetime(2025, 1, 1, 12, 0, 0),
+            }[LocationCode(city)]
 
         with patch.object(route, "arrival_time_at") as arrival_time_at_mock:
             arrival_time_at_mock.side_effect = arrival_time_at
@@ -294,7 +295,7 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
 
         self.assertEqual(summary.packages_updated, 1)
         self.assertEqual(package.status, ItemStatus.IN_PROGRESS)
-        self.assertEqual(package.current_location, "B")
+        self.assertEqual(package.current_location, LocationCode("B"))
         self.assertEqual(package.expected_arrival, datetime(2025, 1, 1, 12, 0, 0))
         self.assertTrue(summary.state_changed)
 
@@ -302,8 +303,8 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
         self,
     ) -> None:
         route = DeliveryRoute(
-            "A",
-            "B",
+            LocationCode("A"),
+            LocationCode("B"),
             departure_time=datetime(2025, 1, 1, 10, 0, 0),
             route_id=1,
         )
@@ -315,13 +316,13 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
             max_range=8000,
         )
         truck.assign(route)
-        truck.current_location = "B"
+        truck.current_location = LocationCode("B")
         route.truck = truck
 
         with patch.object(route, "current_position") as current_position_mock:
             current_position_mock.return_value = SimpleNamespace(
                 kind="AT_STOP",
-                stop_city="B",
+                stop_city=LocationCode("B"),
             )
 
             summary = self.reconciler.reconcile_routes(
@@ -336,13 +337,13 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
         self.assertIsNone(route.truck)
         self.assertIsNone(truck.route)
         self.assertEqual(truck.status, TruckStatus.FREE)
-        self.assertEqual(truck.current_location, "B")
+        self.assertEqual(truck.current_location, LocationCode("B"))
 
     def test_reconcile_routes_at_stop_counts_clearing_stale_in_transit_as_movement(self) -> None:
         route = DeliveryRoute(
-            "A",
-            "B",
-            "C",
+            LocationCode("A"),
+            LocationCode("B"),
+            LocationCode("C"),
             departure_time=datetime(2025, 1, 1, 10, 0, 0),
             route_id=1,
         )
@@ -354,14 +355,14 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
             max_range=8000,
         )
         truck.assign(route)
-        truck.current_location = "B"
-        truck.in_transit_to = "C"
+        truck.current_location = LocationCode("B")
+        truck.in_transit_to = LocationCode("C")
         route.truck = truck
 
         with patch.object(route, "current_position") as current_position_mock:
             current_position_mock.return_value = SimpleNamespace(
                 kind="AT_STOP",
-                stop_city="B",
+                stop_city=LocationCode("B"),
             )
 
             summary = self.reconciler.reconcile_routes(
@@ -375,13 +376,13 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
         self.assertTrue(summary.state_changed)
         self.assertIs(route.truck, truck)
         self.assertIs(truck.route, route)
-        self.assertEqual(truck.current_location, "B")
+        self.assertEqual(truck.current_location, LocationCode("B"))
         self.assertIsNone(truck.in_transit_to)
 
     def test_reconcile_routes_does_not_mutate_truck_when_truck_updates_are_disabled(self) -> None:
         route = DeliveryRoute(
-            "A",
-            "B",
+            LocationCode("A"),
+            LocationCode("B"),
             departure_time=datetime(2099, 1, 1, 10, 0, 0),
             route_id=1,
         )
@@ -396,9 +397,8 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
         truck.assign(route)
         route.truck = truck
 
-        # Set custom truck state after assign(), because assign() normalizes truck fields.
-        truck.current_location = "C"
-        truck.in_transit_to = "X"
+        truck.current_location = LocationCode("C")
+        truck.in_transit_to = LocationCode("B")
 
         summary = self.reconciler.reconcile_routes(
             routes=[route],
@@ -408,7 +408,7 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
 
         self.assertEqual(summary.trucks_moved, 0)
         self.assertEqual(summary.trucks_released, 0)
-        self.assertEqual(truck.current_location, "C")
-        self.assertEqual(truck.in_transit_to, "X")
+        self.assertEqual(truck.current_location, LocationCode("C"))
+        self.assertEqual(truck.in_transit_to, LocationCode("B"))
         self.assertIs(truck.route, route)
         self.assertIs(route.truck, truck)

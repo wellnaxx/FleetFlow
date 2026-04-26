@@ -6,11 +6,13 @@ from src.application.use_cases.packages.remove_package import RemovePackageUseCa
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.entities.delivery_route import DeliveryRoute
+from src.domain.enums.item_status import ItemStatus
 from src.domain.value_objects.contact_info import ContactInfo
+from src.domain.value_objects.location_code import LocationCode
 
 
 class RuntimePackageRemovalIntegrationTests(unittest.TestCase):
-    def test_remove_assigned_package_updates_repo_and_route(self) -> None:
+    def test_remove_assigned_package_updates_repo_route_and_package_state(self) -> None:
         package_repo = InMemoryPackageRepository()
         customer = Customer(
             customer_id=1,
@@ -19,16 +21,21 @@ class RuntimePackageRemovalIntegrationTests(unittest.TestCase):
 
         with (
             patch("src.domain.entities.delivery_package.Map.is_valid_location", return_value=True),
-            patch("src.domain.entities.delivery_route.Map.get_locations", return_value=["A", "B"]),
+            patch(
+                "src.domain.entities.delivery_route.Map.get_locations",
+                return_value=[LocationCode("A"), LocationCode("B")],
+            ),
+            patch("src.domain.entities.delivery_route.Map.get_distance", return_value=100),
         ):
-            route = DeliveryRoute("A", "B", route_id=1)
+            route = DeliveryRoute(LocationCode("A"), LocationCode("B"), route_id=1)
             package = DeliveryPackage(
                 package_id=1,
-                start_location="A",
-                end_location="B",
+                start_location=LocationCode("A"),
+                end_location=LocationCode("B"),
                 weight=1.0,
                 customer=customer,
             )
+
             customer.add_package(package)
             route.assign_package(package)
             package_repo.add(package)
@@ -37,6 +44,12 @@ class RuntimePackageRemovalIntegrationTests(unittest.TestCase):
 
         self.assertIs(removed, package)
         self.assertIsNone(package_repo.get_by_id(package.package_id))
+
         self.assertEqual(route.packages, [])
         self.assertIsNone(package.route)
-        self.assertEqual(package.customer.delivery_packages, ())
+        self.assertIsNone(package.expected_arrival)
+        self.assertEqual(package.status, ItemStatus.TODO)
+        self.assertEqual(package.current_location, LocationCode("A"))
+
+        self.assertEqual(customer.delivery_packages, ())
+        self.assertIs(package.customer, customer)

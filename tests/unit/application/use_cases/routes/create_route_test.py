@@ -2,6 +2,7 @@ import unittest
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
+from domain.value_objects.location_code import LocationCode
 from src.application.use_cases.routes.create_route import CreateRouteUseCase
 
 
@@ -24,7 +25,9 @@ class CreateRouteUseCase_Should(unittest.TestCase):
         fake_route = MagicMock()
         mock_route_cls.return_value = fake_route
 
-        result = self.use_case.execute(["SYD", "MEL", "ADL"], departure)
+        result = self.use_case.execute(
+            [LocationCode("SYD"), LocationCode("MEL"), LocationCode("ADL")], departure
+        )
 
         self.assertIs(result, fake_route)
         self.assertEqual(
@@ -43,7 +46,7 @@ class CreateRouteUseCase_Should(unittest.TestCase):
 
     def test_raises_when_fewer_than_two_locations(self) -> None:
         with self.assertRaises(ValueError) as ctx:
-            self.use_case.execute(["SYD"], None)
+            self.use_case.execute([LocationCode("SYD")], None)
 
         self.assertIn("at least 2 locations", str(ctx.exception))
         self.mock_routes.next_id.assert_not_called()
@@ -62,7 +65,7 @@ class CreateRouteUseCase_Should(unittest.TestCase):
         mock_is_valid.side_effect = side_effect
 
         with self.assertRaises(ValueError) as ctx:
-            self.use_case.execute(["SYD", "BAD", "MEL"], None)
+            self.use_case.execute([LocationCode("SYD"), LocationCode("BAD"), LocationCode("MEL")], None)
 
         self.assertIn("Invalid location: BAD", str(ctx.exception))
         self.mock_routes.next_id.assert_not_called()
@@ -80,7 +83,7 @@ class CreateRouteUseCase_Should(unittest.TestCase):
         self.mock_routes.peek_next_id.return_value = 7
         mock_route_cls.return_value = MagicMock()
 
-        _ = self.use_case.execute(["A", "B", "C"], None)
+        _ = self.use_case.execute([LocationCode("A"), LocationCode("B"), LocationCode("C")], None)
 
         self.assertEqual(
             [call.args[0] for call in mock_is_valid.call_args_list],

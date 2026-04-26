@@ -10,6 +10,7 @@ from src.adapters.driven.persistence.memory.world_state_gateway import (
     InMemoryWorldStateGateway,
     InMemoryWorldStateRuntime,
 )
+from src.application.dto.truck_binding_dto import TruckBinding
 from src.application.dto.world_state_snapshot_dto import (
     CountersSnapshot,
     CustomerSnapshot,
@@ -28,6 +29,7 @@ from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.enums.truck_status import TruckStatus
 from src.domain.services.vehicle_manager import VehicleManager
 from src.domain.value_objects.contact_info import ContactInfo
+from src.domain.value_objects.location_code import LocationCode
 
 
 class _FailingVehicleManager(VehicleManager):
@@ -35,7 +37,7 @@ class _FailingVehicleManager(VehicleManager):
         super().__init__()
         self.replace_attempted = False
 
-    def replace_truck_bindings(self, bindings):  # type: ignore[no-untyped-def]
+    def replace_truck_bindings(self, bindings: list[TruckBinding]) -> None:
         self.replace_attempted = True
         raise RuntimeError("truck binding failure")
 
@@ -48,7 +50,7 @@ class InMemoryWorldStateGatewayTests(unittest.TestCase):
     def setUp(self) -> None:
         self.route_map_locations = patch(
             "src.domain.entities.delivery_route.Map.get_locations",
-            return_value=["A", "B", "C"],
+            return_value=[LocationCode("A"), LocationCode("B"), LocationCode("C")],
         )
         self.route_map_distance = patch(
             "src.domain.entities.delivery_route.Map.get_distance",
@@ -60,13 +62,14 @@ class InMemoryWorldStateGatewayTests(unittest.TestCase):
         )
         self.vehicle_map_locations = patch(
             "src.domain.services.vehicle_manager.Map.get_locations",
-            return_value=["A", "B", "C"],
+            return_value=[LocationCode("A"), LocationCode("B"), LocationCode("C")],
         )
 
         self.route_map_locations.start()
         self.route_map_distance.start()
         self.package_map_valid.start()
         self.vehicle_map_locations.start()
+
         self.addCleanup(self.route_map_locations.stop)
         self.addCleanup(self.route_map_distance.stop)
         self.addCleanup(self.package_map_valid.stop)
@@ -92,6 +95,7 @@ class InMemoryWorldStateGatewayTests(unittest.TestCase):
             reconciler=WorldStateReconciliationService(),
         )
         gateway = InMemoryWorldStateGateway(snapshot_service=snapshot_service)
+
         snapshot = WorldStateSnapshot(
             schema_version=2,
             world=WorldSnapshotData(
@@ -107,8 +111,8 @@ class InMemoryWorldStateGatewayTests(unittest.TestCase):
                 packages=(
                     PackageSnapshot(
                         package_id=1,
-                        start="A",
-                        end="B",
+                        start=LocationCode("A"),
+                        end=LocationCode("B"),
                         weight=5.0,
                         customer_id=1,
                         route_id=1,
@@ -117,12 +121,13 @@ class InMemoryWorldStateGatewayTests(unittest.TestCase):
                 routes=(
                     RouteSnapshot(
                         route_id=1,
-                        locations=("A", "B"),
+                        locations=(LocationCode("A"), LocationCode("B")),
                         departure_time=dt_to_str(datetime(2099, 1, 1, 10, 0, 0)),
                         truck_vehicle_id=1001,
                         package_ids=(1,),
                     ),
                 ),
+                trucks=(),
             ),
         )
 
@@ -136,9 +141,7 @@ class InMemoryWorldStateGatewayTests(unittest.TestCase):
         self.assertEqual(rebuilt_snapshot.world.routes, snapshot.world.routes)
         self.assertEqual(len(rebuilt_snapshot.world.trucks), len(vehicle_manager.list_fleet()))
 
-        truck_snapshot = next(
-            truck for truck in rebuilt_snapshot.world.trucks if truck.vehicle_id == 1001
-        )
+        truck_snapshot = next(truck for truck in rebuilt_snapshot.world.trucks if truck.vehicle_id == 1001)
         route = route_repo.get_by_id(1)
         assert route is not None
 
@@ -147,7 +150,7 @@ class InMemoryWorldStateGatewayTests(unittest.TestCase):
             TruckSnapshot(
                 vehicle_id=1001,
                 status=TruckStatus.ON_THE_WAY,
-                current_location="A",
+                current_location=LocationCode("A"),
                 route_id=1,
                 busy_from=dt_to_str(datetime(2099, 1, 1, 10, 0, 0)),
                 busy_until=dt_to_str(route.eta_final),
@@ -180,8 +183,8 @@ class InMemoryWorldStateGatewayTests(unittest.TestCase):
 
         existing_package = DeliveryPackage(
             package_id=1,
-            start_location="A",
-            end_location="B",
+            start_location=LocationCode("A"),
+            end_location=LocationCode("B"),
             weight=5.0,
             customer=existing_customer,
         )
@@ -189,8 +192,8 @@ class InMemoryWorldStateGatewayTests(unittest.TestCase):
         package_repo.add(existing_package)
 
         existing_route = DeliveryRoute(
-            "A",
-            "B",
+            LocationCode("A"),
+            LocationCode("B"),
             departure_time=datetime(2099, 1, 1, 10, 0, 0),
             route_id=1,
         )
@@ -201,8 +204,8 @@ class InMemoryWorldStateGatewayTests(unittest.TestCase):
         assert truck is not None
 
         truck.assign(existing_route)
-        truck.current_location = "A"
-        truck.in_transit_to = "B"
+        truck.current_location = LocationCode("A")
+        truck.in_transit_to = LocationCode("B")
         existing_route.truck = truck
 
         previous_status = truck.status

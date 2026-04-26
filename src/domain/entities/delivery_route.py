@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from src.domain.enums.route_status import RouteStatus
 from src.domain.services.map import Map
+from src.domain.value_objects.location_code import LocationCode
 
 if TYPE_CHECKING:
     from src.domain.entities.delivery_package import DeliveryPackage
@@ -19,9 +20,9 @@ class RoutePosition:
     """Current operational position of a scheduled route."""
 
     kind: str
-    from_city: str | None = None
-    to_city: str | None = None
-    stop_city: str | None = None
+    from_city: LocationCode | None = None
+    to_city: LocationCode | None = None
+    stop_city: LocationCode | None = None
     next_eta: datetime | None = None
 
 
@@ -32,7 +33,7 @@ class DeliveryRoute:
 
     def __init__(
         self,
-        *locations: str,
+        *locations: LocationCode,
         departure_time: datetime | None = None,
         route_id: int,
     ) -> None:
@@ -58,7 +59,7 @@ class DeliveryRoute:
         if len(set(locations)) != len(locations):
             raise ValueError("A route cannot contain duplicate locations.")
 
-        self._locations: list[str] = list(locations)
+        self._locations: list[LocationCode] = [LocationCode(location) for location in locations]
         self._departure_time: datetime | None = departure_time
         self.route_id = route_id
 
@@ -66,9 +67,9 @@ class DeliveryRoute:
         self._packages: list[DeliveryPackage] = []
         self.status: RouteStatus = RouteStatus.SCHEDULED if departure_time is not None else RouteStatus.PLANNED
 
-        self._segments: list[tuple[str, str, int, timedelta]] = []
-        self._stop_times: dict[str, datetime] = {}
-        self._pos_index: dict[str, int] = {city: i for i, city in enumerate(self._locations)}
+        self._segments: list[tuple[LocationCode, LocationCode, int, timedelta]] = []
+        self._stop_times: dict[LocationCode, datetime] = {}
+        self._pos_index: dict[LocationCode, int] = {city: i for i, city in enumerate(self._locations)}
 
         if self._departure_time is not None:
             self._build_schedule()
@@ -79,17 +80,17 @@ class DeliveryRoute:
         return self._departure_time
 
     @property
-    def locations(self) -> list[str]:
+    def locations(self) -> list[LocationCode]:
         """Route locations in travel order."""
         return list(self._locations)
 
     @property
-    def start_location(self) -> str:
+    def start_location(self) -> LocationCode:
         """First location on the route."""
         return self._locations[0]
 
     @property
-    def end_location(self) -> str:
+    def end_location(self) -> LocationCode:
         """Final location on the route."""
         return self._locations[-1]
 
@@ -142,7 +143,7 @@ class DeliveryRoute:
             current_time += duration
             self._stop_times[end] = current_time
 
-    def arrival_time_at(self, city: str) -> datetime:
+    def arrival_time_at(self, city: LocationCode) -> datetime:
         """Return the scheduled arrival time for a route city.
 
         Args:
@@ -156,6 +157,7 @@ class DeliveryRoute:
         """
         if self._departure_time is None:
             raise ValueError("Route not scheduled yet (no departure time).")
+        city = LocationCode(city)
         if city not in self._stop_times:
             raise ValueError(f"City {city} is not on route {self.route_id}.")
         return self._stop_times[city]
@@ -204,7 +206,7 @@ class DeliveryRoute:
 
         return RoutePosition(kind="AT_STOP", stop_city=first_city, next_eta=first_departure)
 
-    def includes_in_order(self, start: str, end: str) -> bool:
+    def includes_in_order(self, start: LocationCode, end: LocationCode) -> bool:
         """Return whether the route visits start before end.
 
         Args:
@@ -214,10 +216,12 @@ class DeliveryRoute:
         Returns:
             True when both locations are present and start appears before end.
         """
+        start_code = LocationCode(start)
+        end_code = LocationCode(end)
         return (
-            start in self._pos_index
-            and end in self._pos_index
-            and self._pos_index[start] < self._pos_index[end]
+            start_code in self._pos_index
+            and end_code in self._pos_index
+            and self._pos_index[start_code] < self._pos_index[end_code]
         )
 
     def can_accept_package(self, package: DeliveryPackage, now: datetime | None = None) -> str | None:

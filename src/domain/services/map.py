@@ -2,24 +2,83 @@
 
 from typing import ClassVar
 
+from src.domain.value_objects.location_code import LocationCode
+
 
 class Map:
     """Lookup service for supported city codes and intercity distances."""
 
-    _locations: ClassVar[list[str]] = ["SYD", "MEL", "ADL", "ASP", "BRI", "DAR", "PER"]
+    _locations: ClassVar[tuple[LocationCode, ...]] = (
+        LocationCode("SYD"),
+        LocationCode("MEL"),
+        LocationCode("ADL"),
+        LocationCode("ASP"),
+        LocationCode("BRI"),
+        LocationCode("DAR"),
+        LocationCode("PER"),
+    )
 
-    _distances: ClassVar[dict[str, dict[str, int]]] = {
-        "SYD": {"MEL": 877, "ADL": 1376, "ASP": 2762, "BRI": 909, "DAR": 3935, "PER": 4016},
-        "MEL": {"SYD": 877, "ADL": 725, "ASP": 2255, "BRI": 1765, "DAR": 3752, "PER": 3509},
-        "ADL": {"SYD": 1376, "MEL": 725, "ASP": 1530, "BRI": 1927, "DAR": 3027, "PER": 2785},
-        "ASP": {"SYD": 2762, "MEL": 2255, "ADL": 1530, "BRI": 2993, "DAR": 1497, "PER": 2481},
-        "BRI": {"SYD": 909, "MEL": 1765, "ADL": 1927, "ASP": 2993, "DAR": 3426, "PER": 4311},
-        "DAR": {"SYD": 3935, "MEL": 3752, "ADL": 3027, "ASP": 1497, "BRI": 3426, "PER": 4025},
-        "PER": {"SYD": 4016, "MEL": 3509, "ADL": 2785, "ASP": 2481, "BRI": 4311, "DAR": 4025},
+    _distances: ClassVar[dict[LocationCode, dict[LocationCode, int]]] = {
+        LocationCode("SYD"): {
+            LocationCode("MEL"): 877,
+            LocationCode("ADL"): 1376,
+            LocationCode("ASP"): 2762,
+            LocationCode("BRI"): 909,
+            LocationCode("DAR"): 3935,
+            LocationCode("PER"): 4016,
+        },
+        LocationCode("MEL"): {
+            LocationCode("SYD"): 877,
+            LocationCode("ADL"): 725,
+            LocationCode("ASP"): 2255,
+            LocationCode("BRI"): 1765,
+            LocationCode("DAR"): 3752,
+            LocationCode("PER"): 3509,
+        },
+        LocationCode("ADL"): {
+            LocationCode("SYD"): 1376,
+            LocationCode("MEL"): 725,
+            LocationCode("ASP"): 1530,
+            LocationCode("BRI"): 1927,
+            LocationCode("DAR"): 3027,
+            LocationCode("PER"): 2785,
+        },
+        LocationCode("ASP"): {
+            LocationCode("SYD"): 2762,
+            LocationCode("MEL"): 2255,
+            LocationCode("ADL"): 1530,
+            LocationCode("BRI"): 2993,
+            LocationCode("DAR"): 1497,
+            LocationCode("PER"): 2481,
+        },
+        LocationCode("BRI"): {
+            LocationCode("SYD"): 909,
+            LocationCode("MEL"): 1765,
+            LocationCode("ADL"): 1927,
+            LocationCode("ASP"): 2993,
+            LocationCode("DAR"): 3426,
+            LocationCode("PER"): 4311,
+        },
+        LocationCode("DAR"): {
+            LocationCode("SYD"): 3935,
+            LocationCode("MEL"): 3752,
+            LocationCode("ADL"): 3027,
+            LocationCode("ASP"): 1497,
+            LocationCode("BRI"): 3426,
+            LocationCode("PER"): 4025,
+        },
+        LocationCode("PER"): {
+            LocationCode("SYD"): 4016,
+            LocationCode("MEL"): 3509,
+            LocationCode("ADL"): 2785,
+            LocationCode("ASP"): 2481,
+            LocationCode("BRI"): 4311,
+            LocationCode("DAR"): 4025,
+        },
     }
 
     @classmethod
-    def get_locations(cls) -> list[str]:
+    def get_locations(cls) -> list[LocationCode]:
         """Return supported location codes.
 
         Returns:
@@ -28,7 +87,7 @@ class Map:
         return list(cls._locations)
 
     @classmethod
-    def is_valid_location(cls, code: str) -> bool:
+    def is_valid_location(cls, code: object) -> bool:
         """Return whether a location code is supported.
 
         Args:
@@ -37,7 +96,12 @@ class Map:
         Returns:
             True when the code is known to the map.
         """
-        return code in cls._locations
+        try:
+            normalized = LocationCode(code)
+        except (TypeError, ValueError):
+            return False
+
+        return normalized in cls._locations
 
     @classmethod
     def get_distance(cls, a: str, b: str) -> int:
@@ -53,6 +117,8 @@ class Map:
         Raises:
             ValueError: If no distance is known for the pair.
         """
+        a = LocationCode(a)
+        b = LocationCode(b)
         if a == b:
             return 0
         if b in cls._distances.get(a, {}):

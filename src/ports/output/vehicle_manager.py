@@ -5,6 +5,7 @@ from typing import Protocol
 
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.entities.truck import Truck
+from src.domain.value_objects.location_code import LocationCode
 
 
 class RouteSuitabilityView(Protocol):
@@ -16,7 +17,7 @@ class RouteSuitabilityView(Protocol):
         ...
 
     @property
-    def start_location(self) -> str:
+    def start_location(self) -> LocationCode:
         """Route origin location."""
         ...
 

@@ -4,6 +4,7 @@ from datetime import datetime
 
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.services.map import Map
+from src.domain.value_objects.location_code import LocationCode
 from src.ports.output.route_repository import RouteRepositoryPort
 
 
@@ -18,7 +19,7 @@ class CreateRouteUseCase:
         """
         self._routes = routes
 
-    def execute(self, locations: list[str], departure_time: datetime | None) -> DeliveryRoute:
+    def execute(self, locations: list[LocationCode], departure_time: datetime | None) -> DeliveryRoute:
         """Create and persist a delivery route.
 
         Args:

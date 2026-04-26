@@ -4,6 +4,7 @@ from src.application.services.customer_service import CustomerService
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.enums.item_status import ItemStatus
 from src.domain.services.map import Map
+from src.domain.value_objects.location_code import LocationCode
 from src.ports.output.package_repository import PackageRepositoryPort
 
 
@@ -39,9 +40,12 @@ class CreatePackageUseCase:
         Raises:
             ValueError: If a location is invalid or customer resolution fails.
         """
-        if not Map.is_valid_location(start):
+        start_code = LocationCode(start)
+        end_code = LocationCode(end)
+
+        if not Map.is_valid_location(start_code):
             raise ValueError(f"Invalid start location: {start}")
-        if not Map.is_valid_location(end):
+        if not Map.is_valid_location(end_code):
             raise ValueError(f"Invalid end location: {end}")
 
         customer = self._customers.find_existing_customer(name, email, phone)
@@ -51,7 +55,11 @@ class CreatePackageUseCase:
         package_id = self._packages.peek_next_id()
 
         package = DeliveryPackage(
-            start_location=start, end_location=end, weight=weight, customer=customer, package_id=package_id
+            start_location=start_code,
+            end_location=end_code,
+            weight=weight,
+            customer=customer,
+            package_id=package_id,
         )
         package.status = ItemStatus.TODO
         customer.add_package(package)

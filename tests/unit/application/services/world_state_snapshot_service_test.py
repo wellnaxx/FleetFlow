@@ -1,7 +1,9 @@
 import unittest
+from collections.abc import Mapping
 from datetime import datetime
 from unittest.mock import patch
 
+from domain.value_objects.location_code import LocationCode, location_code_or_none
 from src.adapters.driven.persistence.json.serialization import dt_to_str
 from src.adapters.driven.persistence.memory.customer_repository import InMemoryCustomerRepository
 from src.adapters.driven.persistence.memory.package_repository import InMemoryPackageRepository
@@ -45,16 +47,16 @@ def customer_snapshot(
 def package_snapshot(
     package_id: int = 1,
     *,
-    start: str = "A",
-    end: str = "B",
+    start: str | LocationCode = "A",
+    end: str | LocationCode = "B",
     weight: float = 5.0,
     customer_id: int = 1,
     route_id: int | None = None,
 ) -> PackageSnapshot:
     return PackageSnapshot(
         package_id=package_id,
-        start=start,
-        end=end,
+        start=LocationCode(start),
+        end=LocationCode(end),
         weight=weight,
         customer_id=customer_id,
         route_id=route_id,
@@ -64,14 +66,14 @@ def package_snapshot(
 def route_snapshot(
     route_id: int = 1,
     *,
-    locations: tuple[str, ...] = ("A", "B"),
+    locations: tuple[str | LocationCode, ...] = ("A", "B"),
     departure_time: str | None = None,
     truck_vehicle_id: int | None = None,
     package_ids: tuple[int, ...] = (),
 ) -> RouteSnapshot:
     return RouteSnapshot(
         route_id=route_id,
-        locations=locations,
+        locations=tuple(LocationCode(location) for location in locations),
         departure_time=departure_time,
         truck_vehicle_id=truck_vehicle_id,
         package_ids=package_ids,
@@ -82,20 +84,20 @@ def truck_snapshot(
     vehicle_id: int = 1001,
     *,
     status: str = TruckStatus.FREE,
-    current_location: str | None = "A",
+    current_location: str | LocationCode | None = "A",
     route_id: int | None = None,
     busy_from: str | None = None,
     busy_until: str | None = None,
-    in_transit_to: str | None = None,
+    in_transit_to: str | LocationCode | None = None,
 ) -> TruckSnapshot:
     return TruckSnapshot(
         vehicle_id=vehicle_id,
         status=status,
-        current_location=current_location,
+        current_location=location_code_or_none(current_location),
         route_id=route_id,
         busy_from=busy_from,
         busy_until=busy_until,
-        in_transit_to=in_transit_to,
+        in_transit_to=location_code_or_none(in_transit_to),
     )
 
 
@@ -115,9 +117,9 @@ class _RuntimeStateAdapter(WorldStateRuntimePort):
     def replace_world_state(
         self,
         *,
-        customers_by_id: dict[int, Customer],
-        packages_by_id: dict[int, DeliveryPackage],
-        routes_by_id: dict[int, DeliveryRoute],
+        customers_by_id: Mapping[int, Customer],
+        packages_by_id: Mapping[int, DeliveryPackage],
+        routes_by_id: Mapping[int, DeliveryRoute],
         counters: CountersSnapshot,
         truck_bindings: list[TruckBinding],
     ) -> None:
@@ -131,7 +133,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
     def setUp(self) -> None:
         self.route_map_locations = patch(
             "src.domain.entities.delivery_route.Map.get_locations",
-            return_value=["A", "B", "C"],
+            return_value=[LocationCode("A"), LocationCode("B"), LocationCode("C")],
         )
         self.route_map_distance = patch(
             "src.domain.entities.delivery_route.Map.get_distance",
@@ -143,7 +145,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
         )
         self.vehicle_map_locations = patch(
             "src.domain.services.vehicle_manager.Map.get_locations",
-            return_value=["A", "B", "C"],
+            return_value=[LocationCode("A"), LocationCode("B"), LocationCode("C")],
         )
 
         self.route_map_locations.start()
@@ -215,15 +217,15 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
 
         package_b = DeliveryPackage(
             package_id=7,
-            start_location="B",
-            end_location="C",
+            start_location=LocationCode("B"),
+            end_location=LocationCode("C"),
             weight=7.0,
             customer=customer_b,
         )
         package_a = DeliveryPackage(
             package_id=3,
-            start_location="A",
-            end_location="B",
+            start_location=LocationCode("A"),
+            end_location=LocationCode("B"),
             weight=3.5,
             customer=customer_a,
         )
@@ -233,7 +235,9 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
         self.package_repo.add(package_a)
 
         departure_time = datetime(2099, 1, 1, 10, 0, 0)
-        route = DeliveryRoute("A", "B", "C", departure_time=departure_time, route_id=5)
+        route = DeliveryRoute(
+            LocationCode("A"), LocationCode("B"), LocationCode("C"), departure_time=departure_time, route_id=5
+        )
         route.assign_package(package_b)
         route.assign_package(package_a)
         self.route_repo.add(route)
@@ -259,16 +263,16 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
             (
                 PackageSnapshot(
                     package_id=3,
-                    start="A",
-                    end="B",
+                    start=LocationCode("A"),
+                    end=LocationCode("B"),
                     weight=3.5,
                     customer_id=1,
                     route_id=5,
                 ),
                 PackageSnapshot(
                     package_id=7,
-                    start="B",
-                    end="C",
+                    start=LocationCode("B"),
+                    end=LocationCode("C"),
                     weight=7.0,
                     customer_id=2,
                     route_id=5,
@@ -280,7 +284,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
             (
                 RouteSnapshot(
                     route_id=5,
-                    locations=("A", "B", "C"),
+                    locations=(LocationCode("A"), LocationCode("B"), LocationCode("C")),
                     departure_time=dt_to_str(departure_time),
                     truck_vehicle_id=1002,
                     package_ids=(3, 7),
@@ -293,7 +297,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
         assert truck is not None
 
         truck.status = TruckStatus.FREE
-        truck.current_location = "B"
+        truck.current_location = LocationCode("B")
         truck.busy_from = None
         truck.busy_until = None
         truck.in_transit_to = None
@@ -383,12 +387,8 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
     def test_apply_snapshot_rejects_duplicate_package_ids_within_route(self) -> None:
         snapshot = self.make_snapshot(
             customers=(customer_snapshot(),),
-            packages=(
-                package_snapshot(route_id=1),
-            ),
-            routes=(
-                route_snapshot(package_ids=(1, 1)),
-            ),
+            packages=(package_snapshot(route_id=1),),
+            routes=(route_snapshot(package_ids=(1, 1)),),
         )
 
         self.assert_corrupt(snapshot, "Duplicate package ids for route 1")
@@ -397,39 +397,25 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
         missing_reference_cases = (
             (
                 "missing customer",
-                self.make_snapshot(
-                    packages=(
-                        package_snapshot(customer_id=99),
-                    )
-                ),
+                self.make_snapshot(packages=(package_snapshot(customer_id=99),)),
                 "references missing customer 99",
             ),
             (
                 "missing route",
                 self.make_snapshot(
                     customers=(customer_snapshot(),),
-                    packages=(
-                        package_snapshot(route_id=99),
-                    ),
+                    packages=(package_snapshot(route_id=99),),
                 ),
                 "references missing route 99",
             ),
             (
                 "missing package",
-                self.make_snapshot(
-                    routes=(
-                        route_snapshot(package_ids=(99,)),
-                    )
-                ),
+                self.make_snapshot(routes=(route_snapshot(package_ids=(99,)),)),
                 "references missing package 99",
             ),
             (
                 "missing truck",
-                self.make_snapshot(
-                    routes=(
-                        route_snapshot(truck_vehicle_id=9999),
-                    )
-                ),
+                self.make_snapshot(routes=(route_snapshot(truck_vehicle_id=9999),)),
                 "references missing truck 9999",
             ),
         )
@@ -441,12 +427,8 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
     def test_apply_snapshot_rejects_package_route_forward_inconsistency(self) -> None:
         snapshot = self.make_snapshot(
             customers=(customer_snapshot(),),
-            packages=(
-                package_snapshot(route_id=1),
-            ),
-            routes=(
-                route_snapshot(),
-            ),
+            packages=(package_snapshot(route_id=1),),
+            routes=(route_snapshot(),),
         )
 
         self.assert_corrupt(snapshot, "does not include that package")
@@ -454,12 +436,8 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
     def test_apply_snapshot_restores_customer_package_backrefs(self) -> None:
         snapshot = self.make_snapshot(
             customers=(customer_snapshot(),),
-            packages=(
-                package_snapshot(route_id=1),
-            ),
-            routes=(
-                route_snapshot(package_ids=(1,)),
-            ),
+            packages=(package_snapshot(route_id=1),),
+            routes=(route_snapshot(package_ids=(1,)),),
         )
 
         self.service.apply_snapshot(snapshot)
@@ -548,12 +526,8 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
     def test_apply_snapshot_rejects_route_package_reverse_inconsistency(self) -> None:
         snapshot = self.make_snapshot(
             customers=(customer_snapshot(),),
-            packages=(
-                package_snapshot(),
-            ),
-            routes=(
-                route_snapshot(package_ids=(1,)),
-            ),
+            packages=(package_snapshot(),),
+            routes=(route_snapshot(package_ids=(1,)),),
         )
 
         self.assert_corrupt(snapshot, "includes package 1")
@@ -597,7 +571,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
         assert unassigned_package is not None
         assert route is not None
         self.assertEqual(tuple(customer.delivery_packages), (assigned_package, unassigned_package))
-        self.assertEqual(assigned_package.expected_arrival, route.arrival_time_at("C"))
+        self.assertEqual(assigned_package.expected_arrival, route.arrival_time_at(LocationCode("C")))
         self.assertIsNone(unassigned_package.route)
         self.assertIsNone(unassigned_package.expected_arrival)
 
@@ -637,7 +611,9 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
         self.assert_corrupt(snapshot, "Invalid next_route_id in snapshot")
 
     def test_apply_snapshot_clears_existing_truck_bindings_when_snapshot_has_none(self) -> None:
-        route = DeliveryRoute("A", "B", departure_time=datetime(2025, 1, 1, 8, 0, 0), route_id=1)
+        route = DeliveryRoute(
+            LocationCode("A"), LocationCode("B"), departure_time=datetime(2025, 1, 1, 8, 0, 0), route_id=1
+        )
         self.route_repo.add(route)
 
         truck = self.vehicle_manager.find_by_id(1001)
@@ -667,15 +643,17 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
 
         package = DeliveryPackage(
             package_id=1,
-            start_location="A",
-            end_location="B",
+            start_location=LocationCode("A"),
+            end_location=LocationCode("B"),
             weight=5.0,
             customer=customer,
         )
         customer.add_package(package)
         self.package_repo.add(package)
 
-        route = DeliveryRoute("A", "B", departure_time=datetime(2025, 1, 1, 9, 0, 0), route_id=1)
+        route = DeliveryRoute(
+            LocationCode("A"), LocationCode("B"), departure_time=datetime(2025, 1, 1, 9, 0, 0), route_id=1
+        )
         route.assign_package(package)
         self.route_repo.add(route)
 
@@ -762,13 +740,13 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
             packages=(
                 package_snapshot(
                     start="B",
-                    end="A",
+                    end=LocationCode("A"),
                     route_id=1,
                 ),
             ),
             routes=(
                 route_snapshot(
-                    locations=("A", "B", "C"),
+                    locations=(LocationCode("A"), "B", "C"),
                     package_ids=(1,),
                 ),
             ),
@@ -789,7 +767,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
             packages=(
                 package_snapshot(
                     start="C",
-                    end="A",
+                    end=LocationCode("A"),
                     route_id=1,
                 ),
             ),
@@ -818,8 +796,8 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
 
         existing_package = DeliveryPackage(
             package_id=1,
-            start_location="A",
-            end_location="B",
+            start_location=LocationCode("A"),
+            end_location=LocationCode("B"),
             weight=5.0,
             customer=existing_customer,
         )
@@ -827,8 +805,8 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
         self.package_repo.add(existing_package)
 
         existing_route = DeliveryRoute(
-            "A",
-            "B",
+            LocationCode("A"),
+            LocationCode("B"),
             departure_time=datetime(2025, 1, 1, 9, 0, 0),
             route_id=1,
         )
@@ -847,7 +825,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
                 package_snapshot(
                     package_id=2,
                     start="C",
-                    end="A",
+                    end=LocationCode("A"),
                     weight=4.0,
                     customer_id=2,
                     route_id=2,
@@ -908,9 +886,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
     def test_apply_snapshot_does_not_wrap_runtime_swap_failure_as_corruption(self) -> None:
         snapshot = self.make_snapshot(
             counters=CountersSnapshot(1, 1, 2),
-            routes=(
-                route_snapshot(),
-            ),
+            routes=(route_snapshot(),),
         )
 
         with (
@@ -976,12 +952,12 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
             counters=CountersSnapshot(2, 3, 2),
             customers=(customer_snapshot(),),
             packages=(
-                package_snapshot(package_id=1, start="A", end="B", weight=8.0, route_id=1),
+                package_snapshot(package_id=1, start=LocationCode("A"), end="B", weight=8.0, route_id=1),
                 package_snapshot(package_id=2, start="B", end="C", weight=8.0, route_id=1),
             ),
             routes=(
                 route_snapshot(
-                    locations=("A", "B", "C"),
+                    locations=(LocationCode("A"), "B", "C"),
                     departure_time=dt_to_str(departure_time),
                     truck_vehicle_id=1001,
                     package_ids=(1, 2),
@@ -1006,12 +982,12 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
             counters=CountersSnapshot(2, 3, 2),
             customers=(customer_snapshot(),),
             packages=(
-                package_snapshot(package_id=1, start="A", end="C", weight=6.0, route_id=1),
+                package_snapshot(package_id=1, start=LocationCode("A"), end="C", weight=6.0, route_id=1),
                 package_snapshot(package_id=2, start="B", end="C", weight=6.0, route_id=1),
             ),
             routes=(
                 route_snapshot(
-                    locations=("A", "B", "C"),
+                    locations=(LocationCode("A"), "B", "C"),
                     departure_time=dt_to_str(departure_time),
                     truck_vehicle_id=1001,
                     package_ids=(1, 2),
@@ -1076,7 +1052,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
             trucks=(
                 truck_snapshot(
                     status=TruckStatus.ON_THE_WAY,
-                    current_location="A",
+                    current_location=LocationCode("A"),
                     route_id=1,
                     busy_from=dt_to_str(departure_time),
                     in_transit_to="B",
