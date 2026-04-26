@@ -355,11 +355,11 @@ class WorldStateSnapshotService:
 
             truck = trucks_by_id[truck_vehicle_id]
 
-            total_weight = sum(packages_by_id[package_id].weight for package_id in route.package_ids)
-            if total_weight > truck.capacity:
+            max_segment_load = self._route_max_segment_load(route, packages_by_id)
+            if max_segment_load > truck.capacity:
                 raise ValueError(
                     f"Route {route.route_id} assigns truck {truck_vehicle_id}, "
-                    f"but package weight {total_weight} exceeds capacity {truck.capacity}."
+                    f"but segment load {max_segment_load} exceeds capacity {truck.capacity}."
                 )
 
             total_distance = self._route_distance_km(route.locations)
@@ -368,6 +368,23 @@ class WorldStateSnapshotService:
                     f"Route {route.route_id} assigns truck {truck_vehicle_id}, "
                     f"but route distance {total_distance} exceeds range {truck.max_range}."
                 )
+
+    @staticmethod
+    def _route_max_segment_load(route: RouteSnapshot, packages_by_id: dict[int, PackageSnapshot]) -> float:
+        segment_loads = [0.0 for _ in range(len(route.locations) - 1)]
+        location_index = {location: index for index, location in enumerate(route.locations)}
+
+        for package_id in route.package_ids:
+            package = packages_by_id[package_id]
+            start_index = location_index.get(package.start)
+            end_index = location_index.get(package.end)
+            if start_index is None or end_index is None or start_index >= end_index:
+                continue
+
+            for segment_index in range(start_index, end_index):
+                segment_loads[segment_index] += package.weight
+
+        return max(segment_loads, default=0.0)
 
     @staticmethod
     def _route_distance_km(locations: tuple[str, ...]) -> int:

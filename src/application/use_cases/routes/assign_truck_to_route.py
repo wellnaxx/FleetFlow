@@ -22,6 +22,10 @@ class _RouteSuitabilityProbe:
         """Return package weight assigned to the probed route."""
         return self.assigned_weight
 
+    def maximum_segment_load(self) -> float:
+        """Return maximum segment load for the probed route."""
+        return self.assigned_weight
+
 
 @dataclass(frozen=True)
 class AssignTruckToRouteResult:
@@ -77,7 +81,7 @@ class AssignTruckToRouteUseCase:
                 total_distance_km=route.total_distance_km,
                 start_location=route.start_location,
                 departure_time=now,
-                assigned_weight=route.total_assigned_weight(),
+                assigned_weight=route.maximum_segment_load(),
             )
 
         ok, reason = self._vehicles.is_suitable_for_route(truck, effective_route)

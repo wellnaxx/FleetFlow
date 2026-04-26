@@ -65,7 +65,8 @@ class VehicleManager:
 
         Args:
             truck: Candidate truck.
-            route: Route view used for capacity, range, location, and timing checks.
+            route: Route view used for segment capacity, range, location, and
+                timing checks.
 
         Returns:
             Pair of suitability flag and failure reason. The reason is empty
@@ -73,7 +74,7 @@ class VehicleManager:
         """
         if truck.max_range < route.total_distance_km:
             return False, "range too short"
-        if truck.capacity < route.total_assigned_weight():
+        if truck.capacity < route.maximum_segment_load():
             return False, "insufficient capacity"
         if truck.current_location != route.start_location:
             return False, f"wrong location ({truck.current_location} != {route.start_location})"

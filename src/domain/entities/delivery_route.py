@@ -237,7 +237,7 @@ class DeliveryRoute:
         if error := self._validate_pickup_not_passed(package, now):
             return error
 
-        if error := self._validate_truck_constraints(extra_weight=package.weight):
+        if error := self._validate_truck_constraints(extra_package=package):
             return error
 
         return None
@@ -302,6 +302,35 @@ class DeliveryRoute:
         """Total weight of currently assigned packages."""
         return sum(package.weight for package in self._packages)
 
+    def maximum_segment_load(self, extra_package: DeliveryPackage | None = None) -> float:
+        """Return the heaviest cargo load carried on any route segment.
+
+        Capacity is constrained by the maximum simultaneous load between two
+        adjacent stops, not by the sum of every package assigned to the whole
+        route. `extra_package` is included as a candidate load without mutating
+        route state.
+
+        Args:
+            extra_package: Optional package being evaluated for assignment.
+
+        Returns:
+            Maximum carried weight across all adjacent route segments.
+        """
+        if len(self._locations) < 2:
+            return 0.0
+
+        segment_loads = [0.0 for _ in range(len(self._locations) - 1)]
+        for package in (*self._packages, *(() if extra_package is None else (extra_package,))):
+            start_index = self._pos_index.get(package.start_location)
+            end_index = self._pos_index.get(package.end_location)
+            if start_index is None or end_index is None or start_index >= end_index:
+                continue
+
+            for segment_index in range(start_index, end_index):
+                segment_loads[segment_index] += package.weight
+
+        return max(segment_loads, default=0.0)
+
     def _validate_package_route_compatibility(self, package: DeliveryPackage) -> str | None:
         if package.start_location not in self._pos_index or package.end_location not in self._pos_index:
             return (
@@ -354,14 +383,15 @@ class DeliveryRoute:
             f"{package.start_location} for package {package.package_id}."
         )
 
-    def _validate_truck_constraints(self, extra_weight: float) -> str | None:
+    def _validate_truck_constraints(self, extra_package: DeliveryPackage) -> str | None:
         if self.truck is None:
             return None
 
-        total_after = self.total_assigned_weight() + extra_weight
-        if total_after > self.truck.capacity:
+        max_segment_load = self.maximum_segment_load(extra_package=extra_package)
+        if max_segment_load > self.truck.capacity:
             return (
-                f"Truck {self.truck.vehicle_id} capacity exceeded: {total_after}kg > {self.truck.capacity}kg."
+                f"Truck {self.truck.vehicle_id} capacity exceeded: "
+                f"segment load {max_segment_load}kg > {self.truck.capacity}kg."
             )
 
         if self.truck.max_range < self.total_distance_km:

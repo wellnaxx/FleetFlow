@@ -187,6 +187,29 @@ class DeliveryRoute_Should(unittest.TestCase):
         ok_err = r.can_accept_package(_Pkg(5, "A", "C", 10))  # type: ignore[reportArgumentType]
         self.assertIsNone(ok_err)
 
+    def test_capacity_uses_maximum_segment_load_not_total_route_weight(self, *_):
+        r = DeliveryRoute("A", "B", "C", "D", route_id=1)
+        r.truck = _Truck(vehicle_id=10, capacity=50, max_range=1000, current_location="A")  # type: ignore[reportAttributeAccessIssue]
+
+        r.assign_package(_Pkg(1, "A", "B", 40))  # type: ignore[reportArgumentType]
+        r.assign_package(_Pkg(2, "B", "C", 40))  # type: ignore[reportArgumentType]
+
+        self.assertEqual(r.total_assigned_weight(), 80)
+        self.assertEqual(r.maximum_segment_load(), 40)
+        self.assertIsNone(r.can_accept_package(_Pkg(3, "C", "D", 40)))  # type: ignore[reportArgumentType]
+
+    def test_capacity_rejects_overloaded_route_segment(self, *_):
+        r = DeliveryRoute("A", "B", "C", "D", route_id=1)
+        r.truck = _Truck(vehicle_id=10, capacity=50, max_range=1000, current_location="A")  # type: ignore[reportAttributeAccessIssue]
+
+        r.assign_package(_Pkg(1, "A", "C", 30))  # type: ignore[reportArgumentType]
+
+        error = r.can_accept_package(_Pkg(2, "B", "D", 30))  # type: ignore[reportArgumentType]
+
+        self.assertIsNotNone(error)
+        self.assertIn("capacity exceeded", error)
+        self.assertIn("segment load 60", error)
+
     def test_can_accept_package_allows_before_pickup_and_blocks_after_pickup(self, *_):
         base = datetime(2025, 1, 1, 8, 0)
         route = DeliveryRoute("A", "B", "C", route_id=1)

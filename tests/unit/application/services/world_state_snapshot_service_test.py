@@ -965,6 +965,62 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
 
         self.assert_corrupt(snapshot, "exceeds capacity")
 
+    def test_apply_snapshot_allows_non_overlapping_packages_with_total_weight_over_capacity(self) -> None:
+        truck = self.vehicle_manager.find_by_id(1001)
+        assert truck is not None
+        truck.capacity = 10
+
+        departure_time = datetime(2099, 1, 1, 10, 0, 0)
+
+        snapshot = self.make_snapshot(
+            counters=CountersSnapshot(2, 3, 2),
+            customers=(customer_snapshot(),),
+            packages=(
+                package_snapshot(package_id=1, start="A", end="B", weight=8.0, route_id=1),
+                package_snapshot(package_id=2, start="B", end="C", weight=8.0, route_id=1),
+            ),
+            routes=(
+                route_snapshot(
+                    locations=("A", "B", "C"),
+                    departure_time=dt_to_str(departure_time),
+                    truck_vehicle_id=1001,
+                    package_ids=(1, 2),
+                ),
+            ),
+        )
+
+        self.service.apply_snapshot(snapshot)
+
+        route = self.route_repo.get_by_id(1)
+        assert route is not None
+        self.assertEqual(route.maximum_segment_load(), 8.0)
+
+    def test_apply_snapshot_rejects_truck_assignment_when_segment_load_exceeds_capacity(self) -> None:
+        truck = self.vehicle_manager.find_by_id(1001)
+        assert truck is not None
+        truck.capacity = 10
+
+        departure_time = datetime(2099, 1, 1, 10, 0, 0)
+
+        snapshot = self.make_snapshot(
+            counters=CountersSnapshot(2, 3, 2),
+            customers=(customer_snapshot(),),
+            packages=(
+                package_snapshot(package_id=1, start="A", end="C", weight=6.0, route_id=1),
+                package_snapshot(package_id=2, start="B", end="C", weight=6.0, route_id=1),
+            ),
+            routes=(
+                route_snapshot(
+                    locations=("A", "B", "C"),
+                    departure_time=dt_to_str(departure_time),
+                    truck_vehicle_id=1001,
+                    package_ids=(1, 2),
+                ),
+            ),
+        )
+
+        self.assert_corrupt(snapshot, "segment load 12")
+
     def test_apply_snapshot_rejects_truck_assignment_when_route_exceeds_range(self) -> None:
         truck = self.vehicle_manager.find_by_id(1001)
         assert truck is not None

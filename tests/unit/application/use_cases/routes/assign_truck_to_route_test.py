@@ -48,6 +48,7 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
             total_distance_km=100,
         )
         route.total_assigned_weight = MagicMock(return_value=0.0)
+        route.maximum_segment_load = MagicMock(return_value=0.0)
 
         def _set_departure(when: datetime) -> None:
             route.departure_time = when
@@ -79,6 +80,7 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
             truck=None,
         )
         route.total_assigned_weight = MagicMock(return_value=0.0)
+        route.maximum_segment_load = MagicMock(return_value=0.0)
         route.schedule = MagicMock()
 
         truck = MagicMock()
@@ -107,6 +109,7 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
             total_distance_km=100,
         )
         route.total_assigned_weight = MagicMock(return_value=0.0)
+        route.maximum_segment_load = MagicMock(return_value=0.0)
 
         def _set_departure(when: datetime) -> None:
             route.departure_time = when

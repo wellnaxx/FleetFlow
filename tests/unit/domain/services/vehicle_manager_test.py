@@ -62,6 +62,7 @@ class VehicleManager_Should(unittest.TestCase):
             return assigned_weight
 
         r.total_assigned_weight = taw
+        r.maximum_segment_load = taw
         # A "current" route the truck may already be on (with its eta_final)
         active_route = SimpleNamespace(eta_final=truck_eta_final)
         return r, active_route

@@ -29,6 +29,10 @@ class RouteSuitabilityView(Protocol):
         """Return total package weight currently assigned to the route."""
         ...
 
+    def maximum_segment_load(self) -> float:
+        """Return the heaviest package load carried on any route segment."""
+        ...
+
 
 class VehicleManagerPort(Protocol):
     """Manage truck availability and route suitability decisions."""
