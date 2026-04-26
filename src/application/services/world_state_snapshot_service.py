@@ -295,7 +295,7 @@ class WorldStateSnapshotService:
             if truck.vehicle_id not in fleet_ids:
                 raise ValueError(f"Snapshot references missing truck {truck.vehicle_id}.")
 
-            if truck.status not in TruckStatus.STATUSES:
+            if truck.status not in TruckStatus.values():
                 raise ValueError(f"Truck {truck.vehicle_id} has invalid status {truck.status!r}.")
 
             if truck.route_id is not None:

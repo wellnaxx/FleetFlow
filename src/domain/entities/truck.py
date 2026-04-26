@@ -33,7 +33,7 @@ class Truck:
         self.name: str = name
         self.capacity: int = int(capacity)
         self.max_range: int = int(max_range)
-        self.status: str = TruckStatus.FREE
+        self.status: TruckStatus = TruckStatus.FREE
         self._current_location: LocationCode | None = None
         self.route: DeliveryRoute | None = None
         self.busy_from: datetime | None = None

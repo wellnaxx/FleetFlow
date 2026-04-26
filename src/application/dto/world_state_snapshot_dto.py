@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 
+from src.domain.enums.truck_status import TruckStatus
 from src.domain.value_objects.location_code import LocationCode
 
 
@@ -52,7 +53,7 @@ class TruckSnapshot:
     """Persisted truck runtime state."""
 
     vehicle_id: int
-    status: str
+    status: TruckStatus
     current_location: LocationCode | None
     route_id: int | None
     busy_from: str | None

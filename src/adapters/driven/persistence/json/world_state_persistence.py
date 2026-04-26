@@ -21,6 +21,7 @@ from src.application.exceptions.world_state_errors import (
     WorldStateFileNotFoundError,
     WorldStatePersistenceError,
 )
+from src.domain.enums.truck_status import TruckStatus
 from src.domain.value_objects.location_code import LocationCode
 from src.ports.output.world_state_persistence import WorldStatePersistencePort
 
@@ -214,7 +215,7 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
 
         return TruckSnapshot(
             vehicle_id=self._require_int(data, "vehicle_id"),
-            status=self._require_str(data, "status"),
+            status=TruckStatus(self._require_str(data, "status")),
             current_location=self._require_location_or_none(data, "current_location"),
             route_id=route_id_raw,
             busy_from=self._require_str_or_none(data, "busy_from"),

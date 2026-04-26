@@ -5,6 +5,7 @@ from datetime import datetime
 
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.entities.truck import Truck
+from src.domain.enums.truck_status import TruckStatus
 from src.domain.value_objects.location_code import LocationCode
 
 
@@ -14,7 +15,7 @@ class TruckBinding:
 
     truck: Truck
     route: DeliveryRoute | None
-    status: str
+    status: TruckStatus
     current_location: LocationCode | None
     busy_from: datetime | None
     busy_until: datetime | None

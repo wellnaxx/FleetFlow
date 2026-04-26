@@ -3,7 +3,6 @@ from collections.abc import Mapping
 from datetime import datetime
 from unittest.mock import patch
 
-from domain.value_objects.location_code import LocationCode, location_code_or_none
 from src.adapters.driven.persistence.json.serialization import dt_to_str
 from src.adapters.driven.persistence.memory.customer_repository import InMemoryCustomerRepository
 from src.adapters.driven.persistence.memory.package_repository import InMemoryPackageRepository
@@ -27,6 +26,7 @@ from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.enums.truck_status import TruckStatus
 from src.domain.services.vehicle_manager import VehicleManager
 from src.domain.value_objects.contact_info import ContactInfo
+from src.domain.value_objects.location_code import LocationCode, location_code_or_none
 from src.ports.output.world_state_runtime_port import WorldStateRuntimePort
 
 
@@ -83,7 +83,7 @@ def route_snapshot(
 def truck_snapshot(
     vehicle_id: int = 1001,
     *,
-    status: str = TruckStatus.FREE,
+    status: TruckStatus = TruckStatus.FREE,
     current_location: str | LocationCode | None = "A",
     route_id: int | None = None,
     busy_from: str | None = None,
@@ -1146,7 +1146,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
             counters=CountersSnapshot(1, 1, 1),
             trucks=(
                 truck_snapshot(
-                    status="Teleporting",
+                    status="Teleporting",  # type: ignore[arg-type]
                 ),
             ),
         )

@@ -1,9 +1,9 @@
 import unittest
 
-from domain.value_objects.location_code import LocationCode
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.value_objects.contact_info import ContactInfo
+from src.domain.value_objects.location_code import LocationCode
 
 
 class TestDeliveryPackage_Should(unittest.TestCase):

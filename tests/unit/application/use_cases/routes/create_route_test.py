@@ -2,8 +2,8 @@ import unittest
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
-from domain.value_objects.location_code import LocationCode
 from src.application.use_cases.routes.create_route import CreateRouteUseCase
+from src.domain.value_objects.location_code import LocationCode
 
 
 class CreateRouteUseCase_Should(unittest.TestCase):

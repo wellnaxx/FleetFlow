@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from src.adapters.driving.cli.commands.find_suitable_routes_for_package import FindSuitableRoutesForPackage
 from src.application.results.find_suitable_packages_for_route_result import SuitableRouteForPackage
+from src.domain.value_objects.location_code import LocationCode
 
 
 class FindSuitableRoutesForPackage_Should(unittest.TestCase):
@@ -35,19 +36,19 @@ class FindSuitableRoutesForPackage_Should(unittest.TestCase):
         cmd._use_case.execute.return_value = [  # type: ignore[reportAttributeAccessIssue]
             SuitableRouteForPackage(
                 route_id=10,
-                start_location="SYD",
-                end_location="MEL",
+                start_location=LocationCode("SYD"),
+                end_location=LocationCode("MEL"),
                 eta=datetime(2025, 10, 12, 6, 0),
                 capacity_left=123.456,
-                end_city="MEL",
+                end_city=LocationCode("MEL"),
             ),
             SuitableRouteForPackage(
                 route_id=11,
-                start_location="SYD",
-                end_location="MEL",
+                start_location=LocationCode("SYD"),
+                end_location=LocationCode("MEL"),
                 eta=None,
                 capacity_left=None,
-                end_city="MEL",
+                end_city=LocationCode("MEL"),
             ),
         ]
         result = cmd.execute()
@@ -123,11 +124,11 @@ class FindSuitableRoutesForPackage_Should(unittest.TestCase):
         cmd._use_case.execute.return_value = [  # type: ignore[reportAttributeAccessIssue]
             SuitableRouteForPackage(
                 route_id=3,
-                start_location="A",
-                end_location="B",
+                start_location=LocationCode("A"),
+                end_location=LocationCode("B"),
                 eta=None,
                 capacity_left=1.2349,
-                end_city="PER",
+                end_city=LocationCode("PER"),
             )
         ]
 

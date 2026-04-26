@@ -20,6 +20,7 @@ from src.application.exceptions.world_state_errors import (
     WorldStateCorruptionError,
     WorldStateFileNotFoundError,
 )
+from src.domain.enums.truck_status import TruckStatus
 from src.domain.value_objects.location_code import LocationCode
 
 
@@ -242,7 +243,7 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
                 trucks=(
                     TruckSnapshot(
                         vehicle_id=1001,
-                        status="Free",
+                        status=TruckStatus.FREE,
                         current_location=LocationCode("MEL"),
                         route_id=None,
                         busy_from=None,
@@ -251,7 +252,7 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
                     ),
                     TruckSnapshot(
                         vehicle_id=1002,
-                        status="On the way",
+                        status=TruckStatus.ON_THE_WAY,
                         current_location=LocationCode("SYD"),
                         route_id=7,
                         busy_from="2025-01-01T10:00:00",
