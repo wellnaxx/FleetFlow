@@ -1,7 +1,8 @@
 """Build, validate, reconcile, and apply world-state snapshots."""
 
 import itertools
-from typing import ClassVar
+from collections.abc import Callable, Iterable
+from typing import Any, ClassVar
 
 from src.adapters.driven.persistence.json.serialization import dt_from_str, dt_to_str
 from src.application.dto.candidate_truck_dto import CandidateTruckLink
@@ -87,6 +88,17 @@ class WorldStateSnapshotService:
         )
         return WorldStateSnapshot(schema_version=self.SCHEMA_VERSION, world=world)
 
+    def _sorted_snapshots[T, S](
+        self, items: Iterable[T], *, key: Callable[[T], Any], transform: Callable[[T], S]
+    ) -> tuple[S, ...]:
+        return tuple(transform(item) for item in sorted(items, key=key))
+
+    @staticmethod
+    def _keyed_by[T, K, V](
+        items: Iterable[T], *, key: Callable[[T], K], transform: Callable[[T], V]
+    ) -> dict[K, V]:
+        return {key(item): transform(item) for item in items}
+
     def _build_counters_snapshot(self) -> CountersSnapshot:
         return CountersSnapshot(
             next_customer_id=self._customer_repo.peek_next_id(),
@@ -95,44 +107,49 @@ class WorldStateSnapshotService:
         )
 
     def _build_customer_snapshots(self) -> tuple[CustomerSnapshot, ...]:
-        return tuple(
-            CustomerSnapshot(
+        return self._sorted_snapshots(
+            self._customer_repo.list_all(),
+            key=lambda customer: customer.customer_id,
+            transform=lambda customer: CustomerSnapshot(
                 customer_id=customer.customer_id,
                 name=customer.name,
                 email=customer.email or "",
                 phone=customer.phone_number or "",
-            )
-            for customer in sorted(self._customer_repo.list_all(), key=lambda customer: customer.customer_id)
+            ),
         )
 
     def _build_package_snapshots(self) -> tuple[PackageSnapshot, ...]:
-        return tuple(
-            PackageSnapshot(
+        return self._sorted_snapshots(
+            self._package_repo.list_all(),
+            key=lambda package: package.package_id,
+            transform=lambda package: PackageSnapshot(
                 package_id=package.package_id,
                 start=package.start_location,
                 end=package.end_location,
                 weight=package.weight,
                 customer_id=package.customer.customer_id,
                 route_id=package.route.route_id if package.route is not None else None,
-            )
-            for package in sorted(self._package_repo.list_all(), key=lambda package: package.package_id)
+            ),
         )
 
     def _build_route_snapshots(self) -> tuple[RouteSnapshot, ...]:
-        return tuple(
-            RouteSnapshot(
+        return self._sorted_snapshots(
+            self._route_repo.list_all(),
+            key=lambda route: route.route_id,
+            transform=lambda route: RouteSnapshot(
                 route_id=route.route_id,
                 locations=tuple(route.locations),
                 departure_time=dt_to_str(route.departure_time),
                 truck_vehicle_id=route.truck.vehicle_id if route.truck is not None else None,
                 package_ids=tuple(sorted(package.package_id for package in route.packages)),
-            )
-            for route in sorted(self._route_repo.list_all(), key=lambda route: route.route_id)
+            ),
         )
 
     def _build_truck_snapshots(self) -> tuple[TruckSnapshot, ...]:
-        return tuple(
-            TruckSnapshot(
+        return self._sorted_snapshots(
+            self._vehicle_manager.list_fleet(),
+            key=lambda truck: truck.vehicle_id,
+            transform=lambda truck: TruckSnapshot(
                 vehicle_id=truck.vehicle_id,
                 status=truck.status,
                 current_location=truck.current_location,
@@ -140,8 +157,7 @@ class WorldStateSnapshotService:
                 busy_from=dt_to_str(truck.busy_from),
                 busy_until=dt_to_str(truck.busy_until),
                 in_transit_to=truck.in_transit_to,
-            )
-            for truck in sorted(self._vehicle_manager.list_fleet(), key=lambda truck: truck.vehicle_id)
+            ),
         )
 
     def apply_snapshot(self, snapshot: WorldStateSnapshot) -> None:
@@ -444,17 +460,14 @@ class WorldStateSnapshotService:
             )
 
     def _rebuild_customers(self, snapshots: tuple[CustomerSnapshot, ...]) -> dict[int, Customer]:
-        return {
-            snapshot.customer_id: Customer(
+        return self._keyed_by(
+            snapshots,
+            key=lambda snapshot: snapshot.customer_id,
+            transform=lambda snapshot: Customer(
                 customer_id=snapshot.customer_id,
-                contact=ContactInfo(
-                    name=snapshot.name,
-                    email=snapshot.email,
-                    phone_number=snapshot.phone,
-                ),
-            )
-            for snapshot in snapshots
-        }
+                contact=ContactInfo(name=snapshot.name, email=snapshot.email, phone_number=snapshot.phone),
+            ),
+        )
 
     def _rebuild_packages(
         self, snapshots: tuple[PackageSnapshot, ...], rebuilt_customers: dict[int, Customer]
@@ -475,14 +488,15 @@ class WorldStateSnapshotService:
         return rebuilt_packages
 
     def _rebuild_routes(self, snapshots: tuple[RouteSnapshot, ...]) -> dict[int, DeliveryRoute]:
-        return {
-            snapshot.route_id: DeliveryRoute(
+        return self._keyed_by(
+            snapshots,
+            key=lambda snapshot: snapshot.route_id,
+            transform=lambda snapshot: DeliveryRoute(
                 *snapshot.locations,
                 departure_time=dt_from_str(snapshot.departure_time),
                 route_id=snapshot.route_id,
-            )
-            for snapshot in snapshots
-        }
+            ),
+        )
 
     def _validate_route_package_compatibility(self, world: WorldSnapshotData) -> None:
         routes_by_id = {route.route_id: route for route in world.routes}
