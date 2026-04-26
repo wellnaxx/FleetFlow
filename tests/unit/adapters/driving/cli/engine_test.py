@@ -6,6 +6,13 @@ from src.application.results.heartbeat_summary_result import HeartbeatSummary
 
 
 class EngineTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._print_patcher = patch("builtins.print")
+        self._print_patcher.start()
+
+    def tearDown(self) -> None:
+        self._print_patcher.stop()
+
     def make_engine(self) -> tuple[Engine, MagicMock, MagicMock, MagicMock, MagicMock, MagicMock]:
         factory = MagicMock()
         auth = MagicMock()
