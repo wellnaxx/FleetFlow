@@ -1,6 +1,6 @@
 """In-memory world-state snapshot gateway and runtime swap adapter."""
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
 from src.adapters.driven.persistence.memory.customer_repository import InMemoryCustomerRepository
 from src.adapters.driven.persistence.memory.package_repository import InMemoryPackageRepository
@@ -48,7 +48,7 @@ class InMemoryWorldStateRuntime(WorldStateRuntimePort):
         packages_by_id: Mapping[int, DeliveryPackage],
         routes_by_id: Mapping[int, DeliveryRoute],
         counters: CountersSnapshot,
-        truck_bindings: list[TruckBinding],
+        truck_bindings: Sequence[TruckBinding],
     ) -> None:
         """Replace repository and fleet state, rolling back on failure.
 

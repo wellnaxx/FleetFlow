@@ -1,6 +1,6 @@
 """Output port for atomic world-state runtime replacement."""
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Protocol
 
 from src.application.dto.truck_binding_dto import TruckBinding
@@ -20,7 +20,7 @@ class WorldStateRuntimePort(Protocol):
         packages_by_id: Mapping[int, DeliveryPackage],
         routes_by_id: Mapping[int, DeliveryRoute],
         counters: CountersSnapshot,
-        truck_bindings: list[TruckBinding],
+        truck_bindings: Sequence[TruckBinding],
     ) -> None:
         """Replace runtime world state.
 
