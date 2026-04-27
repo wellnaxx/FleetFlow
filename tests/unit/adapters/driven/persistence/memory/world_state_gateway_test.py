@@ -1,4 +1,5 @@
 import unittest
+from collections.abc import Sequence
 from datetime import datetime
 from unittest.mock import patch
 
@@ -37,7 +38,7 @@ class _FailingVehicleManager(VehicleManager):
         super().__init__()
         self.replace_attempted = False
 
-    def replace_truck_bindings(self, bindings: list[TruckBinding]) -> None:
+    def replace_truck_bindings(self, bindings: Sequence[TruckBinding]) -> None:
         self.replace_attempted = True
         raise RuntimeError("truck binding failure")
 

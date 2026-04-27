@@ -1,5 +1,5 @@
 import unittest
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 from unittest.mock import patch
 
@@ -121,7 +121,7 @@ class _RuntimeStateAdapter(WorldStateRuntimePort):
         packages_by_id: Mapping[int, DeliveryPackage],
         routes_by_id: Mapping[int, DeliveryRoute],
         counters: CountersSnapshot,
-        truck_bindings: list[TruckBinding],
+        truck_bindings: Sequence[TruckBinding],
     ) -> None:
         self._customer_repo.replace_customers(customers_by_id, counters.next_customer_id)
         self._package_repo.replace_packages(packages_by_id, counters.next_package_id)
