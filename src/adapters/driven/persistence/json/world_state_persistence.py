@@ -106,19 +106,26 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
         raw_dict = self._require_mapping(raw)
         schema_version = self._require_int(raw_dict, "schema_version")
 
-        world_obj = raw_dict.get("world")
-        if world_obj is None:
-            has_legacy_sections = any(
-                key in raw_dict for key in ("counters", "customers", "packages", "routes")
-            )
-            if not has_legacy_sections:
-                raise ValueError("Missing 'world' section and no legacy world sections found.")
+        legacy_sections = ("counters", "customers", "packages", "routes")
+        present_legacy_sections = [section for section in legacy_sections if section in raw_dict]
 
-            world_dict: dict[str, object] = {
-                "counters": raw_dict.get("counters", {}),
-                "customers": raw_dict.get("customers", []),
-                "packages": raw_dict.get("packages", []),
-                "routes": raw_dict.get("routes", []),
+        world_obj = raw_dict.get("world")
+
+        if world_obj is None:
+            if not present_legacy_sections:
+                raise ValueError("World state payload must contain 'world' or complete legacy sections.")
+
+            missing_sections = [section for section in legacy_sections if section not in raw_dict]
+            if missing_sections:
+                missing = ", ".join(missing_sections)
+                raise ValueError(f"Legacy world state payload is missing required section(s): {missing}.")
+
+            world_dict = {
+                "counters": raw_dict["counters"],
+                "customers": raw_dict["customers"],
+                "packages": raw_dict["packages"],
+                "routes": raw_dict["routes"],
+                "trucks": raw_dict.get("trucks", []),
             }
         else:
             world_dict = self._require_mapping(world_obj)

@@ -505,3 +505,38 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
                 os.remove(path)
 
         self.assertIn("Malformed world state JSON", str(ctx.exception))
+
+    def test_read_incomplete_legacy_flat_schema_raises_world_state_corruption_error(self) -> None:
+        complete_legacy: dict[str, Any] = {
+            "schema_version": 1,
+            "counters": {
+                "next_customer_id": 1,
+                "next_package_id": 1,
+                "next_route_id": 1,
+            },
+            "customers": [],
+            "packages": [],
+            "routes": [],
+        }
+
+        required_sections = ("counters", "customers", "packages", "routes")
+
+        for missing_section in required_sections:
+            with self.subTest(missing_section=missing_section):
+                raw = dict(complete_legacy)
+                del raw[missing_section]
+
+                filename = f"world-state-{uuid.uuid4().hex}.json"
+                path = os.path.join(DATA_DIR, filename)
+
+                try:
+                    with open(path, "w", encoding="utf-8") as file:
+                        json.dump(raw, file)
+
+                    with self.assertRaises(WorldStateCorruptionError) as ctx:
+                        self.persistence.read(path)
+                finally:
+                    with contextlib.suppress(OSError):
+                        os.remove(path)
+
+                self.assertIn("Malformed world state JSON", str(ctx.exception))
