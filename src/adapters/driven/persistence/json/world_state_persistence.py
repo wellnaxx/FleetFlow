@@ -112,6 +112,12 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
         world_obj = raw_dict.get("world")
 
         if world_obj is None:
+            if schema_version != 1:
+                raise ValueError("Legacy flat world state payload is only supported for schema version 1.")
+
+            if "trucks" in raw_dict:
+                raise ValueError("Schema v1 world state payloads do not support truck snapshots.")
+
             if not present_legacy_sections:
                 raise ValueError("World state payload must contain 'world' or complete legacy sections.")
 
@@ -129,6 +135,10 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
             }
         else:
             world_dict = self._require_mapping(world_obj)
+            if schema_version == 1 and "trucks" in world_dict:
+                raise ValueError("Schema v1 world state payloads do not support truck snapshots.")
+            if schema_version == 2 and "trucks" not in world_dict:
+                raise ValueError("Schema v2 world state payloads require truck snapshots.")
 
         counters_raw = self._require_mapping(world_dict.get("counters"))
         customers_raw = self._require_list(world_dict.get("customers"))

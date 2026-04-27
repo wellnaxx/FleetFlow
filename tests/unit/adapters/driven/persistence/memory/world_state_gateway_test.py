@@ -97,6 +97,26 @@ class InMemoryWorldStateGatewayTests(unittest.TestCase):
         )
         gateway = InMemoryWorldStateGateway(snapshot_service=snapshot_service)
 
+        route_snapshot = RouteSnapshot(
+            route_id=1,
+            locations=(LocationCode("A"), LocationCode("B")),
+            departure_time=dt_to_str(datetime(2099, 1, 1, 10, 0, 0)),
+            truck_vehicle_id=1001,
+            package_ids=(1,),
+        )
+        truck_snapshots = tuple(
+            TruckSnapshot(
+                vehicle_id=truck.vehicle_id,
+                status=TruckStatus.ON_THE_WAY if truck.vehicle_id == 1001 else TruckStatus.FREE,
+                current_location=LocationCode("A") if truck.vehicle_id == 1001 else truck.current_location,
+                route_id=1 if truck.vehicle_id == 1001 else None,
+                busy_from=route_snapshot.departure_time if truck.vehicle_id == 1001 else None,
+                busy_until=None,
+                in_transit_to=None,
+            )
+            for truck in vehicle_manager.list_fleet()
+        )
+
         snapshot = WorldStateSnapshot(
             schema_version=2,
             world=WorldSnapshotData(
@@ -119,16 +139,8 @@ class InMemoryWorldStateGatewayTests(unittest.TestCase):
                         route_id=1,
                     ),
                 ),
-                routes=(
-                    RouteSnapshot(
-                        route_id=1,
-                        locations=(LocationCode("A"), LocationCode("B")),
-                        departure_time=dt_to_str(datetime(2099, 1, 1, 10, 0, 0)),
-                        truck_vehicle_id=1001,
-                        package_ids=(1,),
-                    ),
-                ),
-                trucks=(),
+                routes=(route_snapshot,),
+                trucks=truck_snapshots,
             ),
         )
 

@@ -190,16 +190,61 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
         routes: tuple[RouteSnapshot, ...] | None = None,
         trucks: tuple[TruckSnapshot, ...] | None = None,
     ) -> WorldStateSnapshot:
+        resolved_routes = routes or ()
+        if trucks is None and schema_version == 2:
+            resolved_trucks = self.fleet_truck_snapshots_for_routes(resolved_routes)
+        else:
+            resolved_trucks = trucks or ()
+
         return WorldStateSnapshot(
             schema_version=schema_version,
             world=WorldSnapshotData(
                 counters=counters or CountersSnapshot(2, 2, 2),
                 customers=customers or (),
                 packages=packages or (),
-                routes=routes or (),
-                trucks=trucks or (),
+                routes=resolved_routes,
+                trucks=resolved_trucks,
             ),
         )
+
+    def fleet_truck_snapshots_for_routes(
+        self,
+        routes: tuple[RouteSnapshot, ...] = (),
+        *overrides: TruckSnapshot,
+    ) -> tuple[TruckSnapshot, ...]:
+        overrides_by_id = {snapshot.vehicle_id: snapshot for snapshot in overrides}
+        routes_by_truck_id = {
+            route.truck_vehicle_id: route for route in routes if route.truck_vehicle_id is not None
+        }
+
+        snapshots: list[TruckSnapshot] = []
+        for truck in self.vehicle_manager.list_fleet():
+            override = overrides_by_id.get(truck.vehicle_id)
+            if override is not None:
+                snapshots.append(override)
+                continue
+
+            assigned_route = routes_by_truck_id.get(truck.vehicle_id)
+            if assigned_route is not None:
+                snapshots.append(
+                    truck_snapshot(
+                        vehicle_id=truck.vehicle_id,
+                        status=TruckStatus.ON_THE_WAY,
+                        current_location=assigned_route.locations[0],
+                        route_id=assigned_route.route_id,
+                        busy_from=assigned_route.departure_time,
+                    )
+                )
+                continue
+
+            snapshots.append(
+                truck_snapshot(
+                    vehicle_id=truck.vehicle_id,
+                    current_location=truck.current_location,
+                )
+            )
+
+        return tuple(snapshots)
 
     def assert_corrupt(self, snapshot: WorldStateSnapshot, message: str) -> None:
         with self.assertRaises(WorldStateCorruptionError) as ctx:
@@ -335,6 +380,24 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
         self.service.apply_snapshot(snapshot)
 
         self.assertIsNotNone(self.route_repo.get_by_id(1))
+
+    def test_apply_snapshot_rejects_legacy_v1_schema_with_truck_snapshots(self) -> None:
+        snapshot = self.make_snapshot(
+            schema_version=1,
+            counters=CountersSnapshot(1, 1, 1),
+            trucks=(truck_snapshot(),),
+        )
+
+        self.assert_corrupt(snapshot, "Schema v1 snapshots do not support truck runtime state")
+
+    def test_apply_snapshot_rejects_v2_snapshot_missing_fleet_truck_snapshots(self) -> None:
+        snapshot = self.make_snapshot(
+            schema_version=2,
+            counters=CountersSnapshot(1, 1, 1),
+            trucks=(),
+        )
+
+        self.assert_corrupt(snapshot, "Schema v2 snapshot is missing truck snapshots")
 
     def test_apply_snapshot_rejects_invalid_counter_values(self) -> None:
         invalid_counters = (
@@ -1023,7 +1086,8 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
     def test_apply_snapshot_restores_free_truck_runtime_state(self) -> None:
         snapshot = self.make_snapshot(
             counters=CountersSnapshot(1, 1, 1),
-            trucks=(
+            trucks=self.fleet_truck_snapshots_for_routes(
+                (),
                 truck_snapshot(
                     current_location="B",
                 ),
@@ -1045,15 +1109,17 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
     def test_apply_snapshot_restores_in_transit_truck_runtime_state(self) -> None:
         departure_time = datetime(2025, 1, 1, 10, 0, 0)
         current_time = datetime(2025, 1, 1, 10, 30, 0)
+        routes = (
+            route_snapshot(
+                departure_time=dt_to_str(departure_time),
+                truck_vehicle_id=1001,
+            ),
+        )
         snapshot = self.make_snapshot(
             counters=CountersSnapshot(1, 1, 2),
-            routes=(
-                route_snapshot(
-                    departure_time=dt_to_str(departure_time),
-                    truck_vehicle_id=1001,
-                ),
-            ),
-            trucks=(
+            routes=routes,
+            trucks=self.fleet_truck_snapshots_for_routes(
+                routes,
                 truck_snapshot(
                     status=TruckStatus.ON_THE_WAY,
                     current_location=LocationCode("A"),
@@ -1085,15 +1151,17 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
         truck = self.vehicle_manager.find_by_id(1001)
         assert truck is not None
 
+        routes = (
+            route_snapshot(
+                departure_time=dt_to_str(datetime(2025, 1, 1, 10, 0, 0)),
+                truck_vehicle_id=1001,
+            ),
+        )
         snapshot = self.make_snapshot(
             counters=CountersSnapshot(1, 1, 2),
-            routes=(
-                route_snapshot(
-                    departure_time=dt_to_str(datetime(2025, 1, 1, 10, 0, 0)),
-                    truck_vehicle_id=1001,
-                ),
-            ),
-            trucks=(
+            routes=routes,
+            trucks=self.fleet_truck_snapshots_for_routes(
+                routes,
                 truck_snapshot(
                     status=TruckStatus.ON_THE_WAY,
                     current_location="A",

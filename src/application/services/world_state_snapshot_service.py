@@ -184,7 +184,7 @@ class WorldStateSnapshotService:
         self._validate_counters(world.counters)
         self._validate_ids(world)
         self._validate_references(world)
-        self._validate_truck_snapshots(world)
+        self._validate_truck_snapshots(world, schema_version=snapshot.schema_version)
         self._validate_route_package_consistency(world)
         self._validate_route_package_compatibility(world)
         self._validate_truck_route_compatibility(world)
@@ -218,6 +218,9 @@ class WorldStateSnapshotService:
     def _validate_schema(self, snapshot: WorldStateSnapshot) -> None:
         if snapshot.schema_version not in self.SUPPORTED_SCHEMA_VERSIONS:
             raise ValueError(f"Unsupported schema version: {snapshot.schema_version}")
+
+        if snapshot.schema_version == 1 and snapshot.world.trucks:
+            raise ValueError("Schema v1 snapshots do not support truck runtime state.")
 
     def _validate_counters(self, counters: CountersSnapshot) -> None:
         if counters.next_customer_id < 1:
@@ -290,7 +293,7 @@ class WorldStateSnapshotService:
                 raise ValueError(f"Truck {truck_vehicle_id} is assigned to multiple routes in snapshot.")
             assigned_truck_ids.add(truck_vehicle_id)
 
-    def _validate_truck_snapshots(self, world: WorldSnapshotData) -> None:
+    def _validate_truck_snapshots(self, world: WorldSnapshotData, *, schema_version: int) -> None:
         fleet_ids = {truck.vehicle_id for truck in self._vehicle_manager.list_fleet()}
         route_trucks = {
             route.truck_vehicle_id: route.route_id
@@ -325,6 +328,12 @@ class WorldStateSnapshotService:
                         f"Truck {truck.vehicle_id} points to route {truck.route_id}, "
                         f"but route assignment points to {expected_route_id}."
                     )
+
+        if schema_version == 2:
+            missing_truck_ids = fleet_ids - seen_truck_ids
+            if missing_truck_ids:
+                missing = ", ".join(str(truck_id) for truck_id in sorted(missing_truck_ids))
+                raise ValueError(f"Schema v2 snapshot is missing truck snapshots: {missing}.")
 
         trucks_by_snapshot_id = {truck.vehicle_id: truck for truck in world.trucks}
 

@@ -29,6 +29,20 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
         self.persistence = JsonWorldStatePersistence()
 
     def make_snapshot(self, *, schema_version: int = 2) -> WorldStateSnapshot:
+        trucks = ()
+        if schema_version == 2:
+            trucks = (
+                TruckSnapshot(
+                    vehicle_id=1001,
+                    status=TruckStatus.ON_THE_WAY,
+                    current_location=LocationCode("A"),
+                    route_id=7,
+                    busy_from="2025-01-01T10:00:00",
+                    busy_until=None,
+                    in_transit_to=None,
+                ),
+            )
+
         return WorldStateSnapshot(
             schema_version=schema_version,
             world=WorldSnapshotData(
@@ -60,7 +74,7 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
                         package_ids=(2,),
                     ),
                 ),
-                trucks=(),
+                trucks=trucks,
             ),
         )
 
@@ -115,7 +129,17 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
                             "package_ids": [2],
                         }
                     ],
-                    "trucks": [],
+                    "trucks": [
+                        {
+                            "vehicle_id": 1001,
+                            "status": "On the way",
+                            "current_location": "A",
+                            "route_id": 7,
+                            "busy_from": "2025-01-01T10:00:00",
+                            "busy_until": None,
+                            "in_transit_to": None,
+                        }
+                    ],
                 },
                 "users": None,
             },
@@ -162,7 +186,17 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
                         "package_ids": [2],
                     }
                 ],
-                "trucks": [],
+                "trucks": [
+                    {
+                        "vehicle_id": 1001,
+                        "status": "On the way",
+                        "current_location": "A",
+                        "route_id": 7,
+                        "busy_from": "2025-01-01T10:00:00",
+                        "busy_until": None,
+                        "in_transit_to": None,
+                    }
+                ],
             },
         }
 
@@ -179,8 +213,7 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
 
         self.assertEqual(loaded, snapshot)
 
-    def test_read_supports_nested_world_schema_without_truck_section_for_compatibility(self) -> None:
-        snapshot = self.make_snapshot()
+    def test_read_rejects_v2_nested_world_schema_without_truck_section(self) -> None:
         raw = {
             "schema_version": 2,
             "world": {
@@ -225,12 +258,13 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
             with open(path, "w", encoding="utf-8") as file:
                 json.dump(raw, file)
 
-            _read_path, loaded = self.persistence.read(path)
+            with self.assertRaises(WorldStateCorruptionError) as ctx:
+                self.persistence.read(path)
         finally:
             with contextlib.suppress(OSError):
                 os.remove(path)
 
-        self.assertEqual(loaded, snapshot)
+        self.assertIn("Malformed world state JSON", str(ctx.exception))
 
     def test_read_supports_truck_snapshots(self) -> None:
         snapshot = WorldStateSnapshot(
@@ -360,6 +394,61 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
 
         self.assertTrue(read_path.endswith(filename))
         self.assertEqual(loaded, snapshot)
+
+    def test_read_rejects_legacy_flat_schema_with_truck_snapshots(self) -> None:
+        raw: dict[str, Any] = {
+            "schema_version": 1,
+            "counters": {
+                "next_customer_id": 1,
+                "next_package_id": 1,
+                "next_route_id": 1,
+            },
+            "customers": [],
+            "packages": [],
+            "routes": [],
+            "trucks": [],
+        }
+
+        filename = f"world-state-{uuid.uuid4().hex}.json"
+        path = os.path.join(DATA_DIR, filename)
+        try:
+            with open(path, "w", encoding="utf-8") as file:
+                json.dump(raw, file)
+
+            with self.assertRaises(WorldStateCorruptionError) as ctx:
+                self.persistence.read(path)
+        finally:
+            with contextlib.suppress(OSError):
+                os.remove(path)
+
+        self.assertIn("Malformed world state JSON", str(ctx.exception))
+
+    def test_read_rejects_legacy_flat_schema_for_v2(self) -> None:
+        raw: dict[str, Any] = {
+            "schema_version": 2,
+            "counters": {
+                "next_customer_id": 1,
+                "next_package_id": 1,
+                "next_route_id": 1,
+            },
+            "customers": [],
+            "packages": [],
+            "routes": [],
+        }
+
+        filename = f"world-state-{uuid.uuid4().hex}.json"
+        path = os.path.join(DATA_DIR, filename)
+        try:
+            with open(path, "w", encoding="utf-8") as file:
+                json.dump(raw, file)
+
+            with self.assertRaises(WorldStateCorruptionError) as ctx:
+                self.persistence.read(path)
+        finally:
+            with contextlib.suppress(OSError):
+                os.remove(path)
+
+        self.assertIn("Malformed world state JSON", str(ctx.exception))
 
     def test_read_missing_file_raises_world_state_file_not_found(self) -> None:
         filename = f"missing-{uuid.uuid4().hex}.json"
