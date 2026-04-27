@@ -75,6 +75,9 @@ class WorldStateReconciliationService:
         if truck is None:
             return TruckReconciliationSummary()
 
+        # current_position() reports the exact final ETA as AT_STOP, while times after
+        # the final ETA are AFTER_END. Both paths can release the truck, but they cover
+        # different position states.
         position = route.current_position(now)
         before_state = self._truck_state(truck)
 
