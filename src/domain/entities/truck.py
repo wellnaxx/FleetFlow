@@ -46,7 +46,7 @@ class Truck:
         return self._current_location
 
     @current_location.setter
-    def current_location(self, value: LocationCode | None) -> None:
+    def current_location(self, value: str | LocationCode | None) -> None:
         self._current_location = location_code_or_none(value)
 
     @property
@@ -55,7 +55,7 @@ class Truck:
         return self._in_transit_to
 
     @in_transit_to.setter
-    def in_transit_to(self, value: LocationCode | None) -> None:
+    def in_transit_to(self, value: str | LocationCode | None) -> None:
         self._in_transit_to = location_code_or_none(value)
 
     def is_free(self) -> bool:

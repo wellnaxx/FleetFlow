@@ -1,5 +1,6 @@
 """Use case for creating a delivery route."""
 
+from collections.abc import Sequence
 from datetime import datetime
 
 from src.domain.entities.delivery_route import DeliveryRoute
@@ -19,11 +20,13 @@ class CreateRouteUseCase:
         """
         self._routes = routes
 
-    def execute(self, locations: list[LocationCode], departure_time: datetime | None) -> DeliveryRoute:
+    def execute(
+        self, locations: Sequence[str | LocationCode], departure_time: datetime | None
+    ) -> DeliveryRoute:
         """Create and persist a delivery route.
 
         Args:
-            locations: Ordered list of route stops.
+            locations: Ordered list of raw or typed route stops.
             departure_time: Optional initial departure time.
 
         Returns:

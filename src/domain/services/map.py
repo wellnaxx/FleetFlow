@@ -104,7 +104,7 @@ class Map:
         return normalized in cls._locations
 
     @classmethod
-    def get_distance(cls, a: str, b: str) -> int:
+    def get_distance(cls, a: str | LocationCode, b: str | LocationCode) -> int:
         """Return the distance between two supported location codes.
 
         Args:

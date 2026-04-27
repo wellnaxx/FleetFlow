@@ -20,8 +20,8 @@ class DeliveryPackage:
 
     def __init__(
         self,
-        start_location: LocationCode,
-        end_location: LocationCode,
+        start_location: str | LocationCode,
+        end_location: str | LocationCode,
         weight: float,
         customer: Customer,
         package_id: int,
@@ -29,8 +29,8 @@ class DeliveryPackage:
         """Create a package shipment.
 
         Args:
-            start_location: Pickup location code.
-            end_location: Delivery location code.
+            start_location: Raw or typed pickup location code.
+            end_location: Raw or typed delivery location code.
             weight: Package weight in kilograms.
             customer: Owning customer.
             package_id: Stable package identifier.
@@ -74,7 +74,7 @@ class DeliveryPackage:
         return location
 
     @current_location.setter
-    def current_location(self, value: LocationCode | None) -> None:
+    def current_location(self, value: str | LocationCode | None) -> None:
         self._current_location = location_code_or_none(value)
 
     def reset_assignment_state(self) -> None:

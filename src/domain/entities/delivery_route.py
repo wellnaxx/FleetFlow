@@ -33,14 +33,14 @@ class DeliveryRoute:
 
     def __init__(
         self,
-        *locations: LocationCode,
+        *locations: str | LocationCode,
         departure_time: datetime | None = None,
         route_id: int,
     ) -> None:
         """Create a delivery route.
 
         Args:
-            *locations: Ordered location codes from origin to destination.
+            *locations: Ordered raw or typed location codes from origin to destination.
             departure_time: Optional scheduled departure time.
             route_id: Stable route identifier.
 
@@ -51,15 +51,16 @@ class DeliveryRoute:
         if len(locations) < 2:
             raise ValueError("A route must have at least two locations.")
 
+        typed_locations = [LocationCode(location) for location in locations]
         valid = set(Map.get_locations())
-        for location in locations:
+        for location in typed_locations:
             if location not in valid:
                 raise ValueError(f"Invalid location code: {location}.")
 
-        if len(set(locations)) != len(locations):
+        if len(set(typed_locations)) != len(typed_locations):
             raise ValueError("A route cannot contain duplicate locations.")
 
-        self._locations: list[LocationCode] = [LocationCode(location) for location in locations]
+        self._locations: list[LocationCode] = typed_locations
         self._departure_time: datetime | None = departure_time
         self.route_id = route_id
 
@@ -143,11 +144,11 @@ class DeliveryRoute:
             current_time += duration
             self._stop_times[end] = current_time
 
-    def arrival_time_at(self, city: LocationCode) -> datetime:
+    def arrival_time_at(self, city: str | LocationCode) -> datetime:
         """Return the scheduled arrival time for a route city.
 
         Args:
-            city: Location code on this route.
+            city: Raw or typed location code on this route.
 
         Returns:
             Scheduled arrival time at the requested city.
@@ -206,12 +207,12 @@ class DeliveryRoute:
 
         return RoutePosition(kind="AT_STOP", stop_city=first_city, next_eta=first_departure)
 
-    def includes_in_order(self, start: LocationCode, end: LocationCode) -> bool:
+    def includes_in_order(self, start: str | LocationCode, end: str | LocationCode) -> bool:
         """Return whether the route visits start before end.
 
         Args:
-            start: Candidate pickup location code.
-            end: Candidate delivery location code.
+            start: Candidate raw or typed pickup location code.
+            end: Candidate raw or typed delivery location code.
 
         Returns:
             True when both locations are present and start appears before end.

@@ -20,14 +20,14 @@ class LocationCode(str):
         """
         if not isinstance(value, str):
             raise TypeError("Location code must be a string.")
-        
+
         text = value.strip().upper()
         if not text:
             raise ValueError("Location code cannot be blank.")
         return str.__new__(cls, text)
 
 
-def location_code_or_none(value: str | None) -> LocationCode | None:
+def location_code_or_none(value: str | LocationCode | None) -> LocationCode | None:
     """Convert an optional raw location value into a typed location code.
 
     Args:
