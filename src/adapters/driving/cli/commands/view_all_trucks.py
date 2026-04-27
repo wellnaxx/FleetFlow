@@ -20,4 +20,3 @@ class ViewAllTrucks(BaseCommand[ViewAllTrucksUseCase]):
             PermissionError: If the caller lacks truck view permission.
         """
         return "\n\n".join(truck.info() for truck in self._use_case.execute()) or "No trucks."
-

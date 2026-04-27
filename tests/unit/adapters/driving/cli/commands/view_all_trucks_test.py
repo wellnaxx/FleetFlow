@@ -44,5 +44,3 @@ class ViewAllTrucks_Should(unittest.TestCase):
 
         self.assertEqual(result, "Truck 1 Info\n\nTruck 2 Info")
         cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
-
-

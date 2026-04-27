@@ -106,5 +106,3 @@ class ViewRoute_Should(unittest.TestCase):
     def test_no_mutates_flags(self) -> None:
         self.assertFalse(getattr(ViewRoute, "mutates_state", False))
         self.assertFalse(getattr(ViewRoute, "mutates_session", False))
-
-

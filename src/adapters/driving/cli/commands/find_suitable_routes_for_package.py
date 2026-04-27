@@ -41,4 +41,3 @@ class FindSuitableRoutesForPackage(BaseCommand[FindSuitableRoutesForPackageUseCa
             )
 
         return "\n".join(lines)
-

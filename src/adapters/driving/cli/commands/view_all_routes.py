@@ -21,4 +21,3 @@ class ViewAllRoutes(BaseCommand[ViewAllRoutesUseCase]):
         """
         routes = self._use_case.execute()
         return "\n\n".join(r.info() for r in routes) if routes else "No routes available."
-

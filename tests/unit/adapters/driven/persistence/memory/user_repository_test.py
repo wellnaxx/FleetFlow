@@ -91,5 +91,3 @@ class InMemoryUserRepository_Should(unittest.TestCase):
 
     def test_save_is_noop(self) -> None:
         self.assertIsNone(self.repo.save())
-
-

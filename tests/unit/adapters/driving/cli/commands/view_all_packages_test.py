@@ -53,5 +53,3 @@ class TestViewAllPackages_Should(unittest.TestCase):
         cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
         mock_package1.info.assert_called_once_with()
         mock_package2.info.assert_called_once_with()
-
-

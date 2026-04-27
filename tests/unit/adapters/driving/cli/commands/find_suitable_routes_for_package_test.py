@@ -134,5 +134,3 @@ class FindSuitableRoutesForPackage_Should(unittest.TestCase):
 
         out = cmd.execute()
         self.assertIn("Capacity left: 1.23kg", out)
-
-

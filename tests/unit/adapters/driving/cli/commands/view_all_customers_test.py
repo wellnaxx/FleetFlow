@@ -96,5 +96,3 @@ class ViewAllCustomers_Should(unittest.TestCase):
     def test_no_mutates_flags(self) -> None:
         self.assertFalse(getattr(ViewAllCustomers, "mutates_state", False))
         self.assertFalse(getattr(ViewAllCustomers, "mutates_session", False))
-
-

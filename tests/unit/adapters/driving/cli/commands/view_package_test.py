@@ -93,5 +93,3 @@ class TestViewPackage_Should(unittest.TestCase):
         mock_validate.assert_called_once_with(["abc"], 1)
         mock_try_parse.assert_called_once_with("abc")
         cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
-
-

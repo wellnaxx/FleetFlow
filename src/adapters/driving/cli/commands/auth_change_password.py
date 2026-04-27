@@ -14,6 +14,7 @@ class AuthChangePassword(BaseCommand[ChangePasswordUseCase]):
         changepassword: self-service flow prompting old/new/confirm.
         changepassword <username>: manager override prompting new/confirm.
     """
+
     skips_heartbeat = True
     autosaves_state = False
 
@@ -62,4 +63,3 @@ class AuthChangePassword(BaseCommand[ChangePasswordUseCase]):
 
         self._use_case.execute(username, new_pw, old_password=old_pw)
         return "Password changed."
-

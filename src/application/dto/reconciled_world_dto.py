@@ -24,7 +24,7 @@ class ReconciledWorld:
     routes: Mapping[int, DeliveryRoute]
     packages: Mapping[int, DeliveryPackage]
     counters: CountersSnapshot
-    truck_bindings: tuple[TruckBinding]
+    truck_bindings: tuple[TruckBinding, ...]
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "customers", MappingProxyType(dict(self.customers)))

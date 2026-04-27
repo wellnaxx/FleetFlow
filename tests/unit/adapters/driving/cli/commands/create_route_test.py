@@ -131,5 +131,3 @@ class CreateRoute_Should(unittest.TestCase):
 
         self.assertIn("db failure", str(ctx.exception))
         cmd._use_case.execute.assert_called_once_with(["SYD", "MEL"], None)  # type: ignore[reportUnknownMemberType]
-
-

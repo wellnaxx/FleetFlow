@@ -178,5 +178,3 @@ class AssignTruckToRoute_Should(unittest.TestCase):
         _ = cmd.execute()
 
         mock_validate.assert_called_once_with(("1", "2"), 2)
-
-

@@ -161,5 +161,3 @@ class CreatePackage_Tests(unittest.TestCase):
             email="",
             phone="",
         )
-
-

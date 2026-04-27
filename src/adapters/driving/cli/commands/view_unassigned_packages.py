@@ -23,4 +23,3 @@ class ViewUnassignedPackages(BaseCommand[ViewUnassignedPackagesUseCase]):
         if not packages:
             return "No unassigned packages."
         return "\n\n".join(p.info() for p in packages)
-

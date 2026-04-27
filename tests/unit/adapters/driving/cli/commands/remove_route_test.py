@@ -100,5 +100,3 @@ class TestRemoveRoute_Should(unittest.TestCase):
         mock_validate.assert_called_once_with(("42",), 1)
         mock_parse.assert_called_once_with("42")
         cmd._use_case.execute.assert_called_once_with(42)  # type: ignore[reportUnknownMemberType]
-
-

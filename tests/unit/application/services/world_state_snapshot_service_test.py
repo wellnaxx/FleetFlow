@@ -34,6 +34,10 @@ def _distance(_start: str, _end: str) -> int:
     return 100
 
 
+def _valid_location_except_moon(code: object) -> bool:
+    return code != LocationCode("MOON")
+
+
 def customer_snapshot(
     customer_id: int = 1,
     *,
@@ -1153,6 +1157,111 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
 
         self.assert_corrupt(snapshot, "invalid status")
 
+    def test_apply_snapshot_rejects_free_truck_with_route_reference(self) -> None:
+        snapshot = self.make_snapshot(
+            counters=CountersSnapshot(1, 1, 2),
+            routes=(
+                route_snapshot(
+                    departure_time=dt_to_str(datetime(2099, 1, 1, 10, 0, 0)),
+                    truck_vehicle_id=1001,
+                ),
+            ),
+            trucks=(
+                truck_snapshot(
+                    status=TruckStatus.FREE,
+                    route_id=1,
+                ),
+            ),
+        )
+
+        self.assert_corrupt(snapshot, "Free truck 1001 cannot point to route 1")
+
+    def test_apply_snapshot_rejects_free_truck_with_busy_window(self) -> None:
+        busy_window_cases = (
+            ("busy_from", dt_to_str(datetime(2099, 1, 1, 10, 0, 0)), None),
+            ("busy_until", None, dt_to_str(datetime(2099, 1, 1, 11, 0, 0))),
+        )
+
+        for label, busy_from, busy_until in busy_window_cases:
+            with self.subTest(label=label):
+                snapshot = self.make_snapshot(
+                    counters=CountersSnapshot(1, 1, 1),
+                    trucks=(
+                        truck_snapshot(
+                            status=TruckStatus.FREE,
+                            busy_from=busy_from,
+                            busy_until=busy_until,
+                        ),
+                    ),
+                )
+
+                self.assert_corrupt(snapshot, "Free truck 1001 cannot have a busy window")
+
+    def test_apply_snapshot_rejects_free_truck_with_transit_destination(self) -> None:
+        snapshot = self.make_snapshot(
+            counters=CountersSnapshot(1, 1, 1),
+            trucks=(
+                truck_snapshot(
+                    status=TruckStatus.FREE,
+                    in_transit_to="B",
+                ),
+            ),
+        )
+
+        self.assert_corrupt(snapshot, "Free truck 1001 cannot be in transit")
+
+    def test_apply_snapshot_rejects_on_the_way_truck_without_route_reference(self) -> None:
+        snapshot = self.make_snapshot(
+            counters=CountersSnapshot(1, 1, 1),
+            trucks=(
+                truck_snapshot(
+                    status=TruckStatus.ON_THE_WAY,
+                ),
+            ),
+        )
+
+        self.assert_corrupt(snapshot, "On-the-way truck 1001 must point to a route")
+
+    def test_apply_snapshot_rejects_truck_with_unsupported_current_location(self) -> None:
+        snapshot = self.make_snapshot(
+            counters=CountersSnapshot(1, 1, 1),
+            trucks=(
+                truck_snapshot(
+                    current_location="MOON",
+                ),
+            ),
+        )
+
+        with patch(
+            "src.application.services.world_state_snapshot_service.Map.is_valid_location",
+            side_effect=_valid_location_except_moon,
+        ):
+            self.assert_corrupt(snapshot, "unsupported current location MOON")
+
+    def test_apply_snapshot_rejects_truck_with_unsupported_transit_destination(self) -> None:
+        snapshot = self.make_snapshot(
+            counters=CountersSnapshot(1, 1, 2),
+            routes=(
+                route_snapshot(
+                    departure_time=dt_to_str(datetime(2099, 1, 1, 10, 0, 0)),
+                    truck_vehicle_id=1001,
+                ),
+            ),
+            trucks=(
+                truck_snapshot(
+                    status=TruckStatus.ON_THE_WAY,
+                    route_id=1,
+                    in_transit_to="MOON",
+                ),
+            ),
+        )
+
+        with patch(
+            "src.application.services.world_state_snapshot_service.Map.is_valid_location",
+            side_effect=_valid_location_except_moon,
+        ):
+            self.assert_corrupt(snapshot, "unsupported transit destination MOON")
+
     def test_apply_snapshot_rejects_truck_snapshot_route_mismatch(self) -> None:
         snapshot = self.make_snapshot(
             counters=CountersSnapshot(1, 1, 2),
@@ -1166,8 +1275,9 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
                 truck_snapshot(
                     status=TruckStatus.ON_THE_WAY,
                     current_location="A",
+                    route_id=2,
                 ),
             ),
         )
 
-        self.assert_corrupt(snapshot, "truck snapshot points to route")
+        self.assert_corrupt(snapshot, "points to route 2")

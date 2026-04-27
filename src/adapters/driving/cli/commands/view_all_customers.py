@@ -25,4 +25,3 @@ class ViewAllCustomers(BaseCommand[ViewAllCustomersUseCase]):
             if customers
             else "No customers."
         )
-

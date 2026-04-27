@@ -157,10 +157,7 @@ class WorldStateReconciliationService:
         position: RoutePosition,
         now: datetime,
     ) -> tuple[bool, bool]:
-        moved = (
-            truck.current_location != position.stop_city
-            or truck.in_transit_to is not None
-        )
+        moved = truck.current_location != position.stop_city or truck.in_transit_to is not None
 
         truck.current_location = position.stop_city
         truck.in_transit_to = None

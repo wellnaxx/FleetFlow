@@ -1,4 +1,5 @@
 """Fleet inventory and truck suitability service."""
+
 from collections.abc import Sequence
 
 from src.application.dto.truck_binding_dto import TruckBinding
@@ -108,7 +109,7 @@ class VehicleManager:
                 result.append(t)
         result.sort(key=lambda t: t.vehicle_id)
         return result
-    
+
     def replace_truck_bindings(self, bindings: Sequence[TruckBinding]) -> None:
         """Replace runtime truck assignment state from prepared bindings.
 

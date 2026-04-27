@@ -25,4 +25,3 @@ class ViewPackage(BaseCommand[ViewPackageUseCase]):
         package_id = try_parse_int(self._params[0])
         package = self._use_case.execute(package_id)
         return package.info()
-

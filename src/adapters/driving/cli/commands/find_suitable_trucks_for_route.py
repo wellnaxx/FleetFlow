@@ -32,4 +32,3 @@ class FindSuitableTrucksForRoute(BaseCommand[FindSuitableTrucksForRouteUseCase])
             for t in trucks
         )
         return "\n".join(lines)
-

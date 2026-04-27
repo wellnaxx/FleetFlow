@@ -12,8 +12,8 @@ class TestRemovePackage_Should(unittest.TestCase):
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
 
         cmd._authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        
-        def has_side_effect(permission): # pyright: ignore[reportMissingParameterType, reportUnknownParameterType]
+
+        def has_side_effect(permission):  # pyright: ignore[reportMissingParameterType, reportUnknownParameterType]
             return authorized
 
         cmd._authz.has.side_effect = has_side_effect  # type: ignore[reportAttributeAccessIssue]
@@ -101,5 +101,3 @@ class TestRemovePackage_Should(unittest.TestCase):
         mock_validate.assert_called_once_with(["42"], 1)
         mock_try_parse.assert_called_once_with("42")
         cmd._use_case.execute.assert_called_once_with(42)  # type: ignore[reportUnknownMemberType]
-
-

@@ -27,7 +27,3 @@ class LocationCode_Should(unittest.TestCase):
 
     def test_optional_converter_preserves_none(self) -> None:
         self.assertIsNone(location_code_or_none(None))
-
-
-    
-

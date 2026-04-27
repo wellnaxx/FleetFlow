@@ -25,4 +25,3 @@ class ViewRoute(BaseCommand[ViewRouteUseCase]):
         route_id = try_parse_int(self._params[0])
         route = self._use_case.execute(route_id)
         return route.info()
-

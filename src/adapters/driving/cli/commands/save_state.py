@@ -35,4 +35,3 @@ class SaveState(BaseCommand[SaveWorldStateUseCase]):
         path = self.params[0] if self.params else "state.json"
         abs_path = self.use_case.execute(path)
         return f"Saved state to {abs_path}"
-

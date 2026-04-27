@@ -84,5 +84,3 @@ class ViewUnassignedPackages_Should(unittest.TestCase):
     def test_no_mutates_flags(self) -> None:
         self.assertFalse(getattr(ViewUnassignedPackages, "mutates_state", False))
         self.assertFalse(getattr(ViewUnassignedPackages, "mutates_session", False))
-
-

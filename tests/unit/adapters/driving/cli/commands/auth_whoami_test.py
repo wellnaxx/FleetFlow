@@ -11,7 +11,7 @@ class AuthWhoAmI_Tests(unittest.TestCase):
         cmd._use_case = MagicMock()  # type: ignore[reportPrivateUsage]
         cmd._params = []  # type: ignore[reportAttributeAccessIssue]
         return cmd
-    
+
     def test_whoami_skips_heartbeat(self) -> None:
         self.assertTrue(AuthWhoAmI.skips_heartbeat)
 

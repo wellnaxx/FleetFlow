@@ -125,6 +125,3 @@ class FindSuitableTrucksForRoute_Tests(unittest.TestCase):
 
         self.assertIn("db failure", str(ctx.exception))
         cmd._use_case.execute.assert_called_once_with(5)  # type: ignore[reportUnknownMemberType]
-
-
-

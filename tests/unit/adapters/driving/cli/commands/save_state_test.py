@@ -58,5 +58,3 @@ class SaveStateShould(unittest.TestCase):
         self.assertIn("cannot write", str(ctx.exception))
         mock_validate.assert_called_once_with(cmd.params, 0, 1)
         cmd._use_case.execute.assert_called_once_with("bad/dir/state.json")  # type: ignore[reportUnknownMemberType]
-
-

@@ -35,4 +35,3 @@ class ViewRoutesInProgress(BaseCommand[ViewRoutesInProgressUseCase]):
                 lines.append(f"  >> Currently at stop: {pos.stop_city}")
             lines.append("")
         return "\n".join(lines)
-

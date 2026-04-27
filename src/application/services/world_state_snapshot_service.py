@@ -314,6 +314,10 @@ class WorldStateSnapshotService:
             if truck.status not in TruckStatus.values():
                 raise ValueError(f"Truck {truck.vehicle_id} has invalid status {truck.status!r}.")
 
+            status = TruckStatus(truck.status)
+            self._validate_truck_snapshot_locations(truck)
+            self._validate_truck_snapshot_runtime_state(truck, status)
+
             if truck.route_id is not None:
                 expected_route_id = route_trucks.get(truck.vehicle_id)
                 if expected_route_id != truck.route_id:
@@ -331,6 +335,31 @@ class WorldStateSnapshotService:
                     f"Route {route_id} assigns truck {truck_vehicle_id}, "
                     f"but truck snapshot points to route {truck_snapshot.route_id}."
                 )
+
+    @staticmethod
+    def _validate_truck_snapshot_locations(truck: TruckSnapshot) -> None:
+        if truck.current_location is not None and not Map.is_valid_location(truck.current_location):
+            raise ValueError(
+                f"Truck {truck.vehicle_id} has unsupported current location {truck.current_location}."
+            )
+
+        if truck.in_transit_to is not None and not Map.is_valid_location(truck.in_transit_to):
+            raise ValueError(
+                f"Truck {truck.vehicle_id} has unsupported transit destination {truck.in_transit_to}."
+            )
+
+    @staticmethod
+    def _validate_truck_snapshot_runtime_state(truck: TruckSnapshot, status: TruckStatus) -> None:
+        if status == TruckStatus.FREE:
+            if truck.route_id is not None:
+                raise ValueError(f"Free truck {truck.vehicle_id} cannot point to route {truck.route_id}.")
+            if truck.busy_from is not None or truck.busy_until is not None:
+                raise ValueError(f"Free truck {truck.vehicle_id} cannot have a busy window.")
+            if truck.in_transit_to is not None:
+                raise ValueError(f"Free truck {truck.vehicle_id} cannot be in transit.")
+
+        if status == TruckStatus.ON_THE_WAY and truck.route_id is None:
+            raise ValueError(f"On-the-way truck {truck.vehicle_id} must point to a route.")
 
     def _validate_route_package_consistency(self, world: WorldSnapshotData) -> None:
         route_packages: dict[int, set[int]] = {route.route_id: set(route.package_ids) for route in world.routes}
@@ -574,7 +603,7 @@ class WorldStateSnapshotService:
         route_snapshots: tuple[RouteSnapshot, ...],
         truck_snapshots: tuple[TruckSnapshot, ...],
         routes: dict[int, DeliveryRoute],
-    ) -> list[TruckBinding]:
+    ) -> tuple[TruckBinding, ...]:
         candidate_trucks_by_id = self._build_candidate_trucks(truck_snapshots)
 
         trucks_by_route_id = self._link_candidate_trucks_to_routes(
@@ -627,7 +656,7 @@ class WorldStateSnapshotService:
         routes: dict[int, DeliveryRoute],
         trucks_by_route_id: dict[int, CandidateTruckLink],
         candidate_trucks_by_id: dict[int, CandidateTruckLink],
-    ) -> list[TruckBinding]:
+    ) -> tuple[TruckBinding, ...]:
         bindings_by_truck_id: dict[int, TruckBinding] = {}
 
         for truck_id, link in candidate_trucks_by_id.items():
@@ -662,7 +691,7 @@ class WorldStateSnapshotService:
                 in_transit_to=candidate_truck.in_transit_to,
             )
 
-        return [bindings_by_truck_id[truck_id] for truck_id in sorted(bindings_by_truck_id)]
+        return tuple(bindings_by_truck_id[truck_id] for truck_id in sorted(bindings_by_truck_id))
 
     @staticmethod
     def _clone_truck(truck: Truck) -> Truck:

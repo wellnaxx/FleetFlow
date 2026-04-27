@@ -21,4 +21,3 @@ class ViewAllPackages(BaseCommand[ViewAllPackagesUseCase]):
         """
         packages = self._use_case.execute()
         return "\n\n".join(package.info() for package in packages) if packages else "No packages."
-
