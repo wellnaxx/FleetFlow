@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from src.domain.enums.truck_model import TruckModel
 from src.domain.enums.truck_status import TruckStatus
 from src.domain.value_objects.location_code import LocationCode, location_code_or_none
 
@@ -15,7 +16,7 @@ if TYPE_CHECKING:
 class Truck:
     """Fleet vehicle with capacity, range, location, and assignment state."""
 
-    def __init__(self, vehicle_id: int, name: str, capacity: int, max_range: int) -> None:
+    def __init__(self, vehicle_id: int, name: str | TruckModel, capacity: int, max_range: int) -> None:
         """Create a fleet truck.
 
         Args:
@@ -27,10 +28,8 @@ class Truck:
         Raises:
             ValueError: If the truck model name is unsupported.
         """
-        if name not in ("Scania", "Man", "Actros"):
-            raise ValueError("Truck name must be Scania, Man or Actros")
         self.vehicle_id: int = vehicle_id
-        self.name: str = name
+        self.name: TruckModel = TruckModel.from_value(name)
         self.capacity: int = int(capacity)
         self.max_range: int = int(max_range)
         self.status: TruckStatus = TruckStatus.FREE

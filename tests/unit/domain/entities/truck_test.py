@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from unittest.mock import Mock
 
 from src.domain.entities.truck import Truck
+from src.domain.enums.truck_model import TruckModel
 from src.domain.enums.truck_status import TruckStatus
 from src.domain.value_objects.location_code import LocationCode
 
@@ -11,19 +12,19 @@ class TestTruck_Should(unittest.TestCase):
     def setUp(self) -> None:
         self.valid_truck_data = {
             "vehicle_id": 1,
-            "name": "Scania",
+            "name": TruckModel.SCANIA,
             "capacity": 1000,
             "max_range": 500,
         }
         self.truck = Truck(**self.valid_truck_data)  # type: ignore[reportArgumentType]
 
     def test_init_with_valid_data(self) -> None:
-        for name in ["Scania", "Man", "Actros"]:
-            with self.subTest(name=name):
-                truck = Truck(vehicle_id=1, name=name, capacity=1000, max_range=500)
+        for model in TruckModel:
+            with self.subTest(model=model):
+                truck = Truck(vehicle_id=1, name=model, capacity=1000, max_range=500)
 
                 self.assertEqual(truck.vehicle_id, 1)
-                self.assertEqual(truck.name, name)
+                self.assertEqual(truck.name, model)
                 self.assertEqual(truck.capacity, 1000)
                 self.assertEqual(truck.max_range, 500)
                 self.assertEqual(truck.status, TruckStatus.FREE)
@@ -37,12 +38,12 @@ class TestTruck_Should(unittest.TestCase):
         with self.assertRaises(ValueError) as context:
             Truck(vehicle_id=1, name="Invalid", capacity=1000, max_range=500)
 
-        self.assertEqual(str(context.exception), "Truck name must be Scania, Man or Actros")
+        self.assertEqual(str(context.exception), f"Truck name must be {TruckModel.labels()}")
 
     def test_init_capacity_and_range_conversion(self) -> None:
         truck = Truck(
             vehicle_id=1,
-            name="Scania",
+            name=TruckModel.SCANIA,
             capacity=1000,
             max_range=500,
         )  # type: ignore[reportArgumentType]

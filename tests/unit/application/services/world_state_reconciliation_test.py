@@ -10,6 +10,7 @@ from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.entities.truck import Truck
 from src.domain.enums.item_status import ItemStatus
 from src.domain.enums.route_status import RouteStatus
+from src.domain.enums.truck_model import TruckModel
 from src.domain.enums.truck_status import TruckStatus
 from src.domain.value_objects.contact_info import ContactInfo
 from src.domain.value_objects.location_code import LocationCode
@@ -200,7 +201,7 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
 
         truck = Truck(
             vehicle_id=1001,
-            name="Scania",
+            name=TruckModel.SCANIA,
             capacity=42000,
             max_range=8000,
         )
@@ -232,7 +233,7 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
 
         truck = Truck(
             vehicle_id=1001,
-            name="Scania",
+            name=TruckModel.SCANIA,
             capacity=42000,
             max_range=8000,
         )
@@ -311,7 +312,7 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
 
         truck = Truck(
             vehicle_id=1001,
-            name="Scania",
+            name=TruckModel.SCANIA,
             capacity=42000,
             max_range=8000,
         )
@@ -350,7 +351,7 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
 
         truck = Truck(
             vehicle_id=1001,
-            name="Scania",
+            name=TruckModel.SCANIA,
             capacity=42000,
             max_range=8000,
         )
@@ -389,7 +390,7 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
 
         truck = Truck(
             vehicle_id=1001,
-            name="Scania",
+            name=TruckModel.SCANIA,
             capacity=42000,
             max_range=8000,
         )

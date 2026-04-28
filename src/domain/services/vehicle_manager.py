@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from src.application.dto.truck_binding_dto import TruckBinding
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.entities.truck import Truck
+from src.domain.enums.truck_model import TruckModel
 from src.domain.enums.truck_status import TruckStatus
 from src.domain.services.map import Map
 from src.ports.output.vehicle_manager import RouteSuitabilityView
@@ -16,9 +17,9 @@ class VehicleManager:
     def __init__(self) -> None:
         """Create the default fixed fleet and disperse trucks across locations."""
         self.vehicles: list[Truck] = (
-            [Truck(vehicle_id, "Scania", 42000, 8000) for vehicle_id in range(1001, 1011)]
-            + [Truck(vehicle_id, "Man", 37000, 10000) for vehicle_id in range(1011, 1026)]
-            + [Truck(vehicle_id, "Actros", 26000, 13000) for vehicle_id in range(1026, 1041)]
+            [Truck(vehicle_id, TruckModel.SCANIA, 42000, 8000) for vehicle_id in range(1001, 1011)]
+            + [Truck(vehicle_id, TruckModel.MAN, 37000, 10000) for vehicle_id in range(1011, 1026)]
+            + [Truck(vehicle_id, TruckModel.ACTROS, 26000, 13000) for vehicle_id in range(1026, 1041)]
         )
         self.disperse_trucks()
 
@@ -27,7 +28,7 @@ class VehicleManager:
         from collections import defaultdict
 
         locs = Map.get_locations()
-        type_groups: dict[str, list[Truck]] = defaultdict(list)
+        type_groups: dict[TruckModel, list[Truck]] = defaultdict(list)
         for t in self.vehicles:
             type_groups[t.name].append(t)
 

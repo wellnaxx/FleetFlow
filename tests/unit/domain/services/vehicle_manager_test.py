@@ -15,12 +15,12 @@ class VehicleManager_Should(unittest.TestCase):
         self.assertEqual(len(vm.vehicles), 40)
 
         # Deterministic round-robin by type across L1,L2,L3
-        # First round across types: Scania(1001)->L1, Man(1011)->L2, Actros(1026)->L3
+        # First round across model groups assigns 1001->L1, 1011->L2, 1026->L3
         first = {t.vehicle_id: t for t in vm.vehicles}
         self.assertEqual(first[1001].current_location, "L1")
         self.assertEqual(first[1011].current_location, "L2")
         self.assertEqual(first[1026].current_location, "L3")
-        # Second round across types: Scania(1002)->L1, Man(1012)->L2, Actros(1027)->L3
+        # Second round across model groups assigns 1002->L1, 1012->L2, 1027->L3
         self.assertEqual(first[1002].current_location, "L1")
         self.assertEqual(first[1012].current_location, "L2")
         self.assertEqual(first[1027].current_location, "L3")
