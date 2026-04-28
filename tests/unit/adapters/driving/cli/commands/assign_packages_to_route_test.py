@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock, call, patch
 
-from src.adapters.driving.cli.commands.assign_package_to_route import AssignPackageToRoute
+from src.adapters.driving.cli.commands.assign_packages_to_route import AssignPackagesToRoute
 from src.application.results.assign_packages_to_route_result import (
     AssignPackagesToRouteResult,
     PackageAssignmentError,
@@ -14,8 +14,8 @@ def _parse_int(value: str) -> int:
 
 
 class AssignPackageToRoute_Should(unittest.TestCase):
-    def make_cmd(self, params: list[str], *, authorized: bool = True) -> AssignPackageToRoute:
-        cmd = AssignPackageToRoute.__new__(AssignPackageToRoute)
+    def make_cmd(self, params: list[str], *, authorized: bool = True) -> AssignPackagesToRoute:
+        cmd = AssignPackagesToRoute.__new__(AssignPackagesToRoute)
         cmd._params = tuple(params)  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
 
@@ -34,8 +34,8 @@ class AssignPackageToRoute_Should(unittest.TestCase):
         self.assertIn("ROUTE_ASSIGN_PACKAGE", str(ctx.exception))
         cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
-    @patch("src.adapters.driving.cli.commands.assign_package_to_route.validate_params_count")
-    @patch("src.adapters.driving.cli.commands.assign_package_to_route.try_parse_int")
+    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.validate_params_count")
+    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.try_parse_int")
     def test_execute_success_single_package(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
         mock_parse.side_effect = _parse_int
         cmd = self.make_cmd(["5", "42"])
@@ -57,8 +57,8 @@ class AssignPackageToRoute_Should(unittest.TestCase):
         cmd._use_case.execute.assert_called_once_with(5, [42])  # type: ignore[reportUnknownMemberType]
         self.assertEqual(result, "Assigned package 42 to route 5. ETA: N/A (route unscheduled)")
 
-    @patch("src.adapters.driving.cli.commands.assign_package_to_route.validate_params_count")
-    @patch("src.adapters.driving.cli.commands.assign_package_to_route.try_parse_int")
+    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.validate_params_count")
+    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.try_parse_int")
     def test_execute_success_multiple_packages(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
         mock_parse.side_effect = _parse_int
         cmd = self.make_cmd(["7", "8", "9", "10"])
@@ -78,17 +78,15 @@ class AssignPackageToRoute_Should(unittest.TestCase):
         cmd._use_case.execute.assert_called_once_with(7, [8, 9, 10])  # type: ignore[reportUnknownMemberType]
         self.assertEqual(
             result,
-            "\n".join(
-                [
-                    "Assigned package 8 to route 7. ETA: 2025-10-01 18:00",
-                    "Assigned package 9 to route 7. ETA: 2025-10-01 19:00",
-                    "Assigned package 10 to route 7. ETA: N/A",
-                ]
-            ),
+            "\n".join([
+                "Assigned package 8 to route 7. ETA: 2025-10-01 18:00",
+                "Assigned package 9 to route 7. ETA: 2025-10-01 19:00",
+                "Assigned package 10 to route 7. ETA: N/A",
+            ]),
         )
 
-    @patch("src.adapters.driving.cli.commands.assign_package_to_route.validate_params_count")
-    @patch("src.adapters.driving.cli.commands.assign_package_to_route.try_parse_int")
+    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.validate_params_count")
+    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.try_parse_int")
     def test_execute_formats_successes_and_errors(
         self, mock_parse: MagicMock, mock_validate: MagicMock
     ) -> None:
@@ -114,8 +112,8 @@ class AssignPackageToRoute_Should(unittest.TestCase):
             "Failed:\n- Package 9 is already on route 2.",
         )
 
-    @patch("src.adapters.driving.cli.commands.assign_package_to_route.validate_params_count")
-    @patch("src.adapters.driving.cli.commands.assign_package_to_route.try_parse_int")
+    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.validate_params_count")
+    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.try_parse_int")
     def test_execute_returns_empty_string_when_result_has_no_messages(
         self,
         mock_parse: MagicMock,
@@ -132,7 +130,7 @@ class AssignPackageToRoute_Should(unittest.TestCase):
 
         self.assertEqual(result, "")
 
-    @patch("src.adapters.driving.cli.commands.assign_package_to_route.validate_params_count")
+    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.validate_params_count")
     def test_execute_raises_when_params_count_invalid(self, mock_validate: MagicMock) -> None:
         mock_validate.side_effect = ValueError("invalid params count")
         cmd = self.make_cmd(["only_one_param"])
@@ -143,8 +141,8 @@ class AssignPackageToRoute_Should(unittest.TestCase):
         self.assertIn("invalid params count", str(ctx.exception))
         cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
-    @patch("src.adapters.driving.cli.commands.assign_package_to_route.validate_params_count")
-    @patch("src.adapters.driving.cli.commands.assign_package_to_route.try_parse_int")
+    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.validate_params_count")
+    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.try_parse_int")
     def test_execute_raises_when_route_parse_fails(
         self,
         mock_parse: MagicMock,
@@ -161,8 +159,8 @@ class AssignPackageToRoute_Should(unittest.TestCase):
         mock_parse.assert_called_once_with("routeX")
         cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
-    @patch("src.adapters.driving.cli.commands.assign_package_to_route.validate_params_count")
-    @patch("src.adapters.driving.cli.commands.assign_package_to_route.try_parse_int")
+    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.validate_params_count")
+    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.try_parse_int")
     def test_execute_raises_when_any_package_parse_fails(
         self,
         mock_parse: MagicMock,
@@ -178,8 +176,8 @@ class AssignPackageToRoute_Should(unittest.TestCase):
         self.assertEqual(mock_parse.call_args_list, [call("7"), call("p1")])
         cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
-    @patch("src.adapters.driving.cli.commands.assign_package_to_route.validate_params_count")
-    @patch("src.adapters.driving.cli.commands.assign_package_to_route.try_parse_int")
+    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.validate_params_count")
+    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.try_parse_int")
     def test_execute_propagates_use_case_errors(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
         mock_parse.side_effect = _parse_int
         cmd = self.make_cmd(["3", "4"])
@@ -191,8 +189,8 @@ class AssignPackageToRoute_Should(unittest.TestCase):
         self.assertIn("constraints fail", str(ctx.exception))
         cmd._use_case.execute.assert_called_once_with(3, [4])  # type: ignore[reportUnknownMemberType]
 
-    @patch("src.adapters.driving.cli.commands.assign_package_to_route.validate_params_count")
-    @patch("src.adapters.driving.cli.commands.assign_package_to_route.try_parse_int")
+    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.validate_params_count")
+    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.try_parse_int")
     def test_execute_calls_validate_with_required_min_params(
         self,
         mock_parse: MagicMock,
@@ -206,8 +204,8 @@ class AssignPackageToRoute_Should(unittest.TestCase):
 
         mock_validate.assert_called_once_with(("1", "2"), 2)
 
-    @patch("src.adapters.driving.cli.commands.assign_package_to_route.validate_params_count")
-    @patch("src.adapters.driving.cli.commands.assign_package_to_route.try_parse_int")
+    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.validate_params_count")
+    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.try_parse_int")
     def test_execute_uses_try_parse_int_for_every_param(
         self,
         mock_parse: MagicMock,

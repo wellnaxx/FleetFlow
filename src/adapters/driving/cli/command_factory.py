@@ -4,7 +4,7 @@ import shlex
 from collections.abc import Callable
 from typing import Any
 
-from src.adapters.driving.cli.commands.assign_package_to_route import AssignPackageToRoute
+from src.adapters.driving.cli.commands.assign_packages_to_route import AssignPackagesToRoute
 from src.adapters.driving.cli.commands.assign_truck_to_route import AssignTruckToRoute
 from src.adapters.driving.cli.commands.auth_change_password import AuthChangePassword
 from src.adapters.driving.cli.commands.auth_login import AuthLogin
@@ -84,7 +84,7 @@ _CONTAINER_COMMANDS: dict[str, CommandEntry[Any]] = {
         FindSuitableRoutesForPackage, lambda container: container.find_suitable_routes_for_package_use_case
     ),
     "assignpackagestoroute": bind_command(
-        AssignPackageToRoute, lambda container: container.assign_packages_to_route_use_case
+        AssignPackagesToRoute, lambda container: container.assign_packages_to_route_use_case
     ),
     "viewalltrucks": bind_command(ViewAllTrucks, lambda container: container.view_all_trucks_use_case),
 }

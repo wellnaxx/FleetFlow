@@ -7,7 +7,7 @@ from src.application.use_cases.routes.assign_packages_to_route import AssignPack
 from src.domain.enums.auth import Permission
 
 
-class AssignPackageToRoute(BaseCommand[AssignPackagesToRouteUseCase]):
+class AssignPackagesToRoute(BaseCommand[AssignPackagesToRouteUseCase]):
     """Attach one or more packages to a route."""
 
     mutates_state = True
