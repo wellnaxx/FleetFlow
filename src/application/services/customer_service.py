@@ -67,9 +67,7 @@ class CustomerService:
             ValueError: If the contact information fails validation.
         """
         contact_info = ContactInfo(name=name, email=email, phone_number=phone)
-        customer = Customer(customer_id=self._customers.peek_next_id(), contact=contact_info)
-        self._customers.add(customer)
-        return customer
+        return self._customers.create(contact_info)
 
     def _resolve_email_and_phone(
         self, name: str, by_email: Customer | None, by_phone: Customer | None

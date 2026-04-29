@@ -3,14 +3,14 @@
 from collections.abc import Mapping
 
 from src.domain.entities.customer import Customer
+from src.domain.value_objects.contact_info import ContactInfo
 
 
 class InMemoryCustomerRepository:
     """In-memory customer repository.
 
-    Id allocation uses a peek-then-add model:
-    `peek_next_id()` exposes the current candidate id, and `add()` commits
-    advancement by moving `_next_id` past the added entity's id.
+    Normal customer creation allocates ids inside `create()`. Snapshot restore
+    and memory-only tests may still use `add()` to load an existing customer id.
     """
 
     def __init__(self) -> None:
@@ -21,25 +21,31 @@ class InMemoryCustomerRepository:
         self._next_id: int = 1
 
     def peek_next_id(self) -> int:
-        """Return the next candidate id without reserving it.
+        """Return the next memory id counter.
 
-        This method is read-only. The returned id is not committed until an entity
-        with that id is successfully added to the repository.
+        This is intentionally not part of the shared customer repository port;
+        it exists for in-memory world-state snapshots.
 
         Returns:
-            The current next candidate id.
+            The current next id counter.
         """
         return self._next_id
 
-    def add(self, customer: Customer) -> None:
-        """Add a customer and commit repository id advancement.
+    def create(self, contact: ContactInfo) -> Customer:
+        """Create and store a customer with an in-memory allocated id.
 
-        The repository uses a peek-then-add allocation model:
-        callers may inspect `peek_next_id()` to choose an id, but the id is not
-        considered committed until `add()` succeeds.
+        Args:
+            contact: Validated customer contact information.
 
-        On successful add, the repository advances `_next_id` to remain greater
-        than any stored entity id.
+        Returns:
+            Stored customer with its allocated id.
+        """
+        customer = Customer(customer_id=self._next_id, contact=contact)
+        self.add(customer)
+        return customer
+
+    def add(self, customer: Customer) -> Customer:
+        """Add an existing customer and advance the memory id counter.
 
         Args:
             customer: Customer entity to store.
@@ -64,6 +70,7 @@ class InMemoryCustomerRepository:
             self._id_by_phone[customer.phone_number] = customer.customer_id
 
         self._next_id = max(self._next_id, customer.customer_id + 1)
+        return customer
 
     def remove(self, customer_id: int) -> None:
         """Remove a customer and any email/phone indexes for that record.

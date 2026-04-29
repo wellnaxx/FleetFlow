@@ -3,20 +3,20 @@
 from typing import Protocol
 
 from src.domain.entities.customer import Customer
+from src.domain.value_objects.contact_info import ContactInfo
 
 
 class CustomerRepositoryPort(Protocol):
     """Persist and query customer aggregates."""
 
-    def peek_next_id(self) -> int:
-        """Return the id that will be assigned to the next customer."""
-        ...
-
-    def add(self, customer: Customer) -> None:
-        """Persist a customer aggregate.
+    def create(self, contact: ContactInfo) -> Customer:
+        """Create and persist a customer aggregate.
 
         Args:
-            customer: Customer to store.
+            contact: Validated customer contact information.
+
+        Returns:
+            Persisted customer with its allocated id.
         """
         ...
 
