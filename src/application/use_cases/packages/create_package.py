@@ -2,7 +2,6 @@
 
 from src.application.services.customer_service import CustomerService
 from src.domain.entities.delivery_package import DeliveryPackage
-from src.domain.enums.item_status import ItemStatus
 from src.domain.services.map import Map
 from src.domain.value_objects.location_code import LocationCode
 from src.ports.output.package_repository import PackageRepositoryPort
@@ -52,16 +51,11 @@ class CreatePackageUseCase:
         if customer is None:
             customer = self._customers.create(name, email, phone)
 
-        package_id = self._packages.peek_next_id()
-
-        package = DeliveryPackage(
+        package = self._packages.create(
             start_location=start_code,
             end_location=end_code,
             weight=weight,
             customer=customer,
-            package_id=package_id,
         )
-        package.status = ItemStatus.TODO
         customer.add_package(package)
-        self._packages.add(package)
         return package

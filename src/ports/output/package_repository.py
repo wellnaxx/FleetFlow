@@ -2,21 +2,31 @@
 
 from typing import Protocol
 
+from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
+from src.domain.value_objects.location_code import LocationCode
 
 
 class PackageRepositoryPort(Protocol):
     """Persist and query delivery packages."""
 
-    def peek_next_id(self) -> int:
-        """Return the id that will be assigned to the next package."""
-        ...
-
-    def add(self, package: DeliveryPackage) -> None:
-        """Persist a delivery package.
+    def create(
+        self,
+        start_location: LocationCode,
+        end_location: LocationCode,
+        weight: float,
+        customer: Customer,
+    ) -> DeliveryPackage:
+        """Create and persist a delivery package.
 
         Args:
-            package: Package to store.
+            start_location: Pickup location code.
+            end_location: Delivery location code.
+            weight: Package weight in kilograms.
+            customer: Owning customer.
+
+        Returns:
+            Persisted delivery package with its allocated id.
         """
         ...
 

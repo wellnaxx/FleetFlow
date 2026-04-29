@@ -2,16 +2,16 @@
 
 from collections.abc import Mapping
 
+from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
+from src.domain.value_objects.location_code import LocationCode
 
 
 class InMemoryPackageRepository:
     """In-memory package repository keyed by package id.
 
-    Id allocation uses a peek-then-add model:
-    `peek_next_id()` returns the current candidate id without reserving it, and
-    `add()` commits id advancement by moving `_next_id` past the stored
-    package's id.
+    Normal package creation allocates ids inside `create()`. Snapshot restore
+    and memory-only tests may still use `add()` to load an existing package id.
     """
 
     def __init__(self) -> None:
@@ -20,25 +20,46 @@ class InMemoryPackageRepository:
         self._next_id: int = 1
 
     def peek_next_id(self) -> int:
-        """Return the next candidate package id without reserving it.
+        """Return the next memory id counter.
 
-        This method is read-only. The returned id is not committed until a
-        package with that id is successfully added to the repository.
+        This is intentionally not part of the shared package repository port;
+        it exists for in-memory world-state snapshots.
 
         Returns:
-            The current next candidate package id.
+            The current next id counter.
         """
         return self._next_id
 
-    def add(self, package: DeliveryPackage) -> None:
-        """Add a package and commit repository id advancement.
+    def create(
+        self,
+        start_location: LocationCode,
+        end_location: LocationCode,
+        weight: float,
+        customer: Customer,
+    ) -> DeliveryPackage:
+        """Create and store a package with an in-memory allocated id.
 
-        The repository uses a peek-then-add allocation model: callers may inspect
-        `peek_next_id()` to choose an id, but the id is not considered committed
-        until `add()` succeeds.
+        Args:
+            start_location: Pickup location code.
+            end_location: Delivery location code.
+            weight: Package weight in kilograms.
+            customer: Owning customer.
 
-        On successful add, `_next_id` is advanced so it remains greater than every
-        stored package id.
+        Returns:
+            Stored package with its allocated id.
+        """
+        package = DeliveryPackage(
+            start_location=start_location,
+            end_location=end_location,
+            weight=weight,
+            customer=customer,
+            package_id=self._next_id,
+        )
+        self.add(package)
+        return package
+
+    def add(self, package: DeliveryPackage) -> DeliveryPackage:
+        """Add an existing package and advance the memory id counter.
 
         Args:
             package: Package entity to store.
@@ -52,6 +73,7 @@ class InMemoryPackageRepository:
         self._packages[package.package_id] = package
 
         self._next_id = max(self._next_id, package.package_id + 1)
+        return package
 
     def remove(self, package_id: int) -> None:
         """Remove a package by id if it exists.
