@@ -27,7 +27,6 @@ from src.domain.enums.truck_status import TruckStatus
 from src.domain.services.map import Map
 from src.domain.value_objects.contact_info import ContactInfo
 from src.domain.value_objects.location_code import LocationCode
-from src.ports.output.route_repository import RouteRepositoryPort
 from src.ports.output.vehicle_manager import VehicleManagerPort
 from src.ports.output.world_state_runtime_port import WorldStateRuntimePort
 
@@ -56,6 +55,18 @@ class PackageSnapshotRepositoryPort(Protocol):
         ...
 
 
+class RouteSnapshotRepositoryPort(Protocol):
+    """Route repository behavior required by world-state snapshots."""
+
+    def peek_next_id(self) -> int:
+        """Return the repository id counter to preserve in a snapshot."""
+        ...
+
+    def list_all(self) -> list[DeliveryRoute]:
+        """Return all routes."""
+        ...
+
+
 class WorldStateSnapshotService:
     """Coordinates snapshot creation and atomic snapshot application."""
 
@@ -66,7 +77,7 @@ class WorldStateSnapshotService:
         self,
         customer_repo: CustomerSnapshotRepositoryPort,
         package_repo: PackageSnapshotRepositoryPort,
-        route_repo: RouteRepositoryPort,
+        route_repo: RouteSnapshotRepositoryPort,
         vehicle_manager: VehicleManagerPort,
         runtime_state: WorldStateRuntimePort,
         reconciler: WorldStateReconciliationService,

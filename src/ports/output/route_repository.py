@@ -1,22 +1,29 @@
 """Output port for route repository adapters."""
 
+from collections.abc import Sequence
+from datetime import datetime
 from typing import Protocol
 
 from src.domain.entities.delivery_route import DeliveryRoute
+from src.domain.value_objects.location_code import LocationCode
 
 
 class RouteRepositoryPort(Protocol):
     """Persist and query delivery routes."""
 
-    def peek_next_id(self) -> int:
-        """Return the id that will be assigned to the next route."""
-        ...
-
-    def add(self, route: DeliveryRoute) -> None:
-        """Persist a delivery route.
+    def create(
+        self,
+        locations: Sequence[str | LocationCode],
+        departure_time: datetime | None,
+    ) -> DeliveryRoute:
+        """Create and persist a delivery route.
 
         Args:
-            route: Route to store.
+            locations: Ordered route stops.
+            departure_time: Optional scheduled departure time.
+
+        Returns:
+            Persisted route with its allocated id.
         """
         ...
 

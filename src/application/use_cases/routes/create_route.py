@@ -43,10 +43,4 @@ class CreateRouteUseCase:
             if not Map.is_valid_location(location):
                 raise ValueError(f"Invalid location: {location}")
 
-        route = DeliveryRoute(
-            *locations,
-            departure_time=departure_time,
-            route_id=self._routes.peek_next_id(),
-        )
-        self._routes.add(route)
-        return route
+        return self._routes.create(locations=locations, departure_time=departure_time)

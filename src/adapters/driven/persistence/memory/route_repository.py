@@ -1,17 +1,17 @@
 """In-memory route repository implementation."""
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+from datetime import datetime
 
 from src.domain.entities.delivery_route import DeliveryRoute
+from src.domain.value_objects.location_code import LocationCode
 
 
 class InMemoryRouteRepository:
     """In-memory route repository keyed by route id.
 
-    Id allocation uses a peek-then-add model:
-    `peek_next_id()` returns the current candidate id without reserving it, and
-    `add()` commits id advancement by moving `_next_id` past the stored
-    route's id.
+    Normal route creation allocates ids inside `create()`. Snapshot restore
+    and memory-only tests may still use `add()` to load an existing route id.
     """
 
     def __init__(self) -> None:
@@ -20,25 +20,36 @@ class InMemoryRouteRepository:
         self._next_id = 1
 
     def peek_next_id(self) -> int:
-        """Return the next candidate route id without reserving it.
+        """Return the next memory id counter.
 
-        This method is read-only. The returned id is not committed until a
-        route with that id is successfully added to the repository.
+        This is intentionally not part of the shared route repository port;
+        it exists for in-memory world-state snapshots.
 
         Returns:
-            The current next candidate route id.
+            The current next id counter.
         """
         return self._next_id
 
-    def add(self, route: DeliveryRoute) -> None:
-        """Add a route and commit repository id advancement.
+    def create(
+        self,
+        locations: Sequence[str | LocationCode],
+        departure_time: datetime | None,
+    ) -> DeliveryRoute:
+        """Create and store a route with an in-memory allocated id.
 
-        The repository uses a peek-then-add allocation model: callers may inspect
-        `peek_next_id()` to choose an id, but the id is not considered committed
-        until `add()` succeeds.
+        Args:
+            locations: Ordered route stops.
+            departure_time: Optional scheduled departure time.
 
-        On successful add, `_next_id` is advanced so it remains greater than every
-        stored route id.
+        Returns:
+            Stored route with its allocated id.
+        """
+        route = DeliveryRoute(*locations, departure_time=departure_time, route_id=self._next_id)
+        self.add(route)
+        return route
+
+    def add(self, route: DeliveryRoute) -> DeliveryRoute:
+        """Add an existing route and advance the memory id counter.
 
         Args:
             route: Route entity to store.
@@ -51,6 +62,7 @@ class InMemoryRouteRepository:
         self._routes[route.route_id] = route
 
         self._next_id = max(self._next_id, route.route_id + 1)
+        return route
 
     def remove(self, route_id: int) -> None:
         """Remove a route by id if it exists.
