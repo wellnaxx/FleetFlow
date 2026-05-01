@@ -1,10 +1,13 @@
 """Typed query registry for all Postgres SQL queries.
 
-All queries are loaded once at import time. Repositories reference
-this module rather than constructing or loading SQL themselves.
+
+Query groups are loaded lazily on first access and cached afterward.
+Repositories reference this module rather than constructing or loading SQL
+themselves.
 """
 
 from dataclasses import dataclass
+from functools import cached_property
 
 from src.adapters.driven.persistence.database.loader import load_sql
 
@@ -60,55 +63,108 @@ class UserQueries:
     update_role: str
 
 
-@dataclass(frozen=True)
 class QueryRegistry:
-    customers: CustomerQueries
-    routes: RouteQueries
-    packages: PackageQueries
-    trucks: TruckQueries
-    users: UserQueries
+    """Lazy SQL query registry.
+
+    SQL files are loaded when a repository first accesses that query group.
+    This keeps one incomplete repository area from breaking unrelated imports.
+    """
+
+    @cached_property
+    def customers(self) -> CustomerQueries:
+        """Load customer SQL queries.
+
+        Returns:
+            Customer query collection.
+
+        Raises:
+            FileNotFoundError: If a customer SQL file is missing.
+        """
+        return CustomerQueries(
+            add=load_sql("customers/add.sql"),
+            get_by_id=load_sql("customers/get_by_id.sql"),
+            get_by_email=load_sql("customers/get_by_email.sql"),
+            get_by_phone=load_sql("customers/get_by_phone.sql"),
+            list_by_name=load_sql("customers/list_by_name.sql"),
+            list_all=load_sql("customers/list_all.sql"),
+            remove=load_sql("customers/remove.sql"),
+        )
+
+    @cached_property
+    def routes(self) -> RouteQueries:
+        """Load route SQL queries.
+
+        Returns:
+            Route query collection.
+
+        Raises:
+            FileNotFoundError: If a route SQL file is missing.
+        """
+        return RouteQueries(
+            add=load_sql("routes/add.sql"),
+            add_stop=load_sql("routes/add_stop.sql"),
+            get_by_id=load_sql("routes/get_by_id.sql"),
+            list_all=load_sql("routes/list_all.sql"),
+            remove=load_sql("routes/remove.sql"),
+            update_status=load_sql("routes/update_status.sql"),
+            update_truck=load_sql("routes/update_truck.sql"),
+        )
+
+    @cached_property
+    def packages(self) -> PackageQueries:
+        """Load package SQL queries.
+
+        Returns:
+            Package query collection.
+
+        Raises:
+            FileNotFoundError: If a package SQL file is missing.
+        """
+        return PackageQueries(
+            add=load_sql("packages/add.sql"),
+            get_by_id=load_sql("packages/get_by_id.sql"),
+            list_all=load_sql("packages/list_all.sql"),
+            list_by_route=load_sql("packages/list_by_route.sql"),
+            list_unassigned=load_sql("packages/list_unassigned.sql"),
+            remove=load_sql("packages/remove.sql"),
+            update_status=load_sql("packages/update_status.sql"),
+            update_route=load_sql("packages/update_route.sql"),
+        )
+
+    @cached_property
+    def trucks(self) -> TruckQueries:
+        """Load truck SQL queries.
+
+        Returns:
+            Truck query collection.
+
+        Raises:
+            FileNotFoundError: If a truck SQL file is missing.
+        """
+        return TruckQueries(
+            get_by_id=load_sql("trucks/get_by_id.sql"),
+            list_all=load_sql("trucks/list_all.sql"),
+            update_state=load_sql("trucks/update_state.sql"),
+        )
+
+    @cached_property
+    def users(self) -> UserQueries:
+        """Load user SQL queries.
+
+        Returns:
+            User query collection.
+
+        Raises:
+            FileNotFoundError: If a user SQL file is missing.
+        """
+        return UserQueries(
+            add=load_sql("users/add.sql"),
+            get_by_username=load_sql("users/get_by_username.sql"),
+            get_by_id=load_sql("users/get_by_id.sql"),
+            list_all=load_sql("users/list_all.sql"),
+            update_password=load_sql("users/update_password.sql"),
+            update_role=load_sql("users/update_role.sql"),
+        )
 
 
-QUERIES = QueryRegistry(
-    customers=CustomerQueries(
-        add=load_sql("customers/add.sql"),
-        get_by_id=load_sql("customers/get_by_id.sql"),
-        get_by_email=load_sql("customers/get_by_email.sql"),
-        get_by_phone=load_sql("customers/get_by_phone.sql"),
-        list_by_name=load_sql("customers/list_by_name.sql"),
-        list_all=load_sql("customers/list_all.sql"),
-        remove=load_sql("customers/remove.sql"),
-    ),
-    routes=RouteQueries(
-        add=load_sql("routes/add.sql"),
-        add_stop=load_sql("routes/add_stop.sql"),
-        get_by_id=load_sql("routes/get_by_id.sql"),
-        list_all=load_sql("routes/list_all.sql"),
-        remove=load_sql("routes/remove.sql"),
-        update_status=load_sql("routes/update_status.sql"),
-        update_truck=load_sql("routes/update_truck.sql"),
-    ),
-    packages=PackageQueries(
-        add=load_sql("packages/add.sql"),
-        get_by_id=load_sql("packages/get_by_id.sql"),
-        list_all=load_sql("packages/list_all.sql"),
-        list_by_route=load_sql("packages/list_by_route.sql"),
-        list_unassigned=load_sql("packages/list_unassigned.sql"),
-        remove=load_sql("packages/remove.sql"),
-        update_status=load_sql("packages/update_status.sql"),
-        update_route=load_sql("packages/update_route.sql"),
-    ),
-    trucks=TruckQueries(
-        get_by_id=load_sql("trucks/get_by_id.sql"),
-        list_all=load_sql("trucks/list_all.sql"),
-        update_state=load_sql("trucks/update_state.sql"),
-    ),
-    users=UserQueries(
-        add=load_sql("users/add.sql"),
-        get_by_username=load_sql("users/get_by_username.sql"),
-        get_by_id=load_sql("users/get_by_id.sql"),
-        list_all=load_sql("users/list_all.sql"),
-        update_password=load_sql("users/update_password.sql"),
-        update_role=load_sql("users/update_role.sql"),
-    ),
-)
+QUERIES = QueryRegistry()
