@@ -176,33 +176,91 @@ def map_route(row: RouteRow, stops: list[LocationCode]) -> DeliveryRoute:
     return route
 
 
-def map_package(row: PackageRow, customer: Customer) -> DeliveryPackage:
+def map_package(row: RowDict, customer: Customer) -> DeliveryPackage:
     """Map a database package row to a delivery package entity.
 
     Args:
-        row: Typed database row for a package.
+        row: Column-name-keyed database row for a package.
         customer: Customer entity referenced by the package row.
 
     Returns:
         Delivery package entity built from the database row.
 
     Raises:
+        KeyError: If a required package column is missing.
+        TypeError: If a required package column has an unexpected type.
         ValueError: If persisted enum or location values are invalid.
     """
+    typed = _as_package_row(row)
     package = DeliveryPackage(
-        start_location=LocationCode(row["start_location"]),
-        end_location=LocationCode(row["end_location"]),
-        weight=float(row["weight"]),
+        start_location=LocationCode(typed["start_location"]),
+        end_location=LocationCode(typed["end_location"]),
+        weight=float(typed["weight"]),
         customer=customer,
-        package_id=row["package_id"],
+        package_id=typed["package_id"],
     )
-    package.status = ItemStatus(row["status"])
+    package.status = ItemStatus(typed["status"])
     package.current_location = (
-        LocationCode(row["current_location"]) if row["current_location"] is not None else None
+        LocationCode(typed["current_location"]) if typed["current_location"] is not None else None
     )
-    package.expected_arrival = row["expected_arrival"]
+    package.expected_arrival = typed["expected_arrival"]
     # package.route linked after routes are mapped
     return package
+
+
+def _as_package_row(row: RowDict) -> PackageRow:
+    """Validate and narrow a generic database row to a package row.
+
+    Args:
+        row: Generic database row returned by the executor.
+
+    Returns:
+        Typed package row with validated field types.
+
+    Raises:
+        KeyError: If a required package column is missing.
+        TypeError: If a required package column has an unexpected type.
+    """
+    package_id = row["package_id"]
+    start_location = row["start_location"]
+    end_location = row["end_location"]
+    weight = row["weight"]
+    status = row["status"]
+    current_location = row["current_location"]
+    expected_arrival = row["expected_arrival"]
+    customer_id = row["customer_id"]
+    route_id = row["route_id"]
+
+    if not isinstance(package_id, int):
+        raise TypeError(f"package_id: expected int, got {type(package_id).__name__}")
+    if not isinstance(start_location, str):
+        raise TypeError(f"start_location: expected str, got {type(start_location).__name__}")
+    if not isinstance(end_location, str):
+        raise TypeError(f"end_location: expected str, got {type(end_location).__name__}")
+    if not isinstance(weight, Decimal):
+        raise TypeError(f"weight: expected Decimal, got {type(weight).__name__}")
+    if not isinstance(status, str):
+        raise TypeError(f"status: expected str, got {type(status).__name__}")
+    if current_location is not None and not isinstance(current_location, str):
+        raise TypeError(f"current_location: expected str or None, got {type(current_location).__name__}")
+    if expected_arrival is not None and not isinstance(expected_arrival, datetime):
+        raise TypeError(f"expected_arrival: expected datetime or None, got {type(expected_arrival).__name__}")
+    if not isinstance(customer_id, int):
+        raise TypeError(f"customer_id: expected int, got {type(customer_id).__name__}")
+    if route_id is not None and not isinstance(route_id, int):
+        raise TypeError(f"route_id: expected int or None, got {type(route_id).__name__}")
+
+    return PackageRow(
+        package_id=package_id,
+        start_location=start_location,
+        end_location=end_location,
+        weight=weight,
+        status=status,
+        current_location=current_location,
+        expected_arrival=expected_arrival,
+        customer_id=customer_id,
+        route_id=route_id,
+    )
 
 
 def map_user(row: UserRow) -> User:
