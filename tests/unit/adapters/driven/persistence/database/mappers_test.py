@@ -5,7 +5,12 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from src.adapters.driven.persistence.database.mappers import map_customer, map_package, map_route
+from src.adapters.driven.persistence.database.mappers import (
+    map_customer,
+    map_package,
+    map_route,
+    map_user_record,
+)
 from src.domain.entities.customer import Customer
 from src.domain.enums.item_status import ItemStatus
 from src.domain.enums.route_status import RouteStatus
@@ -16,6 +21,17 @@ if TYPE_CHECKING:
 
 
 class DatabaseMappers_Should(unittest.TestCase):
+    def _valid_user_row(self) -> RowDict:
+        return {
+            "user_id": 5,
+            "username": "Alice",
+            "role": "MANAGER",
+            "name": "Alice Admin",
+            "email": "alice@example.com",
+            "phone": "0412345678",
+            "password_hash": "pbkdf2_sha256$200000$salt$hash",
+        }
+
     def _valid_route_rows(self) -> list[RowDict]:
         return [
             {
@@ -107,6 +123,47 @@ class DatabaseMappers_Should(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             map_customer(row)
+
+    def test_map_user_record_builds_user_record_from_valid_row(self) -> None:
+        row = self._valid_user_row()
+
+        user = map_user_record(row)
+
+        self.assertEqual(user.user_id, 5)
+        self.assertEqual(user.username, "Alice")
+        self.assertEqual(user.role, "MANAGER")
+        self.assertEqual(user.name, "Alice Admin")
+        self.assertEqual(user.email, "alice@example.com")
+        self.assertEqual(user.phone_number, "0412345678")
+        self.assertEqual(user.password, "pbkdf2_sha256$200000$salt$hash")
+
+    def test_map_user_record_raises_key_error_for_missing_required_column(self) -> None:
+        row = self._valid_user_row()
+        del row["password_hash"]
+
+        with self.assertRaises(KeyError):
+            map_user_record(row)
+
+    def test_map_user_record_raises_type_error_for_invalid_column_types(self) -> None:
+        cases: list[tuple[str, object]] = [
+            ("user_id", "5"),
+            ("username", None),
+            ("role", None),
+            ("name", None),
+            ("email", None),
+            ("phone", None),
+            ("password_hash", None),
+        ]
+
+        for column, value in cases:
+            with self.subTest(column=column):
+                row = self._valid_user_row()
+                row[column] = value
+
+                with self.assertRaises(TypeError) as ctx:
+                    map_user_record(row)
+
+                self.assertIn(f"{column}: expected", str(ctx.exception))
 
     def test_map_route_builds_route_from_ordered_stop_rows(self) -> None:
         rows = self._valid_route_rows()
