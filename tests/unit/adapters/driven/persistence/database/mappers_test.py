@@ -5,9 +5,10 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from src.adapters.driven.persistence.database.mappers import map_customer, map_package
+from src.adapters.driven.persistence.database.mappers import map_customer, map_package, map_route
 from src.domain.entities.customer import Customer
 from src.domain.enums.item_status import ItemStatus
+from src.domain.enums.route_status import RouteStatus
 from src.domain.value_objects.contact_info import ContactInfo
 
 if TYPE_CHECKING:
@@ -15,6 +16,26 @@ if TYPE_CHECKING:
 
 
 class DatabaseMappers_Should(unittest.TestCase):
+    def _valid_route_rows(self) -> list[RowDict]:
+        return [
+            {
+                "route_id": 21,
+                "departure_time": None,
+                "status": "PLANNED",
+                "truck_vehicle_id": None,
+                "stop_order": 0,
+                "location_code": "SYD",
+            },
+            {
+                "route_id": 21,
+                "departure_time": None,
+                "status": "PLANNED",
+                "truck_vehicle_id": None,
+                "stop_order": 1,
+                "location_code": "MEL",
+            },
+        ]
+
     def _valid_package_row(self) -> RowDict:
         return {
             "package_id": 11,
@@ -86,6 +107,84 @@ class DatabaseMappers_Should(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             map_customer(row)
+
+    def test_map_route_builds_route_from_ordered_stop_rows(self) -> None:
+        rows = self._valid_route_rows()
+
+        route = map_route(rows)
+
+        self.assertEqual(route.route_id, 21)
+        self.assertEqual(route.locations, ["SYD", "MEL"])
+        self.assertIsNone(route.departure_time)
+        self.assertEqual(route.status, RouteStatus.PLANNED)
+        self.assertIsNone(route.truck)
+
+    def test_map_route_applies_departure_and_persisted_status(self) -> None:
+        departure_time = datetime(2026, 5, 1, 9, 0)
+        rows = self._valid_route_rows()
+        for row in rows:
+            row["departure_time"] = departure_time
+            row["status"] = "IN_PROGRESS"
+            row["truck_vehicle_id"] = 1001
+
+        route = map_route(rows)
+
+        self.assertIs(route.departure_time, departure_time)
+        self.assertEqual(route.status, RouteStatus.IN_PROGRESS)
+
+    def test_map_route_raises_value_error_for_empty_rows(self) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            map_route([])
+
+        self.assertIn("Cannot map a route without route rows.", str(ctx.exception))
+
+    def test_map_route_raises_key_error_for_missing_required_column(self) -> None:
+        rows = self._valid_route_rows()
+        del rows[0]["route_id"]
+
+        with self.assertRaises(KeyError):
+            map_route(rows)
+
+    def test_map_route_raises_type_error_for_invalid_route_column_types(self) -> None:
+        cases: list[tuple[str, object]] = [
+            ("route_id", "21"),
+            ("departure_time", "2026-05-01"),
+            ("status", None),
+            ("truck_vehicle_id", "1001"),
+        ]
+
+        for column, value in cases:
+            with self.subTest(column=column):
+                rows = self._valid_route_rows()
+                rows[0][column] = value
+
+                with self.assertRaises(TypeError) as ctx:
+                    map_route(rows)
+
+                self.assertIn(f"{column}: expected", str(ctx.exception))
+
+    def test_map_route_raises_type_error_for_invalid_stop_column_types(self) -> None:
+        cases: list[tuple[str, object]] = [
+            ("stop_order", "0"),
+            ("location_code", None),
+        ]
+
+        for column, value in cases:
+            with self.subTest(column=column):
+                rows = self._valid_route_rows()
+                rows[0][column] = value
+
+                with self.assertRaises(TypeError) as ctx:
+                    map_route(rows)
+
+                self.assertIn(f"{column}: expected", str(ctx.exception))
+
+    def test_map_route_raises_value_error_for_invalid_persisted_status(self) -> None:
+        rows = self._valid_route_rows()
+        rows[0]["status"] = "UNKNOWN"
+
+        with self.assertRaises(ValueError):
+            map_route(rows)
 
     def test_map_package_builds_package_from_valid_row(self) -> None:
         row = self._valid_package_row()
