@@ -5,14 +5,11 @@ from decimal import Decimal
 from typing import TypedDict
 
 from src.adapters.driven.persistence.database.executor import RowDict
+from src.application.models.user_record import UserRecord
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.entities.truck import Truck
-from src.domain.entities.users.employee import Employee
-from src.domain.entities.users.manager import Manager
-from src.domain.entities.users.user import User
-from src.domain.enums.auth import Role
 from src.domain.enums.item_status import ItemStatus
 from src.domain.enums.route_status import RouteStatus
 from src.domain.enums.truck_status import TruckStatus
@@ -63,7 +60,7 @@ class PackageRow(TypedDict):
     route_id: int | None
 
 
-class UserRow(TypedDict):
+class UserRecordRow(TypedDict):
     user_id: int
     username: str
     role: str
@@ -337,29 +334,78 @@ def _as_package_row(row: RowDict) -> PackageRow:
     )
 
 
-def map_user(row: UserRow) -> User:
-    """Map a database user row to the matching user entity subtype.
+def map_user_record(row: RowDict) -> UserRecord:
+    """Map a database user row to a UserRecord.
+
+    The password hash is preserved on UserRecord for AuthService.
+    The User session entity is constructed by AuthService after
+    credential verification, not here.
 
     Args:
         row: Typed database row for a user.
 
     Returns:
-        Manager or employee entity based on the stored role.
+        UserRecord carrying contact info, role, and password hash.
 
     Raises:
+        KeyError: If a required user column is missing.
+        TypeError: If a required user column has an unexpected type.
         ValueError: If the stored role is invalid.
     """
-    role = Role(row["role"])
-    if role == Role.MANAGER:
-        return Manager(
-            name=row["name"],
-            email=row["email"],
-            phone_number=row["phone"],
-            user_id=row["user_id"],
-        )
-    return Employee(
-        name=row["name"],
-        email=row["email"],
-        phone_number=row["phone"],
-        user_id=row["user_id"],
+    typed = _as_user_record_row(row)
+    return UserRecord(
+        user_id=typed["user_id"],
+        username=typed["username"],
+        role=typed["role"],
+        name=typed["name"],
+        email=typed["email"],
+        phone_number=typed["phone"],
+        password=typed["password_hash"],
+    )
+
+
+def _as_user_record_row(row: RowDict) -> UserRecordRow:
+    """Validate and narrow a generic database row to a user record row.
+
+    Args:
+        row: Generic database row returned by the executor.
+
+    Returns:
+        Typed user record row with validated field types.
+
+    Raises:
+        KeyError: If a required user column is missing.
+        TypeError: If a required user column has an unexpected type.
+    """
+    user_id = row["user_id"]
+    username = row["username"]
+    role = row["role"]
+    name = row["name"]
+    email = row["email"]
+    phone_number = row["phone"]
+    password_hash = row["password_hash"]
+
+    if not isinstance(user_id, int):
+        raise TypeError(f"user_id: expected int, got {type(user_id).__name__}")
+    if not isinstance(username, str):
+        raise TypeError(f"username: expected str, got {type(username).__name__}")
+    if not isinstance(role, str):
+        raise TypeError(f"role: expected str, got {type(role).__name__}")
+    if not isinstance(name, str):
+        raise TypeError(f"name: expected str, got {type(name).__name__}")
+    if not isinstance(email, str):
+        raise TypeError(f"email: expected str, got {type(email).__name__}")
+    if not isinstance(phone_number, str):
+        raise TypeError(f"phone: expected str, got {type(phone_number).__name__}")
+    if not isinstance(password_hash, str):
+        raise TypeError(f"password_hash: expected str, got {type(password_hash).__name__}")
+
+    return UserRecordRow(
+        user_id=user_id,
+        username=username,
+        role=role,
+        name=name,
+        email=email,
+        phone=phone_number,
+        password_hash=password_hash,
     )
