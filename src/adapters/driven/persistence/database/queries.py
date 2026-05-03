@@ -48,6 +48,7 @@ class PackageQueries:
 
 @dataclass(frozen=True)
 class TruckQueries:
+    add: str
     get_by_id: str
     list_all: str
     update_state: str
@@ -142,6 +143,7 @@ class QueryRegistry:
             FileNotFoundError: If a truck SQL file is missing.
         """
         return TruckQueries(
+            add=load_sql("trucks/add.sql"),
             get_by_id=load_sql("trucks/get_by_id.sql"),
             list_all=load_sql("trucks/list_all.sql"),
             update_state=load_sql("trucks/update_state.sql"),
