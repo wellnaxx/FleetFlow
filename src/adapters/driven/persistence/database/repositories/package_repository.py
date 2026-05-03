@@ -117,6 +117,48 @@ class PostgresPackageRepository:
         package_rows = fetch_all(QUERIES.packages.list_unassigned)
         return [_map_joined_package_row(package_row) for package_row in package_rows]
 
+    def list_by_route(self, route_id: int) -> list[DeliveryPackage]:
+        """Return packages assigned to a route.
+
+        Args:
+            route_id: Route id to look up.
+
+        Returns:
+            Persisted packages assigned to the route, ordered by package id.
+
+        Raises:
+            DatabaseError: If the select operation fails.
+            KeyError: If a required package or joined customer column is missing.
+            TypeError: If a required package or joined customer column has an unexpected type.
+            ValueError: If persisted package or customer data is invalid.
+        """
+        package_rows = fetch_all(QUERIES.packages.list_by_route, (route_id,))
+        return [_map_joined_package_row(package_row) for package_row in package_rows]
+
+    def update_state(self, package: DeliveryPackage) -> None:
+        """Persist mutable package runtime state.
+
+        Args:
+            package: Package whose current runtime state should be persisted.
+
+        Returns:
+            None.
+
+        Raises:
+            DatabaseError: If the update operation fails.
+        """
+        route_id = package.route.route_id if package.route is not None else None
+        execute_write(
+            QUERIES.packages.update_state,
+            (
+                package.status.value,
+                str(package.current_location),
+                package.expected_arrival,
+                route_id,
+                package.package_id,
+            ),
+        )
+
 
 def _map_joined_package_row(row: RowDict) -> DeliveryPackage:
     """Map a package row that includes joined customer columns.

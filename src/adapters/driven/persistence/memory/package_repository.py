@@ -103,6 +103,34 @@ class InMemoryPackageRepository:
         """Return packages that are not assigned to a route."""
         return [package for package in self.list_all() if package.route is None]
 
+    def list_by_route(self, route_id: int) -> list[DeliveryPackage]:
+        """Return packages that are assigned to a specific route.
+
+        Args:
+            route_id: Route id to look up.
+
+        Returns:
+            A list of matching packages.
+        """
+        return [
+            package
+            for package in self.list_all()
+            if package.route is not None and package.route.route_id == route_id
+        ]
+
+    def update_state(self, package: DeliveryPackage) -> None:
+        """Persist mutable package runtime state.
+
+        For the in-memory implementation, this is a no-op because stored
+        packages are mutated by object reference.
+
+        Args:
+            package: Package whose current runtime state should be persisted.
+
+        Returns:
+            None.
+        """
+
     def replace_packages(self, packages_by_id: Mapping[int, DeliveryPackage], next_id: int) -> None:
         """Replace the full package state from a snapshot load.
 

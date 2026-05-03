@@ -1,10 +1,13 @@
 import unittest
+from datetime import datetime
+from types import SimpleNamespace
 from unittest.mock import MagicMock, call, patch
 
 from src.adapters.driven.persistence.database.queries import QUERIES
 from src.adapters.driven.persistence.database.repositories.package_repository import PostgresPackageRepository
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
+from src.domain.enums.item_status import ItemStatus
 from src.domain.value_objects.contact_info import ContactInfo
 from src.domain.value_objects.location_code import LocationCode
 
@@ -197,6 +200,68 @@ class PostgresPackageRepository_Should(unittest.TestCase):
             }
         )
         map_package_mock.assert_called_once_with(row, self.customer)
+
+    @patch(f"{MODULE}.fetch_all")
+    @patch(f"{MODULE}.map_package")
+    @patch(f"{MODULE}.map_customer")
+    def test_list_by_route_maps_joined_package_rows(
+        self,
+        map_customer_mock: MagicMock,
+        map_package_mock: MagicMock,
+        fetch_all_mock: MagicMock,
+    ) -> None:
+        row = self._joined_package_row(11, "Alice")
+        expected = DeliveryPackage("SYD", "MEL", 12.5, self.customer, 11)
+        fetch_all_mock.return_value = [row]
+        map_customer_mock.return_value = self.customer
+        map_package_mock.return_value = expected
+
+        result = self.repo.list_by_route(21)
+
+        self.assertEqual(result, [expected])
+        fetch_all_mock.assert_called_once_with(QUERIES.packages.list_by_route, (21,))
+        map_package_mock.assert_called_once_with(row, self.customer)
+
+    @patch(f"{MODULE}.execute_write")
+    def test_update_state_writes_mutable_package_state(self, execute_write_mock: MagicMock) -> None:
+        package = DeliveryPackage("SYD", "MEL", 12.5, self.customer, 11)
+        package.status = ItemStatus.IN_PROGRESS
+        package.current_location = "ADL"
+        package.expected_arrival = datetime(2026, 5, 1, 12, 30)
+        package.route = SimpleNamespace(route_id=21)  # type: ignore[assignment]
+
+        self.repo.update_state(package)
+
+        execute_write_mock.assert_called_once_with(
+            QUERIES.packages.update_state,
+            (
+                ItemStatus.IN_PROGRESS.value,
+                "ADL",
+                datetime(2026, 5, 1, 12, 30),
+                21,
+                11,
+            ),
+        )
+
+    @patch(f"{MODULE}.execute_write")
+    def test_update_state_writes_null_route_when_package_is_unassigned(
+        self,
+        execute_write_mock: MagicMock,
+    ) -> None:
+        package = DeliveryPackage("SYD", "MEL", 12.5, self.customer, 11)
+
+        self.repo.update_state(package)
+
+        execute_write_mock.assert_called_once_with(
+            QUERIES.packages.update_state,
+            (
+                ItemStatus.TODO.value,
+                "SYD",
+                None,
+                None,
+                11,
+            ),
+        )
 
     def _joined_package_row(self, package_id: int, customer_name: str) -> dict[str, object]:
         return {

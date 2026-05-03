@@ -56,3 +56,25 @@ class PackageRepositoryPort(Protocol):
     def list_unassigned(self) -> list[DeliveryPackage]:
         """Return packages that are not assigned to a route."""
         ...
+
+    def list_by_route(self, route_id: int) -> list[DeliveryPackage]:
+        """Return packages that are assigned to a specific route.
+
+        Args:
+            route_id: Route id to look up.
+
+        Returns:
+            A list of matching packages.
+        """
+        ...
+
+    def update_state(self, package: DeliveryPackage) -> None:
+        """Persist mutable package runtime state.
+
+        Args:
+            package: Package whose current runtime state should be persisted.
+
+        Returns:
+            None.
+        """
+        ...
