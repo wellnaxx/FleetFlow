@@ -30,8 +30,7 @@ class RouteQueries:
     get_by_id: str
     list_all: str
     remove: str
-    update_status: str
-    update_truck: str
+    update_state: str
 
 
 @dataclass(frozen=True)
@@ -106,8 +105,7 @@ class QueryRegistry:
             get_by_id=load_sql("routes/get_by_id.sql"),
             list_all=load_sql("routes/list_all.sql"),
             remove=load_sql("routes/remove.sql"),
-            update_status=load_sql("routes/update_status.sql"),
-            update_truck=load_sql("routes/update_truck.sql"),
+            update_state=load_sql("routes/update_state.sql"),
         )
 
     @cached_property
