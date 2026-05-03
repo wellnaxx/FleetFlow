@@ -88,6 +88,19 @@ class InMemoryRouteRepository:
         """Return all routes ordered by id."""
         return [self._routes[route_id] for route_id in sorted(self._routes)]
 
+    def update_state(self, route: DeliveryRoute) -> None:
+        """Persist mutable route runtime state.
+
+        For the in-memory implementation, this is a no-op because stored routes
+        are mutated by object reference.
+
+        Args:
+            route: Route whose current runtime state should be persisted.
+
+        Returns:
+            None.
+        """
+
     def replace_routes(self, routes_by_id: Mapping[int, DeliveryRoute], next_id: int) -> None:
         """Replace the full route state from a snapshot load.
 

@@ -49,3 +49,14 @@ class RouteRepositoryPort(Protocol):
     def list_all(self) -> list[DeliveryRoute]:
         """Return all routes."""
         ...
+
+    def update_state(self, route: DeliveryRoute) -> None:
+        """Persist mutable route runtime state.
+
+        Args:
+            route: Route whose current runtime state should be persisted.
+
+        Returns:
+            None.
+        """
+        ...

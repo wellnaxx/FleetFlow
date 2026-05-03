@@ -5,7 +5,9 @@ from unittest.mock import MagicMock, call, patch
 from src.adapters.driven.persistence.database.queries import QUERIES
 from src.adapters.driven.persistence.database.repositories.route_repository import PostgresRouteRepository
 from src.domain.entities.delivery_route import DeliveryRoute
+from src.domain.entities.truck import Truck
 from src.domain.enums.route_status import RouteStatus
+from src.domain.enums.truck_model import TruckModel
 from src.domain.value_objects.location_code import LocationCode
 
 MODULE = "src.adapters.driven.persistence.database.repositories.route_repository"
@@ -167,6 +169,44 @@ class PostgresRouteRepository_Should(unittest.TestCase):
             self.repo.list_all()
 
         self.assertIn("route_id: expected int", str(ctx.exception))
+
+    @patch(f"{MODULE}.execute_write")
+    def test_update_state_writes_mutable_route_state(self, execute_write_mock: MagicMock) -> None:
+        departure_time = datetime(2026, 5, 2, 9, 0)
+        route = DeliveryRoute("SYD", "MEL", departure_time=departure_time, route_id=21)
+        route.status = RouteStatus.IN_PROGRESS
+        route.truck = Truck(1001, TruckModel.SCANIA, 42000, 8000)
+
+        self.repo.update_state(route)
+
+        execute_write_mock.assert_called_once_with(
+            QUERIES.routes.update_state,
+            (
+                departure_time,
+                RouteStatus.IN_PROGRESS.value,
+                1001,
+                21,
+            ),
+        )
+
+    @patch(f"{MODULE}.execute_write")
+    def test_update_state_writes_null_truck_when_route_has_no_truck(
+        self,
+        execute_write_mock: MagicMock,
+    ) -> None:
+        route = DeliveryRoute("SYD", "MEL", route_id=21)
+
+        self.repo.update_state(route)
+
+        execute_write_mock.assert_called_once_with(
+            QUERIES.routes.update_state,
+            (
+                None,
+                RouteStatus.PLANNED.value,
+                None,
+                21,
+            ),
+        )
 
     def _route_stop_row(self, route_id: int, stop_order: int, location_code: str) -> dict[str, object]:
         return {

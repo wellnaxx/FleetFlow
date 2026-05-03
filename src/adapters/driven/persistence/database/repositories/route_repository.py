@@ -98,3 +98,26 @@ class PostgresRouteRepository:
                 raise TypeError(f"route_id: expected int, got {type(route_id).__name__}")
             groups.setdefault(route_id, []).append(row)
         return [map_route(group) for group in groups.values()]
+
+    def update_state(self, route: DeliveryRoute) -> None:
+        """Persist mutable route runtime state.
+
+        Args:
+            route: Route whose current runtime state should be persisted.
+
+        Returns:
+            None.
+
+        Raises:
+            DatabaseError: If the update operation fails.
+        """
+        truck_vehicle_id = route.truck.vehicle_id if route.truck is not None else None
+        execute_write(
+            QUERIES.routes.update_state,
+            (
+                route.departure_time,
+                route.status.value,
+                truck_vehicle_id,
+                route.route_id,
+            ),
+        )
