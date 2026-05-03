@@ -42,8 +42,7 @@ class PackageQueries:
     list_by_route: str
     list_unassigned: str
     remove: str
-    update_status: str
-    update_route: str
+    update_state: str
 
 
 @dataclass(frozen=True)
@@ -128,8 +127,7 @@ class QueryRegistry:
             list_by_route=load_sql("packages/list_by_route.sql"),
             list_unassigned=load_sql("packages/list_unassigned.sql"),
             remove=load_sql("packages/remove.sql"),
-            update_status=load_sql("packages/update_status.sql"),
-            update_route=load_sql("packages/update_route.sql"),
+            update_state=load_sql("packages/update_state.sql"),
         )
 
     @cached_property
