@@ -6,6 +6,7 @@ from src.adapters.driven.persistence.json.world_state_persistence import JsonWor
 from src.adapters.driven.persistence.memory.customer_repository import InMemoryCustomerRepository
 from src.adapters.driven.persistence.memory.package_repository import InMemoryPackageRepository
 from src.adapters.driven.persistence.memory.route_repository import InMemoryRouteRepository
+from src.adapters.driven.persistence.memory.truck_repository import InMemoryTruckRepository
 from src.adapters.driven.persistence.memory.world_state_gateway import (
     InMemoryWorldStateGateway,
     InMemoryWorldStateRuntime,
@@ -43,6 +44,7 @@ from src.application.use_cases.state.advance_world_state import AdvanceWorldStat
 from src.application.use_cases.state.load_world import LoadWorldStateUseCase
 from src.application.use_cases.state.save_world import SaveWorldStateUseCase
 from src.application.use_cases.trucks.view_all_trucks import ViewAllTrucksUseCase
+from src.composition.seed_fleet import seed_fleet_if_empty
 from src.domain.services.vehicle_manager import VehicleManager
 
 
@@ -59,10 +61,12 @@ class Container:
         self.package_repo = InMemoryPackageRepository()
         self.customer_repo = InMemoryCustomerRepository()
         self.route_repo = InMemoryRouteRepository()
+        self.truck_repo = InMemoryTruckRepository()
+        seed_fleet_if_empty(self.truck_repo)
+
+        self.vehicle_manager = VehicleManager(self.truck_repo)
 
         self.customer_service = CustomerService(self.customer_repo)
-
-        self.vehicle_manager = VehicleManager()
         self.auth = auth
         self.authz = AuthorizationService(auth.current_user)
 

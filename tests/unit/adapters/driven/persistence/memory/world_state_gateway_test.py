@@ -7,6 +7,7 @@ from src.adapters.driven.persistence.json.serialization import dt_to_str
 from src.adapters.driven.persistence.memory.customer_repository import InMemoryCustomerRepository
 from src.adapters.driven.persistence.memory.package_repository import InMemoryPackageRepository
 from src.adapters.driven.persistence.memory.route_repository import InMemoryRouteRepository
+from src.adapters.driven.persistence.memory.truck_repository import InMemoryTruckRepository
 from src.adapters.driven.persistence.memory.world_state_gateway import (
     InMemoryWorldStateGateway,
     InMemoryWorldStateRuntime,
@@ -35,7 +36,7 @@ from src.domain.value_objects.location_code import LocationCode
 
 class _FailingVehicleManager(VehicleManager):
     def __init__(self) -> None:
-        super().__init__()
+        super().__init__(InMemoryTruckRepository())
         self.replace_attempted = False
 
     def replace_truck_bindings(self, bindings: Sequence[TruckBinding]) -> None:
@@ -62,7 +63,7 @@ class InMemoryWorldStateGatewayTests(unittest.TestCase):
             return_value=True,
         )
         self.vehicle_map_locations = patch(
-            "src.domain.services.vehicle_manager.Map.get_locations",
+            "src.composition.seed_fleet.Map.get_locations",
             return_value=[LocationCode("A"), LocationCode("B"), LocationCode("C")],
         )
 
@@ -80,7 +81,8 @@ class InMemoryWorldStateGatewayTests(unittest.TestCase):
         customer_repo = InMemoryCustomerRepository()
         package_repo = InMemoryPackageRepository()
         route_repo = InMemoryRouteRepository()
-        vehicle_manager = VehicleManager()
+        truck_repo = InMemoryTruckRepository()
+        vehicle_manager = VehicleManager(truck_repo)
         runtime_state = InMemoryWorldStateRuntime(
             customer_repo=customer_repo,
             package_repo=package_repo,

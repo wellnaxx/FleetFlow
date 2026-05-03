@@ -5,41 +5,16 @@ from collections.abc import Sequence
 from src.application.dto.truck_binding_dto import TruckBinding
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.entities.truck import Truck
-from src.domain.enums.truck_model import TruckModel
 from src.domain.enums.truck_status import TruckStatus
-from src.domain.services.map import Map
+from src.ports.output.truck_repository import TruckRepositoryPort
 from src.ports.output.vehicle_manager import RouteSuitabilityView
 
 
 class VehicleManager:
     """Manage fleet vehicles, availability checks, and snapshot binding restore."""
 
-    def __init__(self) -> None:
-        """Create the default fixed fleet and disperse trucks across locations."""
-        self.vehicles: list[Truck] = (
-            [Truck(vehicle_id, TruckModel.SCANIA, 42000, 8000) for vehicle_id in range(1001, 1011)]
-            + [Truck(vehicle_id, TruckModel.MAN, 37000, 10000) for vehicle_id in range(1011, 1026)]
-            + [Truck(vehicle_id, TruckModel.ACTROS, 26000, 13000) for vehicle_id in range(1026, 1041)]
-        )
-        self.disperse_trucks()
-
-    def disperse_trucks(self) -> None:
-        """Deterministic round-robin by truck type across cities (no randomness)."""
-        from collections import defaultdict
-
-        locs = Map.get_locations()
-        type_groups: dict[TruckModel, list[Truck]] = defaultdict(list)
-        for t in self.vehicles:
-            type_groups[t.name].append(t)
-
-        i = 0
-        for_type_keys = list(type_groups.keys())
-        while any(type_groups.values()):
-            for typ in for_type_keys:
-                if type_groups[typ]:
-                    t = type_groups[typ].pop(0)
-                    t.current_location = locs[i % len(locs)]
-                    i += 1
+    def __init__(self, truck_repo: TruckRepositoryPort) -> None:
+        self._truck_repo = truck_repo
 
     def list_fleet(self) -> list[Truck]:
         """Return the fleet as a copy of the manager's vehicle list.
@@ -47,7 +22,7 @@ class VehicleManager:
         Returns:
             Trucks currently managed by the fleet service.
         """
-        return list(self.vehicles)
+        return self._truck_repo.list_fleet()
 
     def find_by_id(self, vehicle_id: int) -> Truck | None:
         """Return a truck by vehicle id, if it exists.
@@ -58,10 +33,7 @@ class VehicleManager:
         Returns:
             Matching truck, or None when no truck exists.
         """
-        for v in self.vehicles:
-            if v.vehicle_id == vehicle_id:
-                return v
-        return None
+        return self._truck_repo.find_by_id(vehicle_id)
 
     def is_suitable_for_route(self, truck: Truck, route: RouteSuitabilityView) -> tuple[bool, str]:
         """Check structural and schedule suitability for assigning a truck.
@@ -104,11 +76,11 @@ class VehicleManager:
             Suitable trucks sorted by vehicle id.
         """
         result: list[Truck] = []
-        for t in self.vehicles:
-            ok, _ = self.is_suitable_for_route(t, route)
+        for truck in self._truck_repo.list_fleet():
+            ok, _ = self.is_suitable_for_route(truck, route)
             if ok:
-                result.append(t)
-        result.sort(key=lambda t: t.vehicle_id)
+                result.append(truck)
+        result.sort(key=lambda truck: truck.vehicle_id)
         return result
 
     def replace_truck_bindings(self, bindings: Sequence[TruckBinding]) -> None:
@@ -117,12 +89,13 @@ class VehicleManager:
         Args:
             bindings: Prepared truck state produced by snapshot reconciliation.
         """
-        for truck in self.vehicles:
+        for truck in self._truck_repo.list_fleet():
             truck.route = None
             truck.status = TruckStatus.FREE
             truck.busy_from = None
             truck.busy_until = None
             truck.in_transit_to = None
+            self._truck_repo.update_state(truck)
 
         for binding in bindings:
             truck = binding.truck
@@ -136,3 +109,5 @@ class VehicleManager:
             truck.route = route
             if route is not None:
                 route.truck = truck
+
+            self._truck_repo.update_state(truck)

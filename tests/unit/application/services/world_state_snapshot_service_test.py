@@ -7,6 +7,7 @@ from src.adapters.driven.persistence.json.serialization import dt_to_str
 from src.adapters.driven.persistence.memory.customer_repository import InMemoryCustomerRepository
 from src.adapters.driven.persistence.memory.package_repository import InMemoryPackageRepository
 from src.adapters.driven.persistence.memory.route_repository import InMemoryRouteRepository
+from src.adapters.driven.persistence.memory.truck_repository import InMemoryTruckRepository
 from src.application.dto.truck_binding_dto import TruckBinding
 from src.application.dto.world_state_snapshot_dto import (
     CountersSnapshot,
@@ -148,7 +149,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
             return_value=True,
         )
         self.vehicle_map_locations = patch(
-            "src.domain.services.vehicle_manager.Map.get_locations",
+            "src.composition.seed_fleet.Map.get_locations",
             return_value=[LocationCode("A"), LocationCode("B"), LocationCode("C")],
         )
 
@@ -164,7 +165,8 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
         self.customer_repo = InMemoryCustomerRepository()
         self.package_repo = InMemoryPackageRepository()
         self.route_repo = InMemoryRouteRepository()
-        self.vehicle_manager = VehicleManager()
+        self.truck_repo = InMemoryTruckRepository()
+        self.vehicle_manager = VehicleManager(self.truck_repo)
         self.runtime_state = _RuntimeStateAdapter(
             self.customer_repo,
             self.package_repo,

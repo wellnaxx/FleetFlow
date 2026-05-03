@@ -1,42 +1,38 @@
 import unittest
 from datetime import datetime
 from types import SimpleNamespace
-from typing import Any
 from unittest.mock import patch
 
 from src.domain.services.vehicle_manager import VehicleManager
 
 
+class _TruckRepository:
+    def __init__(self, trucks: list[SimpleNamespace] | None = None) -> None:
+        self.trucks = trucks or []
+
+    def list_fleet(self) -> list[SimpleNamespace]:
+        return list(self.trucks)
+
+    def find_by_id(self, vehicle_id: int) -> SimpleNamespace | None:
+        return next((truck for truck in self.trucks if truck.vehicle_id == vehicle_id), None)
+
+    def update_state(self, truck: SimpleNamespace) -> None:
+        pass
+
+
 class VehicleManager_Should(unittest.TestCase):
-    @patch("src.domain.services.vehicle_manager.Map.get_locations", return_value=["L1", "L2", "L3"])
-    def test_init_builds_fleet_and_disperses_round_robin(self, _get_locs: Any) -> None:
-        vm = VehicleManager()
-        # Fleet sizes per constructor: 10 + 15 + 15 = 40
-        self.assertEqual(len(vm.vehicles), 40)
+    def _manager(self, trucks: list[SimpleNamespace] | None = None) -> VehicleManager:
+        return VehicleManager(_TruckRepository(trucks))  # type: ignore[reportArgumentType]
 
-        # Deterministic round-robin by type across L1,L2,L3
-        # First round across model groups assigns 1001->L1, 1011->L2, 1026->L3
-        first = {t.vehicle_id: t for t in vm.vehicles}
-        self.assertEqual(first[1001].current_location, "L1")
-        self.assertEqual(first[1011].current_location, "L2")
-        self.assertEqual(first[1026].current_location, "L3")
-        # Second round across model groups assigns 1002->L1, 1012->L2, 1027->L3
-        self.assertEqual(first[1002].current_location, "L1")
-        self.assertEqual(first[1012].current_location, "L2")
-        self.assertEqual(first[1027].current_location, "L3")
+    def test_list_fleet_and_find_by_id_delegate_to_truck_repository(self) -> None:
+        trucks = [SimpleNamespace(vehicle_id=1001), SimpleNamespace(vehicle_id=1002)]
+        vm = self._manager(trucks)
 
-        # All trucks have one of the known locations
-        self.assertTrue(all(t.current_location in {"L1", "L2", "L3"} for t in vm.vehicles))
-
-    @patch("src.domain.services.vehicle_manager.Map.get_locations", return_value=["A", "B"])
-    def test_list_fleet_returns_copy_and_find_by_id(self, _get_locs: Any) -> None:
-        vm = VehicleManager()
         fleet1 = vm.list_fleet()
         fleet1.pop()  # mutate the returned list
-        self.assertEqual(len(vm.vehicles), 40)  # internal list unchanged
-        # find_by_id works for present and missing
-        any_id = vm.vehicles[0].vehicle_id
-        self.assertIs(vm.find_by_id(any_id), vm.vehicles[0])
+
+        self.assertEqual(len(vm.list_fleet()), 2)
+        self.assertIs(vm.find_by_id(1001), trucks[0])
         self.assertIsNone(vm.find_by_id(999999))
 
     # ---- is_suitable_for_route branches ----
@@ -83,7 +79,7 @@ class VehicleManager_Should(unittest.TestCase):
         )
 
     def test_is_suitable_false_range_too_short(self) -> None:
-        vm = VehicleManager()
+        vm = self._manager()
         r, _ = self._fake_route(total_distance=1000, assigned_weight=0, start_loc="SYD")
         t = self._fake_truck(capacity=1000, max_range=900, current_location="SYD")
         ok, reason = vm.is_suitable_for_route(t, r)  # type: ignore[reportArgumentType]
@@ -91,7 +87,7 @@ class VehicleManager_Should(unittest.TestCase):
         self.assertIn("range too short", reason)
 
     def test_is_suitable_false_insufficient_capacity(self) -> None:
-        vm = VehicleManager()
+        vm = self._manager()
         r, _ = self._fake_route(total_distance=100, assigned_weight=2000, start_loc="SYD")
         t = self._fake_truck(capacity=1500, max_range=1000, current_location="SYD")
         ok, reason = vm.is_suitable_for_route(t, r)  # type: ignore[reportArgumentType]
@@ -99,7 +95,7 @@ class VehicleManager_Should(unittest.TestCase):
         self.assertIn("insufficient capacity", reason)
 
     def test_is_suitable_false_wrong_location(self) -> None:
-        vm = VehicleManager()
+        vm = self._manager()
         r, _ = self._fake_route(total_distance=100, assigned_weight=0, start_loc="MEL")
         t = self._fake_truck(capacity=5000, max_range=5000, current_location="SYD")
         ok, reason = vm.is_suitable_for_route(t, r)  # type: ignore[reportArgumentType]
@@ -109,7 +105,7 @@ class VehicleManager_Should(unittest.TestCase):
         self.assertIn("MEL", reason)
 
     def test_is_suitable_false_truck_busy_in_window(self) -> None:
-        vm = VehicleManager()
+        vm = self._manager()
         dep = datetime(2025, 1, 1, 10, 0)
         # Active route ends at 11:00 >= desired departure => busy
         r, active = self._fake_route(
@@ -125,7 +121,7 @@ class VehicleManager_Should(unittest.TestCase):
         self.assertIn("busy", reason)
 
     def test_is_suitable_false_route_not_scheduled_yet(self) -> None:
-        vm = VehicleManager()
+        vm = self._manager()
         # New route has no departure_time; truck already on some route -> reject
         r, active = self._fake_route(
             total_distance=100,
@@ -140,7 +136,7 @@ class VehicleManager_Should(unittest.TestCase):
         self.assertIn("route not scheduled yet", reason)
 
     def test_is_suitable_false_when_truck_already_assigned_with_unknown_availability(self) -> None:
-        vm = VehicleManager()
+        vm = self._manager()
         dep = datetime(2025, 1, 1, 10, 0)
         r, _active = self._fake_route(
             total_distance=100,
@@ -158,7 +154,7 @@ class VehicleManager_Should(unittest.TestCase):
         self.assertIn("unknown availability", reason)
 
     def test_is_suitable_true_when_existing_assignment_ends_before_departure(self) -> None:
-        vm = VehicleManager()
+        vm = self._manager()
         dep = datetime(2025, 1, 1, 10, 0)
         r, active = self._fake_route(
             total_distance=100,
@@ -175,7 +171,7 @@ class VehicleManager_Should(unittest.TestCase):
         self.assertEqual(reason, "")
 
     def test_is_suitable_true_when_all_conditions_ok(self) -> None:
-        vm = VehicleManager()
+        vm = self._manager()
         dep = datetime(2025, 1, 1, 10, 0)
         # Truck free (no assigned route), enough range/capacity, correct location
         r, _ = self._fake_route(
@@ -189,13 +185,12 @@ class VehicleManager_Should(unittest.TestCase):
     # ---- find_available_for_route ----
 
     def test_find_available_for_route_filters_and_sorts(self) -> None:
-        vm = VehicleManager()
-        # Replace vehicles with a small, controlled set
-        vm.vehicles = [  # type: ignore[reportAttributeAccessIssue]
+        trucks = [
             SimpleNamespace(vehicle_id=5),
             SimpleNamespace(vehicle_id=2),
             SimpleNamespace(vehicle_id=9),
         ]
+        vm = self._manager(trucks)
         # Allow only vehicle_ids {2, 9}
         allow = {2, 9}
         with patch.object(
