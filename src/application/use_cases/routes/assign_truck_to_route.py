@@ -1,16 +1,18 @@
 """Use case for assigning a truck to a route."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
-from datetime import datetime
 from typing import TYPE_CHECKING
 
-from src.domain.value_objects.location_code import LocationCode
-from src.ports.output.route_repository import RouteRepositoryPort
-from src.ports.output.truck_repository import TruckRepositoryPort
-from src.ports.output.vehicle_manager import VehicleManagerPort
-
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from src.domain.entities.delivery_route import DeliveryRoute
+    from src.domain.value_objects.location_code import LocationCode
+    from src.ports.output.route_repository import RouteRepositoryPort
+    from src.ports.output.unit_of_work import UnitOfWorkPort
+    from src.ports.output.vehicle_manager import VehicleManagerPort
 
 
 @dataclass(frozen=True)
@@ -41,20 +43,22 @@ class AssignTruckToRouteUseCase:
     """Assign a truck to a route after suitability checks."""
 
     def __init__(
-        self, routes: RouteRepositoryPort, vehicle_manager: VehicleManagerPort, truck_repo: TruckRepositoryPort
+        self,
+        routes: RouteRepositoryPort,
+        vehicle_manager: VehicleManagerPort,
+        unit_of_work: UnitOfWorkPort,
     ) -> None:
         """Initialize assignment dependencies.
 
         Args:
             routes: Repository used to fetch the target route.
             vehicle_manager: Vehicle manager used to fetch and validate trucks.
-            truck_repo: Repository used to persist truck state after assignment.
-                Vehicle manager owns suitability decisions; the repository owns
-                persistence.
+            unit_of_work: Transaction boundary used to persist route and truck
+                state together after assignment.
         """
         self._routes = routes
         self._vehicle_manager = vehicle_manager
-        self._truck_repo = truck_repo
+        self._unit_of_work = unit_of_work
 
     def execute(self, truck_id: int, route_id: int, now: datetime) -> AssignTruckToRouteResult:
         """Assign a truck to a route.
@@ -99,11 +103,21 @@ class AssignTruckToRouteUseCase:
                 f"Use 'findsuitabletrucksforroute {route_id}' to list options."
             )
 
-        if route.departure_time is None:
-            route.schedule(now)
-        route.truck = truck
-        truck.assign(route)
-        self._routes.update_state(route)
-        self._truck_repo.update_state(truck)
+        route_snapshot = route.snapshot_state()
+        truck_snapshot = truck.snapshot_state()
+        try:
+            if route.departure_time is None:
+                route.schedule(now)
+            route.truck = truck
+            truck.assign(route)
+
+            with self._unit_of_work as uow:
+                uow.routes.update_state(route)
+                uow.trucks.update_state(truck)
+                uow.commit()
+        except Exception:
+            route.restore_state(route_snapshot)
+            truck.restore_state(truck_snapshot)
+            raise
 
         return AssignTruckToRouteResult(route_id=route.route_id, truck_id=truck.vehicle_id)

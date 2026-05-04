@@ -1,27 +1,29 @@
 """Use case for removing a route from runtime state."""
 
-from src.domain.entities.delivery_route import DeliveryRoute
-from src.ports.output.package_repository import PackageRepositoryPort
-from src.ports.output.route_repository import RouteRepositoryPort
-from src.ports.output.truck_repository import TruckRepositoryPort
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.domain.entities.delivery_package import DeliveryPackage
+    from src.domain.entities.delivery_route import DeliveryRoute
+    from src.ports.output.route_repository import RouteRepositoryPort
+    from src.ports.output.unit_of_work import UnitOfWorkPort
 
 
 class RemoveRouteUseCase:
     """Remove a route and detach its packages and truck."""
 
-    def __init__(
-        self, routes: RouteRepositoryPort, packages: PackageRepositoryPort, trucks: TruckRepositoryPort
-    ) -> None:
+    def __init__(self, routes: RouteRepositoryPort, unit_of_work: UnitOfWorkPort) -> None:
         """Initialize the use case.
 
         Args:
-            routes: Repository used to fetch and remove routes.
-            packages: Repository used to update package state.
-            trucks: Repository used to update truck state.
+            routes: Repository used to fetch the target route.
+            unit_of_work: Transaction boundary used to persist package and truck
+                state together with route removal.
         """
         self._routes = routes
-        self._packages = packages
-        self._trucks = trucks
+        self._unit_of_work = unit_of_work
 
     def execute(self, route_id: int) -> DeliveryRoute:
         """Remove a route by id.
@@ -39,14 +41,32 @@ class RemoveRouteUseCase:
         if not route:
             raise ValueError(f"Route with ID {route_id} not found")
 
-        for package in list(route.packages):
-            route.detach_package(package)
-            self._packages.update_state(package)
-
+        route_snapshot = route.snapshot_state()
+        package_snapshots = [(package, package.snapshot_state()) for package in route.packages]
         truck = route.truck
-        route.release_truck(force=True)
-        if truck is not None:
-            self._trucks.update_state(truck)
+        truck_snapshot = truck.snapshot_state() if truck is not None else None
+        detached_packages: list[DeliveryPackage] = []
+        try:
+            for package in list(route.packages):
+                route.detach_package(package)
+                detached_packages.append(package)
 
-        self._routes.remove(route_id)
+            route.release_truck(force=True)
+            with self._unit_of_work as uow:
+                for package in detached_packages:
+                    uow.packages.update_state(package)
+
+                if truck is not None:
+                    uow.trucks.update_state(truck)
+
+                uow.routes.remove(route_id)
+
+                uow.commit()
+        except Exception:
+            route.restore_state(route_snapshot)
+            for package, snapshot in package_snapshots:
+                package.restore_state(snapshot)
+            if truck is not None and truck_snapshot is not None:
+                truck.restore_state(truck_snapshot)
+            raise
         return route

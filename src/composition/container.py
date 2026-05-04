@@ -7,6 +7,7 @@ from src.adapters.driven.persistence.memory.customer_repository import InMemoryC
 from src.adapters.driven.persistence.memory.package_repository import InMemoryPackageRepository
 from src.adapters.driven.persistence.memory.route_repository import InMemoryRouteRepository
 from src.adapters.driven.persistence.memory.truck_repository import InMemoryTruckRepository
+from src.adapters.driven.persistence.memory.unit_of_work import InMemoryUnitOfWork
 from src.adapters.driven.persistence.memory.world_state_gateway import (
     InMemoryWorldStateGateway,
     InMemoryWorldStateRuntime,
@@ -62,6 +63,11 @@ class Container:
         self.customer_repo = InMemoryCustomerRepository()
         self.route_repo = InMemoryRouteRepository()
         self.truck_repo = InMemoryTruckRepository()
+        self.unit_of_work = InMemoryUnitOfWork(
+            routes=self.route_repo,
+            packages=self.package_repo,
+            trucks=self.truck_repo,
+        )
         seed_fleet_if_empty(self.truck_repo)
 
         self.vehicle_manager = VehicleManager(self.truck_repo)
@@ -122,9 +128,9 @@ class Container:
         self.view_all_routes_use_case = ViewAllRoutesUseCase(self.route_repo)
         self.view_routes_in_progress_use_case = ViewRoutesInProgressUseCase(self.route_repo)
         self.create_route_use_case = CreateRouteUseCase(self.route_repo)
-        self.remove_route_use_case = RemoveRouteUseCase(self.route_repo, self.package_repo, self.truck_repo)
+        self.remove_route_use_case = RemoveRouteUseCase(self.route_repo, self.unit_of_work)
         self.assign_truck_to_route_use_case = AssignTruckToRouteUseCase(
-            self.route_repo, self.vehicle_manager, self.truck_repo
+            self.route_repo, self.vehicle_manager, self.unit_of_work
         )
         self.find_suitable_trucks_for_route_use_case = FindSuitableTrucksForRouteUseCase(
             self.route_repo, self.vehicle_manager
