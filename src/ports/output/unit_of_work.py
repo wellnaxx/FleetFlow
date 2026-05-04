@@ -5,17 +5,73 @@ from typing import TYPE_CHECKING, Protocol
 if TYPE_CHECKING:
     from types import TracebackType
 
-    from src.ports.output.package_repository import PackageRepositoryPort
-    from src.ports.output.route_repository import RouteRepositoryPort
-    from src.ports.output.truck_repository import TruckRepositoryPort
+    from src.domain.entities.delivery_package import DeliveryPackage
+    from src.domain.entities.delivery_route import DeliveryRoute
+    from src.domain.entities.truck import Truck
+
+
+class UnitOfWorkRouteRepositoryPort(Protocol):
+    """Route persistence operations available inside a unit of work."""
+
+    def update_state(self, route: DeliveryRoute) -> None:
+        """Persist mutable route runtime state.
+
+        Args:
+            route: Route whose current runtime state should be persisted.
+
+        Returns:
+            None.
+        """
+        ...
+
+    def remove(self, route_id: int) -> None:
+        """Remove a route by id.
+
+        Args:
+            route_id: Route id to remove.
+
+        Returns:
+            None.
+        """
+        ...
+
+
+class UnitOfWorkPackageRepositoryPort(Protocol):
+    """Package persistence operations available inside a unit of work."""
+
+    def update_state(self, package: DeliveryPackage) -> None:
+        """Persist mutable package runtime state.
+
+        Args:
+            package: Package whose current runtime state should be persisted.
+
+        Returns:
+            None.
+        """
+        ...
+
+
+class UnitOfWorkTruckRepositoryPort(Protocol):
+    """Truck persistence operations available inside a unit of work."""
+
+    def update_state(self, truck: Truck) -> None:
+        """Persist mutable truck runtime state.
+
+        Args:
+            truck: Truck whose current runtime state should be persisted.
+
+        Returns:
+            None.
+        """
+        ...
 
 
 class UnitOfWorkPort(Protocol):
     """Coordinate atomic persistence across multiple repositories."""
 
-    routes: RouteRepositoryPort
-    packages: PackageRepositoryPort
-    trucks: TruckRepositoryPort
+    routes: UnitOfWorkRouteRepositoryPort
+    packages: UnitOfWorkPackageRepositoryPort
+    trucks: UnitOfWorkTruckRepositoryPort
 
     def __enter__(self) -> UnitOfWorkPort:
         """Begin a unit-of-work boundary."""
