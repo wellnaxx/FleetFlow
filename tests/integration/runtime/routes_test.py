@@ -4,6 +4,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 from src.adapters.driven.persistence.memory.route_repository import InMemoryRouteRepository
+from src.adapters.driven.persistence.memory.unit_of_work import InMemoryUnitOfWork
 from src.application.use_cases.routes.assign_truck_to_route import (
     AssignTruckToRouteResult,
     AssignTruckToRouteUseCase,
@@ -31,6 +32,12 @@ class _FakeTruck:
         self.current_location = LocationCode(route.start_location)
         return True
 
+    def snapshot_state(self) -> tuple[LocationCode, LocationCode | None, Any]:
+        return (self.current_location, self.in_transit_to, self.route)
+
+    def restore_state(self, snapshot: tuple[LocationCode, LocationCode | None, Any]) -> None:
+        self.current_location, self.in_transit_to, self.route = snapshot
+
     def release(self, now: datetime | None = None, force: bool = False) -> bool:
         released = self.route is not None
         self.route = None
@@ -43,8 +50,9 @@ class RuntimeRoutesIntegrationTests(unittest.TestCase):
         route_repo = InMemoryRouteRepository()
         package_repo = MagicMock()
         truck_repo = MagicMock()
+        unit_of_work = InMemoryUnitOfWork(route_repo, package_repo, truck_repo)
         create_route = CreateRouteUseCase(route_repo)
-        remove_route = RemoveRouteUseCase(route_repo, package_repo, truck_repo)
+        remove_route = RemoveRouteUseCase(route_repo, unit_of_work)
 
         route = create_route.execute([LocationCode("SYD"), LocationCode("MEL")], None)
         self.assertIs(route_repo.get_by_id(route.route_id), route)
@@ -65,8 +73,9 @@ class RuntimeRoutesIntegrationTests(unittest.TestCase):
         vehicles.find_by_id.return_value = truck
         vehicles.is_suitable_for_route.return_value = (True, "")
         truck_repo = MagicMock()
+        unit_of_work = InMemoryUnitOfWork(route_repo, MagicMock(), truck_repo)
 
-        result = AssignTruckToRouteUseCase(route_repo, vehicles, truck_repo).execute(
+        result = AssignTruckToRouteUseCase(route_repo, vehicles, unit_of_work).execute(
             5,
             route.route_id,
             now=datetime(2025, 1, 1, 10, 0),

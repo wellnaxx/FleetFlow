@@ -26,6 +26,16 @@ class RoutePosition:
     next_eta: datetime | None = None
 
 
+@dataclass(frozen=True)
+class RouteStateSnapshot:
+    """Captured mutable state for restoring a route after a failed operation."""
+
+    departure_time: datetime | None
+    status: RouteStatus
+    truck: Truck | None
+    packages: tuple[DeliveryPackage, ...]
+
+
 class DeliveryRoute:
     """Route aggregate for packages and an optional assigned truck."""
 
@@ -99,6 +109,35 @@ class DeliveryRoute:
     def packages(self) -> list[DeliveryPackage]:
         """Assigned packages as a copy of the internal collection."""
         return list(self._packages)
+
+    def snapshot_state(self) -> RouteStateSnapshot:
+        """Capture mutable route state.
+
+        Returns:
+            Snapshot that can be passed to `restore_state`.
+        """
+        return RouteStateSnapshot(
+            departure_time=self._departure_time,
+            status=self.status,
+            truck=self.truck,
+            packages=tuple(self._packages),
+        )
+
+    def restore_state(self, snapshot: RouteStateSnapshot) -> None:
+        """Restore mutable route state from a prior snapshot.
+
+        Args:
+            snapshot: State captured by `snapshot_state`.
+        """
+        self._departure_time = snapshot.departure_time
+        self.status = snapshot.status
+        self.truck = snapshot.truck
+        self._packages = list(snapshot.packages)
+        self._segments.clear()
+        self._stop_times.clear()
+
+        if self._departure_time is not None:
+            self._build_schedule()
 
     @property
     def total_distance_km(self) -> int:

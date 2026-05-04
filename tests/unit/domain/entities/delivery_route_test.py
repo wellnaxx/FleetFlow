@@ -428,6 +428,28 @@ class DeliveryRoute_Should(unittest.TestCase):
         self.assertFalse(released)
         self.assertIsNone(route.truck)
 
+    def test_snapshot_state_restores_route_schedule_truck_and_packages(self, *_: object) -> None:
+        base = datetime(2025, 1, 1, 8, 0)
+        route = DeliveryRoute(LocationCode("A"), LocationCode("B"), LocationCode("C"), route_id=1)
+        package = _Pkg(1, "A", "C", 5)
+        truck = _Truck(route=route)
+        route.schedule(base)
+        route.assign_package(package)  # type: ignore[reportArgumentType]
+        route.truck = truck  # type: ignore[reportAttributeAccessIssue]
+        snapshot = route.snapshot_state()
+
+        route.detach_package(package)  # type: ignore[reportArgumentType]
+        route.truck = None
+        route.schedule(base + timedelta(days=1))
+
+        route.restore_state(snapshot)
+
+        self.assertEqual(route.departure_time, base)
+        self.assertEqual(route.status, RouteStatus.SCHEDULED)
+        self.assertIs(route.truck, truck)
+        self.assertEqual(route.packages, [package])
+        self.assertEqual(route.arrival_time_at(LocationCode("A")), base)
+
     def test_info_contains_key_lines(self, *_: object) -> None:
         base = datetime(2025, 1, 1, 8, 0)
         route = DeliveryRoute(LocationCode("A"), LocationCode("B"), LocationCode("C"), route_id=1)

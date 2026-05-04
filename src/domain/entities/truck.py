@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -11,6 +12,18 @@ from src.domain.value_objects.location_code import LocationCode, location_code_o
 
 if TYPE_CHECKING:
     from src.domain.entities.delivery_route import DeliveryRoute
+
+
+@dataclass(frozen=True)
+class TruckStateSnapshot:
+    """Captured mutable truck state for restoring after a failed operation."""
+
+    route: DeliveryRoute | None
+    status: TruckStatus
+    current_location: LocationCode | None
+    busy_from: datetime | None
+    busy_until: datetime | None
+    in_transit_to: LocationCode | None
 
 
 class Truck:
@@ -56,6 +69,34 @@ class Truck:
     @in_transit_to.setter
     def in_transit_to(self, value: str | LocationCode | None) -> None:
         self._in_transit_to = location_code_or_none(value)
+
+    def snapshot_state(self) -> TruckStateSnapshot:
+        """Capture mutable truck state.
+
+        Returns:
+            Snapshot that can be passed to `restore_state`.
+        """
+        return TruckStateSnapshot(
+            route=self.route,
+            status=self.status,
+            current_location=self._current_location,
+            busy_from=self.busy_from,
+            busy_until=self.busy_until,
+            in_transit_to=self._in_transit_to,
+        )
+
+    def restore_state(self, snapshot: TruckStateSnapshot) -> None:
+        """Restore mutable truck state from a prior snapshot.
+
+        Args:
+            snapshot: State captured by `snapshot_state`.
+        """
+        self.route = snapshot.route
+        self.status = snapshot.status
+        self._current_location = snapshot.current_location
+        self.busy_from = snapshot.busy_from
+        self.busy_until = snapshot.busy_until
+        self._in_transit_to = snapshot.in_transit_to
 
     def is_free(self) -> bool:
         """Return whether the truck is available for assignment.

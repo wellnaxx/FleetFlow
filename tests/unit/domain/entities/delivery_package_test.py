@@ -1,7 +1,9 @@
 import unittest
+from datetime import datetime
 
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
+from src.domain.enums.item_status import ItemStatus
 from src.domain.value_objects.contact_info import ContactInfo
 from src.domain.value_objects.location_code import LocationCode
 
@@ -97,3 +99,23 @@ class TestDeliveryPackage_Should(unittest.TestCase):
     def test_package_customer_start_num_phone(self):
         with self.assertRaises(ValueError):
             Customer(ContactInfo("Dan", "dan@ecom", "082588997"), 1)
+
+    def test_snapshot_state_restores_mutable_assignment_state(self):
+        customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
+        package = DeliveryPackage(LocationCode("SYD"), LocationCode("BRI"), 500, customer, 1)
+        route = object()
+        expected_arrival = datetime(2025, 1, 1, 12, 0)
+        package.route = route  # type: ignore[assignment]
+        package.status = ItemStatus.IN_PROGRESS
+        package.current_location = LocationCode("MEL")
+        package.expected_arrival = expected_arrival
+        snapshot = package.snapshot_state()
+
+        package.reset_assignment_state()
+
+        package.restore_state(snapshot)
+
+        self.assertIs(package.route, route)
+        self.assertEqual(package.status, ItemStatus.IN_PROGRESS)
+        self.assertEqual(package.current_location, LocationCode("MEL"))
+        self.assertEqual(package.expected_arrival, expected_arrival)

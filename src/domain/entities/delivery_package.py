@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from src.domain.enums.item_status import ItemStatus
@@ -13,6 +14,16 @@ if TYPE_CHECKING:
 
     from src.domain.entities.customer import Customer
     from src.domain.entities.delivery_route import DeliveryRoute
+
+
+@dataclass(frozen=True)
+class DeliveryPackageStateSnapshot:
+    """Captured mutable package state for restoring after a failed operation."""
+
+    route: DeliveryRoute | None
+    status: ItemStatus
+    current_location: LocationCode | None
+    expected_arrival: datetime | None
 
 
 class DeliveryPackage:
@@ -76,6 +87,30 @@ class DeliveryPackage:
     @current_location.setter
     def current_location(self, value: str | LocationCode | None) -> None:
         self._current_location = location_code_or_none(value)
+
+    def snapshot_state(self) -> DeliveryPackageStateSnapshot:
+        """Capture mutable package state.
+
+        Returns:
+            Snapshot that can be passed to `restore_state`.
+        """
+        return DeliveryPackageStateSnapshot(
+            route=self.route,
+            status=self.status,
+            current_location=self._current_location,
+            expected_arrival=self.expected_arrival,
+        )
+
+    def restore_state(self, snapshot: DeliveryPackageStateSnapshot) -> None:
+        """Restore mutable package state from a prior snapshot.
+
+        Args:
+            snapshot: State captured by `snapshot_state`.
+        """
+        self.route = snapshot.route
+        self.status = snapshot.status
+        self._current_location = snapshot.current_location
+        self.expected_arrival = snapshot.expected_arrival
 
     def reset_assignment_state(self) -> None:
         """Clear route-derived state and return the package to the unassigned baseline."""

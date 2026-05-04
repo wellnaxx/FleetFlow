@@ -181,6 +181,34 @@ class TestTruck_Should(unittest.TestCase):
         self.assertFalse(result)
         self.assertEqual(self.truck.status, TruckStatus.ON_THE_WAY)
 
+    def test_snapshot_state_restores_mutable_assignment_state(self) -> None:
+        mock_route = Mock()
+        busy_from = datetime(2024, 1, 1, 10, 0)
+        busy_until = datetime(2024, 1, 1, 18, 0)
+        self.truck.route = mock_route
+        self.truck.status = TruckStatus.ON_THE_WAY
+        self.truck.current_location = LocationCode("SYD")
+        self.truck.busy_from = busy_from
+        self.truck.busy_until = busy_until
+        self.truck.in_transit_to = LocationCode("MEL")
+        snapshot = self.truck.snapshot_state()
+
+        self.truck.route = None
+        self.truck.status = TruckStatus.FREE
+        self.truck.current_location = None
+        self.truck.busy_from = None
+        self.truck.busy_until = None
+        self.truck.in_transit_to = None
+
+        self.truck.restore_state(snapshot)
+
+        self.assertIs(self.truck.route, mock_route)
+        self.assertEqual(self.truck.status, TruckStatus.ON_THE_WAY)
+        self.assertEqual(self.truck.current_location, LocationCode("SYD"))
+        self.assertEqual(self.truck.busy_from, busy_from)
+        self.assertEqual(self.truck.busy_until, busy_until)
+        self.assertEqual(self.truck.in_transit_to, LocationCode("MEL"))
+
     def test_info(self) -> None:
         self.truck.current_location = LocationCode("SYD")
 
