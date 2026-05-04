@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 
 from src.application.use_cases.routes.remove_route import RemoveRouteUseCase
 
@@ -7,7 +7,9 @@ from src.application.use_cases.routes.remove_route import RemoveRouteUseCase
 class RemoveRouteUseCase_Should(unittest.TestCase):
     def setUp(self) -> None:
         self.mock_routes = MagicMock()
-        self.use_case = RemoveRouteUseCase(self.mock_routes)
+        self.mock_packages = MagicMock()
+        self.mock_trucks = MagicMock()
+        self.use_case = RemoveRouteUseCase(self.mock_routes, self.mock_packages, self.mock_trucks)
 
     def test_raises_when_route_not_found(self) -> None:
         self.mock_routes.get_by_id.return_value = None
@@ -18,6 +20,8 @@ class RemoveRouteUseCase_Should(unittest.TestCase):
         self.assertIn("Route with ID 42 not found", str(ctx.exception))
         self.mock_routes.get_by_id.assert_called_once_with(42)
         self.mock_routes.remove.assert_not_called()
+        self.mock_packages.update_state.assert_not_called()
+        self.mock_trucks.update_state.assert_not_called()
 
     def test_removes_route_without_truck(self) -> None:
         route = MagicMock()
@@ -32,10 +36,14 @@ class RemoveRouteUseCase_Should(unittest.TestCase):
         self.mock_routes.get_by_id.assert_called_once_with(42)
         route.release_truck.assert_called_once_with(force=True)
         self.mock_routes.remove.assert_called_once_with(42)
+        self.mock_packages.update_state.assert_not_called()
+        self.mock_trucks.update_state.assert_not_called()
 
     def test_releases_truck_before_removal(self) -> None:
+        truck = MagicMock()
         route = MagicMock()
         route.route_id = 42
+        route.truck = truck
         route.packages = []
         self.mock_routes.get_by_id.return_value = route
 
@@ -43,6 +51,8 @@ class RemoveRouteUseCase_Should(unittest.TestCase):
 
         self.assertIs(result, route)
         route.release_truck.assert_called_once_with(force=True)
+        self.mock_packages.update_state.assert_not_called()
+        self.mock_trucks.update_state.assert_called_once_with(truck)
         self.mock_routes.remove.assert_called_once_with(42)
 
     def test_release_error_stops_removal(self) -> None:
@@ -58,6 +68,8 @@ class RemoveRouteUseCase_Should(unittest.TestCase):
         self.assertIn("truck release failed", str(ctx.exception))
         route.release_truck.assert_called_once_with(force=True)
         self.mock_routes.remove.assert_not_called()
+        self.mock_packages.update_state.assert_not_called()
+        self.mock_trucks.update_state.assert_not_called()
 
     def test_detaches_assigned_packages_before_removal(self) -> None:
         package1 = MagicMock()
@@ -73,6 +85,8 @@ class RemoveRouteUseCase_Should(unittest.TestCase):
         route.detach_package.assert_any_call(package1)
         route.detach_package.assert_any_call(package2)
         self.assertEqual(route.detach_package.call_count, 2)
+        self.mock_packages.update_state.assert_has_calls([call(package1), call(package2)], any_order=True)
+        self.mock_trucks.update_state.assert_not_called()
         route.release_truck.assert_called_once_with(force=True)
         self.mock_routes.remove.assert_called_once_with(42)
 
@@ -90,4 +104,6 @@ class RemoveRouteUseCase_Should(unittest.TestCase):
 
         self.assertIn("detach failed", str(ctx.exception))
         route.detach_package.assert_called_once_with(package)
+        self.mock_packages.update_state.assert_not_called()
+        self.mock_trucks.update_state.assert_not_called()
         self.mock_routes.remove.assert_not_called()

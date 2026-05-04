@@ -41,8 +41,10 @@ class _FakeTruck:
 class RuntimeRoutesIntegrationTests(unittest.TestCase):
     def test_create_and_remove_route_updates_shared_repo_state(self) -> None:
         route_repo = InMemoryRouteRepository()
+        package_repo = MagicMock()
+        truck_repo = MagicMock()
         create_route = CreateRouteUseCase(route_repo)
-        remove_route = RemoveRouteUseCase(route_repo)
+        remove_route = RemoveRouteUseCase(route_repo, package_repo, truck_repo)
 
         route = create_route.execute([LocationCode("SYD"), LocationCode("MEL")], None)
         self.assertIs(route_repo.get_by_id(route.route_id), route)
@@ -51,6 +53,8 @@ class RuntimeRoutesIntegrationTests(unittest.TestCase):
 
         self.assertIs(removed, route)
         self.assertIsNone(route_repo.get_by_id(route.route_id))
+        package_repo.update_state.assert_not_called()
+        truck_repo.update_state.assert_not_called()
 
     def test_assign_truck_schedules_route_and_links_truck(self) -> None:
         route_repo = InMemoryRouteRepository()
@@ -60,8 +64,9 @@ class RuntimeRoutesIntegrationTests(unittest.TestCase):
         vehicles = MagicMock()
         vehicles.find_by_id.return_value = truck
         vehicles.is_suitable_for_route.return_value = (True, "")
+        truck_repo = MagicMock()
 
-        result = AssignTruckToRouteUseCase(route_repo, vehicles).execute(
+        result = AssignTruckToRouteUseCase(route_repo, vehicles, truck_repo).execute(
             5,
             route.route_id,
             now=datetime(2025, 1, 1, 10, 0),

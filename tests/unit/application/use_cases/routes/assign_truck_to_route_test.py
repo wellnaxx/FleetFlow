@@ -13,7 +13,8 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
     def setUp(self) -> None:
         self.mock_routes = MagicMock()
         self.mock_vehicles = MagicMock()
-        self.use_case = AssignTruckToRouteUseCase(self.mock_routes, self.mock_vehicles)
+        self.mock_trucks = MagicMock()
+        self.use_case = AssignTruckToRouteUseCase(self.mock_routes, self.mock_vehicles, self.mock_trucks)
 
     def test_raises_when_route_not_found(self) -> None:
         self.mock_routes.get_by_id.return_value = None
@@ -24,6 +25,8 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         self.assertIn("Route with ID 22 not found", str(ctx.exception))
         self.mock_routes.get_by_id.assert_called_once_with(22)
         self.mock_vehicles.find_by_id.assert_not_called()
+        self.mock_routes.update_state.assert_not_called()
+        self.mock_trucks.update_state.assert_not_called()
 
     def test_raises_when_truck_not_found(self) -> None:
         route = SimpleNamespace(route_id=22, departure_time=None, start_location="SYD", truck=None)
@@ -36,6 +39,8 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         self.assertIn("Truck with ID 11 not found", str(ctx.exception))
         self.mock_routes.get_by_id.assert_called_once_with(22)
         self.mock_vehicles.find_by_id.assert_called_once_with(11)
+        self.mock_routes.update_state.assert_not_called()
+        self.mock_trucks.update_state.assert_not_called()
 
     def test_schedules_route_when_unscheduled(self) -> None:
         fixed_now = datetime(2025, 10, 12, 6, 0)
@@ -69,6 +74,8 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         route.schedule.assert_called_once_with(fixed_now)
         self.assertIs(route.truck, truck)
         truck.assign.assert_called_once_with(route)
+        self.mock_routes.update_state.assert_called_once_with(route)
+        self.mock_trucks.update_state.assert_called_once_with(truck)
 
     def test_does_not_reschedule_when_route_already_scheduled(self) -> None:
         fixed_now = datetime(2025, 10, 12, 6, 0)
@@ -97,6 +104,8 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         self.mock_vehicles.is_suitable_for_route.assert_called_once_with(truck, route)
         self.assertIs(route.truck, truck)
         truck.assign.assert_called_once_with(route)
+        self.mock_routes.update_state.assert_called_once_with(route)
+        self.mock_trucks.update_state.assert_called_once_with(truck)
 
     def test_raises_when_truck_is_not_suitable(self) -> None:
         fixed_now = datetime(2025, 10, 12, 6, 0)
@@ -131,6 +140,8 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         truck.assign.assert_not_called()
         self.assertIsNone(route.truck)
         self.assertIsNone(route.departure_time)
+        self.mock_routes.update_state.assert_not_called()
+        self.mock_trucks.update_state.assert_not_called()
 
     def test_assigns_truck_to_route_on_success(self) -> None:
         fixed_now = datetime(2025, 10, 12, 6, 0)
@@ -156,6 +167,8 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         self.assertEqual(result, AssignTruckToRouteResult(route_id=22, truck_id=11))
         self.assertIs(route.truck, truck)
         truck.assign.assert_called_once_with(route)
+        self.mock_routes.update_state.assert_called_once_with(route)
+        self.mock_trucks.update_state.assert_called_once_with(truck)
 
     def test_raises_when_route_already_has_a_truck(self) -> None:
         route = SimpleNamespace(
@@ -175,3 +188,5 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         self.mock_vehicles.find_by_id.assert_called_once_with(11)
         self.mock_vehicles.is_suitable_for_route.assert_not_called()
         route.schedule.assert_not_called()
+        self.mock_routes.update_state.assert_not_called()
+        self.mock_trucks.update_state.assert_not_called()

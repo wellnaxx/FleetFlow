@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from src.domain.value_objects.location_code import LocationCode
 from src.ports.output.route_repository import RouteRepositoryPort
+from src.ports.output.truck_repository import TruckRepositoryPort
 from src.ports.output.vehicle_manager import VehicleManagerPort
 
 if TYPE_CHECKING:
@@ -39,15 +40,21 @@ class AssignTruckToRouteResult:
 class AssignTruckToRouteUseCase:
     """Assign a truck to a route after suitability checks."""
 
-    def __init__(self, routes: RouteRepositoryPort, vehicles: VehicleManagerPort) -> None:
+    def __init__(
+        self, routes: RouteRepositoryPort, vehicle_manager: VehicleManagerPort, truck_repo: TruckRepositoryPort
+    ) -> None:
         """Initialize assignment dependencies.
 
         Args:
             routes: Repository used to fetch the target route.
-            vehicles: Vehicle manager used to fetch and validate trucks.
+            vehicle_manager: Vehicle manager used to fetch and validate trucks.
+            truck_repo: Repository used to persist truck state after assignment.
+                Vehicle manager owns suitability decisions; the repository owns
+                persistence.
         """
         self._routes = routes
-        self._vehicles = vehicles
+        self._vehicle_manager = vehicle_manager
+        self._truck_repo = truck_repo
 
     def execute(self, truck_id: int, route_id: int, now: datetime) -> AssignTruckToRouteResult:
         """Assign a truck to a route.
@@ -68,7 +75,7 @@ class AssignTruckToRouteUseCase:
         if route is None:
             raise ValueError(f"Route with ID {route_id} not found")
 
-        truck = self._vehicles.find_by_id(truck_id)
+        truck = self._vehicle_manager.find_by_id(truck_id)
         if not truck:
             raise ValueError(f"Truck with ID {truck_id} not found")
 
@@ -85,7 +92,7 @@ class AssignTruckToRouteUseCase:
                 assigned_weight=route.maximum_segment_load(),
             )
 
-        ok, reason = self._vehicles.is_suitable_for_route(truck, effective_route)
+        ok, reason = self._vehicle_manager.is_suitable_for_route(truck, effective_route)
         if not ok:
             raise ValueError(
                 f"Truck {truck_id} is not suitable for route {route_id}: {reason}. "
@@ -96,5 +103,7 @@ class AssignTruckToRouteUseCase:
             route.schedule(now)
         route.truck = truck
         truck.assign(route)
+        self._routes.update_state(route)
+        self._truck_repo.update_state(truck)
 
         return AssignTruckToRouteResult(route_id=route.route_id, truck_id=truck.vehicle_id)

@@ -73,6 +73,7 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
             ),
         )
         route.assign_package.assert_called_once_with(package, now=self.now)
+        self.mock_packages.update_state.assert_called_once_with(package)
 
     def test_returns_success_for_scheduled_route_with_eta(self) -> None:
         route = self._make_route(route_id=7, departure_time=datetime(2025, 10, 1, 9, 0))
@@ -86,6 +87,7 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
 
         self.assertEqual(result.successes[0].eta_text, "2025-10-01 18:00")
         route.assign_package.assert_called_once_with(package, now=self.now)
+        self.mock_packages.update_state.assert_called_once_with(package)
         route.arrival_time_at.assert_called_once_with("MEL")
 
     def test_deduplicates_package_ids(self) -> None:
@@ -101,6 +103,7 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
         self.assertEqual(len(result.errors), 0)
         self.mock_packages.get_by_id.assert_called_once_with(8)
         route.assign_package.assert_called_once_with(package, now=self.now)
+        self.mock_packages.update_state.assert_called_once_with(package)
 
     def test_returns_errors_when_all_packages_missing(self) -> None:
         route = self._make_route(route_id=7, departure_time=None)
@@ -114,6 +117,7 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
             result.errors,
             [PackageAssignmentError(package_id=8, message="Package 8 not found.")],
         )
+        self.mock_packages.update_state.assert_not_called()
 
     def test_returns_errors_when_all_packages_already_assigned(self) -> None:
         route = self._make_route(route_id=7, departure_time=None)
@@ -130,6 +134,7 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
             result.errors,
             [PackageAssignmentError(package_id=8, message="Package 8 is already on route 3.")],
         )
+        self.mock_packages.update_state.assert_not_called()
 
     def test_returns_errors_when_all_assignments_fail_on_route_validation(self) -> None:
         route = self._make_route(route_id=7, departure_time=None)
@@ -146,6 +151,7 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
             result.errors,
             [PackageAssignmentError(package_id=8, message="capacity exceeded")],
         )
+        self.mock_packages.update_state.assert_not_called()
 
     def test_partial_success_returns_successes_and_errors(self) -> None:
         route = self._make_route(route_id=7, departure_time=None)
@@ -175,6 +181,7 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
                 ],
             ),
         )
+        self.mock_packages.update_state.assert_called_once_with(package_ok)
 
     def test_eta_falls_back_to_na_when_arrival_lookup_fails(self) -> None:
         route = self._make_route(route_id=7, departure_time=datetime(2025, 10, 1, 9, 0))

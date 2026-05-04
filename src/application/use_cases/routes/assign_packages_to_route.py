@@ -79,6 +79,7 @@ class AssignPackagesToRouteUseCase:
 
             try:
                 route.assign_package(package, now=now)
+                self._packages.update_state(package)
                 result.successes.append(
                     PackageAssignmentSuccess(
                         package_id=package.package_id,

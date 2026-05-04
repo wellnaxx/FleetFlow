@@ -122,8 +122,10 @@ class Container:
         self.view_all_routes_use_case = ViewAllRoutesUseCase(self.route_repo)
         self.view_routes_in_progress_use_case = ViewRoutesInProgressUseCase(self.route_repo)
         self.create_route_use_case = CreateRouteUseCase(self.route_repo)
-        self.remove_route_use_case = RemoveRouteUseCase(self.route_repo)
-        self.assign_truck_to_route_use_case = AssignTruckToRouteUseCase(self.route_repo, self.vehicle_manager)
+        self.remove_route_use_case = RemoveRouteUseCase(self.route_repo, self.package_repo, self.truck_repo)
+        self.assign_truck_to_route_use_case = AssignTruckToRouteUseCase(
+            self.route_repo, self.vehicle_manager, self.truck_repo
+        )
         self.find_suitable_trucks_for_route_use_case = FindSuitableTrucksForRouteUseCase(
             self.route_repo, self.vehicle_manager
         )
