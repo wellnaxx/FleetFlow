@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import unittest
 from datetime import datetime, timedelta
 from types import SimpleNamespace
+from typing import NamedTuple
 from unittest.mock import MagicMock
 
 from src.application.services.heartbeat_service import HeartbeatService
@@ -8,6 +11,15 @@ from src.application.services.world_state_reconciliation_service import WorldSta
 from src.domain.enums.item_status import ItemStatus
 from src.domain.enums.route_status import RouteStatus
 from src.domain.enums.truck_status import TruckStatus
+
+
+class _FakeTruckSnapshot(NamedTuple):
+    current_location: str
+    in_transit_to: str | None
+    route: _FakeRoute | None
+    status: TruckStatus
+    busy_from: object | None
+    busy_until: object | None
 
 
 class _FakeTruck:
@@ -18,6 +30,24 @@ class _FakeTruck:
         self.status = TruckStatus.ON_THE_WAY
         self.busy_from = None
         self.busy_until = None
+
+    def snapshot_state(self) -> _FakeTruckSnapshot:
+        return _FakeTruckSnapshot(
+            current_location=self.current_location,
+            in_transit_to=self.in_transit_to,
+            route=self.route,
+            status=self.status,
+            busy_from=self.busy_from,
+            busy_until=self.busy_until,
+        )
+
+    def restore_state(self, snapshot: _FakeTruckSnapshot) -> None:
+        self.current_location = snapshot.current_location
+        self.in_transit_to = snapshot.in_transit_to
+        self.route = snapshot.route
+        self.status = snapshot.status
+        self.busy_from = snapshot.busy_from
+        self.busy_until = snapshot.busy_until
 
     def release(self, now: datetime | None = None, force: bool = False) -> bool:
         if self.route is None:
@@ -40,6 +70,12 @@ class _FakeTruck:
         return True
 
 
+class _FakePackageSnapshot(NamedTuple):
+    current_location: str
+    expected_arrival: datetime | None
+    status: ItemStatus | None
+
+
 class _FakePackage:
     def __init__(self, start: str, end: str) -> None:
         self.start_location = start
@@ -47,6 +83,24 @@ class _FakePackage:
         self.current_location = start
         self.expected_arrival = None
         self.status: ItemStatus | None = None
+
+    def snapshot_state(self) -> _FakePackageSnapshot:
+        return _FakePackageSnapshot(
+            current_location=self.current_location,
+            expected_arrival=self.expected_arrival,
+            status=self.status,
+        )
+
+    def restore_state(self, snapshot: _FakePackageSnapshot) -> None:
+        self.current_location = snapshot.current_location
+        self.expected_arrival = snapshot.expected_arrival
+        self.status = snapshot.status
+
+
+class _FakeRouteSnapshot(NamedTuple):
+    truck: _FakeTruck | None
+    packages: tuple[_FakePackage, ...]
+    status: RouteStatus | None
 
 
 class _FakeRoute:
@@ -66,6 +120,18 @@ class _FakeRoute:
         self.truck: _FakeTruck | None = None
         self.packages = packages or []
         self.status: RouteStatus | None = None
+
+    def snapshot_state(self) -> _FakeRouteSnapshot:
+        return _FakeRouteSnapshot(
+            truck=self.truck,
+            packages=tuple(self.packages),
+            status=self.status,
+        )
+
+    def restore_state(self, snapshot: _FakeRouteSnapshot) -> None:
+        self.truck = snapshot.truck
+        self.packages = list(snapshot.packages)
+        self.status = snapshot.status
 
     def current_position(self, now: datetime) -> SimpleNamespace:
         if self.departure_time is None:
@@ -105,6 +171,13 @@ class _FakeRoute:
         return released
 
 
+def _unit_of_work_mock() -> MagicMock:
+    unit_of_work = MagicMock()
+    unit_of_work.__enter__.return_value = unit_of_work
+    unit_of_work.__exit__.return_value = False
+    return unit_of_work
+
+
 class HeartbeatServiceTests(unittest.TestCase):
     def test_advance_updates_route_statuses_truck_positions_and_packages(self) -> None:
         base = datetime(2025, 1, 1, 8, 0)
@@ -139,8 +212,9 @@ class HeartbeatServiceTests(unittest.TestCase):
         routes = [scheduled_route, in_progress_route, unscheduled_route]
         route_repo = MagicMock()
         route_repo.list_all.return_value = routes
+        unit_of_work = _unit_of_work_mock()
 
-        service = HeartbeatService(route_repo, WorldStateReconciliationService())
+        service = HeartbeatService(route_repo, WorldStateReconciliationService(), unit_of_work)
 
         summary_before_departure = service.advance(now=base)
         summary_mid_route = service.advance(now=base + timedelta(minutes=30))
@@ -167,6 +241,10 @@ class HeartbeatServiceTests(unittest.TestCase):
         self.assertEqual(package_end.current_location, "S3")
         self.assertEqual(package_mid.expected_arrival, in_progress_route.arrival_time_at("M3"))
         self.assertEqual(package_end.expected_arrival, in_progress_route.arrival_time_at("E3"))
+        self.assertEqual(unit_of_work.commit.call_count, 2)
+        self.assertEqual(unit_of_work.routes.update_state.call_count, 3)
+        self.assertEqual(unit_of_work.packages.update_state.call_count, 2)
+        self.assertEqual(unit_of_work.trucks.update_state.call_count, 2)
 
     def test_advance_releases_truck_and_marks_packages_done_after_completion(self) -> None:
         base = datetime(2025, 1, 1, 8, 0)
@@ -183,8 +261,9 @@ class HeartbeatServiceTests(unittest.TestCase):
 
         route_repo = MagicMock()
         route_repo.list_all.return_value = [route]
+        unit_of_work = _unit_of_work_mock()
 
-        service = HeartbeatService(route_repo, WorldStateReconciliationService())
+        service = HeartbeatService(route_repo, WorldStateReconciliationService(), unit_of_work)
 
         summary = service.advance(now=base + timedelta(hours=2))
 
@@ -200,6 +279,10 @@ class HeartbeatServiceTests(unittest.TestCase):
         self.assertEqual(truck.current_location, "E3")
         self.assertEqual(package.status, ItemStatus.DONE)
         self.assertEqual(package.current_location, "E3")
+        unit_of_work.routes.update_state.assert_called_once_with(route)
+        unit_of_work.packages.update_state.assert_called_once_with(package)
+        unit_of_work.trucks.update_state.assert_called_once_with(truck)
+        unit_of_work.commit.assert_called_once_with()
 
     def test_advance_reports_state_changed_for_expected_arrival_only_update(self) -> None:
         base = datetime(2025, 1, 1, 8, 0)
@@ -219,11 +302,70 @@ class HeartbeatServiceTests(unittest.TestCase):
 
         route_repo = MagicMock()
         route_repo.list_all.return_value = [route]
+        unit_of_work = _unit_of_work_mock()
 
-        service = HeartbeatService(route_repo, WorldStateReconciliationService())
+        service = HeartbeatService(route_repo, WorldStateReconciliationService(), unit_of_work)
 
         summary = service.advance(now=base + timedelta(minutes=30))
 
         self.assertTrue(summary.state_changed)
         self.assertEqual(summary.packages_updated, 1)
         self.assertEqual(package.expected_arrival, route.arrival_time_at("E3"))
+        unit_of_work.routes.update_state.assert_not_called()
+        unit_of_work.packages.update_state.assert_called_once_with(package)
+        unit_of_work.trucks.update_state.assert_not_called()
+        unit_of_work.commit.assert_called_once_with()
+
+    def test_advance_skips_unit_of_work_when_reconciliation_changes_nothing(self) -> None:
+        route = _FakeRoute(
+            locations=["S1", "E1"],
+            departure_time=None,
+            eta_final=None,
+        )
+        route.status = RouteStatus.PLANNED
+
+        route_repo = MagicMock()
+        route_repo.list_all.return_value = [route]
+        unit_of_work = _unit_of_work_mock()
+
+        service = HeartbeatService(route_repo, WorldStateReconciliationService(), unit_of_work)
+
+        summary = service.advance(now=datetime(2025, 1, 1, 8, 0))
+
+        self.assertFalse(summary.state_changed)
+        unit_of_work.__enter__.assert_not_called()
+        unit_of_work.commit.assert_not_called()
+
+    def test_advance_restores_domain_state_when_persistence_fails(self) -> None:
+        base = datetime(2025, 1, 1, 8, 0)
+        package = _FakePackage("S3", "E3")
+        route = _FakeRoute(
+            locations=["S3", "E3"],
+            departure_time=base + timedelta(hours=2),
+            eta_final=base + timedelta(hours=3),
+            packages=[package],
+        )
+        truck = _FakeTruck(current_location="X")
+        route.truck = truck
+        truck.route = route
+
+        route_snapshot = route.snapshot_state()
+        package_snapshot = package.snapshot_state()
+        truck_snapshot = truck.snapshot_state()
+
+        route_repo = MagicMock()
+        route_repo.list_all.return_value = [route]
+        unit_of_work = _unit_of_work_mock()
+        unit_of_work.packages.update_state.side_effect = RuntimeError("write failed")
+
+        service = HeartbeatService(route_repo, WorldStateReconciliationService(), unit_of_work)
+
+        with self.assertRaisesRegex(RuntimeError, "write failed"):
+            service.advance(now=base)
+
+        self.assertEqual(route.snapshot_state(), route_snapshot)
+        self.assertEqual(package.snapshot_state(), package_snapshot)
+        self.assertEqual(truck.snapshot_state(), truck_snapshot)
+        unit_of_work.routes.update_state.assert_called_once_with(route)
+        unit_of_work.packages.update_state.assert_called_once_with(package)
+        unit_of_work.commit.assert_not_called()

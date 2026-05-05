@@ -20,11 +20,10 @@ class EngineTests(unittest.TestCase):
         save_world = MagicMock()
         advance = MagicMock()
         advance.execute.return_value = HeartbeatSummary(
-            routes_updated=0,
-            packages_updated=0,
-            trucks_moved=0,
-            trucks_released=0,
-            state_changed=False,
+            mutated_routes=(),
+            mutated_packages=(),
+            mutated_trucks_moved=(),
+            mutated_trucks_released=(),
         )
         engine = Engine(
             factory=factory,
@@ -128,11 +127,10 @@ class EngineTests(unittest.TestCase):
         cmd.execute.return_value = "ok"
         factory.create.return_value = cmd
         advance.execute.return_value = HeartbeatSummary(
-            routes_updated=0,
-            packages_updated=1,
-            trucks_moved=0,
-            trucks_released=0,
-            state_changed=True,
+            mutated_routes=(),
+            mutated_packages=(MagicMock(),),
+            mutated_trucks_moved=(),
+            mutated_trucks_released=(),
         )
 
         with patch("builtins.print") as mock_print:

@@ -2,11 +2,22 @@
 
 from dataclasses import dataclass
 
+from src.domain.entities.truck import Truck
+
 
 @dataclass(frozen=True)
 class TruckReconciliationSummary:
-    """Counts and change flag for one route's truck reconciliation."""
+    """Summary of truck mutations produced while reconciling one route.
 
-    trucks_moved: int = 0
-    trucks_released: int = 0
-    state_changed: bool = False
+    Args:
+        trucks_moved: Trucks whose location or transit target changed.
+        trucks_released: Trucks released from completed routes.
+    """
+
+    trucks_moved: tuple[Truck, ...] = ()
+    trucks_released: tuple[Truck, ...] = ()
+
+    @property
+    def state_changed(self) -> bool:
+        """Return whether any truck state changed."""
+        return bool(self.trucks_moved or self.trucks_released)

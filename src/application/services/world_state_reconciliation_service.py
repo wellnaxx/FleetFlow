@@ -35,35 +35,30 @@ class WorldStateReconciliationService:
         """
         current_time = now or datetime.now()
 
-        routes_updated = 0
-        packages_updated = 0
-        trucks_moved = 0
-        trucks_released = 0
-        state_changed = False
+        routes_updated: list[DeliveryRoute] = []
+        packages_updated: list[DeliveryPackage] = []
+        trucks_moved: list[Truck] = []
+        trucks_released: list[Truck] = []
 
         for route in routes:
             new_status = self._compute_route_status(route, current_time)
             if route.status != new_status:
                 route.status = new_status
-                routes_updated += 1
-                state_changed = True
+                routes_updated.append(route)
 
             if update_trucks:
                 truck_summary = self._reconcile_truck_for_route(route, current_time)
-                trucks_moved += truck_summary.trucks_moved
-                trucks_released += truck_summary.trucks_released
-                state_changed = state_changed or truck_summary.state_changed
+                trucks_moved.extend(truck_summary.trucks_moved)
+                trucks_released.extend(truck_summary.trucks_released)
 
             package_changes = self._update_packages_for_route(route, current_time)
-            packages_updated += package_changes
-            state_changed = state_changed or package_changes > 0
+            packages_updated.extend(package_changes)
 
         return HeartbeatSummary(
-            routes_updated=routes_updated,
-            packages_updated=packages_updated,
-            trucks_moved=trucks_moved,
-            trucks_released=trucks_released,
-            state_changed=state_changed,
+            mutated_routes=tuple(routes_updated),
+            mutated_packages=tuple(packages_updated),
+            mutated_trucks_moved=tuple(trucks_moved),
+            mutated_trucks_released=tuple(trucks_released),
         )
 
     def _reconcile_truck_for_route(
@@ -79,17 +74,16 @@ class WorldStateReconciliationService:
         # the final ETA are AFTER_END. Both paths can release the truck, but they cover
         # different position states.
         position = route.current_position(now)
-        before_state = self._truck_state(truck)
 
-        trucks_moved = 0
-        trucks_released = 0
+        trucks_moved: list[Truck] = []
+        trucks_released: list[Truck] = []
 
         if position.kind == "UNSCHEDULED":
             self._set_truck_unscheduled(truck)
 
         elif position.kind == "BEFORE_START":
             if self._set_truck_before_start(truck, route):
-                trucks_moved += 1
+                trucks_moved.append(truck)
 
         elif position.kind == "AT_STOP":
             moved, released = self._set_truck_at_stop(
@@ -99,30 +93,25 @@ class WorldStateReconciliationService:
                 now=now,
             )
             if moved:
-                trucks_moved += 1
+                trucks_moved.append(truck)
             if released:
-                trucks_released += 1
+                trucks_released.append(truck)
 
         elif position.kind == "IN_TRANSIT":
             if self._set_truck_in_transit(truck, route, position):
-                trucks_moved += 1
+                trucks_moved.append(truck)
 
         elif position.kind == "AFTER_END":
             before_location = truck.current_location
             before_in_transit_to = truck.in_transit_to
 
             if route.release_truck(now=now, force=False):
-                trucks_released += 1
+                trucks_released.append(truck)
                 if truck.current_location != before_location or truck.in_transit_to != before_in_transit_to:
-                    trucks_moved += 1
-
-        after_state = self._truck_state(truck)
-        state_changed = before_state != after_state or trucks_released > 0
+                    trucks_moved.append(truck)
 
         return TruckReconciliationSummary(
-            trucks_moved=trucks_moved,
-            trucks_released=trucks_released,
-            state_changed=state_changed,
+            trucks_moved=tuple(trucks_moved), trucks_released=tuple(trucks_released)
         )
 
     def _compute_route_status(self, route: DeliveryRoute, now: datetime) -> RouteStatus:
@@ -191,8 +180,8 @@ class WorldStateReconciliationService:
         truck.route = route
         return moved
 
-    def _update_packages_for_route(self, route: DeliveryRoute, now: datetime) -> int:
-        changed_packages = 0
+    def _update_packages_for_route(self, route: DeliveryRoute, now: datetime) -> list[DeliveryPackage]:
+        changed_packages: list[DeliveryPackage] = []
         stop_times: dict[str, datetime] = {}
 
         if route.departure_time is not None:
@@ -219,7 +208,7 @@ class WorldStateReconciliationService:
                     package_changed = True
 
                 if package_changed:
-                    changed_packages += 1
+                    changed_packages.append(package)
                 continue
 
             if start not in pos_index or end not in pos_index or pos_index[start] > pos_index[end]:
@@ -233,7 +222,7 @@ class WorldStateReconciliationService:
                     package_changed = True
 
                 if package_changed:
-                    changed_packages += 1
+                    changed_packages.append(package)
                 continue
 
             start_time = stop_times.get(start)
@@ -275,7 +264,7 @@ class WorldStateReconciliationService:
                     package_changed = True
 
             if package_changed:
-                changed_packages += 1
+                changed_packages.append(package)
 
         return changed_packages
 
@@ -297,8 +286,3 @@ class WorldStateReconciliationService:
             changed = True
 
         return changed
-
-    @staticmethod
-    def _truck_state(truck: Truck) -> tuple[LocationCode | None, LocationCode | None, int | None]:
-        route_identity = id(truck.route) if truck.route is not None else None
-        return (truck.current_location, truck.in_transit_to, route_identity)

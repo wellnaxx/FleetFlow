@@ -78,7 +78,7 @@ class Container:
 
         self.reconciler = WorldStateReconciliationService()
 
-        self.heartbeat_service = HeartbeatService(self.route_repo, self.reconciler)
+        self.heartbeat_service = HeartbeatService(self.route_repo, self.reconciler, self.unit_of_work)
         self.advance_world_state_use_case = AdvanceWorldStateUseCase(self.heartbeat_service)
 
         self.world_state_runtime = InMemoryWorldStateRuntime(
