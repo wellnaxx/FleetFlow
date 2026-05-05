@@ -453,18 +453,21 @@ class DeliveryRoute:
         if package.end_location in self._stop_times:
             package.expected_arrival = self.arrival_time_at(package.end_location)
 
-    def restore_package_link(self, package: DeliveryPackage) -> None:
+    def restore_package_link(self, package: DeliveryPackage, *, refresh_expected_arrival: bool = True) -> None:
         """Restore a package-route link while rebuilding candidate snapshot state.
 
         Args:
             package: Candidate package to link to this candidate route.
+            refresh_expected_arrival: Whether to recalculate the package ETA
+                from this route's schedule.
         """
         if package in self._packages:
             return
 
         self._packages.append(package)
         package.route = self
-        self._update_expected_arrival(package)
+        if refresh_expected_arrival:
+            self._update_expected_arrival(package)
 
     def info(self) -> str:
         """Return a human-readable route summary.
