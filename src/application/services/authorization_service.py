@@ -2,10 +2,10 @@
 
 from collections.abc import Callable
 from functools import wraps
-from typing import Any
+from typing import Concatenate, Protocol
 
 from src.domain.entities.users.user import User
-from src.domain.enums.auth import ROLE_PERMISSIONS, Permission, Role
+from src.domain.enums.auth import ROLE_PERMISSIONS, Permission
 
 
 class AuthorizationService:
@@ -30,14 +30,27 @@ class AuthorizationService:
         """
         if not self.current_user:
             return False
-        role: Role | None = getattr(self.current_user, "role", None)
-        if role is None:
-            return False
-        allowed: set[Permission] = ROLE_PERMISSIONS.get(role, set())
+        allowed: set[Permission] = ROLE_PERMISSIONS.get(self.current_user.role, set())
         return perm in allowed
 
 
-def requires(permission: Permission) -> Callable[..., Any]:
+class HasAuthorization(Protocol):
+    """Object that exposes authorization state."""
+
+    @property
+    def authz(self) -> AuthorizationService:
+        """Return the authorization service."""
+        ...
+
+
+type CommandMethod[T: HasAuthorization, **P, R] = Callable[Concatenate[T, P], R]
+type CommandDecorator[T: HasAuthorization, **P, R] = Callable[
+    [CommandMethod[T, P, R]],
+    CommandMethod[T, P, R],
+]
+
+
+def requires[T: HasAuthorization, **P, R](permission: Permission) -> CommandDecorator[T, P, R]:
     """Build a decorator that requires one permission.
 
     Args:
@@ -47,7 +60,7 @@ def requires(permission: Permission) -> Callable[..., Any]:
         Decorator that raises PermissionError when authorization fails.
     """
 
-    def deco(fn: Callable[..., Any]) -> Callable[..., Any]:
+    def deco(fn: CommandMethod[T, P, R]) -> CommandMethod[T, P, R]:
         """Decorate a command method with a single-permission check.
 
         Args:
@@ -58,10 +71,12 @@ def requires(permission: Permission) -> Callable[..., Any]:
         """
 
         @wraps(fn)
-        def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
+        def wrapper(self: T, *args: P.args, **kwargs: P.kwargs) -> R:
             """Authorize and invoke the wrapped command method."""
-            authz: AuthorizationService | None = getattr(self, "authz", None)
-            if not authz or not authz.has(permission):
+            if self.authz.current_user is None:
+                raise PermissionError("Unauthenticated")
+
+            if not self.authz.has(permission):
                 raise PermissionError(f"Missing permission: {permission.name}")
             return fn(self, *args, **kwargs)
 
@@ -70,7 +85,7 @@ def requires(permission: Permission) -> Callable[..., Any]:
     return deco
 
 
-def requires_all(*permissions: Permission) -> Callable[..., Any]:
+def requires_all[T: HasAuthorization, **P, R](*permissions: Permission) -> CommandDecorator[T, P, R]:
     """Build a decorator that requires all permissions.
 
     Args:
@@ -80,7 +95,7 @@ def requires_all(*permissions: Permission) -> Callable[..., Any]:
         Decorator that raises PermissionError when authorization fails.
     """
 
-    def deco(fn: Callable[..., Any]) -> Callable[..., Any]:
+    def deco(fn: CommandMethod[T, P, R]) -> CommandMethod[T, P, R]:
         """Decorate a command method with an all-permissions check.
 
         Args:
@@ -91,14 +106,17 @@ def requires_all(*permissions: Permission) -> Callable[..., Any]:
         """
 
         @wraps(fn)
-        def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
+        def wrapper(self: T, *args: P.args, **kwargs: P.kwargs) -> R:
             """Authorize and invoke the wrapped command method."""
-            authz: AuthorizationService | None = getattr(self, "authz", None)
-            if not authz:
-                raise PermissionError("Not authenticated")
-            missing = [p for p in permissions if not authz.has(p)]
+            if self.authz.current_user is None:
+                raise PermissionError("Unauthenticated")
+
+            missing = [p for p in permissions if not self.authz.has(p)]
+
             if missing:
-                raise PermissionError(f"Missing permission: {missing[0].name}")
+                names = ", ".join(p.name for p in missing)
+                raise PermissionError(f"Missing permissions: {names}")
+
             return fn(self, *args, **kwargs)
 
         return wrapper
