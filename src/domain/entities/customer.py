@@ -63,6 +63,18 @@ class Customer:
         package.customer = self
         self._delivery_packages.append(package)
 
+    def restore_package_link(self, package: DeliveryPackage) -> None:
+        """Restore a package-customer link while rebuilding persisted state.
+
+        Args:
+            package: Package to link to this customer.
+        """
+        if any(p.package_id == package.package_id for p in self._delivery_packages):
+            return
+
+        package.customer = self
+        self._delivery_packages.append(package)
+
     def remove_package(self, package: DeliveryPackage) -> None:
         """Remove a package from this customer's active package collection.
 
