@@ -1,11 +1,8 @@
 from src.adapters.driven.persistence.database.executor import (
-    RowDict,
     execute_insert,
     execute_write,
-    fetch_all,
-    fetch_one,
 )
-from src.adapters.driven.persistence.database.mappers import map_customer, map_package
+from src.adapters.driven.persistence.database.graph_loader import load_world_graph
 from src.adapters.driven.persistence.database.queries import QUERIES
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
@@ -75,17 +72,7 @@ class PostgresPackageRepository:
             TypeError: If a required package or customer column has an unexpected type.
             ValueError: If persisted package data is invalid or references a missing customer.
         """
-        package_row = fetch_one(QUERIES.packages.get_by_id, (package_id,))
-        if package_row is None:
-            return None
-
-        customer_id = _package_customer_id(package_row)
-        customer_row = fetch_one(QUERIES.customers.get_by_id, (customer_id,))
-        if customer_row is None:
-            raise ValueError(f"Package {package_id} references missing customer {customer_id}.")
-        customer = map_customer(customer_row)
-
-        return map_package(package_row, customer)
+        return load_world_graph().packages.get(package_id)
 
     def list_all(self) -> list[DeliveryPackage]:
         """Return all packages.
@@ -99,8 +86,7 @@ class PostgresPackageRepository:
             TypeError: If a required package or joined customer column has an unexpected type.
             ValueError: If persisted package or customer data is invalid.
         """
-        package_rows = fetch_all(QUERIES.packages.list_all)
-        return [_map_joined_package_row(package_row) for package_row in package_rows]
+        return sorted(load_world_graph().packages.values(), key=lambda package: package.package_id)
 
     def list_unassigned(self) -> list[DeliveryPackage]:
         """Return packages that are not assigned to a route.
@@ -114,8 +100,10 @@ class PostgresPackageRepository:
             TypeError: If a required package or joined customer column has an unexpected type.
             ValueError: If persisted package or customer data is invalid.
         """
-        package_rows = fetch_all(QUERIES.packages.list_unassigned)
-        return [_map_joined_package_row(package_row) for package_row in package_rows]
+        return sorted(
+            (package for package in load_world_graph().packages.values() if package.route is None),
+            key=lambda package: package.package_id,
+        )
 
     def list_by_route(self, route_id: int) -> list[DeliveryPackage]:
         """Return packages assigned to a route.
@@ -132,8 +120,10 @@ class PostgresPackageRepository:
             TypeError: If a required package or joined customer column has an unexpected type.
             ValueError: If persisted package or customer data is invalid.
         """
-        package_rows = fetch_all(QUERIES.packages.list_by_route, (route_id,))
-        return [_map_joined_package_row(package_row) for package_row in package_rows]
+        route = load_world_graph().routes.get(route_id)
+        if route is None:
+            return []
+        return sorted(route.packages, key=lambda package: package.package_id)
 
     def update_state(self, package: DeliveryPackage) -> None:
         """Persist mutable package runtime state.
@@ -158,47 +148,3 @@ class PostgresPackageRepository:
                 package.package_id,
             ),
         )
-
-
-def _map_joined_package_row(row: RowDict) -> DeliveryPackage:
-    """Map a package row that includes joined customer columns.
-
-    Args:
-        row: Package row with `customer_name`, `customer_email`, and `customer_phone` aliases.
-
-    Returns:
-        Delivery package built with its customer.
-
-    Raises:
-        KeyError: If a required package or joined customer column is missing.
-        TypeError: If a required package or joined customer column has an unexpected type.
-        ValueError: If persisted package or customer data is invalid.
-    """
-    customer = map_customer(
-        {
-            "customer_id": row["customer_id"],
-            "name": row["customer_name"],
-            "email": row["customer_email"],
-            "phone": row["customer_phone"],
-        }
-    )
-    return map_package(row, customer)
-
-
-def _package_customer_id(row: RowDict) -> int:
-    """Return the customer id from a package row.
-
-    Args:
-        row: Package row returned by the executor.
-
-    Returns:
-        Customer id referenced by the package row.
-
-    Raises:
-        KeyError: If the customer id column is missing.
-        TypeError: If the customer id column is not an integer.
-    """
-    customer_id = row["customer_id"]
-    if not isinstance(customer_id, int):
-        raise TypeError(f"customer_id: expected int, got {type(customer_id).__name__}")
-    return customer_id

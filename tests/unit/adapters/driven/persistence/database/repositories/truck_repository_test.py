@@ -1,5 +1,6 @@
 import unittest
 from datetime import datetime
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from src.adapters.driven.persistence.database.queries import QUERIES
@@ -7,6 +8,7 @@ from src.adapters.driven.persistence.database.repositories.truck_repository impo
 from src.domain.entities.truck import Truck
 from src.domain.enums.truck_model import TruckModel
 from src.domain.enums.truck_status import TruckStatus
+from src.domain.value_objects.location_code import LocationCode
 
 MODULE = "src.adapters.driven.persistence.database.repositories.truck_repository"
 
@@ -36,54 +38,43 @@ class PostgresTruckRepository_Should(unittest.TestCase):
             ),
         )
 
-    @patch(f"{MODULE}.fetch_all")
-    @patch(f"{MODULE}.map_truck")
+    @patch(f"{MODULE}.load_world_graph")
     def test_list_fleet_maps_all_truck_rows(
         self,
-        map_truck_mock: MagicMock,
-        fetch_all_mock: MagicMock,
+        load_world_graph_mock: MagicMock,
     ) -> None:
-        rows = [self._truck_row(1001), self._truck_row(1002)]
         trucks = [self._truck(1001), self._truck(1002)]
-        fetch_all_mock.return_value = rows
-        map_truck_mock.side_effect = trucks
+        load_world_graph_mock.return_value = SimpleNamespace(trucks={1001: trucks[0], 1002: trucks[1]})
 
         result = self.repo.list_fleet()
 
         self.assertEqual(result, trucks)
-        fetch_all_mock.assert_called_once_with(QUERIES.trucks.list_all)
-        self.assertEqual([call.args[0] for call in map_truck_mock.call_args_list], rows)
+        load_world_graph_mock.assert_called_once_with()
 
-    @patch(f"{MODULE}.fetch_one", return_value=None)
-    @patch(f"{MODULE}.map_truck")
+    @patch(f"{MODULE}.load_world_graph")
     def test_find_by_id_returns_none_when_truck_is_missing(
         self,
-        map_truck_mock: MagicMock,
-        fetch_one_mock: MagicMock,
+        load_world_graph_mock: MagicMock,
     ) -> None:
+        load_world_graph_mock.return_value = SimpleNamespace(trucks={})
+
         truck = self.repo.find_by_id(1001)
 
         self.assertIsNone(truck)
-        fetch_one_mock.assert_called_once_with(QUERIES.trucks.get_by_id, (1001,))
-        map_truck_mock.assert_not_called()
+        load_world_graph_mock.assert_called_once_with()
 
-    @patch(f"{MODULE}.fetch_one")
-    @patch(f"{MODULE}.map_truck")
+    @patch(f"{MODULE}.load_world_graph")
     def test_find_by_id_maps_existing_truck(
         self,
-        map_truck_mock: MagicMock,
-        fetch_one_mock: MagicMock,
+        load_world_graph_mock: MagicMock,
     ) -> None:
-        row = self._truck_row(1001)
         expected = self._truck()
-        fetch_one_mock.return_value = row
-        map_truck_mock.return_value = expected
+        load_world_graph_mock.return_value = SimpleNamespace(trucks={1001: expected})
 
         truck = self.repo.find_by_id(1001)
 
         self.assertIs(truck, expected)
-        fetch_one_mock.assert_called_once_with(QUERIES.trucks.get_by_id, (1001,))
-        map_truck_mock.assert_called_once_with(row)
+        load_world_graph_mock.assert_called_once_with()
 
     @patch(f"{MODULE}.execute_write")
     def test_update_state_writes_mutable_truck_state(self, execute_write_mock: MagicMock) -> None:
@@ -106,21 +97,8 @@ class PostgresTruckRepository_Should(unittest.TestCase):
     def _truck(self, vehicle_id: int = 1001) -> Truck:
         truck = Truck(vehicle_id, TruckModel.SCANIA, 42000, 8000)
         truck.status = TruckStatus.ON_THE_WAY
-        truck.current_location = "SYD"
+        truck.current_location = LocationCode("SYD")
         truck.busy_from = datetime(2026, 5, 1, 9, 0)
         truck.busy_until = datetime(2026, 5, 1, 17, 0)
-        truck.in_transit_to = "MEL"
+        truck.in_transit_to = LocationCode("MEL")
         return truck
-
-    def _truck_row(self, vehicle_id: int) -> dict[str, object]:
-        return {
-            "vehicle_id": vehicle_id,
-            "name": TruckModel.SCANIA.value,
-            "capacity": 42000,
-            "max_range": 8000,
-            "status": TruckStatus.ON_THE_WAY.value,
-            "current_location": "SYD",
-            "busy_from": datetime(2026, 5, 1, 9, 0),
-            "busy_until": datetime(2026, 5, 1, 17, 0),
-            "in_transit_to": "MEL",
-        }

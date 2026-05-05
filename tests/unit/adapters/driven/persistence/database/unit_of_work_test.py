@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
+from src.adapters.driven.persistence.database.errors import DatabaseError
 from src.adapters.driven.persistence.database.unit_of_work import PostgresUnitOfWork
 
 MODULE = "src.adapters.driven.persistence.database.unit_of_work"
@@ -222,12 +223,12 @@ class PostgresUnitOfWork_Should(unittest.TestCase):
         cursor = MagicMock()
         conn.cursor.return_value = cursor
         get_connection_mock.return_value = conn
-        rollback_error = RuntimeError("rollback failed")
+        rollback_error = DatabaseError("rollback failed")
         conn.rollback.side_effect = rollback_error
         unit_of_work = PostgresUnitOfWork()
         unit_of_work.__enter__()
 
-        with self.assertRaises(RuntimeError) as ctx:
+        with self.assertRaises(DatabaseError) as ctx:
             unit_of_work.__exit__(None, None, None)
 
         self.assertIs(ctx.exception, rollback_error)

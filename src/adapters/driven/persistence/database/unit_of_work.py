@@ -1,9 +1,12 @@
+"""Postgres unit-of-work implementation."""
+
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from src.adapters.driven.persistence.database.connection import get_connection
+from src.adapters.driven.persistence.database.errors import DatabaseError
 from src.adapters.driven.persistence.database.repositories.package_unit_of_work_repository import (
     PostgresPackageUnitOfWorkRepository,
 )
@@ -17,6 +20,9 @@ from src.adapters.driven.persistence.database.repositories.truck_unit_of_work_re
 if TYPE_CHECKING:
     from types import TracebackType
 
+    from psycopg import Connection, Cursor
+
+    from src.adapters.driven.persistence.database.executor import Row
     from src.ports.output.unit_of_work import (
         UnitOfWorkPackageRepositoryPort,
         UnitOfWorkRouteRepositoryPort,
@@ -27,36 +33,48 @@ logger = logging.getLogger(__name__)
 
 
 class PostgresUnitOfWork:
-    """Coordinate atomic persistence across multiple repositories."""
+    """Coordinate atomic persistence across multiple Postgres repositories."""
 
     routes: UnitOfWorkRouteRepositoryPort
     packages: UnitOfWorkPackageRepositoryPort
     trucks: UnitOfWorkTruckRepositoryPort
 
+    _conn: Connection[Row]
+    _cursor: Cursor[Row]
+    _committed: bool
+
     def __enter__(self) -> PostgresUnitOfWork:
-        """Begin a unit-of-work boundary.
+        """Open a database transaction and transaction-bound repositories.
 
         Returns:
             Active unit of work with transaction-bound repositories.
 
         Raises:
-            DatabaseError: If opening the connection or cursor fails.
+            DatabaseError: If opening the connection, cursor, or repositories fails.
         """
-        conn = get_connection()
-        cursor = None
+        conn: Connection[Row] | None = None
+        cursor: Cursor[Row] | None = None
+
         try:
+            conn = get_connection()
             cursor = conn.cursor()
+
             self.routes = PostgresRouteUnitOfWorkRepository(cursor)
             self.packages = PostgresPackageUnitOfWorkRepository(cursor)
             self.trucks = PostgresTruckUnitOfWorkRepository(cursor)
-        except Exception:
+
+            self._conn = conn
+            self._cursor = cursor
+            self._committed = False
+        except DatabaseError:
             self._close_resources(cursor=cursor, conn=conn)
             raise
-
-        self._conn = conn
-        self._cursor = cursor
-        self._committed = False
-        return self
+        except Exception as exc:
+            self._close_resources(cursor=cursor, conn=conn)
+            logger.exception("Failed to open Postgres unit of work.")
+            raise DatabaseError.operation_failed(exc) from exc
+        else:
+            return self
 
     def __exit__(
         self,
@@ -64,7 +82,7 @@ class PostgresUnitOfWork:
         exc: BaseException | None,
         tb: TracebackType | None,
     ) -> None:
-        """Close the transaction resources and rollback uncommitted work.
+        """Rollback uncommitted work and close database resources.
 
         Args:
             exc_type: Exception type when the context exits with an error.
@@ -73,15 +91,19 @@ class PostgresUnitOfWork:
 
         Returns:
             None.
+
+        Raises:
+            Exception: The original rollback error when rollback fails during a clean exit.
         """
         rollback_error: Exception | None = None
+
         try:
             if not self._committed:
                 try:
                     self.rollback()
                 except Exception as error:
                     rollback_error = error
-                    logger.exception("Failed to rollback Postgres unit of work")
+                    logger.exception("Failed to rollback Postgres unit of work.")
         finally:
             self._close_resources(cursor=self._cursor, conn=self._conn)
 
@@ -89,21 +111,47 @@ class PostgresUnitOfWork:
             raise rollback_error
 
     def commit(self) -> None:
-        """Commit all work performed inside the boundary."""
-        self._conn.commit()
-        self._committed = True
+        """Commit all work performed inside the unit of work.
+
+        Returns:
+            None.
+
+        Raises:
+            DatabaseError: If the commit fails.
+        """
+        try:
+            self._conn.commit()
+            self._committed = True
+        except DatabaseError:
+            raise
+        except Exception as exc:
+            logger.exception("Failed to commit Postgres unit of work.")
+            raise DatabaseError.operation_failed(exc) from exc
 
     def rollback(self) -> None:
-        """Rollback all uncommitted work performed inside the boundary."""
-        self._conn.rollback()
+        """Rollback all uncommitted work performed inside the unit of work.
+
+        Returns:
+            None.
+
+        Raises:
+            DatabaseError: If the rollback fails.
+        """
+        try:
+            self._conn.rollback()
+        except DatabaseError:
+            raise
+        except Exception as exc:
+            logger.exception("Failed to rollback Postgres unit of work.")
+            raise DatabaseError.operation_failed(exc) from exc
 
     @staticmethod
-    def _close_resources(cursor: Any | None, conn: Any) -> None:
-        """Close cursor and connection, attempting both even if one close fails.
+    def _close_resources(cursor: Cursor[Row] | None, conn: Connection[Row] | None) -> None:
+        """Close cursor and connection, logging close failures.
 
         Args:
-            cursor: Cursor to close, if it was created.
-            conn: Connection to close.
+            cursor: Cursor to close, if one was opened.
+            conn: Connection to close, if one was opened.
 
         Returns:
             None.
@@ -112,9 +160,10 @@ class PostgresUnitOfWork:
             try:
                 cursor.close()
             except Exception:
-                logger.exception("Failed to close Postgres unit-of-work cursor")
+                logger.exception("Failed to close Postgres unit-of-work cursor.")
 
-        try:
-            conn.close()
-        except Exception:
-            logger.exception("Failed to close Postgres unit-of-work connection")
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                logger.exception("Failed to close Postgres unit-of-work connection.")

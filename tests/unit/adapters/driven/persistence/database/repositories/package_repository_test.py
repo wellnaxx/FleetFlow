@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime
 from types import SimpleNamespace
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 from src.adapters.driven.persistence.database.queries import QUERIES
 from src.adapters.driven.persistence.database.repositories.package_repository import PostgresPackageRepository
@@ -44,189 +44,114 @@ class PostgresPackageRepository_Should(unittest.TestCase):
 
         execute_write_mock.assert_called_once_with(QUERIES.packages.remove, (11,))
 
-    @patch(f"{MODULE}.fetch_one", return_value=None)
-    @patch(f"{MODULE}.map_package")
-    @patch(f"{MODULE}.map_customer")
+    @patch(f"{MODULE}.load_world_graph")
     def test_get_by_id_returns_none_when_package_is_missing(
         self,
-        map_customer_mock: MagicMock,
-        map_package_mock: MagicMock,
-        fetch_one_mock: MagicMock,
+        load_world_graph_mock: MagicMock,
     ) -> None:
+        load_world_graph_mock.return_value = SimpleNamespace(packages={})
+
         package = self.repo.get_by_id(11)
 
         self.assertIsNone(package)
-        fetch_one_mock.assert_called_once_with(QUERIES.packages.get_by_id, (11,))
-        map_customer_mock.assert_not_called()
-        map_package_mock.assert_not_called()
+        load_world_graph_mock.assert_called_once_with()
 
-    @patch(f"{MODULE}.fetch_one")
-    @patch(f"{MODULE}.map_package")
-    @patch(f"{MODULE}.map_customer")
-    def test_get_by_id_fetches_customer_and_maps_package(
+    @patch(f"{MODULE}.load_world_graph")
+    def test_get_by_id_returns_hydrated_package(
         self,
-        map_customer_mock: MagicMock,
-        map_package_mock: MagicMock,
-        fetch_one_mock: MagicMock,
+        load_world_graph_mock: MagicMock,
     ) -> None:
-        package_row = {
-            "package_id": 11,
-            "start_location": "SYD",
-            "end_location": "MEL",
-            "weight": object(),
-            "status": "To Do",
-            "current_location": "SYD",
-            "expected_arrival": None,
-            "customer_id": 7,
-            "route_id": None,
-        }
-        customer_row = {"customer_id": 7, "name": "Alice", "email": "", "phone": ""}
-        expected = DeliveryPackage("SYD", "MEL", 12.5, self.customer, 11)
-        fetch_one_mock.side_effect = [package_row, customer_row]
-        map_customer_mock.return_value = self.customer
-        map_package_mock.return_value = expected
+        expected = DeliveryPackage(LocationCode("SYD"), LocationCode("MEL"), 12.5, self.customer, 11)
+        load_world_graph_mock.return_value = SimpleNamespace(packages={11: expected})
 
         package = self.repo.get_by_id(11)
 
         self.assertIs(package, expected)
-        fetch_one_mock.assert_has_calls(
-            [
-                call(QUERIES.packages.get_by_id, (11,)),
-                call(QUERIES.customers.get_by_id, (7,)),
-            ]
-        )
-        map_customer_mock.assert_called_once_with(customer_row)
-        map_package_mock.assert_called_once_with(package_row, self.customer)
+        load_world_graph_mock.assert_called_once_with()
 
-    @patch(f"{MODULE}.fetch_one")
-    def test_get_by_id_raises_when_package_references_missing_customer(
+    @patch(f"{MODULE}.load_world_graph")
+    def test_get_by_id_propagates_graph_loader_errors(
         self,
-        fetch_one_mock: MagicMock,
+        load_world_graph_mock: MagicMock,
     ) -> None:
-        package_row = {
-            "package_id": 11,
-            "start_location": "SYD",
-            "end_location": "MEL",
-            "weight": object(),
-            "status": "To Do",
-            "current_location": "SYD",
-            "expected_arrival": None,
-            "customer_id": 7,
-            "route_id": None,
-        }
-        fetch_one_mock.side_effect = [package_row, None]
+        load_world_graph_mock.side_effect = ValueError("Package 11 references missing route 21.")
 
         with self.assertRaises(ValueError) as ctx:
             self.repo.get_by_id(11)
 
-        self.assertIn("Package 11 references missing customer 7.", str(ctx.exception))
+        self.assertIn("Package 11 references missing route 21.", str(ctx.exception))
 
-    @patch(f"{MODULE}.fetch_one")
-    def test_get_by_id_rejects_invalid_package_customer_id(self, fetch_one_mock: MagicMock) -> None:
-        fetch_one_mock.return_value = {
-            "package_id": 11,
-            "start_location": "SYD",
-            "end_location": "MEL",
-            "weight": object(),
-            "status": "To Do",
-            "current_location": "SYD",
-            "expected_arrival": None,
-            "customer_id": "7",
-            "route_id": None,
-        }
-
-        with self.assertRaises(TypeError) as ctx:
-            self.repo.get_by_id(11)
-
-        self.assertIn("customer_id: expected int", str(ctx.exception))
-
-    @patch(f"{MODULE}.fetch_all")
-    @patch(f"{MODULE}.map_package")
-    @patch(f"{MODULE}.map_customer")
-    def test_list_all_maps_joined_package_rows(
+    @patch(f"{MODULE}.load_world_graph")
+    def test_list_all_returns_hydrated_packages_ordered_by_id(
         self,
-        map_customer_mock: MagicMock,
-        map_package_mock: MagicMock,
-        fetch_all_mock: MagicMock,
+        load_world_graph_mock: MagicMock,
     ) -> None:
-        rows = [
-            self._joined_package_row(11, "Alice"),
-            self._joined_package_row(12, "Bob"),
-        ]
         packages = [
-            DeliveryPackage("SYD", "MEL", 12.5, self.customer, 11),
-            DeliveryPackage("MEL", "SYD", 10.0, self.customer, 12),
+            DeliveryPackage(LocationCode("SYD"), LocationCode("MEL"), 12.5, self.customer, 11),
+            DeliveryPackage(LocationCode("MEL"), LocationCode("SYD"), 10.0, self.customer, 12),
         ]
-        fetch_all_mock.return_value = rows
-        map_customer_mock.return_value = self.customer
-        map_package_mock.side_effect = packages
+        load_world_graph_mock.return_value = SimpleNamespace(packages={12: packages[1], 11: packages[0]})
 
         result = self.repo.list_all()
 
         self.assertEqual(result, packages)
-        fetch_all_mock.assert_called_once_with(QUERIES.packages.list_all)
-        self.assertEqual(map_customer_mock.call_args_list[0].args[0]["name"], "Alice")
-        self.assertEqual(map_customer_mock.call_args_list[1].args[0]["name"], "Bob")
-        self.assertEqual(
-            [map_call.args for map_call in map_package_mock.call_args_list],
-            [(rows[0], self.customer), (rows[1], self.customer)],
-        )
+        load_world_graph_mock.assert_called_once_with()
 
-    @patch(f"{MODULE}.fetch_all")
-    @patch(f"{MODULE}.map_package")
-    @patch(f"{MODULE}.map_customer")
-    def test_list_unassigned_maps_joined_package_rows(
+    @patch(f"{MODULE}.load_world_graph")
+    def test_list_unassigned_returns_hydrated_unassigned_packages_ordered_by_id(
         self,
-        map_customer_mock: MagicMock,
-        map_package_mock: MagicMock,
-        fetch_all_mock: MagicMock,
+        load_world_graph_mock: MagicMock,
     ) -> None:
-        row = self._joined_package_row(11, "Alice")
-        expected = DeliveryPackage("SYD", "MEL", 12.5, self.customer, 11)
-        fetch_all_mock.return_value = [row]
-        map_customer_mock.return_value = self.customer
-        map_package_mock.return_value = expected
+        assigned = DeliveryPackage(LocationCode("SYD"), LocationCode("MEL"), 12.5, self.customer, 10)
+        assigned.route = SimpleNamespace(route_id=21)  # type: ignore[assignment]
+
+        unassigned_1 = DeliveryPackage(LocationCode("SYD"), LocationCode("MEL"), 12.5, self.customer, 11)
+        unassigned_2 = DeliveryPackage(LocationCode("MEL"), LocationCode("SYD"), 10.0, self.customer, 12)
+
+        load_world_graph_mock.return_value = SimpleNamespace(
+            packages={12: unassigned_2, 10: assigned, 11: unassigned_1}
+        )
 
         result = self.repo.list_unassigned()
 
-        self.assertEqual(result, [expected])
-        fetch_all_mock.assert_called_once_with(QUERIES.packages.list_unassigned)
-        map_customer_mock.assert_called_once_with(
-            {
-                "customer_id": 7,
-                "name": "Alice",
-                "email": "alice@example.com",
-                "phone": "0412345678",
-            }
-        )
-        map_package_mock.assert_called_once_with(row, self.customer)
+        self.assertEqual(result, [unassigned_1, unassigned_2])
+        load_world_graph_mock.assert_called_once_with()
 
-    @patch(f"{MODULE}.fetch_all")
-    @patch(f"{MODULE}.map_package")
-    @patch(f"{MODULE}.map_customer")
-    def test_list_by_route_maps_joined_package_rows(
+    @patch(f"{MODULE}.load_world_graph")
+    def test_list_by_route_returns_hydrated_route_packages(
         self,
-        map_customer_mock: MagicMock,
-        map_package_mock: MagicMock,
-        fetch_all_mock: MagicMock,
+        load_world_graph_mock: MagicMock,
     ) -> None:
-        row = self._joined_package_row(11, "Alice")
-        expected = DeliveryPackage("SYD", "MEL", 12.5, self.customer, 11)
-        fetch_all_mock.return_value = [row]
-        map_customer_mock.return_value = self.customer
-        map_package_mock.return_value = expected
+        package_1 = DeliveryPackage(LocationCode("SYD"), LocationCode("MEL"), 12.5, self.customer, 11)
+        package_2 = DeliveryPackage(LocationCode("MEL"), LocationCode("SYD"), 10.0, self.customer, 12)
+        route_packages = [package_2, package_1]
+        route = SimpleNamespace(packages=route_packages)
+
+        load_world_graph_mock.return_value = SimpleNamespace(routes={21: route})
 
         result = self.repo.list_by_route(21)
 
-        self.assertEqual(result, [expected])
-        fetch_all_mock.assert_called_once_with(QUERIES.packages.list_by_route, (21,))
-        map_package_mock.assert_called_once_with(row, self.customer)
+        self.assertEqual(result, [package_1, package_2])
+        self.assertIsNot(result, route_packages)
+        load_world_graph_mock.assert_called_once_with()
+
+    @patch(f"{MODULE}.load_world_graph")
+    def test_list_by_route_returns_empty_list_when_route_is_missing(
+        self,
+        load_world_graph_mock: MagicMock,
+    ) -> None:
+        load_world_graph_mock.return_value = SimpleNamespace(routes={})
+
+        result = self.repo.list_by_route(21)
+
+        self.assertEqual(result, [])
+        load_world_graph_mock.assert_called_once_with()
 
     @patch(f"{MODULE}.execute_write")
     def test_update_state_writes_mutable_package_state(self, execute_write_mock: MagicMock) -> None:
-        package = DeliveryPackage("SYD", "MEL", 12.5, self.customer, 11)
+        package = DeliveryPackage(LocationCode("SYD"), LocationCode("MEL"), 12.5, self.customer, 11)
         package.status = ItemStatus.IN_PROGRESS
-        package.current_location = "ADL"
+        package.current_location = LocationCode("ADL")
         package.expected_arrival = datetime(2026, 5, 1, 12, 30)
         package.route = SimpleNamespace(route_id=21)  # type: ignore[assignment]
 
@@ -248,7 +173,7 @@ class PostgresPackageRepository_Should(unittest.TestCase):
         self,
         execute_write_mock: MagicMock,
     ) -> None:
-        package = DeliveryPackage("SYD", "MEL", 12.5, self.customer, 11)
+        package = DeliveryPackage(LocationCode("SYD"), LocationCode("MEL"), 12.5, self.customer, 11)
 
         self.repo.update_state(package)
 
@@ -262,19 +187,3 @@ class PostgresPackageRepository_Should(unittest.TestCase):
                 11,
             ),
         )
-
-    def _joined_package_row(self, package_id: int, customer_name: str) -> dict[str, object]:
-        return {
-            "package_id": package_id,
-            "start_location": "SYD",
-            "end_location": "MEL",
-            "weight": object(),
-            "status": "To Do",
-            "current_location": "SYD",
-            "expected_arrival": None,
-            "customer_id": 7,
-            "route_id": None,
-            "customer_name": customer_name,
-            "customer_email": "alice@example.com",
-            "customer_phone": "0412345678",
-        }

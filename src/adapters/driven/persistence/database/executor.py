@@ -1,11 +1,11 @@
 """Low-level database helpers for executing SQL against the Postgres backend.
 
 Usage contract:
-- For single-statement operations: use fetch_all, fetch_one, execute_insert,
-  execute_write. Each acquires its own connection from the pool.
-- For multi-statement operations that must be atomic: open transaction_cursor
-  and use the _tx variants inside it.
-- Never mix standalone and _tx variants in the same logical operation.
+- For single-statement operations, use fetch_all, fetch_one, execute_insert,
+  or execute_write. Each helper opens its own connection.
+- For multi-statement atomic operations, use transaction_cursor and the _tx
+  variants inside it.
+- Do not mix standalone helpers and _tx helpers in the same logical operation.
 """
 
 from __future__ import annotations
@@ -32,11 +32,6 @@ type Row = tuple[object, ...]
 type RowDict = dict[str, object]
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
-
 def _as_query(sql: SQLQuery) -> QueryNoTemplate:
     """Cast SQLQuery to QueryNoTemplate for psycopg's execute signature.
 
@@ -49,7 +44,8 @@ def _as_query(sql: SQLQuery) -> QueryNoTemplate:
 def _get_column_names(cursor: Cursor[Row]) -> list[str]:
     if cursor.description is None:
         raise DatabaseError.wrong_query_result()
-    return [col.name for col in cursor.description]
+
+    return [column.name for column in cursor.description]
 
 
 def _extract_inserted_id(row: Row | None) -> int:
@@ -57,23 +53,22 @@ def _extract_inserted_id(row: Row | None) -> int:
         raise DatabaseError.missing_returning_id()
 
     new_id = row[0]
-    if not isinstance(new_id, int):
+    if not isinstance(new_id, int) or isinstance(new_id, bool):
         raise DatabaseError.invalid_returned_id_type(new_id)
 
     return new_id
 
 
 def _cursor_to_dicts(cursor: Cursor[Row]) -> list[RowDict]:
-    """Convert all cursor rows to column-name-keyed dicts."""
     columns = _get_column_names(cursor)
     rows = cursor.fetchall()
     return [dict(zip(columns, row, strict=True)) for row in rows]
 
 
 def _cursor_to_dict(cursor: Cursor[Row], row: Row | None) -> RowDict | None:
-    """Convert one cursor row to a column-name-keyed dict."""
     if row is None:
         return None
+
     columns = _get_column_names(cursor)
     return dict(zip(columns, row, strict=True))
 
@@ -90,25 +85,11 @@ def _db_operation(label: str) -> Iterator[None]:
         raise DatabaseError.operation_failed(exc) from exc
 
 
-# ---------------------------------------------------------------------------
-# Transaction context manager
-# ---------------------------------------------------------------------------
-
-
 @contextmanager
 def transaction_cursor() -> Iterator[Cursor[Row]]:
-    """Yield a cursor bound to a single transaction with automatic commit/rollback.
+    """Yield a cursor inside one transaction.
 
-    Use the _tx variants of fetch/execute inside this context. On normal exit
-    the transaction is committed. On any exception it is rolled back and the
-    exception re-raised.
-
-    Example::
-
-        with transaction_cursor() as cur:
-            route_id = execute_insert_tx(cur, QUERIES.routes.add, (departure, status))
-            for stop in stops:
-                execute_write_tx(cur, QUERIES.routes.add_stop, (route_id, stop))
+    The transaction commits on normal exit and rolls back on exception.
     """
     try:
         with get_connection() as conn, conn.cursor() as cursor:
@@ -121,49 +102,39 @@ def transaction_cursor() -> Iterator[Cursor[Row]]:
     except DatabaseError:
         raise
     except Exception as exc:
-        logger.exception("Transactional database operation failed")
+        logger.exception("Transactional database operation failed.")
         raise DatabaseError.operation_failed(exc) from exc
-
-
-# ---------------------------------------------------------------------------
-# _tx variants — use inside transaction_cursor
-# ---------------------------------------------------------------------------
 
 
 def fetch_all_tx(cursor: Cursor[Row], sql: SQLQuery, params: SQLParams = ()) -> list[RowDict]:
     """Execute a SELECT inside an open transaction and return all rows as dicts."""
-    logger.debug("SELECT (tx) %s | params=%s", sql, params)
+    logger.debug("SELECT tx: %s | params=%s", sql, params)
     cursor.execute(_as_query(sql), params)
     return _cursor_to_dicts(cursor)
 
 
 def fetch_one_tx(cursor: Cursor[Row], sql: SQLQuery, params: SQLParams = ()) -> RowDict | None:
-    """Execute a SELECT inside an open transaction and return the first row as a dict, or None."""
-    logger.debug("SELECT (one, tx) %s | params=%s", sql, params)
+    """Execute a SELECT inside an open transaction and return one row as a dict."""
+    logger.debug("SELECT one tx: %s | params=%s", sql, params)
     cursor.execute(_as_query(sql), params)
     return _cursor_to_dict(cursor, cursor.fetchone())
 
 
 def execute_insert_tx(cursor: Cursor[Row], sql: SQLQuery, params: SQLParams = ()) -> int:
-    """Execute an INSERT inside an open transaction and return the new row's id.
+    """Execute an INSERT inside an open transaction and return the inserted id.
 
-    The SQL must include a RETURNING clause that yields the new id as the first column.
+    The SQL must include a RETURNING clause with the id as the first column.
     """
-    logger.debug("INSERT (tx) %s | params=%s", sql, params)
+    logger.debug("INSERT tx: %s | params=%s", sql, params)
     cursor.execute(_as_query(sql), params)
     return _extract_inserted_id(cursor.fetchone())
 
 
 def execute_write_tx(cursor: Cursor[Row], sql: SQLQuery, params: SQLParams = ()) -> int:
     """Execute an UPDATE or DELETE inside an open transaction and return affected row count."""
-    logger.debug("WRITE (tx) %s | params=%s", sql, params)
+    logger.debug("WRITE tx: %s | params=%s", sql, params)
     cursor.execute(_as_query(sql), params)
     return int(cursor.rowcount)
-
-
-# ---------------------------------------------------------------------------
-# Standalone variants — each acquires its own connection
-# ---------------------------------------------------------------------------
 
 
 def fetch_all(sql: SQLQuery, params: SQLParams = ()) -> list[RowDict]:

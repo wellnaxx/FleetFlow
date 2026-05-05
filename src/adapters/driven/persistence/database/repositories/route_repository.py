@@ -2,14 +2,12 @@ from collections.abc import Sequence
 from datetime import datetime
 
 from src.adapters.driven.persistence.database.executor import (
-    RowDict,
     execute_insert_tx,
     execute_write,
     execute_write_tx,
-    fetch_all,
     transaction_cursor,
 )
-from src.adapters.driven.persistence.database.mappers import map_route
+from src.adapters.driven.persistence.database.graph_loader import load_world_graph
 from src.adapters.driven.persistence.database.queries import QUERIES
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.value_objects.location_code import LocationCode
@@ -72,11 +70,7 @@ class PostgresRouteRepository:
             TypeError: If a required route or stop column has an unexpected type.
             ValueError: If persisted route data is invalid.
         """
-        route_rows = fetch_all(QUERIES.routes.get_by_id, (route_id,))
-        if not route_rows:
-            return None
-
-        return map_route(route_rows)
+        return load_world_graph().routes.get(route_id)
 
     def list_all(self) -> list[DeliveryRoute]:
         """Return all routes.
@@ -90,14 +84,7 @@ class PostgresRouteRepository:
             TypeError: If a required route or stop column has an unexpected type.
             ValueError: If persisted route data is invalid.
         """
-        rows = fetch_all(QUERIES.routes.list_all)
-        groups: dict[int, list[RowDict]] = {}
-        for row in rows:
-            route_id = row["route_id"]
-            if not isinstance(route_id, int):
-                raise TypeError(f"route_id: expected int, got {type(route_id).__name__}")
-            groups.setdefault(route_id, []).append(row)
-        return [map_route(group) for group in groups.values()]
+        return sorted(load_world_graph().routes.values(), key=lambda route: route.route_id)
 
     def update_state(self, route: DeliveryRoute) -> None:
         """Persist mutable route runtime state.

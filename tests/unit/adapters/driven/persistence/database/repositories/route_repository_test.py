@@ -1,5 +1,6 @@
 import unittest
 from datetime import datetime
+from types import SimpleNamespace
 from unittest.mock import MagicMock, call, patch
 
 from src.adapters.driven.persistence.database.queries import QUERIES
@@ -40,15 +41,13 @@ class PostgresRouteRepository_Should(unittest.TestCase):
             QUERIES.routes.add,
             (None, RouteStatus.PLANNED.value),
         )
-        execute_write_tx_mock.assert_has_calls(
-            [
-                call(cursor, QUERIES.routes.add_stop, (42, 0, "SYD")),
-                call(cursor, QUERIES.routes.add_stop, (42, 1, "MEL")),
-                call(cursor, QUERIES.routes.add_stop, (42, 2, "ADL")),
-            ]
-        )
+        execute_write_tx_mock.assert_has_calls([
+            call(cursor, QUERIES.routes.add_stop, (42, 0, "SYD")),
+            call(cursor, QUERIES.routes.add_stop, (42, 1, "MEL")),
+            call(cursor, QUERIES.routes.add_stop, (42, 2, "ADL")),
+        ])
         self.assertEqual(route.route_id, 42)
-        self.assertEqual(route.locations, ["SYD", "MEL", "ADL"])
+        self.assertEqual(route.locations, [LocationCode("SYD"), LocationCode("MEL"), LocationCode("ADL")])
         self.assertIsNone(route.departure_time)
         self.assertEqual(route.status, RouteStatus.PLANNED)
 
@@ -101,69 +100,51 @@ class PostgresRouteRepository_Should(unittest.TestCase):
 
         execute_write_mock.assert_called_once_with(QUERIES.routes.remove, (21,))
 
-    @patch(f"{MODULE}.fetch_all", return_value=[])
-    @patch(f"{MODULE}.map_route")
+    @patch(f"{MODULE}.load_world_graph")
     def test_get_by_id_returns_none_when_route_is_missing(
         self,
-        map_route_mock: MagicMock,
-        fetch_all_mock: MagicMock,
+        load_world_graph_mock: MagicMock,
     ) -> None:
+        load_world_graph_mock.return_value = SimpleNamespace(routes={})
+
         route = self.repo.get_by_id(21)
 
         self.assertIsNone(route)
-        fetch_all_mock.assert_called_once_with(QUERIES.routes.get_by_id, (21,))
-        map_route_mock.assert_not_called()
+        load_world_graph_mock.assert_called_once_with()
 
-    @patch(f"{MODULE}.fetch_all")
-    @patch(f"{MODULE}.map_route")
-    def test_get_by_id_maps_route_rows(
+    @patch(f"{MODULE}.load_world_graph")
+    def test_get_by_id_returns_hydrated_route(
         self,
-        map_route_mock: MagicMock,
-        fetch_all_mock: MagicMock,
+        load_world_graph_mock: MagicMock,
     ) -> None:
-        rows = [self._route_stop_row(21, 0, "SYD"), self._route_stop_row(21, 1, "MEL")]
-        expected = DeliveryRoute("SYD", "MEL", route_id=21)
-        fetch_all_mock.return_value = rows
-        map_route_mock.return_value = expected
+        expected = DeliveryRoute(LocationCode("SYD"), LocationCode("MEL"), route_id=21)
+        load_world_graph_mock.return_value = SimpleNamespace(routes={21: expected})
 
         route = self.repo.get_by_id(21)
 
         self.assertIs(route, expected)
-        fetch_all_mock.assert_called_once_with(QUERIES.routes.get_by_id, (21,))
-        map_route_mock.assert_called_once_with(rows)
+        load_world_graph_mock.assert_called_once_with()
 
-    @patch(f"{MODULE}.fetch_all")
-    @patch(f"{MODULE}.map_route")
-    def test_list_all_groups_rows_by_route_id(
+    @patch(f"{MODULE}.load_world_graph")
+    def test_list_all_returns_hydrated_routes(
         self,
-        map_route_mock: MagicMock,
-        fetch_all_mock: MagicMock,
+        load_world_graph_mock: MagicMock,
     ) -> None:
-        route_1_rows = [self._route_stop_row(21, 0, "SYD"), self._route_stop_row(21, 1, "MEL")]
-        route_2_rows = [self._route_stop_row(22, 0, "MEL"), self._route_stop_row(22, 1, "ADL")]
-        route_1 = DeliveryRoute("SYD", "MEL", route_id=21)
-        route_2 = DeliveryRoute("MEL", "ADL", route_id=22)
-        fetch_all_mock.return_value = [*route_1_rows, *route_2_rows]
-        map_route_mock.side_effect = [route_1, route_2]
+        route_1 = DeliveryRoute(LocationCode("SYD"), LocationCode("MEL"), route_id=21)
+        route_2 = DeliveryRoute(LocationCode("MEL"), LocationCode("ADL"), route_id=22)
+        load_world_graph_mock.return_value = SimpleNamespace(routes={22: route_2, 21: route_1})
 
         routes = self.repo.list_all()
 
         self.assertEqual(routes, [route_1, route_2])
-        fetch_all_mock.assert_called_once_with(QUERIES.routes.list_all)
-        map_route_mock.assert_has_calls([call(route_1_rows), call(route_2_rows)])
+        load_world_graph_mock.assert_called_once_with()
 
-    @patch(f"{MODULE}.fetch_all")
-    def test_list_all_rejects_invalid_route_id_type(self, fetch_all_mock: MagicMock) -> None:
-        fetch_all_mock.return_value = [
-            {
-                "route_id": "21",
-                "departure_time": None,
-                "status": "PLANNED",
-                "truck_vehicle_id": None,
-                "stop_order": 0,
-                "location_code": "SYD",
-            }
-        ]
+    @patch(f"{MODULE}.load_world_graph")
+    def test_list_all_propagates_graph_loader_errors(
+        self,
+        load_world_graph_mock: MagicMock,
+    ) -> None:
+        load_world_graph_mock.side_effect = TypeError("route_id: expected int")
 
         with self.assertRaises(TypeError) as ctx:
             self.repo.list_all()
@@ -173,7 +154,9 @@ class PostgresRouteRepository_Should(unittest.TestCase):
     @patch(f"{MODULE}.execute_write")
     def test_update_state_writes_mutable_route_state(self, execute_write_mock: MagicMock) -> None:
         departure_time = datetime(2026, 5, 2, 9, 0)
-        route = DeliveryRoute("SYD", "MEL", departure_time=departure_time, route_id=21)
+        route = DeliveryRoute(
+            LocationCode("SYD"), LocationCode("MEL"), departure_time=departure_time, route_id=21
+        )
         route.status = RouteStatus.IN_PROGRESS
         route.truck = Truck(1001, TruckModel.SCANIA, 42000, 8000)
 
@@ -194,7 +177,7 @@ class PostgresRouteRepository_Should(unittest.TestCase):
         self,
         execute_write_mock: MagicMock,
     ) -> None:
-        route = DeliveryRoute("SYD", "MEL", route_id=21)
+        route = DeliveryRoute(LocationCode("SYD"), LocationCode("MEL"), route_id=21)
 
         self.repo.update_state(route)
 
@@ -207,13 +190,3 @@ class PostgresRouteRepository_Should(unittest.TestCase):
                 21,
             ),
         )
-
-    def _route_stop_row(self, route_id: int, stop_order: int, location_code: str) -> dict[str, object]:
-        return {
-            "route_id": route_id,
-            "departure_time": None,
-            "status": "PLANNED",
-            "truck_vehicle_id": None,
-            "stop_order": stop_order,
-            "location_code": location_code,
-        }
