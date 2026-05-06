@@ -3,14 +3,14 @@ from datetime import datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, call, patch
 
-from src.adapters.driven.persistence.database.graph_loader import load_world_graph
+from src.adapters.driven.persistence.database.graph_loaders.world_graph_loader import load_world_graph
 from src.adapters.driven.persistence.database.queries import QUERIES
 from src.domain.enums.item_status import ItemStatus
 from src.domain.enums.route_status import RouteStatus
 from src.domain.enums.truck_model import TruckModel
 from src.domain.enums.truck_status import TruckStatus
 
-MODULE = "src.adapters.driven.persistence.database.graph_loader"
+MODULE = "src.adapters.driven.persistence.database.graph_loaders.world_graph_loader"
 
 
 class WorldGraphLoaderShould(unittest.TestCase):

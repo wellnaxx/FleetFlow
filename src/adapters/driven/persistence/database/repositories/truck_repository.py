@@ -1,7 +1,7 @@
 from src.adapters.driven.persistence.database.executor import (
     execute_write,
 )
-from src.adapters.driven.persistence.database.graph_loader import load_world_graph
+from src.adapters.driven.persistence.database.graph_loaders.world_graph_loader import load_world_graph
 from src.adapters.driven.persistence.database.queries import QUERIES
 from src.domain.entities.truck import Truck
 

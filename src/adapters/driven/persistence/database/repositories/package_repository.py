@@ -2,7 +2,7 @@ from src.adapters.driven.persistence.database.executor import (
     execute_insert,
     execute_write,
 )
-from src.adapters.driven.persistence.database.graph_loader import load_world_graph
+from src.adapters.driven.persistence.database.graph_loaders.world_graph_loader import load_world_graph
 from src.adapters.driven.persistence.database.queries import QUERIES
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage

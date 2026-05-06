@@ -7,7 +7,7 @@ from src.adapters.driven.persistence.database.executor import (
     execute_write_tx,
     transaction_cursor,
 )
-from src.adapters.driven.persistence.database.graph_loader import load_world_graph
+from src.adapters.driven.persistence.database.graph_loaders.world_graph_loader import load_world_graph
 from src.adapters.driven.persistence.database.queries import QUERIES
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.value_objects.location_code import LocationCode
