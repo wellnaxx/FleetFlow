@@ -39,6 +39,7 @@ class PackageQueries:
     get_by_id: str
     list_all: str
     list_by_route: str
+    list_assigned: str
     list_unassigned: str
     remove: str
     update_state: str
@@ -48,7 +49,9 @@ class PackageQueries:
 class TruckQueries:
     add: str
     get_by_id: str
+    get_by_route_id: str
     list_all: str
+    list_assigned: str
     update_state: str
 
 
@@ -123,6 +126,7 @@ class QueryRegistry:
             get_by_id=load_sql("packages/get_by_id.sql"),
             list_all=load_sql("packages/list_all.sql"),
             list_by_route=load_sql("packages/list_by_route.sql"),
+            list_assigned=load_sql("packages/list_assigned.sql"),
             list_unassigned=load_sql("packages/list_unassigned.sql"),
             remove=load_sql("packages/remove.sql"),
             update_state=load_sql("packages/update_state.sql"),
@@ -141,7 +145,9 @@ class QueryRegistry:
         return TruckQueries(
             add=load_sql("trucks/add.sql"),
             get_by_id=load_sql("trucks/get_by_id.sql"),
+            get_by_route_id=load_sql("trucks/get_by_route_id.sql"),
             list_all=load_sql("trucks/list_all.sql"),
+            list_assigned=load_sql("trucks/list_assigned.sql"),
             update_state=load_sql("trucks/update_state.sql"),
         )
 
