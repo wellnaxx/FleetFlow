@@ -157,6 +157,26 @@ class RouteGraphLoaderShould(unittest.TestCase):
 
     @patch(f"{MODULE}.transaction_cursor")
     @patch(f"{MODULE}.fetch_all_tx")
+    def test_load_route_graphs_returns_empty_list_when_no_routes_exist(
+        self,
+        fetch_all_tx_mock: MagicMock,
+        transaction_cursor_mock: MagicMock,
+    ) -> None:
+        cursor = self._transaction_cursor(transaction_cursor_mock)
+        fetch_all_tx_mock.side_effect = [[], [], []]
+
+        graphs = load_route_graphs()
+
+        self.assertEqual(graphs, [])
+        fetch_all_tx_mock.assert_has_calls([
+            call(cursor, QUERIES.routes.list_all),
+            call(cursor, QUERIES.trucks.list_assigned),
+            call(cursor, QUERIES.packages.list_assigned),
+        ])
+        self.assertEqual(fetch_all_tx_mock.call_count, 3)
+
+    @patch(f"{MODULE}.transaction_cursor")
+    @patch(f"{MODULE}.fetch_all_tx")
     def test_load_route_graphs_rejects_missing_assigned_truck(
         self,
         fetch_all_tx_mock: MagicMock,

@@ -296,15 +296,17 @@ def link_route_trucks(
         None.
 
     Raises:
-        ValueError: If a route references a missing truck.
+        ValueError: If a truck mapping references a missing route or truck.
     """
     for route_id, vehicle_id in route_truck_ids.items():
         if vehicle_id is None:
             continue
 
-        route = routes[route_id]
-        truck = trucks.get(vehicle_id)
+        route = routes.get(route_id)
+        if route is None:
+            raise ValueError(f"Route truck mapping references missing route {route_id}.")
 
+        truck = trucks.get(vehicle_id)
         if truck is None:
             raise ValueError(f"Route {route_id} references missing truck {vehicle_id}.")
 
