@@ -7,7 +7,10 @@ from src.adapters.driven.persistence.database.executor import (
     execute_write_tx,
     transaction_cursor,
 )
-from src.adapters.driven.persistence.database.graph_loaders.world_graph_loader import load_world_graph
+from src.adapters.driven.persistence.database.graph_loaders.route_graph_loader import (
+    load_route_graph,
+    load_route_graphs,
+)
 from src.adapters.driven.persistence.database.queries import QUERIES
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.value_objects.location_code import LocationCode
@@ -70,7 +73,8 @@ class PostgresRouteRepository:
             TypeError: If a required route or stop column has an unexpected type.
             ValueError: If persisted route data is invalid.
         """
-        return load_world_graph().routes.get(route_id)
+        route_graph = load_route_graph(route_id)
+        return route_graph.route if route_graph is not None else None
 
     def list_all(self) -> list[DeliveryRoute]:
         """Return all routes.
@@ -84,7 +88,7 @@ class PostgresRouteRepository:
             TypeError: If a required route or stop column has an unexpected type.
             ValueError: If persisted route data is invalid.
         """
-        return sorted(load_world_graph().routes.values(), key=lambda route: route.route_id)
+        return [graph.route for graph in load_route_graphs()]
 
     def update_state(self, route: DeliveryRoute) -> None:
         """Persist mutable route runtime state.

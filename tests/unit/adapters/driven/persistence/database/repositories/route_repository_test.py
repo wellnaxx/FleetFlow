@@ -41,11 +41,13 @@ class PostgresRouteRepository_Should(unittest.TestCase):
             QUERIES.routes.add,
             (None, RouteStatus.PLANNED.value),
         )
-        execute_write_tx_mock.assert_has_calls([
-            call(cursor, QUERIES.routes.add_stop, (42, 0, "SYD")),
-            call(cursor, QUERIES.routes.add_stop, (42, 1, "MEL")),
-            call(cursor, QUERIES.routes.add_stop, (42, 2, "ADL")),
-        ])
+        execute_write_tx_mock.assert_has_calls(
+            [
+                call(cursor, QUERIES.routes.add_stop, (42, 0, "SYD")),
+                call(cursor, QUERIES.routes.add_stop, (42, 1, "MEL")),
+                call(cursor, QUERIES.routes.add_stop, (42, 2, "ADL")),
+            ]
+        )
         self.assertEqual(route.route_id, 42)
         self.assertEqual(route.locations, [LocationCode("SYD"), LocationCode("MEL"), LocationCode("ADL")])
         self.assertIsNone(route.departure_time)
@@ -100,51 +102,54 @@ class PostgresRouteRepository_Should(unittest.TestCase):
 
         execute_write_mock.assert_called_once_with(QUERIES.routes.remove, (21,))
 
-    @patch(f"{MODULE}.load_world_graph")
+    @patch(f"{MODULE}.load_route_graph")
     def test_get_by_id_returns_none_when_route_is_missing(
         self,
-        load_world_graph_mock: MagicMock,
+        load_route_graph_mock: MagicMock,
     ) -> None:
-        load_world_graph_mock.return_value = SimpleNamespace(routes={})
+        load_route_graph_mock.return_value = None
 
         route = self.repo.get_by_id(21)
 
         self.assertIsNone(route)
-        load_world_graph_mock.assert_called_once_with()
+        load_route_graph_mock.assert_called_once_with(21)
 
-    @patch(f"{MODULE}.load_world_graph")
+    @patch(f"{MODULE}.load_route_graph")
     def test_get_by_id_returns_hydrated_route(
         self,
-        load_world_graph_mock: MagicMock,
+        load_route_graph_mock: MagicMock,
     ) -> None:
         expected = DeliveryRoute(LocationCode("SYD"), LocationCode("MEL"), route_id=21)
-        load_world_graph_mock.return_value = SimpleNamespace(routes={21: expected})
+        load_route_graph_mock.return_value = SimpleNamespace(route=expected)
 
         route = self.repo.get_by_id(21)
 
         self.assertIs(route, expected)
-        load_world_graph_mock.assert_called_once_with()
+        load_route_graph_mock.assert_called_once_with(21)
 
-    @patch(f"{MODULE}.load_world_graph")
+    @patch(f"{MODULE}.load_route_graphs")
     def test_list_all_returns_hydrated_routes(
         self,
-        load_world_graph_mock: MagicMock,
+        load_route_graphs_mock: MagicMock,
     ) -> None:
         route_1 = DeliveryRoute(LocationCode("SYD"), LocationCode("MEL"), route_id=21)
         route_2 = DeliveryRoute(LocationCode("MEL"), LocationCode("ADL"), route_id=22)
-        load_world_graph_mock.return_value = SimpleNamespace(routes={22: route_2, 21: route_1})
+        load_route_graphs_mock.return_value = [
+            SimpleNamespace(route=route_1),
+            SimpleNamespace(route=route_2),
+        ]
 
         routes = self.repo.list_all()
 
         self.assertEqual(routes, [route_1, route_2])
-        load_world_graph_mock.assert_called_once_with()
+        load_route_graphs_mock.assert_called_once_with()
 
-    @patch(f"{MODULE}.load_world_graph")
+    @patch(f"{MODULE}.load_route_graphs")
     def test_list_all_propagates_graph_loader_errors(
         self,
-        load_world_graph_mock: MagicMock,
+        load_route_graphs_mock: MagicMock,
     ) -> None:
-        load_world_graph_mock.side_effect = TypeError("route_id: expected int")
+        load_route_graphs_mock.side_effect = TypeError("route_id: expected int")
 
         with self.assertRaises(TypeError) as ctx:
             self.repo.list_all()
