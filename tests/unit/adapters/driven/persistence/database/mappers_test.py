@@ -9,6 +9,7 @@ from src.adapters.driven.persistence.database.mappers import (
     map_customer,
     map_package,
     map_route,
+    map_truck,
     map_user_record,
 )
 from src.domain.entities.customer import Customer
@@ -65,6 +66,19 @@ class DatabaseMappers_Should(unittest.TestCase):
             "route_id": None,
         }
 
+    def _valid_truck_row(self) -> RowDict:
+        return {
+            "vehicle_id": 1001,
+            "name": "Scania",
+            "capacity": 42000,
+            "max_range": 8000,
+            "status": "Available",
+            "current_location": "SYD",
+            "busy_from": None,
+            "busy_until": None,
+            "in_transit_to": None,
+        }
+
     def test_map_customer_builds_customer_from_valid_row(self) -> None:
         row: RowDict = {
             "customer_id": 7,
@@ -93,6 +107,7 @@ class DatabaseMappers_Should(unittest.TestCase):
     def test_map_customer_raises_type_error_for_invalid_column_types(self) -> None:
         cases: list[tuple[str, object]] = [
             ("customer_id", "7"),
+            ("customer_id", True),
             ("name", None),
             ("email", None),
             ("phone", None),
@@ -147,6 +162,7 @@ class DatabaseMappers_Should(unittest.TestCase):
     def test_map_user_record_raises_type_error_for_invalid_column_types(self) -> None:
         cases: list[tuple[str, object]] = [
             ("user_id", "5"),
+            ("user_id", True),
             ("username", None),
             ("role", None),
             ("name", None),
@@ -205,9 +221,11 @@ class DatabaseMappers_Should(unittest.TestCase):
     def test_map_route_raises_type_error_for_invalid_route_column_types(self) -> None:
         cases: list[tuple[str, object]] = [
             ("route_id", "21"),
+            ("route_id", True),
             ("departure_time", "2026-05-01"),
             ("status", None),
             ("truck_vehicle_id", "1001"),
+            ("truck_vehicle_id", True),
         ]
 
         for column, value in cases:
@@ -223,6 +241,7 @@ class DatabaseMappers_Should(unittest.TestCase):
     def test_map_route_raises_type_error_for_invalid_stop_column_types(self) -> None:
         cases: list[tuple[str, object]] = [
             ("stop_order", "0"),
+            ("stop_order", True),
             ("location_code", None),
         ]
 
@@ -286,6 +305,7 @@ class DatabaseMappers_Should(unittest.TestCase):
     def test_map_package_raises_type_error_for_invalid_column_types(self) -> None:
         cases: list[tuple[str, object]] = [
             ("package_id", "11"),
+            ("package_id", True),
             ("start_location", None),
             ("end_location", None),
             ("weight", 12.5),
@@ -293,7 +313,9 @@ class DatabaseMappers_Should(unittest.TestCase):
             ("current_location", 1),
             ("expected_arrival", "2026-05-01"),
             ("customer_id", "7"),
+            ("customer_id", True),
             ("route_id", "99"),
+            ("route_id", True),
         ]
         customer = Customer(customer_id=7, contact=ContactInfo(name="Alice"))
 
@@ -314,3 +336,16 @@ class DatabaseMappers_Should(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             map_package(row, customer)
+
+    def test_map_truck_rejects_bool_integer_columns(self) -> None:
+        cases = ["vehicle_id", "capacity", "max_range"]
+
+        for column in cases:
+            with self.subTest(column=column):
+                row = self._valid_truck_row()
+                row[column] = True
+
+                with self.assertRaises(TypeError) as ctx:
+                    map_truck(row)
+
+                self.assertIn(f"{column}: expected", str(ctx.exception))

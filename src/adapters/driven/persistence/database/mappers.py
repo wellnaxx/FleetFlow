@@ -109,7 +109,7 @@ def _as_customer_row(row: RowDict) -> CustomerRow:
     email = row["email"]
     phone = row["phone"]
 
-    if not isinstance(customer_id, int):
+    if not isinstance(customer_id, int) or isinstance(customer_id, bool):
         raise TypeError(f"customer_id: expected int, got {type(customer_id).__name__}")
     if not isinstance(name, str):
         raise TypeError(f"name: expected str, got {type(name).__name__}")
@@ -181,13 +181,13 @@ def _as_truck_row(row: RowDict) -> TruckRow:
     busy_until = row["busy_until"]
     in_transit_to = row["in_transit_to"]
 
-    if not isinstance(vehicle_id, int):
+    if not isinstance(vehicle_id, int) or isinstance(vehicle_id, bool):
         raise TypeError(f"vehicle_id: expected int, got {type(vehicle_id).__name__}")
     if not isinstance(name, str):
         raise TypeError(f"name: expected str, got {type(name).__name__}")
-    if not isinstance(capacity, int):
+    if not isinstance(capacity, int) or isinstance(capacity, bool):
         raise TypeError(f"capacity: expected int, got {type(capacity).__name__}")
-    if not isinstance(max_range, int):
+    if not isinstance(max_range, int) or isinstance(max_range, bool):
         raise TypeError(f"max_range: expected int, got {type(max_range).__name__}")
     if not isinstance(status, str):
         raise TypeError(f"status: expected str, got {type(status).__name__}")
@@ -231,8 +231,8 @@ def map_route(rows: list[RowDict]) -> DeliveryRoute:
     if not rows:
         raise ValueError("Cannot map a route without route rows.")
 
-    typed = _as_route_row(rows[0])
-    stops = [LocationCode(_as_route_stop_row(row)["location_code"]) for row in rows]
+    typed = as_route_row(rows[0])
+    stops = [LocationCode(as_route_stop_row(row)["location_code"]) for row in rows]
     route = DeliveryRoute(
         *stops,
         route_id=typed["route_id"],
@@ -243,7 +243,7 @@ def map_route(rows: list[RowDict]) -> DeliveryRoute:
     return route
 
 
-def _as_route_row(row: RowDict) -> RouteRow:
+def as_route_row(row: RowDict) -> RouteRow:
     """Validate and narrow a generic database row to a route row.
 
     Args:
@@ -261,13 +261,15 @@ def _as_route_row(row: RowDict) -> RouteRow:
     status = row["status"]
     truck_vehicle_id = row["truck_vehicle_id"]
 
-    if not isinstance(route_id, int):
+    if not isinstance(route_id, int) or isinstance(route_id, bool):
         raise TypeError(f"route_id: expected int, got {type(route_id).__name__}")
     if departure_time is not None and not isinstance(departure_time, datetime):
         raise TypeError(f"departure_time: expected datetime or None, got {type(departure_time).__name__}")
     if not isinstance(status, str):
         raise TypeError(f"status: expected str, got {type(status).__name__}")
-    if truck_vehicle_id is not None and not isinstance(truck_vehicle_id, int):
+    if truck_vehicle_id is not None and (
+        not isinstance(truck_vehicle_id, int) or isinstance(truck_vehicle_id, bool)
+    ):
         raise TypeError(f"truck_vehicle_id: expected int or None, got {type(truck_vehicle_id).__name__}")
 
     return RouteRow(
@@ -278,7 +280,7 @@ def _as_route_row(row: RowDict) -> RouteRow:
     )
 
 
-def _as_route_stop_row(row: RowDict) -> RouteStopRow:
+def as_route_stop_row(row: RowDict) -> RouteStopRow:
     """Validate and narrow a generic database row to a route stop row.
 
     Args:
@@ -294,7 +296,7 @@ def _as_route_stop_row(row: RowDict) -> RouteStopRow:
     stop_order = row["stop_order"]
     location_code = row["location_code"]
 
-    if not isinstance(stop_order, int):
+    if not isinstance(stop_order, int) or isinstance(stop_order, bool):
         raise TypeError(f"stop_order: expected int, got {type(stop_order).__name__}")
     if not isinstance(location_code, str):
         raise TypeError(f"location_code: expected str, got {type(location_code).__name__}")
@@ -320,7 +322,7 @@ def map_package(row: RowDict, customer: Customer) -> DeliveryPackage:
         TypeError: If a required package column has an unexpected type.
         ValueError: If persisted enum or location values are invalid.
     """
-    typed = _as_package_row(row)
+    typed = as_package_row(row)
     package = DeliveryPackage(
         start_location=LocationCode(typed["start_location"]),
         end_location=LocationCode(typed["end_location"]),
@@ -337,7 +339,7 @@ def map_package(row: RowDict, customer: Customer) -> DeliveryPackage:
     return package
 
 
-def _as_package_row(row: RowDict) -> PackageRow:
+def as_package_row(row: RowDict) -> PackageRow:
     """Validate and narrow a generic database row to a package row.
 
     Args:
@@ -360,7 +362,7 @@ def _as_package_row(row: RowDict) -> PackageRow:
     customer_id = row["customer_id"]
     route_id = row["route_id"]
 
-    if not isinstance(package_id, int):
+    if not isinstance(package_id, int) or isinstance(package_id, bool):
         raise TypeError(f"package_id: expected int, got {type(package_id).__name__}")
     if not isinstance(start_location, str):
         raise TypeError(f"start_location: expected str, got {type(start_location).__name__}")
@@ -374,9 +376,9 @@ def _as_package_row(row: RowDict) -> PackageRow:
         raise TypeError(f"current_location: expected str or None, got {type(current_location).__name__}")
     if expected_arrival is not None and not isinstance(expected_arrival, datetime):
         raise TypeError(f"expected_arrival: expected datetime or None, got {type(expected_arrival).__name__}")
-    if not isinstance(customer_id, int):
+    if not isinstance(customer_id, int) or isinstance(customer_id, bool):
         raise TypeError(f"customer_id: expected int, got {type(customer_id).__name__}")
-    if route_id is not None and not isinstance(route_id, int):
+    if route_id is not None and (not isinstance(route_id, int) or isinstance(route_id, bool)):
         raise TypeError(f"route_id: expected int or None, got {type(route_id).__name__}")
 
     return PackageRow(
@@ -390,6 +392,51 @@ def _as_package_row(row: RowDict) -> PackageRow:
         customer_id=customer_id,
         route_id=route_id,
     )
+
+
+def map_package_with_customer(row: RowDict) -> DeliveryPackage:
+    """Map a joined package/customer row to a delivery package entity.
+
+    Args:
+        row: Column-name-keyed database row containing package columns plus
+            joined customer columns: customer_name, customer_email, and
+            customer_phone.
+
+    Returns:
+        Delivery package entity with its customer link restored.
+
+    Raises:
+        KeyError: If a required package or customer column is missing.
+        TypeError: If a required package or customer column has an unexpected type.
+        ValueError: If persisted enum, location, or contact values are invalid.
+    """
+    customer = map_customer_from_package_row(row)
+    package = map_package(row, customer)
+    customer.restore_package_link(package)
+    return package
+
+
+def map_customer_from_package_row(row: RowDict) -> Customer:
+    """Map joined customer columns from a package/customer query row.
+
+    Args:
+        row: Column-name-keyed database row containing package columns plus
+            customer_name, customer_email, and customer_phone aliases.
+
+    Returns:
+        Customer entity built from the joined customer columns.
+
+    Raises:
+        KeyError: If a required customer column is missing.
+        TypeError: If a required customer column has an unexpected type.
+        ValueError: If the customer contact information is invalid.
+    """
+    return map_customer({
+        "customer_id": row["customer_id"],
+        "name": row["customer_name"],
+        "email": row["customer_email"],
+        "phone": row["customer_phone"],
+    })
 
 
 def map_user_record(row: RowDict) -> UserRecord:
@@ -443,7 +490,7 @@ def _as_user_record_row(row: RowDict) -> UserRecordRow:
     phone_number = row["phone"]
     password_hash = row["password_hash"]
 
-    if not isinstance(user_id, int):
+    if not isinstance(user_id, int) or isinstance(user_id, bool):
         raise TypeError(f"user_id: expected int, got {type(user_id).__name__}")
     if not isinstance(username, str):
         raise TypeError(f"username: expected str, got {type(username).__name__}")
