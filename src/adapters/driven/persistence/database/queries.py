@@ -37,9 +37,11 @@ class RouteQueries:
 class PackageQueries:
     add: str
     get_by_id: str
+    get_by_id_with_customer: str
     list_all: str
     list_by_route: str
     list_assigned: str
+    list_assigned_with_customer: str
     list_unassigned: str
     remove: str
     update_state: str
@@ -124,9 +126,11 @@ class QueryRegistry:
         return PackageQueries(
             add=load_sql("packages/add.sql"),
             get_by_id=load_sql("packages/get_by_id.sql"),
+            get_by_id_with_customer=load_sql("packages/get_by_id_with_customer.sql"),
             list_all=load_sql("packages/list_all.sql"),
             list_by_route=load_sql("packages/list_by_route.sql"),
             list_assigned=load_sql("packages/list_assigned.sql"),
+            list_assigned_with_customer = load_sql("packages/list_assigned_with_customers.sql"),
             list_unassigned=load_sql("packages/list_unassigned.sql"),
             remove=load_sql("packages/remove.sql"),
             update_state=load_sql("packages/update_state.sql"),
