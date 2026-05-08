@@ -1,2 +1,1 @@
 *.sql linguist-detectable=true
-src/adapters/driven/persistence/database/sql/*.sql linguist-language=SQL
