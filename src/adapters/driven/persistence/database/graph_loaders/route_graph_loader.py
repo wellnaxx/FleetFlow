@@ -40,6 +40,9 @@ from src.adapters.driven.persistence.database.queries import QUERIES
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from psycopg import Cursor
+
+    from src.adapters.driven.persistence.database.executor import Row
     from src.domain.entities.customer import Customer
     from src.domain.entities.delivery_package import DeliveryPackage
     from src.domain.entities.delivery_route import DeliveryRoute
@@ -78,7 +81,50 @@ def load_route_graph(route_id: int) -> HydratedRouteGraph | None:
         TypeError: If required database columns have unexpected types.
         ValueError: If persisted route relationships are inconsistent.
     """
-    route_rows, truck_row, package_rows = _load_route_rows(route_id)
+    with transaction_cursor() as cursor:
+        return load_route_graph_tx(cursor, route_id)
+
+
+def load_route_graph_tx(cursor: Cursor[Row], route_id: int) -> HydratedRouteGraph | None:
+    """Load one route graph inside an existing transaction.
+
+    Args:
+        cursor: Cursor owned by the caller's active transaction.
+        route_id: Route id to load.
+
+    Returns:
+        Hydrated route graph, or `None` when the route does not exist.
+
+    Raises:
+        DatabaseError: If any SQL query fails.
+        KeyError: If a required database column is missing.
+        TypeError: If required database columns have unexpected types.
+        ValueError: If persisted route relationships are inconsistent.
+    """
+    route_rows, truck_row, package_rows = _load_route_rows_tx(cursor, route_id)
+    return hydrate_route_graph_from_rows(route_rows, truck_row, package_rows)
+
+
+def hydrate_route_graph_from_rows(
+    route_rows: list[RowDict],
+    truck_row: RowDict | None,
+    package_rows: list[RowDict],
+) -> HydratedRouteGraph | None:
+    """Hydrate a route graph from already-loaded database rows.
+
+    Args:
+        route_rows: Route/stop rows for one route.
+        truck_row: Assigned truck row, or `None`.
+        package_rows: Joined package/customer rows for the route.
+
+    Returns:
+        Hydrated route graph, or `None` when route rows are empty.
+
+    Raises:
+        KeyError: If a required database column is missing.
+        TypeError: If required database columns have unexpected types.
+        ValueError: If persisted route relationships are inconsistent.
+    """
 
     if not route_rows:
         return None
@@ -129,10 +175,14 @@ def load_route_graphs() -> list[HydratedRouteGraph]:
     return [_build_route_graph(route) for route in sorted(routes.values(), key=lambda route: route.route_id)]
 
 
-def _load_route_rows(route_id: int) -> tuple[list[RowDict], RowDict | None, list[RowDict]]:
+def _load_route_rows_tx(
+    cursor: Cursor[Row],
+    route_id: int,
+) -> tuple[list[RowDict], RowDict | None, list[RowDict]]:
     """Load rows needed to hydrate one route graph.
 
     Args:
+        cursor: Cursor owned by an active transaction.
         route_id: Route id to load.
 
     Returns:
@@ -141,10 +191,9 @@ def _load_route_rows(route_id: int) -> tuple[list[RowDict], RowDict | None, list
     Raises:
         DatabaseError: If any SQL query fails.
     """
-    with transaction_cursor() as cursor:
-        route_rows = fetch_all_tx(cursor, QUERIES.routes.get_by_id, (route_id,))
-        truck_row = fetch_one_tx(cursor, QUERIES.trucks.get_by_route_id, (route_id,))
-        package_rows = fetch_all_tx(cursor, QUERIES.packages.list_by_route, (route_id,))
+    route_rows = fetch_all_tx(cursor, QUERIES.routes.get_by_id, (route_id,))
+    truck_row = fetch_one_tx(cursor, QUERIES.trucks.get_by_route_id, (route_id,))
+    package_rows = fetch_all_tx(cursor, QUERIES.packages.list_by_route, (route_id,))
 
     return route_rows, truck_row, package_rows
 

@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, call, patch
 
 from src.adapters.driven.persistence.database.graph_loaders.route_graph_loader import (
     load_route_graph,
+    load_route_graph_tx,
     load_route_graphs,
 )
 from src.adapters.driven.persistence.database.queries import QUERIES
@@ -62,6 +63,38 @@ class RouteGraphLoaderShould(unittest.TestCase):
         self.assertEqual(customer.delivery_packages, (package,))
         self.assertEqual(package.expected_arrival, expected_arrival)
 
+        fetch_all_tx_mock.assert_has_calls([
+            call(cursor, QUERIES.routes.get_by_id, (21,)),
+            call(cursor, QUERIES.packages.list_by_route, (21,)),
+        ])
+        fetch_one_tx_mock.assert_called_once_with(cursor, QUERIES.trucks.get_by_route_id, (21,))
+
+    @patch(f"{MODULE}.transaction_cursor")
+    @patch(f"{MODULE}.fetch_one_tx")
+    @patch(f"{MODULE}.fetch_all_tx")
+    def test_load_route_graph_tx_reuses_existing_cursor_without_opening_transaction(
+        self,
+        fetch_all_tx_mock: MagicMock,
+        fetch_one_tx_mock: MagicMock,
+        transaction_cursor_mock: MagicMock,
+    ) -> None:
+        cursor = MagicMock()
+        fetch_all_tx_mock.side_effect = [
+            [
+                self._route_row(21, 0, "SYD"),
+                self._route_row(21, 1, "MEL"),
+            ],
+            [],
+        ]
+        fetch_one_tx_mock.return_value = None
+
+        graph = load_route_graph_tx(cursor, 21)
+
+        self.assertIsNotNone(graph)
+        assert graph is not None
+        self.assertEqual(graph.route.route_id, 21)
+        self.assertIsNone(graph.truck)
+        transaction_cursor_mock.assert_not_called()
         fetch_all_tx_mock.assert_has_calls([
             call(cursor, QUERIES.routes.get_by_id, (21,)),
             call(cursor, QUERIES.packages.list_by_route, (21,)),
