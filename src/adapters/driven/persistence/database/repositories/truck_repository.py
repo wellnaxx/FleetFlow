@@ -1,7 +1,10 @@
 from src.adapters.driven.persistence.database.executor import (
     execute_write,
 )
-from src.adapters.driven.persistence.database.graph_loaders.world_graph_loader import load_world_graph
+from src.adapters.driven.persistence.database.graph_loaders.truck_graph_loader import (
+    load_truck_graph,
+    load_truck_graphs,
+)
 from src.adapters.driven.persistence.database.queries import QUERIES
 from src.domain.entities.truck import Truck
 
@@ -48,7 +51,7 @@ class PostgresTruckRepository:
             TypeError: If a required truck column has an unexpected type.
             ValueError: If persisted truck data is invalid.
         """
-        return list(load_world_graph().trucks.values())
+        return [graph.truck for graph in load_truck_graphs()]
 
     def find_by_id(self, vehicle_id: int) -> Truck | None:
         """Return a truck by vehicle id.
@@ -65,7 +68,8 @@ class PostgresTruckRepository:
             TypeError: If a required truck column has an unexpected type.
             ValueError: If persisted truck data is invalid.
         """
-        return load_world_graph().trucks.get(vehicle_id)
+        truck_graph = load_truck_graph(vehicle_id)
+        return truck_graph.truck if truck_graph is not None else None
 
     def update_state(self, truck: Truck) -> None:
         """Persist mutable truck runtime state.

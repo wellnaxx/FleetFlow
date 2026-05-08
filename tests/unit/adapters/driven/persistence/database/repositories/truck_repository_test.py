@@ -38,43 +38,46 @@ class PostgresTruckRepository_Should(unittest.TestCase):
             ),
         )
 
-    @patch(f"{MODULE}.load_world_graph")
+    @patch(f"{MODULE}.load_truck_graphs")
     def test_list_fleet_maps_all_truck_rows(
         self,
-        load_world_graph_mock: MagicMock,
+        load_truck_graphs_mock: MagicMock,
     ) -> None:
         trucks = [self._truck(1001), self._truck(1002)]
-        load_world_graph_mock.return_value = SimpleNamespace(trucks={1001: trucks[0], 1002: trucks[1]})
+        load_truck_graphs_mock.return_value = [
+            SimpleNamespace(truck=trucks[0]),
+            SimpleNamespace(truck=trucks[1]),
+        ]
 
         result = self.repo.list_fleet()
 
         self.assertEqual(result, trucks)
-        load_world_graph_mock.assert_called_once_with()
+        load_truck_graphs_mock.assert_called_once_with()
 
-    @patch(f"{MODULE}.load_world_graph")
+    @patch(f"{MODULE}.load_truck_graph")
     def test_find_by_id_returns_none_when_truck_is_missing(
         self,
-        load_world_graph_mock: MagicMock,
+        load_truck_graph_mock: MagicMock,
     ) -> None:
-        load_world_graph_mock.return_value = SimpleNamespace(trucks={})
+        load_truck_graph_mock.return_value = None
 
         truck = self.repo.find_by_id(1001)
 
         self.assertIsNone(truck)
-        load_world_graph_mock.assert_called_once_with()
+        load_truck_graph_mock.assert_called_once_with(1001)
 
-    @patch(f"{MODULE}.load_world_graph")
+    @patch(f"{MODULE}.load_truck_graph")
     def test_find_by_id_maps_existing_truck(
         self,
-        load_world_graph_mock: MagicMock,
+        load_truck_graph_mock: MagicMock,
     ) -> None:
         expected = self._truck()
-        load_world_graph_mock.return_value = SimpleNamespace(trucks={1001: expected})
+        load_truck_graph_mock.return_value = SimpleNamespace(truck=expected)
 
         truck = self.repo.find_by_id(1001)
 
         self.assertIs(truck, expected)
-        load_world_graph_mock.assert_called_once_with()
+        load_truck_graph_mock.assert_called_once_with(1001)
 
     @patch(f"{MODULE}.execute_write")
     def test_update_state_writes_mutable_truck_state(self, execute_write_mock: MagicMock) -> None:
