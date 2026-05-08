@@ -52,7 +52,9 @@ class TruckQueries:
     add: str
     get_by_id: str
     get_by_route_id: str
+    get_by_id_with_route: str
     list_all: str
+    list_all_with_route: str
     list_assigned: str
     update_state: str
 
@@ -150,7 +152,9 @@ class QueryRegistry:
             add=load_sql("trucks/add.sql"),
             get_by_id=load_sql("trucks/get_by_id.sql"),
             get_by_route_id=load_sql("trucks/get_by_route_id.sql"),
+            get_by_id_with_route=load_sql("trucks/get_by_id_with_route.sql"),
             list_all=load_sql("trucks/list_all.sql"),
+            list_all_with_route=load_sql("trucks/list_all_with_route.sql"),
             list_assigned=load_sql("trucks/list_assigned.sql"),
             update_state=load_sql("trucks/update_state.sql"),
         )
