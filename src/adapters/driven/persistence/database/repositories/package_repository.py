@@ -2,7 +2,12 @@ from src.adapters.driven.persistence.database.executor import (
     execute_insert,
     execute_write,
 )
-from src.adapters.driven.persistence.database.graph_loaders.world_graph_loader import load_world_graph
+from src.adapters.driven.persistence.database.graph_loaders.package_graph_loader import (
+    load_package_graph,
+    load_package_graphs,
+    load_unassigned_package_graphs,
+)
+from src.adapters.driven.persistence.database.graph_loaders.route_graph_loader import load_route_graph
 from src.adapters.driven.persistence.database.queries import QUERIES
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
@@ -72,7 +77,8 @@ class PostgresPackageRepository:
             TypeError: If a required package or customer column has an unexpected type.
             ValueError: If persisted package data is invalid or references a missing customer.
         """
-        return load_world_graph().packages.get(package_id)
+        package_graph = load_package_graph(package_id)
+        return package_graph.package if package_graph is not None else None
 
     def list_all(self) -> list[DeliveryPackage]:
         """Return all packages.
@@ -86,7 +92,7 @@ class PostgresPackageRepository:
             TypeError: If a required package or joined customer column has an unexpected type.
             ValueError: If persisted package or customer data is invalid.
         """
-        return sorted(load_world_graph().packages.values(), key=lambda package: package.package_id)
+        return [graph.package for graph in load_package_graphs()]
 
     def list_unassigned(self) -> list[DeliveryPackage]:
         """Return packages that are not assigned to a route.
@@ -100,10 +106,7 @@ class PostgresPackageRepository:
             TypeError: If a required package or joined customer column has an unexpected type.
             ValueError: If persisted package or customer data is invalid.
         """
-        return sorted(
-            (package for package in load_world_graph().packages.values() if package.route is None),
-            key=lambda package: package.package_id,
-        )
+        return [graph.package for graph in load_unassigned_package_graphs()]
 
     def list_by_route(self, route_id: int) -> list[DeliveryPackage]:
         """Return packages assigned to a route.
@@ -120,10 +123,10 @@ class PostgresPackageRepository:
             TypeError: If a required package or joined customer column has an unexpected type.
             ValueError: If persisted package or customer data is invalid.
         """
-        route = load_world_graph().routes.get(route_id)
+        route = load_route_graph(route_id)
         if route is None:
             return []
-        return sorted(route.packages, key=lambda package: package.package_id)
+        return sorted(route.packages.values(), key=lambda package: package.package_id)
 
     def update_state(self, package: DeliveryPackage) -> None:
         """Persist mutable package runtime state.

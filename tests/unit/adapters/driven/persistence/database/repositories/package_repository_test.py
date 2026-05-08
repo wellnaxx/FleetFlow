@@ -44,108 +44,105 @@ class PostgresPackageRepository_Should(unittest.TestCase):
 
         execute_write_mock.assert_called_once_with(QUERIES.packages.remove, (11,))
 
-    @patch(f"{MODULE}.load_world_graph")
+    @patch(f"{MODULE}.load_package_graph")
     def test_get_by_id_returns_none_when_package_is_missing(
         self,
-        load_world_graph_mock: MagicMock,
+        load_package_graph_mock: MagicMock,
     ) -> None:
-        load_world_graph_mock.return_value = SimpleNamespace(packages={})
+        load_package_graph_mock.return_value = None
 
         package = self.repo.get_by_id(11)
 
         self.assertIsNone(package)
-        load_world_graph_mock.assert_called_once_with()
+        load_package_graph_mock.assert_called_once_with(11)
 
-    @patch(f"{MODULE}.load_world_graph")
+    @patch(f"{MODULE}.load_package_graph")
     def test_get_by_id_returns_hydrated_package(
         self,
-        load_world_graph_mock: MagicMock,
+        load_package_graph_mock: MagicMock,
     ) -> None:
         expected = DeliveryPackage(LocationCode("SYD"), LocationCode("MEL"), 12.5, self.customer, 11)
-        load_world_graph_mock.return_value = SimpleNamespace(packages={11: expected})
+        load_package_graph_mock.return_value = SimpleNamespace(package=expected)
 
         package = self.repo.get_by_id(11)
 
         self.assertIs(package, expected)
-        load_world_graph_mock.assert_called_once_with()
+        load_package_graph_mock.assert_called_once_with(11)
 
-    @patch(f"{MODULE}.load_world_graph")
+    @patch(f"{MODULE}.load_package_graph")
     def test_get_by_id_propagates_graph_loader_errors(
         self,
-        load_world_graph_mock: MagicMock,
+        load_package_graph_mock: MagicMock,
     ) -> None:
-        load_world_graph_mock.side_effect = ValueError("Package 11 references missing route 21.")
+        load_package_graph_mock.side_effect = ValueError("Package 11 references missing route 21.")
 
         with self.assertRaises(ValueError) as ctx:
             self.repo.get_by_id(11)
 
         self.assertIn("Package 11 references missing route 21.", str(ctx.exception))
 
-    @patch(f"{MODULE}.load_world_graph")
+    @patch(f"{MODULE}.load_package_graphs")
     def test_list_all_returns_hydrated_packages_ordered_by_id(
         self,
-        load_world_graph_mock: MagicMock,
+        load_package_graphs_mock: MagicMock,
     ) -> None:
         packages = [
             DeliveryPackage(LocationCode("SYD"), LocationCode("MEL"), 12.5, self.customer, 11),
             DeliveryPackage(LocationCode("MEL"), LocationCode("SYD"), 10.0, self.customer, 12),
         ]
-        load_world_graph_mock.return_value = SimpleNamespace(packages={12: packages[1], 11: packages[0]})
+        load_package_graphs_mock.return_value = [
+            SimpleNamespace(package=packages[0]),
+            SimpleNamespace(package=packages[1]),
+        ]
 
         result = self.repo.list_all()
 
         self.assertEqual(result, packages)
-        load_world_graph_mock.assert_called_once_with()
+        load_package_graphs_mock.assert_called_once_with()
 
-    @patch(f"{MODULE}.load_world_graph")
+    @patch(f"{MODULE}.load_unassigned_package_graphs")
     def test_list_unassigned_returns_hydrated_unassigned_packages_ordered_by_id(
         self,
-        load_world_graph_mock: MagicMock,
+        load_unassigned_package_graphs_mock: MagicMock,
     ) -> None:
-        assigned = DeliveryPackage(LocationCode("SYD"), LocationCode("MEL"), 12.5, self.customer, 10)
-        assigned.route = SimpleNamespace(route_id=21)  # type: ignore[assignment]
-
         unassigned_1 = DeliveryPackage(LocationCode("SYD"), LocationCode("MEL"), 12.5, self.customer, 11)
         unassigned_2 = DeliveryPackage(LocationCode("MEL"), LocationCode("SYD"), 10.0, self.customer, 12)
-
-        load_world_graph_mock.return_value = SimpleNamespace(
-            packages={12: unassigned_2, 10: assigned, 11: unassigned_1}
-        )
+        load_unassigned_package_graphs_mock.return_value = [
+            SimpleNamespace(package=unassigned_1),
+            SimpleNamespace(package=unassigned_2),
+        ]
 
         result = self.repo.list_unassigned()
 
         self.assertEqual(result, [unassigned_1, unassigned_2])
-        load_world_graph_mock.assert_called_once_with()
+        load_unassigned_package_graphs_mock.assert_called_once_with()
 
-    @patch(f"{MODULE}.load_world_graph")
+    @patch(f"{MODULE}.load_route_graph")
     def test_list_by_route_returns_hydrated_route_packages(
         self,
-        load_world_graph_mock: MagicMock,
+        load_route_graph_mock: MagicMock,
     ) -> None:
         package_1 = DeliveryPackage(LocationCode("SYD"), LocationCode("MEL"), 12.5, self.customer, 11)
         package_2 = DeliveryPackage(LocationCode("MEL"), LocationCode("SYD"), 10.0, self.customer, 12)
-        route_packages = [package_2, package_1]
-        route = SimpleNamespace(packages=route_packages)
-
-        load_world_graph_mock.return_value = SimpleNamespace(routes={21: route})
+        route_packages = {12: package_2, 11: package_1}
+        load_route_graph_mock.return_value = SimpleNamespace(packages=route_packages)
 
         result = self.repo.list_by_route(21)
 
         self.assertEqual(result, [package_1, package_2])
-        self.assertIsNot(result, route_packages)
-        load_world_graph_mock.assert_called_once_with()
+        load_route_graph_mock.assert_called_once_with(21)
 
-    @patch(f"{MODULE}.load_world_graph")
+    @patch(f"{MODULE}.load_route_graph")
     def test_list_by_route_returns_empty_list_when_route_is_missing(
         self,
-        load_world_graph_mock: MagicMock,
+        load_route_graph_mock: MagicMock,
     ) -> None:
-        load_world_graph_mock.return_value = SimpleNamespace(routes={})
+        load_route_graph_mock.return_value = None
 
         result = self.repo.list_by_route(21)
 
         self.assertEqual(result, [])
-        load_world_graph_mock.assert_called_once_with()
+        load_route_graph_mock.assert_called_once_with(21)
 
     @patch(f"{MODULE}.execute_write")
     def test_update_state_writes_mutable_package_state(self, execute_write_mock: MagicMock) -> None:
