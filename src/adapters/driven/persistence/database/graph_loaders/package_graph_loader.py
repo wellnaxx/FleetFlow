@@ -111,7 +111,7 @@ def _hydrate_package_graph_tx(
         route_graphs: Cache of already hydrated route graphs keyed by route id.
 
     Returns:
-        Hydrated package graph for one assigned package.
+        Hydrated package graph for one package.
 
     Raises:
         ValueError: When the package is assigned to a route, but the route does not exist.
