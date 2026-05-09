@@ -9,7 +9,15 @@ from src.shared.env_vars import get_env_var
 
 @dataclass(frozen=True)
 class PostgresConfig:
-    """Connection settings for the PostgreSQL adapter."""
+    """Connection settings for the PostgreSQL adapter.
+
+    Args:
+        host: Database host address.
+        name: Database name.
+        user: Database username.
+        password: Database password.
+        port: Database port number (default: 5432).
+    """
 
     host: str
     name: str
