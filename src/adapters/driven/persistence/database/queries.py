@@ -69,6 +69,11 @@ class UserQueries:
     update_role: str
 
 
+@dataclass(frozen=True)
+class WorldStateQueries:
+    get_snapshot_counters: str
+
+
 class QueryRegistry:
     """Lazy SQL query registry.
 
@@ -176,6 +181,20 @@ class QueryRegistry:
             list_all=load_sql("users/list_all.sql"),
             update_password=load_sql("users/update_password.sql"),
             update_role=load_sql("users/update_role.sql"),
+        )
+
+    @cached_property
+    def world_state(self) -> WorldStateQueries:
+        """Load world-state SQL queries.
+
+        Returns:
+            World-state query collection.
+
+        Raises:
+            FileNotFoundError: If a world-state SQL file is missing.
+        """
+        return WorldStateQueries(
+            get_snapshot_counters=load_sql("world_state/get_snapshot_counters.sql"),
         )
 
 
