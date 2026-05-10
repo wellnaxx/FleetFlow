@@ -78,11 +78,13 @@ class AssignPackageToRoute_Should(unittest.TestCase):
         cmd._use_case.execute.assert_called_once_with(7, [8, 9, 10])  # type: ignore[reportUnknownMemberType]
         self.assertEqual(
             result,
-            "\n".join([
-                "Assigned package 8 to route 7. ETA: 2025-10-01 18:00",
-                "Assigned package 9 to route 7. ETA: 2025-10-01 19:00",
-                "Assigned package 10 to route 7. ETA: N/A",
-            ]),
+            "\n".join(
+                [
+                    "Assigned package 8 to route 7. ETA: 2025-10-01 18:00",
+                    "Assigned package 9 to route 7. ETA: 2025-10-01 19:00",
+                    "Assigned package 10 to route 7. ETA: N/A",
+                ]
+            ),
         )
 
     @patch("src.adapters.driving.cli.commands.assign_packages_to_route.validate_params_count")

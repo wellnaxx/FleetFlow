@@ -1,4 +1,5 @@
 """Database adapter exceptions."""
+
 from __future__ import annotations
 
 
@@ -16,7 +17,7 @@ class DatabaseError(RuntimeError):
     @classmethod
     def write_failed(cls, cause: Exception) -> DatabaseError:
         return cls(f"Database write failed: {cause}")
-    
+
     @classmethod
     def operation_failed(cls, cause: Exception) -> DatabaseError:
         return cls(f"Database operation failed: {cause}")

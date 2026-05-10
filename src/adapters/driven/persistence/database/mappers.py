@@ -431,12 +431,14 @@ def map_customer_from_package_row(row: RowDict) -> Customer:
         TypeError: If a required customer column has an unexpected type.
         ValueError: If the customer contact information is invalid.
     """
-    return map_customer({
-        "customer_id": row["customer_id"],
-        "name": row["customer_name"],
-        "email": row["customer_email"],
-        "phone": row["customer_phone"],
-    })
+    return map_customer(
+        {
+            "customer_id": row["customer_id"],
+            "name": row["customer_name"],
+            "email": row["customer_email"],
+            "phone": row["customer_phone"],
+        }
+    )
 
 
 def map_user_record(row: RowDict) -> UserRecord:

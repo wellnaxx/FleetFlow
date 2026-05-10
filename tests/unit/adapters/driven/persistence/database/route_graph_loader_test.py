@@ -63,10 +63,12 @@ class RouteGraphLoaderShould(unittest.TestCase):
         self.assertEqual(customer.delivery_packages, (package,))
         self.assertEqual(package.expected_arrival, expected_arrival)
 
-        fetch_all_tx_mock.assert_has_calls([
-            call(cursor, QUERIES.routes.get_by_id, (21,)),
-            call(cursor, QUERIES.packages.list_by_route, (21,)),
-        ])
+        fetch_all_tx_mock.assert_has_calls(
+            [
+                call(cursor, QUERIES.routes.get_by_id, (21,)),
+                call(cursor, QUERIES.packages.list_by_route, (21,)),
+            ]
+        )
         fetch_one_tx_mock.assert_called_once_with(cursor, QUERIES.trucks.get_by_route_id, (21,))
 
     @patch(f"{MODULE}.transaction_cursor")
@@ -95,10 +97,12 @@ class RouteGraphLoaderShould(unittest.TestCase):
         self.assertEqual(graph.route.route_id, 21)
         self.assertIsNone(graph.truck)
         transaction_cursor_mock.assert_not_called()
-        fetch_all_tx_mock.assert_has_calls([
-            call(cursor, QUERIES.routes.get_by_id, (21,)),
-            call(cursor, QUERIES.packages.list_by_route, (21,)),
-        ])
+        fetch_all_tx_mock.assert_has_calls(
+            [
+                call(cursor, QUERIES.routes.get_by_id, (21,)),
+                call(cursor, QUERIES.packages.list_by_route, (21,)),
+            ]
+        )
         fetch_one_tx_mock.assert_called_once_with(cursor, QUERIES.trucks.get_by_route_id, (21,))
 
     @patch(f"{MODULE}.transaction_cursor")
@@ -117,10 +121,12 @@ class RouteGraphLoaderShould(unittest.TestCase):
         graph = load_route_graph(21)
 
         self.assertIsNone(graph)
-        fetch_all_tx_mock.assert_has_calls([
-            call(cursor, QUERIES.routes.get_by_id, (21,)),
-            call(cursor, QUERIES.packages.list_by_route, (21,)),
-        ])
+        fetch_all_tx_mock.assert_has_calls(
+            [
+                call(cursor, QUERIES.routes.get_by_id, (21,)),
+                call(cursor, QUERIES.packages.list_by_route, (21,)),
+            ]
+        )
         fetch_one_tx_mock.assert_called_once_with(cursor, QUERIES.trucks.get_by_route_id, (21,))
 
     @patch(f"{MODULE}.transaction_cursor")
@@ -181,11 +187,13 @@ class RouteGraphLoaderShould(unittest.TestCase):
         self.assertEqual([package.package_id for package in route_21.packages], [11])
         self.assertEqual([package.package_id for package in route_22.packages], [12])
 
-        fetch_all_tx_mock.assert_has_calls([
-            call(cursor, QUERIES.routes.list_all),
-            call(cursor, QUERIES.trucks.list_assigned),
-            call(cursor, QUERIES.packages.list_assigned),
-        ])
+        fetch_all_tx_mock.assert_has_calls(
+            [
+                call(cursor, QUERIES.routes.list_all),
+                call(cursor, QUERIES.trucks.list_assigned),
+                call(cursor, QUERIES.packages.list_assigned),
+            ]
+        )
         self.assertEqual(fetch_all_tx_mock.call_count, 3)
 
     @patch(f"{MODULE}.transaction_cursor")
@@ -201,11 +209,13 @@ class RouteGraphLoaderShould(unittest.TestCase):
         graphs = load_route_graphs()
 
         self.assertEqual(graphs, [])
-        fetch_all_tx_mock.assert_has_calls([
-            call(cursor, QUERIES.routes.list_all),
-            call(cursor, QUERIES.trucks.list_assigned),
-            call(cursor, QUERIES.packages.list_assigned),
-        ])
+        fetch_all_tx_mock.assert_has_calls(
+            [
+                call(cursor, QUERIES.routes.list_all),
+                call(cursor, QUERIES.trucks.list_assigned),
+                call(cursor, QUERIES.packages.list_assigned),
+            ]
+        )
         self.assertEqual(fetch_all_tx_mock.call_count, 3)
 
     @patch(f"{MODULE}.transaction_cursor")

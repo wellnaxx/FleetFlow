@@ -54,12 +54,14 @@ class WorldGraphLoaderShould(unittest.TestCase):
         self.assertEqual(package.current_location, "SYD")
         self.assertEqual(package.expected_arrival, expected_arrival)
 
-        fetch_all_tx_mock.assert_has_calls([
-            call(cursor, QUERIES.customers.list_all),
-            call(cursor, QUERIES.routes.list_all),
-            call(cursor, QUERIES.packages.list_all),
-            call(cursor, QUERIES.trucks.list_all),
-        ])
+        fetch_all_tx_mock.assert_has_calls(
+            [
+                call(cursor, QUERIES.customers.list_all),
+                call(cursor, QUERIES.routes.list_all),
+                call(cursor, QUERIES.packages.list_all),
+                call(cursor, QUERIES.trucks.list_all),
+            ]
+        )
         self.assertEqual(fetch_all_tx_mock.call_count, 4)
 
     @patch(f"{MODULE}.transaction_cursor")

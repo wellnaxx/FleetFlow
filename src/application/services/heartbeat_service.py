@@ -9,6 +9,8 @@ from src.ports.output.route_repository import RouteRepositoryPort
 from src.ports.output.unit_of_work import UnitOfWorkPort
 
 logger = logging.getLogger(__name__)
+
+
 class HeartbeatService:
     """Runs route, package, and truck reconciliation for all routes."""
 

@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 class InMemoryUnitOfWork:
     """Coordinate atomic persistence across multiple repositories."""
+
     def __init__(
         self,
         routes: UnitOfWorkRouteRepositoryPort,
