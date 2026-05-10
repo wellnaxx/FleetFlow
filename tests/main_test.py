@@ -13,10 +13,10 @@ from src.domain.enums.auth import Role
 class MainStartupTests(unittest.TestCase):
     @patch("main.Engine")
     @patch("main.CommandFactory")
-    @patch("main.Container")
+    @patch("main.build_container")
     @patch("main.bootstrap_admin")
     @patch("main.AuthService")
-    @patch("main.UserStore")
+    @patch("main.JSONUserStore")
     @patch("main.os.path.exists", return_value=False)
     def test_main_skips_world_state_load_when_autosave_missing(
         self,
@@ -24,7 +24,7 @@ class MainStartupTests(unittest.TestCase):
         user_store_cls: MagicMock,
         auth_service_cls: MagicMock,
         bootstrap_admin: MagicMock,
-        container_cls: MagicMock,
+        build_container: MagicMock,
         command_factory_cls: MagicMock,
         engine_cls: MagicMock,
     ) -> None:
@@ -36,7 +36,9 @@ class MainStartupTests(unittest.TestCase):
 
         user_store_cls.return_value = store
         auth_service_cls.return_value = auth
-        container_cls.return_value = container
+        container.autosave_enabled = True
+        container.default_world_state_path = main.DEFAULT_WORLD_STATE_PATH
+        build_container.return_value = container
         command_factory_cls.return_value = command_factory
         engine_cls.return_value = engine
 
@@ -47,10 +49,10 @@ class MainStartupTests(unittest.TestCase):
 
     @patch("main.Engine")
     @patch("main.CommandFactory")
-    @patch("main.Container")
+    @patch("main.build_container")
     @patch("main.bootstrap_admin")
     @patch("main.AuthService")
-    @patch("main.UserStore")
+    @patch("main.JSONUserStore")
     @patch("main.os.path.exists", return_value=True)
     def test_main_loads_world_state_when_autosave_exists_and_is_valid(
         self,
@@ -58,7 +60,7 @@ class MainStartupTests(unittest.TestCase):
         user_store_cls: MagicMock,
         auth_service_cls: MagicMock,
         bootstrap_admin: MagicMock,
-        container_cls: MagicMock,
+        build_container: MagicMock,
         command_factory_cls: MagicMock,
         engine_cls: MagicMock,
     ) -> None:
@@ -70,23 +72,25 @@ class MainStartupTests(unittest.TestCase):
 
         user_store_cls.return_value = store
         auth_service_cls.return_value = auth
-        container_cls.return_value = container
+        container.autosave_enabled = True
+        container.default_world_state_path = "state.json"
+        build_container.return_value = container
         command_factory_cls.return_value = command_factory
         engine_cls.return_value = engine
 
         main.main()
 
-        container.load_world_state_use_case.execute.assert_called_once_with(main.DEFAULT_WORLD_STATE_PATH)
+        container.load_world_state_use_case.execute.assert_called_once_with("state.json")
         engine.start.assert_called_once_with()
 
     @patch("main.print")
     @patch("main._quarantine_corrupt_world_state")
     @patch("main.Engine")
     @patch("main.CommandFactory")
-    @patch("main.Container")
+    @patch("main.build_container")
     @patch("main.bootstrap_admin")
     @patch("main.AuthService")
-    @patch("main.UserStore")
+    @patch("main.JSONUserStore")
     @patch("main.os.path.exists", return_value=True)
     def test_main_treats_missing_default_world_state_as_noop_even_after_exists_check(
         self,
@@ -94,7 +98,7 @@ class MainStartupTests(unittest.TestCase):
         user_store_cls: MagicMock,
         auth_service_cls: MagicMock,
         bootstrap_admin: MagicMock,
-        container_cls: MagicMock,
+        build_container: MagicMock,
         command_factory_cls: MagicMock,
         engine_cls: MagicMock,
         quarantine: MagicMock,
@@ -108,14 +112,16 @@ class MainStartupTests(unittest.TestCase):
 
         user_store_cls.return_value = store
         auth_service_cls.return_value = auth
-        container_cls.return_value = container
+        container.autosave_enabled = True
+        container.default_world_state_path = "state.json"
+        build_container.return_value = container
         command_factory_cls.return_value = command_factory
         engine_cls.return_value = engine
         container.load_world_state_use_case.execute.side_effect = WorldStateFileNotFoundError("missing")
 
         main.main()
 
-        container.load_world_state_use_case.execute.assert_called_once_with(main.DEFAULT_WORLD_STATE_PATH)
+        container.load_world_state_use_case.execute.assert_called_once_with("state.json")
         quarantine.assert_not_called()
         print_mock.assert_not_called()
         engine.start.assert_called_once_with()
@@ -125,10 +131,10 @@ class MainStartupTests(unittest.TestCase):
     @patch("main.logger")
     @patch("main.Engine")
     @patch("main.CommandFactory")
-    @patch("main.Container")
+    @patch("main.build_container")
     @patch("main.bootstrap_admin")
     @patch("main.AuthService")
-    @patch("main.UserStore")
+    @patch("main.JSONUserStore")
     @patch("main.os.path.exists", return_value=True)
     def test_main_warns_quarantines_and_continues_when_default_world_state_is_corrupt(
         self,
@@ -136,7 +142,7 @@ class MainStartupTests(unittest.TestCase):
         user_store_cls: MagicMock,
         auth_service_cls: MagicMock,
         bootstrap_admin: MagicMock,
-        container_cls: MagicMock,
+        build_container: MagicMock,
         command_factory_cls: MagicMock,
         engine_cls: MagicMock,
         logger: MagicMock,
@@ -151,7 +157,9 @@ class MainStartupTests(unittest.TestCase):
 
         user_store_cls.return_value = store
         auth_service_cls.return_value = auth
-        container_cls.return_value = container
+        container.autosave_enabled = True
+        container.default_world_state_path = "state.json"
+        build_container.return_value = container
         command_factory_cls.return_value = command_factory
         engine_cls.return_value = engine
 
@@ -159,12 +167,12 @@ class MainStartupTests(unittest.TestCase):
 
         main.main()
 
-        container.load_world_state_use_case.execute.assert_called_once_with(main.DEFAULT_WORLD_STATE_PATH)
+        container.load_world_state_use_case.execute.assert_called_once_with("state.json")
         logger.exception.assert_called_once_with(
             "Failed to load default world state from %r.",
-            main.DEFAULT_WORLD_STATE_PATH,
+            "state.json",
         )
-        quarantine.assert_called_once_with(main.DEFAULT_WORLD_STATE_PATH)
+        quarantine.assert_called_once_with("state.json")
         print_mock.assert_called_once()
 
         warning_text = print_mock.call_args.args[0]
@@ -179,10 +187,10 @@ class MainStartupTests(unittest.TestCase):
     @patch("main.logger")
     @patch("main.Engine")
     @patch("main.CommandFactory")
-    @patch("main.Container")
+    @patch("main.build_container")
     @patch("main.bootstrap_admin")
     @patch("main.AuthService")
-    @patch("main.UserStore")
+    @patch("main.JSONUserStore")
     @patch("main.os.path.exists", return_value=True)
     def test_main_warns_and_continues_when_default_world_state_is_corrupt_and_quarantine_fails(
         self,
@@ -190,7 +198,7 @@ class MainStartupTests(unittest.TestCase):
         user_store_cls: MagicMock,
         auth_service_cls: MagicMock,
         bootstrap_admin: MagicMock,
-        container_cls: MagicMock,
+        build_container: MagicMock,
         command_factory_cls: MagicMock,
         engine_cls: MagicMock,
         logger: MagicMock,
@@ -205,7 +213,9 @@ class MainStartupTests(unittest.TestCase):
 
         user_store_cls.return_value = store
         auth_service_cls.return_value = auth
-        container_cls.return_value = container
+        container.autosave_enabled = True
+        container.default_world_state_path = "state.json"
+        build_container.return_value = container
         command_factory_cls.return_value = command_factory
         engine_cls.return_value = engine
 
@@ -213,12 +223,12 @@ class MainStartupTests(unittest.TestCase):
 
         main.main()
 
-        container.load_world_state_use_case.execute.assert_called_once_with(main.DEFAULT_WORLD_STATE_PATH)
+        container.load_world_state_use_case.execute.assert_called_once_with("state.json")
         logger.exception.assert_called_once_with(
             "Failed to load default world state from %r.",
-            main.DEFAULT_WORLD_STATE_PATH,
+            "state.json",
         )
-        quarantine.assert_called_once_with(main.DEFAULT_WORLD_STATE_PATH)
+        quarantine.assert_called_once_with("state.json")
         print_mock.assert_called_once()
 
         warning_text = print_mock.call_args.args[0]
@@ -232,10 +242,10 @@ class MainStartupTests(unittest.TestCase):
     @patch("main._quarantine_corrupt_world_state")
     @patch("main.Engine")
     @patch("main.CommandFactory")
-    @patch("main.Container")
+    @patch("main.build_container")
     @patch("main.bootstrap_admin")
     @patch("main.AuthService")
-    @patch("main.UserStore")
+    @patch("main.JSONUserStore")
     @patch("main.os.path.exists", return_value=True)
     def test_main_does_not_quarantine_non_corruption_startup_errors(
         self,
@@ -243,7 +253,7 @@ class MainStartupTests(unittest.TestCase):
         user_store_cls: MagicMock,
         auth_service_cls: MagicMock,
         bootstrap_admin: MagicMock,
-        container_cls: MagicMock,
+        build_container: MagicMock,
         command_factory_cls: MagicMock,
         engine_cls: MagicMock,
         quarantine: MagicMock,
@@ -255,7 +265,9 @@ class MainStartupTests(unittest.TestCase):
 
         user_store_cls.return_value = store
         auth_service_cls.return_value = auth
-        container_cls.return_value = container
+        container.autosave_enabled = True
+        container.default_world_state_path = "state.json"
+        build_container.return_value = container
         container.load_world_state_use_case.execute.side_effect = RuntimeError("runtime bug")
 
         with self.assertRaises(RuntimeError):
@@ -265,6 +277,43 @@ class MainStartupTests(unittest.TestCase):
         print_mock.assert_not_called()
         command_factory_cls.assert_not_called()
         engine_cls.assert_not_called()
+
+    @patch("main.Engine")
+    @patch("main.CommandFactory")
+    @patch("main.build_container")
+    @patch("main.bootstrap_admin")
+    @patch("main.AuthService")
+    @patch("main.JSONUserStore")
+    @patch("main.os.path.exists", return_value=True)
+    def test_main_skips_default_world_state_load_when_autosave_disabled(
+        self,
+        exists: MagicMock,
+        user_store_cls: MagicMock,
+        auth_service_cls: MagicMock,
+        bootstrap_admin: MagicMock,
+        build_container: MagicMock,
+        command_factory_cls: MagicMock,
+        engine_cls: MagicMock,
+    ) -> None:
+        store = MagicMock()
+        auth = MagicMock()
+        container = MagicMock()
+        command_factory = MagicMock()
+        engine = MagicMock()
+
+        user_store_cls.return_value = store
+        auth_service_cls.return_value = auth
+        container.autosave_enabled = False
+        container.default_world_state_path = "state.json"
+        build_container.return_value = container
+        command_factory_cls.return_value = command_factory
+        engine_cls.return_value = engine
+
+        main.main()
+
+        exists.assert_not_called()
+        container.load_world_state_use_case.execute.assert_not_called()
+        engine.start.assert_called_once_with()
 
 
 class QuarantineCorruptWorldStateTests(unittest.TestCase):
@@ -308,10 +357,10 @@ class QuarantineCorruptWorldStateTests(unittest.TestCase):
     @patch("main._quarantine_corrupt_world_state")
     @patch("main.Engine")
     @patch("main.CommandFactory")
-    @patch("main.Container")
+    @patch("main.build_container")
     @patch("main.bootstrap_admin")
     @patch("main.AuthService")
-    @patch("main.UserStore")
+    @patch("main.JSONUserStore")
     @patch("main.os.path.exists", return_value=True)
     def test_main_does_not_quarantine_runtime_swap_errors(
         self,
@@ -319,7 +368,7 @@ class QuarantineCorruptWorldStateTests(unittest.TestCase):
         user_store_cls: MagicMock,
         auth_service_cls: MagicMock,
         bootstrap_admin: MagicMock,
-        container_cls: MagicMock,
+        build_container: MagicMock,
         command_factory_cls: MagicMock,
         engine_cls: MagicMock,
         quarantine: MagicMock,
@@ -331,7 +380,9 @@ class QuarantineCorruptWorldStateTests(unittest.TestCase):
 
         user_store_cls.return_value = store
         auth_service_cls.return_value = auth
-        container_cls.return_value = container
+        container.autosave_enabled = True
+        container.default_world_state_path = "state.json"
+        build_container.return_value = container
         container.load_world_state_use_case.execute.side_effect = WorldStateRuntimeSwapError(
             "Failed to replace runtime world state."
         )
@@ -339,7 +390,7 @@ class QuarantineCorruptWorldStateTests(unittest.TestCase):
         with self.assertRaises(WorldStateRuntimeSwapError):
             main.main()
 
-        container.load_world_state_use_case.execute.assert_called_once_with(main.DEFAULT_WORLD_STATE_PATH)
+        container.load_world_state_use_case.execute.assert_called_once_with("state.json")
         quarantine.assert_not_called()
         print_mock.assert_not_called()
         command_factory_cls.assert_not_called()

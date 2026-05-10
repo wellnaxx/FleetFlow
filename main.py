@@ -4,19 +4,21 @@ import os
 import sys
 from datetime import datetime
 
-from src.adapters.driven.persistence.json.user_store import UserStore
+from src.adapters.driven.persistence.json.user_store import JSONUserStore
 from src.adapters.driving.cli.command_factory import CommandFactory
 from src.adapters.driving.cli.engine import Engine
-from src.application.config.state_persistence import DEFAULT_WORLD_STATE_PATH
 from src.application.exceptions.world_state_errors import WorldStateCorruptionError, WorldStateFileNotFoundError
 from src.application.services.auth_service import AuthService
-from src.composition.container import Container
+from src.composition.container import Container, build_container
 from src.domain.enums.auth import Role
+from src.ports.output.user_repository import UserRepositoryPort
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_WORLD_STATE_PATH = "state.json"
 
-def bootstrap_admin(auth: AuthService, store: UserStore) -> None:
+
+def bootstrap_admin(auth: AuthService, store: UserRepositoryPort) -> None:
     if store.get("admin"):
         return
 
@@ -61,20 +63,25 @@ def _load_default_world_state(container: Container) -> None:
     Missing file -> ignore.
     Corrupt file -> warn, quarantine, continue with empty world state.
     """
-    if not os.path.exists(DEFAULT_WORLD_STATE_PATH):
+    if not container.autosave_enabled:
+        return
+
+    default_world_state_path = container.default_world_state_path
+
+    if not os.path.exists(default_world_state_path):
         return
 
     try:
-        container.load_world_state_use_case.execute(DEFAULT_WORLD_STATE_PATH)
+        container.load_world_state_use_case.execute(default_world_state_path)
     except WorldStateFileNotFoundError:
         return
     except WorldStateCorruptionError:
         logger.exception(
             "Failed to load default world state from %r.",
-            DEFAULT_WORLD_STATE_PATH,
+            default_world_state_path,
         )
 
-        quarantined_path = _quarantine_corrupt_world_state(DEFAULT_WORLD_STATE_PATH)
+        quarantined_path = _quarantine_corrupt_world_state(default_world_state_path)
 
         if quarantined_path is not None:
             print(
@@ -91,11 +98,11 @@ def _load_default_world_state(container: Container) -> None:
 
 
 def main() -> None:
-    store = UserStore("users.json")
+    store = JSONUserStore("users.json")
     auth = AuthService(store)
     bootstrap_admin(auth, store)
 
-    container = Container(auth)
+    container = build_container(auth)
     _load_default_world_state(container)
 
     cmd_factory = CommandFactory(auth, container.authz, container)
@@ -106,6 +113,7 @@ def main() -> None:
         container.save_world_state_use_case,
         container.default_world_state_path,
         container.advance_world_state_use_case,
+        container.autosave_enabled,
     ).start()
 
 

@@ -16,7 +16,7 @@ from src.domain.value_objects.contact_info import ContactInfo
 logger = logging.getLogger(__name__)
 
 
-class UserStore:
+class JSONUserStore:
     """Persist user records as JSON with strict load-time validation."""
 
     def __init__(self, path: str = "users.json") -> None:
@@ -65,7 +65,7 @@ class UserStore:
             raise TypeError("payload must be an object")
 
         payload = cast(dict[object, object], data)
-        next_id = UserStore._parse_next_id(payload)
+        next_id = JSONUserStore._parse_next_id(payload)
         if "users" not in payload:
             raise TypeError("'users' is required")
         users_obj = payload["users"]
@@ -77,8 +77,8 @@ class UserStore:
         seen_user_ids: set[int] = set()
         max_user_id = 0
         for raw_user in users:
-            user = UserStore._parse_raw_user(raw_user)
-            key = UserStore._normalize_username(user.username)
+            user = JSONUserStore._parse_raw_user(raw_user)
+            key = JSONUserStore._normalize_username(user.username)
             if key in users_by_username:
                 raise ValueError(f"Duplicate username in store: {user.username!r}")
             user_id = user.user_id
@@ -114,17 +114,17 @@ class UserStore:
         if user_id < 1:
             raise ValueError("user_id must be positive")
 
-        username = UserStore._parse_string_field(raw, "username")
+        username = JSONUserStore._parse_string_field(raw, "username")
         raw_username = username.strip()
-        if not UserStore._normalize_username(raw_username):
+        if not JSONUserStore._normalize_username(raw_username):
             raise ValueError("Username is required.")
-        role = UserStore._parse_string_field(raw, "role")
-        role_value = UserStore._normalize_role(role)
-        name = UserStore._parse_string_field(raw, "name")
-        email = UserStore._parse_string_field(raw, "email")
-        phone_number = UserStore._parse_string_field(raw, "phone_number")
+        role = JSONUserStore._parse_string_field(raw, "role")
+        role_value = JSONUserStore._normalize_role(role)
+        name = JSONUserStore._parse_string_field(raw, "name")
+        email = JSONUserStore._parse_string_field(raw, "email")
+        phone_number = JSONUserStore._parse_string_field(raw, "phone_number")
         contact = ContactInfo(name=name, email=email, phone_number=phone_number)
-        password = UserStore._parse_string_field(raw, "password")
+        password = JSONUserStore._parse_string_field(raw, "password")
         password_hash = PasswordHash.parse(password)
 
         return UserRecord(
@@ -246,7 +246,7 @@ class UserStore:
         if norm in self._by_username:
             raise ValueError("Username already exists.")
 
-        role_value = UserStore._normalize_role(role)
+        role_value = JSONUserStore._normalize_role(role)
 
         ci = ContactInfo(name=name, email=email, phone_number=phone_number)
 

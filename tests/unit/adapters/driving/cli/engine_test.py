@@ -13,7 +13,9 @@ class EngineTests(unittest.TestCase):
     def tearDown(self) -> None:
         self._print_patcher.stop()
 
-    def make_engine(self) -> tuple[Engine, MagicMock, MagicMock, MagicMock, MagicMock, MagicMock]:
+    def make_engine(
+        self, *, autosave_enabled: bool = True
+    ) -> tuple[Engine, MagicMock, MagicMock, MagicMock, MagicMock, MagicMock]:
         factory = MagicMock()
         auth = MagicMock()
         authz = MagicMock()
@@ -32,6 +34,7 @@ class EngineTests(unittest.TestCase):
             save_world_state=save_world,
             autosave_path="state.json",
             advance_world_state=advance,
+            autosave_enabled=autosave_enabled,
         )
         return engine, factory, auth, authz, save_world, advance
 
@@ -235,13 +238,13 @@ class EngineTests(unittest.TestCase):
         mock_print.assert_called_once_with("Unexpected error: boom")
 
     def test_exec_line_does_not_autosave_mutating_command_when_autosave_disabled(self) -> None:
-        engine, factory, _auth, _authz, save_world, advance = self.make_engine()
+        engine, factory, _auth, _authz, save_world, advance = self.make_engine(autosave_enabled=False)
 
         cmd = MagicMock()
         cmd.skips_heartbeat = False
         cmd.mutates_state = True
         cmd.mutates_session = False
-        cmd.autosaves_state = False
+        cmd.autosaves_state = True
         cmd.execute.return_value = "Loaded state."
         factory.create.return_value = cmd
 

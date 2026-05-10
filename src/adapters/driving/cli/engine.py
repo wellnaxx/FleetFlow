@@ -25,6 +25,7 @@ class Engine:
         save_world_state: SaveWorldStateUseCase,
         autosave_path: str,
         advance_world_state: AdvanceWorldStateUseCase,
+        autosave_enabled: bool,
     ) -> None:
         """Initialize the CLI engine.
 
@@ -35,6 +36,7 @@ class Engine:
             save_world_state: Use case used for post-mutation autosave.
             autosave_path: Default autosave path for state mutations.
             advance_world_state: Use case used to run the pre-command heartbeat.
+            autosave_enabled: Whether autosave is enabled.
         """
         self._factory = factory
         self.auth = auth
@@ -42,6 +44,7 @@ class Engine:
         self._save_world_state = save_world_state
         self._autosave_path = autosave_path
         self._advance_world_state = advance_world_state
+        self._autosave_enabled: bool = autosave_enabled
         self._running: bool = False
 
     def _rebind_app(self) -> None:
@@ -322,7 +325,7 @@ class Engine:
             if cmd.mutates_session:
                 self._rebind_app()
 
-            if heartbeat_changed or (cmd.mutates_state and cmd.autosaves_state):
+            if self._autosave_enabled and (heartbeat_changed or (cmd.mutates_state and cmd.autosaves_state)):
                 try:
                     self._save_world_state.execute(self._autosave_path)
                 except Exception as se:

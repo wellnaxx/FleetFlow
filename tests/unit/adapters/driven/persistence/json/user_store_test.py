@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, mock_open, patch
 
-from src.adapters.driven.persistence.json.user_store import UserStore
+from src.adapters.driven.persistence.json.user_store import JSONUserStore
 from src.adapters.driven.security.password_hasher import PasswordHash
 from src.application.models.user_record import UserRecord
 from src.domain.enums.auth import Role
@@ -22,7 +22,7 @@ def _ph(s: str = "hash") -> SimpleNamespace:
     return SimpleNamespace(serialize=lambda: f"SER({s})")
 
 
-class UserStore_Load_Save_Should(unittest.TestCase):
+class JSONUserStore_Load_Save_Should(unittest.TestCase):
     @patch(
         "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
     )
@@ -56,7 +56,7 @@ class UserStore_Load_Save_Should(unittest.TestCase):
             ],
         }
 
-        store = UserStore()  # triggers _load
+        store = JSONUserStore()  # triggers _load
         # case-insensitive get
         self.assertIsInstance(store.get("ALICE"), UserRecord)
         self.assertEqual(store.get("bob").user_id, 4)  # type: ignore[reportOptionalMemberAccess]
@@ -80,7 +80,7 @@ class UserStore_Load_Save_Should(unittest.TestCase):
         resolve: MagicMock,
     ) -> None:
         with self.assertRaises(ValueError) as ctx:
-            UserStore()
+            JSONUserStore()
 
         self.assertIn("Malformed user store JSON", str(ctx.exception))
 
@@ -94,7 +94,7 @@ class UserStore_Load_Save_Should(unittest.TestCase):
         self, jload: MagicMock, mopen: MagicMock, exists: MagicMock, resolve: MagicMock
     ) -> None:
         with self.assertRaises(ValueError) as ctx:
-            UserStore()
+            JSONUserStore()
 
         self.assertIn("Malformed user store JSON", str(ctx.exception))
 
@@ -108,7 +108,7 @@ class UserStore_Load_Save_Should(unittest.TestCase):
         self, jload: MagicMock, mopen: MagicMock, exists: MagicMock, resolve: MagicMock
     ) -> None:
         with self.assertRaises(ValueError) as ctx:
-            UserStore()
+            JSONUserStore()
 
         self.assertIn("Malformed user store JSON", str(ctx.exception))
 
@@ -128,7 +128,7 @@ class UserStore_Load_Save_Should(unittest.TestCase):
         self, jload: MagicMock, mopen: MagicMock, exists: MagicMock, resolve: MagicMock
     ) -> None:
         with self.assertRaises(ValueError) as ctx:
-            UserStore()
+            JSONUserStore()
 
         self.assertIn("Malformed user store JSON", str(ctx.exception))
 
@@ -167,7 +167,7 @@ class UserStore_Load_Save_Should(unittest.TestCase):
         self, jload: MagicMock, mopen: MagicMock, exists: MagicMock, resolve: MagicMock
     ) -> None:
         with self.assertRaises(ValueError) as ctx:
-            UserStore()
+            JSONUserStore()
 
         self.assertIn("Malformed user store JSON", str(ctx.exception))
 
@@ -206,7 +206,7 @@ class UserStore_Load_Save_Should(unittest.TestCase):
         self, jload: MagicMock, mopen: MagicMock, exists: MagicMock, resolve: MagicMock
     ) -> None:
         with self.assertRaises(ValueError) as ctx:
-            UserStore()
+            JSONUserStore()
 
         self.assertIn("Malformed user store JSON", str(ctx.exception))
 
@@ -236,7 +236,7 @@ class UserStore_Load_Save_Should(unittest.TestCase):
         self, jload: MagicMock, mopen: MagicMock, exists: MagicMock, resolve: MagicMock
     ) -> None:
         with self.assertRaises(ValueError) as ctx:
-            UserStore()
+            JSONUserStore()
 
         self.assertIn("Malformed user store JSON", str(ctx.exception))
 
@@ -266,7 +266,7 @@ class UserStore_Load_Save_Should(unittest.TestCase):
         self, jload: MagicMock, mopen: MagicMock, exists: MagicMock, resolve: MagicMock
     ) -> None:
         with self.assertRaises(ValueError) as ctx:
-            UserStore()
+            JSONUserStore()
 
         self.assertIn("Malformed user store JSON", str(ctx.exception))
 
@@ -296,7 +296,7 @@ class UserStore_Load_Save_Should(unittest.TestCase):
         self, jload: MagicMock, mopen: MagicMock, exists: MagicMock, resolve: MagicMock
     ) -> None:
         with self.assertRaises(ValueError) as ctx:
-            UserStore()
+            JSONUserStore()
 
         self.assertIn("Malformed user store JSON", str(ctx.exception))
 
@@ -334,7 +334,7 @@ class UserStore_Load_Save_Should(unittest.TestCase):
     def test_init_corrects_stale_next_id_to_follow_max_loaded_user_id(
         self, jload: MagicMock, mopen: MagicMock, exists: MagicMock, resolve: MagicMock
     ) -> None:
-        store = UserStore()
+        store = JSONUserStore()
 
         self.assertEqual(store._next_id, 5)  # type: ignore[reportPrivateUsage]
 
@@ -381,14 +381,14 @@ class UserStore_Load_Save_Should(unittest.TestCase):
     def test_init_accepts_valid_unordered_users_and_corrects_next_id(
         self, jload: MagicMock, mopen: MagicMock, exists: MagicMock, resolve: MagicMock
     ) -> None:
-        store = UserStore()
+        store = JSONUserStore()
 
         self.assertEqual(store._next_id, 10)  # type: ignore[reportPrivateUsage]
         self.assertEqual(store.get("alice").user_id, 2)  # type: ignore[reportOptionalMemberAccess]
         self.assertEqual(store.get("BOB").user_id, 5)  # type: ignore[reportOptionalMemberAccess]
         self.assertEqual(store.get("charlie").user_id, 9)  # type: ignore[reportOptionalMemberAccess]
 
-    @patch.object(UserStore, "_atomic_write", return_value="C:/fake/users.json")
+    @patch.object(JSONUserStore, "_atomic_write", return_value="C:/fake/users.json")
     @patch(
         "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
     )
@@ -396,7 +396,7 @@ class UserStore_Load_Save_Should(unittest.TestCase):
     def test_save_writes_sorted_payload(
         self, exists: MagicMock, resolve: MagicMock, atomic_write: MagicMock
     ) -> None:
-        store = UserStore()
+        store = JSONUserStore()
         # seed users out of order to check sorting by user_id
         u1 = UserRecord(3, "c", "EMPLOYEE", "C", "c@x", "03", "p3")
         u2 = UserRecord(1, "a", "EMPLOYEE", "A", "a@x", "01", "p1")
@@ -413,7 +413,7 @@ class UserStore_Load_Save_Should(unittest.TestCase):
         self.assertEqual(ids, [1, 2, 3])  # sorted
 
 
-class UserStore_Create_Get_Update_Should(unittest.TestCase):
+class JSONUserStore_Create_Get_Update_Should(unittest.TestCase):
     @patch(
         "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
     )
@@ -424,7 +424,7 @@ class UserStore_Create_Get_Update_Should(unittest.TestCase):
         # Patch ContactInfo so we control cleaning behavior
         with (
             patch("src.adapters.driven.persistence.json.user_store.ContactInfo") as CI,
-            patch.object(UserStore, "_atomic_write", return_value="C:/fake/users.json") as aw,
+            patch.object(JSONUserStore, "_atomic_write", return_value="C:/fake/users.json") as aw,
         ):
             CI.side_effect = lambda name, email, phone_number: SimpleNamespace(  # type: ignore[reportUnknownLambdaType]
                 name=name.strip(),  # type: ignore[reportUnknownMemberType]
@@ -432,7 +432,7 @@ class UserStore_Create_Get_Update_Should(unittest.TestCase):
                 phone_number=(phone_number or "").strip(),  # type: ignore[reportUnknownMemberType]
             )
 
-            store = UserStore()
+            store = JSONUserStore()
 
             rec = store.create(
                 username="  Alice  ",
@@ -465,12 +465,12 @@ class UserStore_Create_Get_Update_Should(unittest.TestCase):
     def test_create_accepts_role_enum(self, exists: MagicMock, resolve: MagicMock) -> None:
         with (
             patch("src.adapters.driven.persistence.json.user_store.ContactInfo") as CI,
-            patch.object(UserStore, "_atomic_write", return_value="C:/fake/users.json"),
+            patch.object(JSONUserStore, "_atomic_write", return_value="C:/fake/users.json"),
         ):
             CI.side_effect = lambda name, email, phone_number: SimpleNamespace(  # type: ignore[reportUnknownLambdaType]
                 name=name, email=email, phone_number=phone_number
             )
-            store = UserStore()
+            store = JSONUserStore()
             rec = store.create("bob", Role.MANAGER, "Bob", "", "", _ph("pw2"))  # type: ignore[reportArgumentType]
             self.assertEqual(rec.role, "MANAGER")
 
@@ -479,8 +479,8 @@ class UserStore_Create_Get_Update_Should(unittest.TestCase):
     )
     @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
     def test_create_validations_and_password_type(self, exists: MagicMock, resolve: MagicMock) -> None:
-        with patch.object(UserStore, "_atomic_write", return_value="C:/fake/users.json"):
-            store = UserStore()
+        with patch.object(JSONUserStore, "_atomic_write", return_value="C:/fake/users.json"):
+            store = JSONUserStore()
             with self.assertRaises(ValueError):
                 store.create("", "EMPLOYEE", "N", "", "", _ph("pw"))  # type: ignore[reportArgumentType]
             store.create("user", "EMPLOYEE", "Name", "", "", _ph("pw"))  # type: ignore[reportArgumentType]
@@ -496,8 +496,8 @@ class UserStore_Create_Get_Update_Should(unittest.TestCase):
     )
     @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
     def test_update_password_happy_and_missing(self, exists: MagicMock, resolve: MagicMock) -> None:
-        with patch.object(UserStore, "_atomic_write", return_value="C:/fake/users.json"):
-            store = UserStore()
+        with patch.object(JSONUserStore, "_atomic_write", return_value="C:/fake/users.json"):
+            store = JSONUserStore()
             store.create("anna", "EMPLOYEE", "Anna", "", "", _ph("old"))  # type: ignore[reportArgumentType]
             rec = store.get("Anna")
             self.assertEqual(rec.password, "SER(old)")  # type: ignore[reportOptionalMemberAccess]
@@ -513,7 +513,7 @@ class UserStore_Create_Get_Update_Should(unittest.TestCase):
     )
     @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
     def test_list_users_returns_all(self, exists: MagicMock, resolve: MagicMock) -> None:
-        store = UserStore()
+        store = JSONUserStore()
         store._by_username = {  # type: ignore[reportAttributeAccessIssue]
             "a": UserRecord(1, "a", "E", "A", "", "", "p"),
             "b": UserRecord(2, "b", "E", "B", "", "", "p"),
@@ -526,8 +526,8 @@ class UserStore_Create_Get_Update_Should(unittest.TestCase):
     )
     @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
     def test_get_is_whitespace_and_case_insensitive(self, exists: MagicMock, resolve: MagicMock) -> None:
-        with patch.object(UserStore, "_atomic_write", return_value="C:/fake/users.json"):
-            store = UserStore()
+        with patch.object(JSONUserStore, "_atomic_write", return_value="C:/fake/users.json"):
+            store = JSONUserStore()
             rec = store.create("Alice", "EMPLOYEE", "Alice", "", "", _ph("pw1"))  # type: ignore[reportArgumentType]
 
             self.assertIs(store.get("alice"), rec)
@@ -541,8 +541,8 @@ class UserStore_Create_Get_Update_Should(unittest.TestCase):
     def test_create_rejects_duplicate_username_with_whitespace_and_case_variants(
         self, exists: MagicMock, resolve: MagicMock
     ) -> None:
-        with patch.object(UserStore, "_atomic_write", return_value="C:/fake/users.json"):
-            store = UserStore()
+        with patch.object(JSONUserStore, "_atomic_write", return_value="C:/fake/users.json"):
+            store = JSONUserStore()
             store.create("Alice", "EMPLOYEE", "Alice", "", "", _ph("pw1"))  # type: ignore[reportArgumentType]
 
             with self.assertRaises(ValueError) as ctx:
@@ -557,8 +557,8 @@ class UserStore_Create_Get_Update_Should(unittest.TestCase):
     def test_update_password_accepts_whitespace_and_case_insensitive_username(
         self, exists: MagicMock, resolve: MagicMock
     ) -> None:
-        with patch.object(UserStore, "_atomic_write", return_value="C:/fake/users.json"):
-            store = UserStore()
+        with patch.object(JSONUserStore, "_atomic_write", return_value="C:/fake/users.json"):
+            store = JSONUserStore()
             store.create("Alice", "EMPLOYEE", "Alice", "", "", _ph("old"))  # type: ignore[reportArgumentType]
 
             store.update_password("  ALICE  ", _ph("new"))  # type: ignore[reportArgumentType]
@@ -566,7 +566,7 @@ class UserStore_Create_Get_Update_Should(unittest.TestCase):
             self.assertEqual(store.get("alice").password, "SER(new)")  # type: ignore[reportOptionalMemberAccess]
 
 
-class UserStore_AtomicWrite_Should(unittest.TestCase):
+class JSONUserStore_AtomicWrite_Should(unittest.TestCase):
     @patch("src.adapters.driven.persistence.json.user_store.ensure_data_dir")
     @patch(
         "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
@@ -594,7 +594,7 @@ class UserStore_AtomicWrite_Should(unittest.TestCase):
         resolve: MagicMock,
         ensure: MagicMock,
     ) -> None:
-        store = UserStore()  # _load is skipped because exists() -> False
+        store = JSONUserStore()  # _load is skipped because exists() -> False
         payload: dict[str, Any] = {"_next_id": 1, "users": []}
 
         cm = MagicMock()
@@ -640,7 +640,7 @@ class UserStore_AtomicWrite_Should(unittest.TestCase):
         ensure: MagicMock,
         logger: MagicMock,
     ) -> None:
-        store = UserStore()
+        store = JSONUserStore()
         payload: dict[str, Any] = {"_next_id": 1, "users": []}
 
         cm = MagicMock()
