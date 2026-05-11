@@ -21,14 +21,15 @@ FleetFlow currently supports:
 - User authentication with manager and employee roles.
 - Role-based authorization around CLI commands and application use cases.
 - Password hashing with PBKDF2-HMAC and strict persisted password-hash validation.
+- Environment-selected in-memory or PostgreSQL logistics persistence backend.
 - Manual save/load plus autosave after mutating commands when autosave is enabled.
-- Versioned JSON world-state snapshots containing customers, packages, routes, repository counters, and truck runtime state.
+- Versioned JSON world-state snapshots for the in-memory backend containing customers, packages, routes, repository counters, and truck runtime state.
 - Startup recovery for default saved state: missing state is ignored, corrupt state is quarantined, and unexpected runtime errors still fail loudly.
-- A large automated test suite covering domain behavior, application services, use cases, CLI commands, persistence, runtime swaps, and startup behavior.
+- A large automated test suite covering domain behavior, application services, use cases, CLI commands, JSON and database persistence, runtime swaps, and startup behavior.
 
 ## Architecture Overview
 
-FleetFlow uses a hexagonal-style layered architecture. The CLI is the current driving adapter. JSON persistence, in-memory repositories, security, and runtime state management are driven adapters behind application-level ports and services.
+FleetFlow uses a hexagonal-style layered architecture. The CLI is the current driving adapter. JSON world-state persistence, in-memory repositories, PostgreSQL repositories, security, and runtime state management are driven adapters behind application-level ports and services.
 
 ```text
 FleetFlow/
@@ -37,6 +38,7 @@ FleetFlow/
 |-- src/
 |   |-- adapters/
 |   |   |-- driven/
+|   |   |   |-- persistence/database/ # PostgreSQL repositories, SQL, graph loaders, and unit of work
 |   |   |   |-- persistence/json/ # JSON world-state and user persistence
 |   |   |   |-- persistence/memory/# in-memory repositories and runtime state gateway
 |   |   |   `-- security/         # password hashing
@@ -44,7 +46,6 @@ FleetFlow/
 |   |       |-- cli/              # engine, menus, command factory, CLI commands
 |   |       `-- http/             # placeholder for a future HTTP adapter
 |   |-- application/
-|   |   |-- config/               # application-level configuration constants
 |   |   |-- dto/                  # persisted snapshot and runtime transfer objects
 |   |   |-- exceptions/           # application and world-state exception hierarchy
 |   |   |-- models/               # persisted application models such as UserRecord
@@ -57,9 +58,10 @@ FleetFlow/
 |   |   |-- enums/                # roles, permissions, item/route/truck statuses
 |   |   |-- services/             # Map and VehicleManager domain services
 |   |   `-- value_objects/        # ContactInfo, LocationCode
-|   `-- ports/
-|       |-- input/                # reserved for future input-port abstractions
-|       `-- output/               # repository, persistence, runtime, and vehicle ports
+|   |-- ports/
+|   |   |-- input/                # reserved for future input-port abstractions
+|   |   `-- output/               # repository, persistence, runtime, and vehicle ports
+|   `-- shared/                   # environment-variable helpers
 |-- tests/
 |-- main.py
 `-- pyproject.toml
@@ -73,7 +75,7 @@ CLI Menu / Command Mode
   -> Application Use Case
   -> Application Service / Port
   -> Domain Entity / Domain Service
-  -> In-memory Repository or JSON Persistence Adapter
+  -> In-memory/PostgreSQL Repository or JSON Persistence Adapter
 ```
 
 The composition root is `src/composition/container.py`. It wires repositories, domain services, application services, world-state persistence, runtime state management, and all CLI-facing use cases.
@@ -120,7 +122,7 @@ FleetFlow stores local JSON files under `data/` by default:
 - `data/users.json`: persisted user records and password hashes.
 - `data/state.json`: default world-state autosave target.
 
-World-state saves are versioned snapshots. The current canonical schema version is `2` and includes:
+World-state saves for the in-memory backend are versioned snapshots. The current canonical schema version is `2` and includes:
 
 - repository id counters,
 - customers,
@@ -132,7 +134,7 @@ The state pipeline is:
 
 ```text
 Save:
-Runtime repositories + truck fleet
+In-memory runtime repositories + truck fleet
   -> WorldStateSnapshotService.build_snapshot()
   -> JsonWorldStatePersistence.write()
 
@@ -147,7 +149,9 @@ JsonWorldStatePersistence.read()
 
 Runtime replacement is performed through a single world-state swap boundary so repositories and truck runtime state are committed together. If a valid snapshot cannot be committed to runtime, the previous runtime state is restored and a `WorldStateRuntimeSwapError` is raised.
 
-At startup, FleetFlow attempts to load the default state file. Missing default state is treated as a no-op. Corrupt world-state JSON is quarantined with a `.corrupt.<timestamp>` suffix and the application starts with empty runtime state. Non-corruption runtime errors are not swallowed.
+At startup, FleetFlow attempts to load the default state file when autosave is enabled. Missing default state is treated as a no-op. Corrupt world-state JSON is quarantined with a `.corrupt.<timestamp>` suffix and the application starts with empty runtime state. Non-corruption runtime errors are not swallowed.
+
+When `PERSISTENCE_BACKEND=postgres`, package, route, truck, customer, and unit-of-work operations use the PostgreSQL adapter. The current committed CLI composition disables autosave/default JSON loading for that backend, and JSON world-state import/export is not implemented for PostgreSQL yet.
 
 ## Authentication and Authorization
 
@@ -175,7 +179,24 @@ If the application is started non-interactively and no admin user exists, startu
 
 - Python 3.13
 
-The runtime application uses the Python standard library. No runtime `requirements.txt` is currently needed.
+No runtime `requirements.txt` is currently checked in. Install the runtime packages used by the current code before running the CLI:
+
+```bash
+python -m pip install python-dotenv "psycopg[binary]"
+```
+
+The default backend is in-memory plus JSON world-state persistence. To select PostgreSQL, set the required environment variables before starting the app:
+
+```text
+PERSISTENCE_BACKEND=postgres
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=fleetflow
+DB_USER=<username>
+DB_PASSWORD=<password>
+```
+
+Apply `src/adapters/driven/persistence/database/schema.sql` to the database before using the PostgreSQL backend.
 
 ### Windows PowerShell
 
@@ -296,7 +317,7 @@ Quoted arguments are supported in command mode through shell-style parsing, so n
 
 The CLI engine performs heartbeat/reconciliation around command execution. Reconciliation may update route status, truck position, truck release state, package status, package current location, and expected arrival.
 
-Mutating commands are autosaved to the default world-state path when autosave is enabled. Some commands intentionally mutate runtime state without immediately autosaving over the current file, such as `load`.
+Mutating commands are autosaved to the default world-state path when autosave is enabled. Autosave is enabled for the in-memory backend and disabled for the PostgreSQL backend in the current committed composition. Some commands intentionally mutate runtime state without immediately autosaving over the current file, such as `load`.
 
 ## Testing
 
@@ -344,13 +365,13 @@ python -m mypy .
 
 ## Roadmap
 
-FleetFlow is currently a CLI-first logistics backend with a layered/hexagonal architecture, domain entities, use cases, ports, in-memory repositories, JSON world-state persistence, authentication, autosave/load support, heartbeat reconciliation, and segment-aware route capacity checks.
+FleetFlow is currently a CLI-first logistics backend with a layered/hexagonal architecture, domain entities, use cases, ports, in-memory repositories, a PostgreSQL repository adapter, JSON world-state persistence, authentication, autosave/load support, heartbeat reconciliation, and segment-aware route capacity checks.
 
 The current architecture leaves several possible paths for future development. These are not required for the core project to work, but they are natural extensions if the project continues growing.
 
 ### Backend hardening
 
-The existing backend can be tightened further by cleaning up `LocationCode` boundary ergonomics, making world-state schema compatibility rules more explicit, strengthening truck snapshot invariant validation, removing generated/private files from exported archives, and keeping documentation aligned with the actual codebase.
+The existing backend can be tightened further by hardening PostgreSQL setup/migration workflows.
 
 ### Command bus layer
 
@@ -366,9 +387,9 @@ The CLI could remain supported beside the API instead of being replaced by it.
 
 ### PostgreSQL persistence adapter
 
-The current in-memory repositories and JSON world-state persistence work well for local development and testing. A PostgreSQL adapter could be added behind the existing repository ports for a more realistic long-running backend.
+The current PostgreSQL adapter sits behind the existing repository ports for package, route, truck, customer, and unit-of-work persistence. It gives FleetFlow a more realistic long-running backend while preserving the CLI and application use-case boundaries.
 
-JSON save/load could remain useful as an import/export, backup, or local snapshot mechanism.
+Remaining work includes operational migration tooling, stronger integration coverage against a real database, and JSON import/export parity so save/load can remain useful as an import/export, backup, or local snapshot mechanism.
 
 ### Audit log and domain events
 
