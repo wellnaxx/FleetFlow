@@ -1,3 +1,22 @@
+[project]
+name = "fleetflow"
+version = "0.1.0"
+description = "Console-based logistics management system for packages, delivery routes, trucks, customers, and authenticated users."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "psycopg[binary]>=3.2",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "mypy>=1.15",
+    "pyright>=1.1",
+    "pytest>=8.3",
+    "ruff>=0.11",
+]
+
 [tool.ruff]
 line-length = 112
 target-version = "py313"
