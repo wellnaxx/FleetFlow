@@ -7,6 +7,7 @@ from src.adapters.driven.persistence.database.repositories.package_repository im
 from src.adapters.driven.persistence.database.repositories.route_repository import PostgresRouteRepository
 from src.adapters.driven.persistence.database.repositories.truck_repository import PostgresTruckRepository
 from src.adapters.driven.persistence.database.unit_of_work import PostgresUnitOfWork
+from src.adapters.driven.persistence.database.world_state_gateway import PostgresWorldStateGateway
 from src.adapters.driven.persistence.json.config import get_json_config
 from src.adapters.driven.persistence.json.world_state_persistence import JsonWorldStatePersistence
 from src.adapters.driven.persistence.memory.customer_repository import InMemoryCustomerRepository
@@ -24,6 +25,7 @@ from src.application.services.authorization_service import AuthorizationService
 from src.application.services.customer_service import CustomerService
 from src.application.services.heartbeat_service import HeartbeatService
 from src.application.services.world_state_reconciliation_service import WorldStateReconciliationService
+from src.application.services.world_state_snapshot_builder import WorldStateSnapshotBuilder
 from src.application.services.world_state_snapshot_service import WorldStateSnapshotService
 from src.application.use_cases.auth.change_password import ChangePasswordUseCase
 from src.application.use_cases.auth.login import LoginUseCase
@@ -113,6 +115,7 @@ class Container:
         seed_fleet_if_empty(self.truck_repo)
         self.vehicle_manager = VehicleManager(self.truck_repo)
         self.reconciler = WorldStateReconciliationService()
+        self.builder = WorldStateSnapshotBuilder()
 
         self._wire_world_state(config)
         self._wire_common(auth)
@@ -166,15 +169,14 @@ class Container:
                 vehicle_manager=self.vehicle_manager,
                 runtime_state=self.world_state_runtime,
                 reconciler=self.reconciler,
+                builder=self.builder,
             )
             self.world_state_gateway = InMemoryWorldStateGateway(
                 snapshot_service=self.world_state_snapshot_service,
             )
             return
 
-        self.world_state_gateway = UnsupportedWorldStateGateway(
-            "JSON world-state import/export is not implemented for the Postgres backend yet."
-        )
+        self.world_state_gateway = PostgresWorldStateGateway(snapshot_builder=self.builder)
         self.world_state_runtime = None
         self.world_state_snapshot_service = None
 

@@ -2,9 +2,9 @@
 
 import itertools
 from collections.abc import Callable, Iterable
-from typing import Any, ClassVar, Protocol
+from typing import ClassVar, Protocol
 
-from src.adapters.driven.persistence.json.serialization import dt_from_str, dt_to_str
+from src.adapters.driven.persistence.json.serialization import dt_from_str
 from src.application.dto.candidate_truck_dto import CandidateTruckLink
 from src.application.dto.reconciled_world_dto import ReconciledWorld
 from src.application.dto.truck_binding_dto import TruckBinding
@@ -19,6 +19,7 @@ from src.application.dto.world_state_snapshot_dto import (
 )
 from src.application.exceptions.world_state_errors import WorldStateCorruptionError
 from src.application.services.world_state_reconciliation_service import WorldStateReconciliationService
+from src.application.services.world_state_snapshot_builder import WorldStateSnapshotBuilder
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.entities.delivery_route import DeliveryRoute
@@ -81,6 +82,7 @@ class WorldStateSnapshotService:
         vehicle_manager: VehicleManagerPort,
         runtime_state: WorldStateRuntimePort,
         reconciler: WorldStateReconciliationService,
+        builder: WorldStateSnapshotBuilder | None = None,
     ) -> None:
         """Initialize snapshot service dependencies.
 
@@ -91,6 +93,7 @@ class WorldStateSnapshotService:
             vehicle_manager: Fleet service used to snapshot and validate trucks.
             runtime_state: Runtime boundary used for atomic state replacement.
             reconciler: Service used to reconcile candidate loaded state.
+            builder: Snapshot builder. When omitted, a default builder is used.
         """
         self._customer_repo = customer_repo
         self._package_repo = package_repo
@@ -98,6 +101,7 @@ class WorldStateSnapshotService:
         self._vehicle_manager = vehicle_manager
         self._runtime_state = runtime_state
         self._reconciler = reconciler
+        self._builder = builder or WorldStateSnapshotBuilder()
 
     def build_snapshot(self) -> WorldStateSnapshot:
         """Build a canonical snapshot from current runtime state.
@@ -106,25 +110,14 @@ class WorldStateSnapshotService:
             Versioned world-state snapshot containing customers, packages,
             routes, counters, and truck runtime state.
         """
-        counters = self._build_counters_snapshot()
-        customers = self._build_customer_snapshots()
-        packages = self._build_package_snapshots()
-        routes = self._build_route_snapshots()
-        trucks = self._build_truck_snapshots()
-
-        world = WorldSnapshotData(
-            counters=counters,
-            customers=customers,
-            packages=packages,
-            routes=routes,
-            trucks=trucks,
+        return self._builder.build_world_state_snapshot(
+            customers=self._customer_repo.list_all(),
+            packages=self._package_repo.list_all(),
+            routes=self._route_repo.list_all(),
+            trucks=self._vehicle_manager.list_fleet(),
+            counters=self._build_counters_snapshot(),
+            schema_version=self.SCHEMA_VERSION,
         )
-        return WorldStateSnapshot(schema_version=self.SCHEMA_VERSION, world=world)
-
-    def _sorted_snapshots[T, S](
-        self, items: Iterable[T], *, key: Callable[[T], Any], transform: Callable[[T], S]
-    ) -> tuple[S, ...]:
-        return tuple(transform(item) for item in sorted(items, key=key))
 
     @staticmethod
     def _keyed_by[T, K, V](
@@ -137,60 +130,6 @@ class WorldStateSnapshotService:
             next_customer_id=self._customer_repo.peek_next_id(),
             next_package_id=self._package_repo.peek_next_id(),
             next_route_id=self._route_repo.peek_next_id(),
-        )
-
-    def _build_customer_snapshots(self) -> tuple[CustomerSnapshot, ...]:
-        return self._sorted_snapshots(
-            self._customer_repo.list_all(),
-            key=lambda customer: customer.customer_id,
-            transform=lambda customer: CustomerSnapshot(
-                customer_id=customer.customer_id,
-                name=customer.name,
-                email=customer.email or "",
-                phone=customer.phone_number or "",
-            ),
-        )
-
-    def _build_package_snapshots(self) -> tuple[PackageSnapshot, ...]:
-        return self._sorted_snapshots(
-            self._package_repo.list_all(),
-            key=lambda package: package.package_id,
-            transform=lambda package: PackageSnapshot(
-                package_id=package.package_id,
-                start=package.start_location,
-                end=package.end_location,
-                weight=package.weight,
-                customer_id=package.customer.customer_id,
-                route_id=package.route.route_id if package.route is not None else None,
-            ),
-        )
-
-    def _build_route_snapshots(self) -> tuple[RouteSnapshot, ...]:
-        return self._sorted_snapshots(
-            self._route_repo.list_all(),
-            key=lambda route: route.route_id,
-            transform=lambda route: RouteSnapshot(
-                route_id=route.route_id,
-                locations=tuple(route.locations),
-                departure_time=dt_to_str(route.departure_time),
-                truck_vehicle_id=route.truck.vehicle_id if route.truck is not None else None,
-                package_ids=tuple(sorted(package.package_id for package in route.packages)),
-            ),
-        )
-
-    def _build_truck_snapshots(self) -> tuple[TruckSnapshot, ...]:
-        return self._sorted_snapshots(
-            self._vehicle_manager.list_fleet(),
-            key=lambda truck: truck.vehicle_id,
-            transform=lambda truck: TruckSnapshot(
-                vehicle_id=truck.vehicle_id,
-                status=truck.status,
-                current_location=truck.current_location,
-                route_id=truck.route.route_id if truck.route is not None else None,
-                busy_from=dt_to_str(truck.busy_from),
-                busy_until=dt_to_str(truck.busy_until),
-                in_transit_to=truck.in_transit_to,
-            ),
         )
 
     def apply_snapshot(self, snapshot: WorldStateSnapshot) -> None:
