@@ -105,15 +105,16 @@ class WorldStateSnapshotRebuilder:
         rebuilt_packages: dict[int, DeliveryPackage] = {}
 
         for snapshot in snapshots:
+            customer = rebuilt_customers[snapshot.customer_id]
             package = DeliveryPackage(
                 package_id=snapshot.package_id,
                 start_location=snapshot.start,
                 end_location=snapshot.end,
                 weight=snapshot.weight,
-                customer=rebuilt_customers[snapshot.customer_id],
+                customer=customer,
             )
             rebuilt_packages[snapshot.package_id] = package
-            rebuilt_customers[snapshot.customer_id].add_package(package)
+            customer.add_package(package)
 
         return rebuilt_packages
 
