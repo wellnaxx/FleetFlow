@@ -27,6 +27,7 @@ from src.application.services.heartbeat_service import HeartbeatService
 from src.application.services.world_snapshot_validator import WorldStateSnapshotValidator
 from src.application.services.world_state_reconciliation_service import WorldStateReconciliationService
 from src.application.services.world_state_snapshot_builder import WorldStateSnapshotBuilder
+from src.application.services.world_state_snapshot_rebuilder import WorldStateSnapshotRebuilder
 from src.application.services.world_state_snapshot_service import WorldStateSnapshotService
 from src.application.use_cases.auth.change_password import ChangePasswordUseCase
 from src.application.use_cases.auth.login import LoginUseCase
@@ -118,6 +119,7 @@ class Container:
         self.reconciler = WorldStateReconciliationService()
         self.builder = WorldStateSnapshotBuilder()
         self.validator = WorldStateSnapshotValidator(vehicle_manager=self.vehicle_manager)
+        self.rebuilder = WorldStateSnapshotRebuilder()
 
         self._wire_world_state(config)
         self._wire_common(auth)
@@ -173,6 +175,7 @@ class Container:
                 reconciler=self.reconciler,
                 builder=self.builder,
                 validator=self.validator,
+                rebuilder=self.rebuilder,
             )
             self.world_state_gateway = InMemoryWorldStateGateway(
                 snapshot_service=self.world_state_snapshot_service,

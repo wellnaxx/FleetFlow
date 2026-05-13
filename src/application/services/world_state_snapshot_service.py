@@ -1,6 +1,6 @@
 """Build, validate, reconcile, and apply world-state snapshots."""
 
-from collections.abc import Callable, Iterable
+from collections.abc import Mapping
 from typing import ClassVar, Protocol
 
 from src.adapters.driven.persistence.json.serialization import dt_from_str
@@ -9,8 +9,6 @@ from src.application.dto.reconciled_world_dto import ReconciledWorld
 from src.application.dto.truck_binding_dto import TruckBinding
 from src.application.dto.world_state_snapshot_dto import (
     CountersSnapshot,
-    CustomerSnapshot,
-    PackageSnapshot,
     RouteSnapshot,
     TruckSnapshot,
     WorldStateSnapshot,
@@ -19,11 +17,11 @@ from src.application.exceptions.world_state_errors import WorldStateCorruptionEr
 from src.application.services.world_snapshot_validator import WorldStateSnapshotValidator
 from src.application.services.world_state_reconciliation_service import WorldStateReconciliationService
 from src.application.services.world_state_snapshot_builder import WorldStateSnapshotBuilder
+from src.application.services.world_state_snapshot_rebuilder import WorldStateSnapshotRebuilder
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.entities.truck import Truck
-from src.domain.value_objects.contact_info import ContactInfo
 from src.ports.output.vehicle_manager import VehicleManagerPort
 from src.ports.output.world_state_runtime_port import WorldStateRuntimePort
 
@@ -80,6 +78,7 @@ class WorldStateSnapshotService:
         reconciler: WorldStateReconciliationService,
         builder: WorldStateSnapshotBuilder | None = None,
         validator: WorldStateSnapshotValidator | None = None,
+        rebuilder: WorldStateSnapshotRebuilder | None = None,
     ) -> None:
         """Initialize snapshot service dependencies.
 
@@ -92,6 +91,7 @@ class WorldStateSnapshotService:
             reconciler: Service used to reconcile candidate loaded state.
             builder: Snapshot builder. When omitted, a default builder is used.
             validator: Snapshot validator. When omitted, a default validator is used.
+            rebuilder: Snapshot rebuilder. When omitted, a default rebuilder is used.
         """
         self._customer_repo = customer_repo
         self._package_repo = package_repo
@@ -101,6 +101,7 @@ class WorldStateSnapshotService:
         self._reconciler = reconciler
         self._builder = builder or WorldStateSnapshotBuilder()
         self._validator = validator or WorldStateSnapshotValidator(vehicle_manager)
+        self._rebuilder = rebuilder or WorldStateSnapshotRebuilder()
 
     def build_snapshot(self) -> WorldStateSnapshot:
         """Build a canonical snapshot from current runtime state.
@@ -117,12 +118,6 @@ class WorldStateSnapshotService:
             counters=self._build_counters_snapshot(),
             schema_version=self.SCHEMA_VERSION,
         )
-
-    @staticmethod
-    def _keyed_by[T, K, V](
-        items: Iterable[T], *, key: Callable[[T], K], transform: Callable[[T], V]
-    ) -> dict[K, V]:
-        return {key(item): transform(item) for item in items}
 
     def _build_counters_snapshot(self) -> CountersSnapshot:
         return CountersSnapshot(
@@ -153,9 +148,10 @@ class WorldStateSnapshotService:
 
         self._validator.validate_snapshot(snapshot, self.SUPPORTED_SCHEMA_VERSIONS)
 
-        rebuilt_customers = self._rebuild_customers(world.customers)
-        rebuilt_packages = self._rebuild_packages(world.packages, rebuilt_customers)
-        rebuilt_routes = self._rebuild_routes(world.routes)
+        rebuilt_world = self._rebuilder.rebuild(snapshot)
+        rebuilt_customers = rebuilt_world.customers
+        rebuilt_packages = rebuilt_world.packages
+        rebuilt_routes = rebuilt_world.routes
 
         self._link_packages_to_routes(
             snapshots=world.routes,
@@ -177,50 +173,11 @@ class WorldStateSnapshotService:
             truck_bindings=truck_bindings,
         )
 
-    def _rebuild_customers(self, snapshots: tuple[CustomerSnapshot, ...]) -> dict[int, Customer]:
-        return self._keyed_by(
-            snapshots,
-            key=lambda snapshot: snapshot.customer_id,
-            transform=lambda snapshot: Customer(
-                customer_id=snapshot.customer_id,
-                contact=ContactInfo(name=snapshot.name, email=snapshot.email, phone_number=snapshot.phone),
-            ),
-        )
-
-    def _rebuild_packages(
-        self, snapshots: tuple[PackageSnapshot, ...], rebuilt_customers: dict[int, Customer]
-    ) -> dict[int, DeliveryPackage]:
-        rebuilt_packages: dict[int, DeliveryPackage] = {}
-
-        for snapshot in snapshots:
-            package = DeliveryPackage(
-                package_id=snapshot.package_id,
-                start_location=snapshot.start,
-                end_location=snapshot.end,
-                weight=snapshot.weight,
-                customer=rebuilt_customers[snapshot.customer_id],
-            )
-            rebuilt_packages[snapshot.package_id] = package
-            rebuilt_customers[snapshot.customer_id].add_package(package)
-
-        return rebuilt_packages
-
-    def _rebuild_routes(self, snapshots: tuple[RouteSnapshot, ...]) -> dict[int, DeliveryRoute]:
-        return self._keyed_by(
-            snapshots,
-            key=lambda snapshot: snapshot.route_id,
-            transform=lambda snapshot: DeliveryRoute(
-                *snapshot.locations,
-                departure_time=dt_from_str(snapshot.departure_time),
-                route_id=snapshot.route_id,
-            ),
-        )
-
     def _link_packages_to_routes(
         self,
         snapshots: tuple[RouteSnapshot, ...],
-        rebuilt_packages: dict[int, DeliveryPackage],
-        rebuilt_routes: dict[int, DeliveryRoute],
+        rebuilt_packages: Mapping[int, DeliveryPackage],
+        rebuilt_routes: Mapping[int, DeliveryRoute],
     ) -> None:
         for snapshot in snapshots:
             route = rebuilt_routes[snapshot.route_id]
@@ -233,7 +190,7 @@ class WorldStateSnapshotService:
         self,
         *,
         route_snapshots: tuple[RouteSnapshot, ...],
-        rebuilt_routes: dict[int, DeliveryRoute],
+        rebuilt_routes: Mapping[int, DeliveryRoute],
         candidate_trucks_by_id: dict[int, CandidateTruckLink],
     ) -> dict[int, CandidateTruckLink]:
         real_trucks_by_id = {truck.vehicle_id: truck for truck in self._vehicle_manager.list_fleet()}
@@ -264,7 +221,7 @@ class WorldStateSnapshotService:
         *,
         route_snapshots: tuple[RouteSnapshot, ...],
         truck_snapshots: tuple[TruckSnapshot, ...],
-        routes: dict[int, DeliveryRoute],
+        routes: Mapping[int, DeliveryRoute],
     ) -> tuple[TruckBinding, ...]:
         candidate_trucks_by_id = self._build_candidate_trucks(truck_snapshots)
 
@@ -315,7 +272,7 @@ class WorldStateSnapshotService:
         self,
         *,
         route_snapshots: tuple[RouteSnapshot, ...],
-        routes: dict[int, DeliveryRoute],
+        routes: Mapping[int, DeliveryRoute],
         trucks_by_route_id: dict[int, CandidateTruckLink],
         candidate_trucks_by_id: dict[int, CandidateTruckLink],
     ) -> tuple[TruckBinding, ...]:
