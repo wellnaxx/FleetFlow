@@ -28,7 +28,7 @@ class WorldStateSnapshotBuilder:
         routes: Iterable[DeliveryRoute],
         trucks: Iterable[Truck],
         counters: CountersSnapshot,
-        schema_version: int = 2,
+        schema_version: int,
     ) -> WorldStateSnapshot:
         """Build a world-state snapshot from live runtime state.
 
@@ -38,7 +38,7 @@ class WorldStateSnapshotBuilder:
             routes: Live route objects.
             trucks: Live truck objects.
             counters: Repository id counters.
-
+            schema_version: The version of the schema to use for the snapshot.
         Returns:
             WorldStateSnapshot DTO representing the current runtime state.
         """
