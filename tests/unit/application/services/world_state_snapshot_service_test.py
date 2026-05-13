@@ -983,8 +983,8 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
 
         with (
             patch.object(
-                self.service,
-                "_reconcile_candidate_world",
+                self.service._reconciler,
+                "reconcile_routes",
                 side_effect=ValueError("candidate graph is invalid"),
             ),
             self.assertRaises(WorldStateCorruptionError) as ctx,

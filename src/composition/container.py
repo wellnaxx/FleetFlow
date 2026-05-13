@@ -25,6 +25,7 @@ from src.application.services.authorization_service import AuthorizationService
 from src.application.services.customer_service import CustomerService
 from src.application.services.heartbeat_service import HeartbeatService
 from src.application.services.world_snapshot_validator import WorldStateSnapshotValidator
+from src.application.services.world_state_linker import WorldStateLinker
 from src.application.services.world_state_reconciliation_service import WorldStateReconciliationService
 from src.application.services.world_state_snapshot_builder import WorldStateSnapshotBuilder
 from src.application.services.world_state_snapshot_rebuilder import WorldStateSnapshotRebuilder
@@ -120,6 +121,7 @@ class Container:
         self.builder = WorldStateSnapshotBuilder()
         self.validator = WorldStateSnapshotValidator(vehicle_manager=self.vehicle_manager)
         self.rebuilder = WorldStateSnapshotRebuilder()
+        self.linker = WorldStateLinker(vehicle_manager=self.vehicle_manager)
 
         self._wire_world_state(config)
         self._wire_common(auth)
