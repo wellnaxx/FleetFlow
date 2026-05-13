@@ -1,6 +1,7 @@
 import unittest
 from collections.abc import Mapping, Sequence
 from datetime import datetime
+from typing import cast
 from unittest.mock import patch
 
 from src.adapters.driven.persistence.json.serialization import dt_to_str
@@ -461,6 +462,47 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
         )
 
         self.assert_corrupt(snapshot, "Duplicate package ids for route 1")
+
+    def test_apply_snapshot_rejects_duplicate_customer_email_after_normalization(self) -> None:
+        snapshot = self.make_snapshot(
+            customers=(
+                customer_snapshot(email=" Alice@Example.com "),
+                customer_snapshot(customer_id=2, name="Bobby", email="alice@example.com"),
+            ),
+        )
+
+        self.assert_corrupt(snapshot, "Duplicate customer email")
+
+    def test_apply_snapshot_rejects_duplicate_customer_phone_after_trimming(self) -> None:
+        snapshot = self.make_snapshot(
+            customers=(
+                customer_snapshot(phone=" 0412345678 "),
+                customer_snapshot(customer_id=2, name="Bobby", phone="0412345678"),
+            ),
+        )
+
+        self.assert_corrupt(snapshot, "Duplicate customer phone")
+
+    def test_apply_snapshot_allows_empty_and_missing_customer_contact_values(self) -> None:
+        snapshot = self.make_snapshot(
+            counters=CountersSnapshot(3, 1, 1),
+            customers=(
+                customer_snapshot(email=cast(str, None), phone=cast(str, None)),
+                customer_snapshot(customer_id=2, name="Bobby", email="", phone=""),
+            ),
+        )
+
+        self.service.apply_snapshot(snapshot)
+
+        first_customer = self.customer_repo.get_by_id(1)
+        second_customer = self.customer_repo.get_by_id(2)
+
+        assert first_customer is not None
+        assert second_customer is not None
+        self.assertEqual(first_customer.contact.email, "")
+        self.assertEqual(first_customer.contact.phone_number, "")
+        self.assertEqual(second_customer.contact.email, "")
+        self.assertEqual(second_customer.contact.phone_number, "")
 
     def test_apply_snapshot_rejects_missing_references(self) -> None:
         missing_reference_cases = (
@@ -1066,6 +1108,32 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
 
         self.assert_corrupt(snapshot, "segment load 12")
 
+    def test_apply_snapshot_uses_first_duplicate_route_location_for_segment_load_validation(self) -> None:
+        truck = self.vehicle_manager.find_by_id(1001)
+        assert truck is not None
+        truck.capacity = 10
+
+        departure_time = datetime(2099, 1, 1, 10, 0, 0)
+
+        snapshot = self.make_snapshot(
+            counters=CountersSnapshot(2, 3, 2),
+            customers=(customer_snapshot(),),
+            packages=(
+                package_snapshot(package_id=1, start="A", end="B", weight=6.0, route_id=1),
+                package_snapshot(package_id=2, start="A", end="B", weight=6.0, route_id=1),
+            ),
+            routes=(
+                route_snapshot(
+                    locations=("A", "B", "A", "C"),
+                    departure_time=dt_to_str(departure_time),
+                    truck_vehicle_id=1001,
+                    package_ids=(1, 2),
+                ),
+            ),
+        )
+
+        self.assert_corrupt(snapshot, "segment load 12")
+
     def test_apply_snapshot_rejects_truck_assignment_when_route_exceeds_range(self) -> None:
         truck = self.vehicle_manager.find_by_id(1001)
         assert truck is not None
@@ -1303,7 +1371,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
         )
 
         with patch(
-            "src.application.services.world_state_snapshot_service.Map.is_valid_location",
+            "src.application.services.world_snapshot_validator.Map.is_valid_location",
             side_effect=_valid_location_except_moon,
         ):
             self.assert_corrupt(snapshot, "unsupported current location MOON")
@@ -1327,7 +1395,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
         )
 
         with patch(
-            "src.application.services.world_state_snapshot_service.Map.is_valid_location",
+            "src.application.services.world_snapshot_validator.Map.is_valid_location",
             side_effect=_valid_location_except_moon,
         ):
             self.assert_corrupt(snapshot, "unsupported transit destination MOON")
