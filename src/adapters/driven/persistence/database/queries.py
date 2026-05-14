@@ -15,6 +15,7 @@ from src.adapters.driven.persistence.database.loader import load_sql
 @dataclass(frozen=True)
 class CustomerQueries:
     add: str
+    add_snapshot: str
     get_by_id: str
     get_by_email: str
     get_by_phone: str
@@ -26,6 +27,7 @@ class CustomerQueries:
 @dataclass(frozen=True)
 class RouteQueries:
     add: str
+    add_snapshot: str
     add_stop: str
     get_by_id: str
     list_all: str
@@ -36,6 +38,7 @@ class RouteQueries:
 @dataclass(frozen=True)
 class PackageQueries:
     add: str
+    add_snapshot: str
     get_by_id: str
     get_by_id_with_customer: str
     list_all: str
@@ -71,7 +74,11 @@ class UserQueries:
 
 @dataclass(frozen=True)
 class WorldStateQueries:
+    clear_world: str
     get_snapshot_counters: str
+    reset_customer_sequence: str
+    reset_package_sequence: str
+    reset_route_sequence: str
 
 
 class QueryRegistry:
@@ -93,6 +100,7 @@ class QueryRegistry:
         """
         return CustomerQueries(
             add=load_sql("customers/add.sql"),
+            add_snapshot=load_sql("customers/add_snapshot.sql"),
             get_by_id=load_sql("customers/get_by_id.sql"),
             get_by_email=load_sql("customers/get_by_email.sql"),
             get_by_phone=load_sql("customers/get_by_phone.sql"),
@@ -113,6 +121,7 @@ class QueryRegistry:
         """
         return RouteQueries(
             add=load_sql("routes/add.sql"),
+            add_snapshot=load_sql("routes/add_snapshot.sql"),
             add_stop=load_sql("routes/add_stop.sql"),
             get_by_id=load_sql("routes/get_by_id.sql"),
             list_all=load_sql("routes/list_all.sql"),
@@ -132,6 +141,7 @@ class QueryRegistry:
         """
         return PackageQueries(
             add=load_sql("packages/add.sql"),
+            add_snapshot=load_sql("packages/add_snapshot.sql"),
             get_by_id=load_sql("packages/get_by_id.sql"),
             get_by_id_with_customer=load_sql("packages/get_by_id_with_customer.sql"),
             list_all=load_sql("packages/list_all.sql"),
@@ -194,7 +204,11 @@ class QueryRegistry:
             FileNotFoundError: If a world-state SQL file is missing.
         """
         return WorldStateQueries(
+            clear_world=load_sql("world_state/clear_world.sql"),
             get_snapshot_counters=load_sql("world_state/get_snapshot_counters.sql"),
+            reset_customer_sequence=load_sql("world_state/reset_customer_sequence.sql"),
+            reset_package_sequence=load_sql("world_state/reset_package_sequence.sql"),
+            reset_route_sequence=load_sql("world_state/reset_route_sequence.sql"),
         )
 
 
