@@ -11,7 +11,7 @@ from src.application.dto.world_state_snapshot_dto import (
     WorldSnapshotData,
     WorldStateSnapshot,
 )
-from src.application.services.world_state_linker import WorldStateLinker
+from src.application.services.world_state_linker import WorldStateSnapshotLinker
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.entities.truck import Truck
 from src.domain.enums.truck_model import TruckModel
@@ -24,7 +24,7 @@ def _distance(_start: str, _end: str) -> int:
     return 100
 
 
-class WorldStateLinkerTests(unittest.TestCase):
+class WorldStateSnapshotLinkerTests(unittest.TestCase):
     def setUp(self) -> None:
         self.route_map_locations = patch(
             "src.domain.entities.delivery_route.Map.get_locations",
@@ -50,7 +50,7 @@ class WorldStateLinkerTests(unittest.TestCase):
 
         vehicle_manager = Mock(spec=VehicleManagerPort)
         vehicle_manager.list_fleet.return_value = [real_truck]
-        linker = WorldStateLinker(vehicle_manager)
+        linker = WorldStateSnapshotLinker(vehicle_manager)
 
         route = DeliveryRoute(LocationCode("A"), LocationCode("B"), departure_time=departure_time, route_id=1)
         snapshot = WorldStateSnapshot(
@@ -95,7 +95,7 @@ class WorldStateLinkerTests(unittest.TestCase):
         candidate_truck.route = reassigned_route
 
         link = CandidateTruckLink(real_truck=real_truck, candidate_truck=candidate_truck)
-        linker = WorldStateLinker(Mock(spec=VehicleManagerPort))
+        linker = WorldStateSnapshotLinker(Mock(spec=VehicleManagerPort))
 
         bindings = linker.build_truck_bindings(
             route_snapshots=(

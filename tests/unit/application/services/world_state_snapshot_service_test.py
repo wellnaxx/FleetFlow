@@ -20,7 +20,12 @@ from src.application.dto.world_state_snapshot_dto import (
     WorldStateSnapshot,
 )
 from src.application.exceptions.world_state_errors import WorldStateCorruptionError
+from src.application.services.world_snapshot_validator import WorldStateSnapshotValidator
+from src.application.services.world_state_linker import WorldStateSnapshotLinker
 from src.application.services.world_state_reconciliation_service import WorldStateReconciliationService
+from src.application.services.world_state_snapshot_builder import WorldStateSnapshotBuilder
+from src.application.services.world_state_snapshot_preparer import WorldStateSnapshotPreparer
+from src.application.services.world_state_snapshot_rebuilder import WorldStateSnapshotRebuilder
 from src.application.services.world_state_snapshot_service import WorldStateSnapshotService
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
@@ -174,13 +179,25 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
             self.route_repo,
             self.vehicle_manager,
         )
+        self.reconciler = WorldStateReconciliationService()
+        self.builder = WorldStateSnapshotBuilder()
+        self.validator = WorldStateSnapshotValidator(vehicle_manager=self.vehicle_manager)
+        self.rebuilder = WorldStateSnapshotRebuilder()
+        self.linker = WorldStateSnapshotLinker(vehicle_manager=self.vehicle_manager)
+        self.preparer = WorldStateSnapshotPreparer(
+            reconciler=self.reconciler,
+            validator=self.validator,
+            rebuilder=self.rebuilder,
+            linker=self.linker,
+        )
         self.service = WorldStateSnapshotService(
             customer_repo=self.customer_repo,
             package_repo=self.package_repo,
             route_repo=self.route_repo,
             vehicle_manager=self.vehicle_manager,
             runtime_state=self.runtime_state,
-            reconciler=WorldStateReconciliationService(),
+            builder=self.builder,
+            preparer=self.preparer,
         )
 
     def make_snapshot(
@@ -983,7 +1000,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
 
         with (
             patch.object(
-                self.service._reconciler,
+                self.reconciler,
                 "reconcile_routes",
                 side_effect=ValueError("candidate graph is invalid"),
             ),

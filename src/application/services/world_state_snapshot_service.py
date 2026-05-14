@@ -8,11 +8,8 @@ from src.application.dto.world_state_snapshot_dto import (
     WorldStateSnapshot,
 )
 from src.application.exceptions.world_state_errors import WorldStateCorruptionError
-from src.application.services.world_snapshot_validator import WorldStateSnapshotValidator
-from src.application.services.world_state_linker import WorldStateLinker
-from src.application.services.world_state_reconciliation_service import WorldStateReconciliationService
 from src.application.services.world_state_snapshot_builder import WorldStateSnapshotBuilder
-from src.application.services.world_state_snapshot_rebuilder import WorldStateSnapshotRebuilder
+from src.application.services.world_state_snapshot_preparer import WorldStateSnapshotPreparer
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.entities.delivery_route import DeliveryRoute
@@ -69,11 +66,8 @@ class WorldStateSnapshotService:
         route_repo: RouteSnapshotRepositoryPort,
         vehicle_manager: VehicleManagerPort,
         runtime_state: WorldStateRuntimePort,
-        reconciler: WorldStateReconciliationService,
-        builder: WorldStateSnapshotBuilder | None = None,
-        validator: WorldStateSnapshotValidator | None = None,
-        rebuilder: WorldStateSnapshotRebuilder | None = None,
-        linker: WorldStateLinker | None = None,
+        builder: WorldStateSnapshotBuilder,
+        preparer: WorldStateSnapshotPreparer,
     ) -> None:
         """Initialize snapshot service dependencies.
 
@@ -83,22 +77,16 @@ class WorldStateSnapshotService:
             route_repo: Repository containing live route aggregates.
             vehicle_manager: Fleet service used to snapshot and validate trucks.
             runtime_state: Runtime boundary used for atomic state replacement.
-            reconciler: Service used to reconcile candidate loaded state.
-            builder: Snapshot builder. When omitted, a default builder is used.
-            validator: Snapshot validator. When omitted, a default validator is used.
-            rebuilder: Snapshot rebuilder. When omitted, a default rebuilder is used.
-            linker: Snapshot linker. When omitted, a default linker is used.
+            builder: Service used to build world-state snapshots.
+            preparer: Service used to prepare loaded snapshots for application.
         """
         self._customer_repo = customer_repo
         self._package_repo = package_repo
         self._route_repo = route_repo
         self._vehicle_manager = vehicle_manager
         self._runtime_state = runtime_state
-        self._reconciler = reconciler
-        self._builder = builder or WorldStateSnapshotBuilder()
-        self._validator = validator or WorldStateSnapshotValidator(vehicle_manager)
-        self._rebuilder = rebuilder or WorldStateSnapshotRebuilder()
-        self._linker = linker or WorldStateLinker(vehicle_manager)
+        self._builder = builder
+        self._preparer = preparer
 
     def build_snapshot(self) -> WorldStateSnapshot:
         """Build a canonical snapshot from current runtime state.
@@ -134,42 +122,11 @@ class WorldStateSnapshotService:
                 load-time invariants before runtime replacement.
         """
         try:
-            reconciled_world = self._prepare_snapshot_for_swap(snapshot)
+            reconciled_world = self._preparer.prepare(snapshot, self.SUPPORTED_SCHEMA_VERSIONS)
         except (KeyError, TypeError, ValueError) as exc:
             raise WorldStateCorruptionError(f"Invalid world state snapshot: {exc}") from exc
 
         self._swap_runtime_state(reconciled_world)
-
-    def _prepare_snapshot_for_swap(self, snapshot: WorldStateSnapshot) -> ReconciledWorld:
-        world = snapshot.world
-
-        self._validator.validate_snapshot(snapshot, self.SUPPORTED_SCHEMA_VERSIONS)
-
-        rebuilt_world = self._rebuilder.rebuild(snapshot)
-        rebuilt_customers = rebuilt_world.customers
-        rebuilt_packages = rebuilt_world.packages
-        rebuilt_routes = rebuilt_world.routes
-
-        linked_trucks = self._linker.link(snapshot, rebuilt_world)
-
-        self._reconciler.reconcile_routes(
-            routes=list(rebuilt_routes.values()),
-            update_trucks=True,
-        )
-        truck_bindings = self._linker.build_truck_bindings(
-            route_snapshots=world.routes,
-            routes=rebuilt_routes,
-            trucks_by_route_id=linked_trucks.trucks_by_route_id,
-            candidate_trucks_by_id=linked_trucks.candidate_trucks_by_id,
-        )
-
-        return ReconciledWorld(
-            customers=rebuilt_customers,
-            packages=rebuilt_packages,
-            routes=rebuilt_routes,
-            counters=world.counters,
-            truck_bindings=truck_bindings,
-        )
 
     def _swap_runtime_state(self, world: ReconciledWorld) -> None:
         self._runtime_state.replace_world_state(

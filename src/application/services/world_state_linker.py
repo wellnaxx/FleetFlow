@@ -16,7 +16,7 @@ from src.domain.enums.truck_status import TruckStatus
 from src.ports.output.vehicle_manager import VehicleManagerPort
 
 
-class WorldStateLinker:
+class WorldStateSnapshotLinker:
     """Service for linking detached domain objects rebuilt from world-state snapshots."""
 
     def __init__(self, vehicle_manager: VehicleManagerPort) -> None:

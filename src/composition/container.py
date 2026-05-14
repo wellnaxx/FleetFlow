@@ -25,9 +25,10 @@ from src.application.services.authorization_service import AuthorizationService
 from src.application.services.customer_service import CustomerService
 from src.application.services.heartbeat_service import HeartbeatService
 from src.application.services.world_snapshot_validator import WorldStateSnapshotValidator
-from src.application.services.world_state_linker import WorldStateLinker
+from src.application.services.world_state_linker import WorldStateSnapshotLinker
 from src.application.services.world_state_reconciliation_service import WorldStateReconciliationService
 from src.application.services.world_state_snapshot_builder import WorldStateSnapshotBuilder
+from src.application.services.world_state_snapshot_preparer import WorldStateSnapshotPreparer
 from src.application.services.world_state_snapshot_rebuilder import WorldStateSnapshotRebuilder
 from src.application.services.world_state_snapshot_service import WorldStateSnapshotService
 from src.application.use_cases.auth.change_password import ChangePasswordUseCase
@@ -121,7 +122,13 @@ class Container:
         self.builder = WorldStateSnapshotBuilder()
         self.validator = WorldStateSnapshotValidator(vehicle_manager=self.vehicle_manager)
         self.rebuilder = WorldStateSnapshotRebuilder()
-        self.linker = WorldStateLinker(vehicle_manager=self.vehicle_manager)
+        self.linker = WorldStateSnapshotLinker(vehicle_manager=self.vehicle_manager)
+        self.preparer = WorldStateSnapshotPreparer(
+            reconciler=self.reconciler,
+            validator=self.validator,
+            rebuilder=self.rebuilder,
+            linker=self.linker,
+        )
 
         self._wire_world_state(config)
         self._wire_common(auth)
@@ -174,10 +181,8 @@ class Container:
                 route_repo=route_repo,
                 vehicle_manager=self.vehicle_manager,
                 runtime_state=self.world_state_runtime,
-                reconciler=self.reconciler,
+                preparer=self.preparer,
                 builder=self.builder,
-                validator=self.validator,
-                rebuilder=self.rebuilder,
             )
             self.world_state_gateway = InMemoryWorldStateGateway(
                 snapshot_service=self.world_state_snapshot_service,
