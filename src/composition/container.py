@@ -8,6 +8,7 @@ from src.adapters.driven.persistence.database.repositories.route_repository impo
 from src.adapters.driven.persistence.database.repositories.truck_repository import PostgresTruckRepository
 from src.adapters.driven.persistence.database.unit_of_work import PostgresUnitOfWork
 from src.adapters.driven.persistence.database.world_state_gateway import PostgresWorldStateGateway
+from src.adapters.driven.persistence.database.world_state_importer import PostgresWorldStateImporter
 from src.adapters.driven.persistence.json.config import get_json_config
 from src.adapters.driven.persistence.json.world_state_persistence import JsonWorldStatePersistence
 from src.adapters.driven.persistence.memory.customer_repository import InMemoryCustomerRepository
@@ -189,7 +190,11 @@ class Container:
             )
             return
 
-        self.world_state_gateway = PostgresWorldStateGateway(snapshot_builder=self.builder)
+        self.world_state_gateway = PostgresWorldStateGateway(
+            snapshot_builder=self.builder,
+            snapshot_preparer=self.preparer,
+            importer=PostgresWorldStateImporter(),
+        )
         self.world_state_runtime = None
         self.world_state_snapshot_service = None
 

@@ -1,6 +1,6 @@
 """Build, validate, reconcile, and apply world-state snapshots."""
 
-from typing import ClassVar, Protocol
+from typing import Protocol
 
 from src.application.dto.reconciled_world_dto import ReconciledWorld
 from src.application.dto.world_state_snapshot_dto import (
@@ -8,6 +8,7 @@ from src.application.dto.world_state_snapshot_dto import (
     WorldStateSnapshot,
 )
 from src.application.exceptions.world_state_errors import WorldStateCorruptionError
+from src.application.services.world_state_schema import SCHEMA_VERSION, SUPPORTED_SCHEMA_VERSIONS
 from src.application.services.world_state_snapshot_builder import WorldStateSnapshotBuilder
 from src.application.services.world_state_snapshot_preparer import WorldStateSnapshotPreparer
 from src.domain.entities.customer import Customer
@@ -56,9 +57,6 @@ class RouteSnapshotRepositoryPort(Protocol):
 class WorldStateSnapshotService:
     """Coordinates snapshot creation and atomic snapshot application."""
 
-    SCHEMA_VERSION: ClassVar[int] = 2
-    SUPPORTED_SCHEMA_VERSIONS: ClassVar[frozenset[int]] = frozenset({1, 2})
-
     def __init__(
         self,
         customer_repo: CustomerSnapshotRepositoryPort,
@@ -101,7 +99,7 @@ class WorldStateSnapshotService:
             routes=self._route_repo.list_all(),
             trucks=self._vehicle_manager.list_fleet(),
             counters=self._build_counters_snapshot(),
-            schema_version=self.SCHEMA_VERSION,
+            schema_version=SCHEMA_VERSION,
         )
 
     def _build_counters_snapshot(self) -> CountersSnapshot:
@@ -122,7 +120,7 @@ class WorldStateSnapshotService:
                 load-time invariants before runtime replacement.
         """
         try:
-            reconciled_world = self._preparer.prepare(snapshot, self.SUPPORTED_SCHEMA_VERSIONS)
+            reconciled_world = self._preparer.prepare(snapshot, SUPPORTED_SCHEMA_VERSIONS)
         except (KeyError, TypeError, ValueError) as exc:
             raise WorldStateCorruptionError(f"Invalid world state snapshot: {exc}") from exc
 
