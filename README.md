@@ -23,9 +23,10 @@ FleetFlow currently supports:
 - Password hashing with PBKDF2-HMAC and strict persisted password-hash validation.
 - Environment-selected in-memory or PostgreSQL logistics persistence backend.
 - Manual save/load plus autosave after mutating commands when autosave is enabled.
-- Versioned JSON world-state snapshots for the in-memory backend containing customers, packages, routes, repository counters, and truck runtime state.
+- Versioned JSON world-state snapshots containing customers, packages, routes, repository counters, and truck runtime state.
+- PostgreSQL world-state export/import through the same JSON snapshot format.
 - Startup recovery for default saved state: missing state is ignored, corrupt state is quarantined, and unexpected runtime errors still fail loudly.
-- A large automated test suite covering domain behavior, application services, use cases, CLI commands, JSON and database persistence, runtime swaps, and startup behavior.
+- A large automated test suite covering domain behavior, application services, use cases, CLI commands, JSON and database persistence, runtime swaps, snapshot import/export, and startup behavior.
 
 ## Architecture Overview
 
@@ -38,7 +39,7 @@ FleetFlow/
 |-- src/
 |   |-- adapters/
 |   |   |-- driven/
-|   |   |   |-- persistence/database/ # PostgreSQL repositories, SQL, graph loaders, and unit of work
+|   |   |   |-- persistence/database/ # PostgreSQL repositories, SQL, graph loaders, unit of work, snapshot gateway/importer
 |   |   |   |-- persistence/json/ # JSON world-state and user persistence
 |   |   |   |-- persistence/memory/# in-memory repositories and runtime state gateway
 |   |   |   `-- security/         # password hashing
@@ -117,12 +118,20 @@ FleetFlow enforces the main logistics invariants in the domain and application l
 
 ## World-State Persistence
 
-FleetFlow stores local JSON files under `data/` by default:
+FleetFlow stores local JSON files in the working directory by default:
 
-- `data/users.json`: persisted user records and password hashes.
-- `data/state.json`: default world-state autosave target.
+- `users.json`: persisted user records and password hashes.
+- `state.json`: default world-state save/load target.
 
-World-state saves for the in-memory backend are versioned snapshots. The current canonical schema version is `2` and includes:
+These paths can be overridden with:
+
+```text
+JSON_USER_STORE_PATH=<path>
+JSON_STATE_PATH=<path>
+JSON_EXPORT_DIR=<path>
+```
+
+World-state saves are versioned snapshots. The current canonical schema version is `2` and includes:
 
 - repository id counters,
 - customers,
@@ -130,7 +139,19 @@ World-state saves for the in-memory backend are versioned snapshots. The current
 - routes,
 - truck runtime snapshots.
 
-The state pipeline is:
+The application-level snapshot preparation pipeline is shared by the in-memory and PostgreSQL backends:
+
+```text
+WorldStateSnapshot
+  -> schema/version validation
+  -> graph invariant validation
+  -> rebuild detached candidate world
+  -> link package/route/truck relationships
+  -> reconcile route, package, and truck runtime state
+  -> produce ReconciledWorld
+```
+
+For the in-memory backend:
 
 ```text
 Save:
@@ -151,7 +172,23 @@ Runtime replacement is performed through a single world-state swap boundary so r
 
 At startup, FleetFlow attempts to load the default state file when autosave is enabled. Missing default state is treated as a no-op. Corrupt world-state JSON is quarantined with a `.corrupt.<timestamp>` suffix and the application starts with empty runtime state. Non-corruption runtime errors are not swallowed.
 
-When `PERSISTENCE_BACKEND=postgres`, package, route, truck, customer, and unit-of-work operations use the PostgreSQL adapter. The current committed CLI composition disables autosave/default JSON loading for that backend, and JSON world-state import/export is not implemented for PostgreSQL yet.
+For the PostgreSQL backend:
+
+```text
+Save:
+PostgreSQL world graph loader + sequence counter loader
+  -> WorldStateSnapshotBuilder
+  -> JsonWorldStatePersistence.write()
+
+Load:
+JsonWorldStatePersistence.read()
+  -> PostgresWorldStateGateway.apply_snapshot()
+  -> shared snapshot preparation pipeline
+  -> PostgresWorldStateImporter.import_world()
+  -> clear live world tables, insert customers/routes/packages, update fixed fleet trucks, reset id sequences
+```
+
+When `PERSISTENCE_BACKEND=postgres`, package, route, truck, customer, and unit-of-work operations use the PostgreSQL adapter. Autosave and default startup JSON loading are disabled for this backend, but explicit `save` and `load` commands are available as snapshot export/import operations. PostgreSQL snapshot import/export is covered by unit tests and a gateway-level round-trip integration test with injected database boundaries; a live PostgreSQL test harness is still future infrastructure work.
 
 ## Authentication and Authorization
 
@@ -196,7 +233,7 @@ DB_USER=<username>
 DB_PASSWORD=<password>
 ```
 
-Apply `src/adapters/driven/persistence/database/schema.sql` to the database before using the PostgreSQL backend.
+Apply `src/adapters/driven/persistence/database/schema.sql` to the database before using the PostgreSQL backend. The composition root seeds the fixed fleet if the trucks table is empty.
 
 ### Windows PowerShell
 
@@ -317,7 +354,7 @@ Quoted arguments are supported in command mode through shell-style parsing, so n
 
 The CLI engine performs heartbeat/reconciliation around command execution. Reconciliation may update route status, truck position, truck release state, package status, package current location, and expected arrival.
 
-Mutating commands are autosaved to the default world-state path when autosave is enabled. Autosave is enabled for the in-memory backend and disabled for the PostgreSQL backend in the current committed composition. Some commands intentionally mutate runtime state without immediately autosaving over the current file, such as `load`.
+Mutating commands are autosaved to the default world-state path when autosave is enabled. Autosave is enabled for the in-memory backend and disabled for the PostgreSQL backend. With PostgreSQL, `save` and `load` remain explicit snapshot export/import commands, but normal command mutations are persisted directly through database repositories and units of work.
 
 ## Testing
 
@@ -371,7 +408,7 @@ The current architecture leaves several possible paths for future development. T
 
 ### Backend hardening
 
-The existing backend can be tightened further by hardening PostgreSQL setup/migration workflows.
+The existing backend can be tightened further by hardening PostgreSQL setup/migration workflows and adding a real PostgreSQL integration-test harness.
 
 ### Command bus layer
 
@@ -389,7 +426,7 @@ The CLI could remain supported beside the API instead of being replaced by it.
 
 The current PostgreSQL adapter sits behind the existing repository ports for package, route, truck, customer, and unit-of-work persistence. It gives FleetFlow a more realistic long-running backend while preserving the CLI and application use-case boundaries.
 
-Remaining work includes operational migration tooling, stronger integration coverage against a real database, and JSON import/export parity so save/load can remain useful as an import/export, backup, or local snapshot mechanism.
+Remaining work includes operational migration tooling, stronger integration coverage against a real database, and production hardening for snapshot import/export workflows such as backup/restore procedures and operational safeguards.
 
 ### Audit log and domain events
 
