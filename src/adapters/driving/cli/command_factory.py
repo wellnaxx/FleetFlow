@@ -28,8 +28,6 @@ from src.adapters.driving.cli.commands.view_package import ViewPackage
 from src.adapters.driving.cli.commands.view_route import ViewRoute
 from src.adapters.driving.cli.commands.view_routes_in_progress import ViewRoutesInProgress
 from src.adapters.driving.cli.commands.view_unassigned_packages import ViewUnassignedPackages
-from src.application.services.auth_service import AuthService
-from src.application.services.authorization_service import AuthorizationService
 from src.composition.container import Container
 
 type CommandEntry[T] = tuple[type[BaseCommand[T]], Callable[[Container], T]]
@@ -52,57 +50,53 @@ def bind_command[T](
 
 
 _CONTAINER_COMMANDS: dict[str, CommandEntry[Any]] = {
-    "save": bind_command(SaveState, lambda container: container.save_world_state_use_case),
-    "load": bind_command(LoadState, lambda container: container.load_world_state_use_case),
-    "login": bind_command(AuthLogin, lambda container: container.login_use_case),
-    "logout": bind_command(AuthLogout, lambda container: container.logout_use_case),
-    "whoami": bind_command(AuthWhoAmI, lambda container: container.who_am_i_use_case),
-    "registeruser": bind_command(AuthRegisterUser, lambda container: container.register_user_use_case),
-    "changepassword": bind_command(AuthChangePassword, lambda container: container.change_password_use_case),
-    "createpackage": bind_command(CreatePackage, lambda container: container.create_package_use_case),
-    "viewpackage": bind_command(ViewPackage, lambda container: container.view_package_use_case),
-    "viewallpackages": bind_command(ViewAllPackages, lambda container: container.view_all_packages_use_case),
-    "removepackage": bind_command(RemovePackage, lambda container: container.remove_package_use_case),
+    "save": bind_command(SaveState, lambda container: container.state_cases.save),
+    "load": bind_command(LoadState, lambda container: container.state_cases.load),
+    "login": bind_command(AuthLogin, lambda container: container.auth_cases.login),
+    "logout": bind_command(AuthLogout, lambda container: container.auth_cases.logout),
+    "whoami": bind_command(AuthWhoAmI, lambda container: container.auth_cases.who_am_i),
+    "registeruser": bind_command(AuthRegisterUser, lambda container: container.auth_cases.register_user),
+    "changepassword": bind_command(AuthChangePassword, lambda container: container.auth_cases.change_password),
+    "createpackage": bind_command(CreatePackage, lambda container: container.package_cases.create),
+    "viewpackage": bind_command(ViewPackage, lambda container: container.package_cases.view),
+    "viewallpackages": bind_command(ViewAllPackages, lambda container: container.package_cases.view_all),
+    "removepackage": bind_command(RemovePackage, lambda container: container.package_cases.remove),
     "viewunassignedpackages": bind_command(
-        ViewUnassignedPackages, lambda container: container.view_unassigned_packages_use_case
+        ViewUnassignedPackages, lambda container: container.package_cases.view_unassigned
     ),
-    "viewallcustomers": bind_command(ViewAllCustomers, lambda container: container.view_all_customers_use_case),
-    "createroute": bind_command(CreateRoute, lambda container: container.create_route_use_case),
-    "viewroute": bind_command(ViewRoute, lambda container: container.view_route_use_case),
-    "viewallroutes": bind_command(ViewAllRoutes, lambda container: container.view_all_routes_use_case),
+    "viewallcustomers": bind_command(ViewAllCustomers, lambda container: container.customer_cases.view_all),
+    "createroute": bind_command(CreateRoute, lambda container: container.route_cases.create),
+    "viewroute": bind_command(ViewRoute, lambda container: container.route_cases.view),
+    "viewallroutes": bind_command(ViewAllRoutes, lambda container: container.route_cases.view_all),
     "viewroutesinprogress": bind_command(
-        ViewRoutesInProgress, lambda container: container.view_routes_in_progress_use_case
+        ViewRoutesInProgress, lambda container: container.route_cases.view_in_progress
     ),
-    "removeroute": bind_command(RemoveRoute, lambda container: container.remove_route_use_case),
+    "removeroute": bind_command(RemoveRoute, lambda container: container.route_cases.remove),
     "assigntrucktoroute": bind_command(
-        AssignTruckToRoute, lambda container: container.assign_truck_to_route_use_case
+        AssignTruckToRoute, lambda container: container.route_cases.assign_truck
     ),
     "findsuitabletrucksforroute": bind_command(
-        FindSuitableTrucksForRoute, lambda container: container.find_suitable_trucks_for_route_use_case
+        FindSuitableTrucksForRoute, lambda container: container.route_cases.find_suitable_trucks
     ),
     "findsuitableroutesforpackage": bind_command(
-        FindSuitableRoutesForPackage, lambda container: container.find_suitable_routes_for_package_use_case
+        FindSuitableRoutesForPackage, lambda container: container.route_cases.find_suitable_routes
     ),
     "assignpackagestoroute": bind_command(
-        AssignPackagesToRoute, lambda container: container.assign_packages_to_route_use_case
+        AssignPackagesToRoute, lambda container: container.route_cases.assign_packages
     ),
-    "viewalltrucks": bind_command(ViewAllTrucks, lambda container: container.view_all_trucks_use_case),
+    "viewalltrucks": bind_command(ViewAllTrucks, lambda container: container.truck_cases.view_all),
 }
 
 
 class CommandFactory:
     """Parse CLI input and create fully wired command objects."""
 
-    def __init__(self, auth: AuthService, authz: AuthorizationService, container: Container) -> None:
-        """Initialize the factory with shared command dependencies.
+    def __init__(self, container: Container) -> None:
+        """Initialize the factory with the application container.
 
         Args:
-            auth: Authentication service exposed to commands.
-            authz: Authorization service exposed to commands.
             container: Dependency container holding command use cases.
         """
-        self._auth = auth
-        self._authz = authz
         self._container = container
 
     def create(self, input_line: str) -> BaseCommand[Any]:
@@ -127,4 +121,4 @@ class CommandFactory:
             raise ValueError(f"Invalid command name: {name}!")
 
         cls, get_use_case = entry
-        return cls(params, self._auth, self._authz, get_use_case(self._container))
+        return cls(params, get_use_case(self._container))

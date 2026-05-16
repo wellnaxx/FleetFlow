@@ -5,27 +5,24 @@ from src.adapters.driving.cli.commands.view_all_packages import ViewAllPackages
 
 
 class TestViewAllPackages_Should(unittest.TestCase):
-    def make_cmd(self, *, authorized: bool = True) -> ViewAllPackages:
+    def make_cmd(self) -> ViewAllPackages:
         cmd = ViewAllPackages.__new__(ViewAllPackages)
         cmd._params = []  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-
-        cmd._authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._authz.has.return_value = authorized  # type: ignore[reportAttributeAccessIssue]
-
         return cmd
 
-    def test_execute_without_permission_raises(self) -> None:
-        cmd = self.make_cmd(authorized=False)
+    def test_execute_propagates_permission_errors_from_use_case(self) -> None:
+        cmd = self.make_cmd()
+        cmd._use_case.execute.side_effect = PermissionError("Missing permission: PACKAGE_VIEW_ALL")  # type: ignore[reportAttributeAccessIssue]
 
         with self.assertRaises(PermissionError) as context:
             cmd.execute()
 
         self.assertIn("PACKAGE_VIEW_ALL", str(context.exception))
-        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
 
     def test_no_packages_available(self) -> None:
-        cmd = self.make_cmd(authorized=True)
+        cmd = self.make_cmd()
         cmd._use_case.execute.return_value = []  # type: ignore[reportAttributeAccessIssue]
 
         result = cmd.execute()
@@ -34,7 +31,7 @@ class TestViewAllPackages_Should(unittest.TestCase):
         cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
 
     def test_with_multiple_packages(self) -> None:
-        cmd = self.make_cmd(authorized=True)
+        cmd = self.make_cmd()
 
         mock_package1 = MagicMock()
         mock_package1.info.return_value = "Package 1 Info"

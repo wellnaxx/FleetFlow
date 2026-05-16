@@ -7,11 +7,9 @@ from src.domain.enums.auth import Role
 
 
 class AuthRegisterUser_Should(unittest.TestCase):
-    def make_cmd(self, params: list[str] | None = None, *, authorized: bool = True) -> AuthRegisterUser:
+    def make_cmd(self, params: list[str] | None = None) -> AuthRegisterUser:
         cmd = AuthRegisterUser.__new__(AuthRegisterUser)
         cmd._params = params or []  # type: ignore[reportAttributeAccessIssue]
-        cmd._authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._authz.has.return_value = authorized  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
@@ -40,9 +38,10 @@ class AuthRegisterUser_Should(unittest.TestCase):
         # Act
         result = cmd.execute()
 
-        # Assert: inputs were stripped/lowercased as specified
+        # Assert: CLI trims display/contact fields, while username normalization
+        # is enforced by the use case/auth service.
         cmd._use_case.execute.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
-            username="alice",
+            username="  Alice  ",
             role=Role.MANAGER,
             name="Alice Wonder",
             email="alice@example.com",
@@ -62,9 +61,8 @@ class AuthRegisterUser_Should(unittest.TestCase):
         # Act
         result = cmd.execute()
 
-        # Assert: username is lowercased, role parsed from 'employee'
         cmd._use_case.execute.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
-            username="bob",
+            username="Bob",
             role=Role.EMPLOYEE,
             name="Bob B.",
             email="bob@ex.com",
@@ -119,11 +117,19 @@ class AuthRegisterUser_Should(unittest.TestCase):
         mock_input.side_effect = ["", ""]
         cmd = self.make_cmd(params=["frank", "employee", "Frank F."])
         mock_gp.side_effect = ["short7", "short7"]  # 7 chars
+        cmd._use_case.execute.side_effect = ValueError("Password must be at least 8 characters.")  # type: ignore[reportAttributeAccessIssue]
 
         with self.assertRaises(ValueError) as ctx:
             cmd.execute()
         self.assertIn("at least 8", str(ctx.exception))
-        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
+            username="frank",
+            role=Role.EMPLOYEE,
+            name="Frank F.",
+            email="",
+            phone_number="",
+            password="short7",
+        )
 
     @patch("src.adapters.driving.cli.commands.auth_register.getpass.getpass")
     @patch("builtins.input")
@@ -139,7 +145,7 @@ class AuthRegisterUser_Should(unittest.TestCase):
         result = cmd.execute()
 
         cmd._use_case.execute.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
-            username="gina",
+            username=" Gina ",
             role=Role.EMPLOYEE,
             name="Gina G",
             email="",
@@ -161,14 +167,26 @@ class AuthRegisterUser_Should(unittest.TestCase):
             cmd.execute()
         self.assertIn("not allowed", str(ctx.exception))
 
-    def test_requires_admin_permission(self) -> None:
-        cmd = self.make_cmd(authorized=False)
+    @patch("src.adapters.driving.cli.commands.auth_register.getpass.getpass")
+    @patch("builtins.input")
+    def test_permission_errors_from_use_case_propagate(self, mock_input: MagicMock, mock_gp: MagicMock) -> None:
+        mock_input.side_effect = ["", ""]
+        mock_gp.side_effect = ["TempPass123", "TempPass123"]
+        cmd = self.make_cmd(params=["admin2", "manager", "Admin Two"])
+        cmd._use_case.execute.side_effect = PermissionError("Missing permission: ADMIN_USER")  # type: ignore[reportAttributeAccessIssue]
 
         with self.assertRaises(PermissionError) as ctx:
             cmd.execute()
 
         self.assertIn("ADMIN_USER", str(ctx.exception))
-        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
+            username="admin2",
+            role=Role.MANAGER,
+            name="Admin Two",
+            email="",
+            phone_number="",
+            password="TempPass123",
+        )
 
     def test_no_mutates_session_flag_present(self) -> None:
         self.assertFalse(getattr(AuthRegisterUser, "mutates_session", False))

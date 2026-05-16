@@ -72,7 +72,7 @@ def _load_default_world_state(container: Container) -> None:
         return
 
     try:
-        container.load_world_state_use_case.execute(default_world_state_path)
+        container.state_cases.load.execute(default_world_state_path)
     except WorldStateFileNotFoundError:
         return
     except WorldStateCorruptionError:
@@ -105,14 +105,14 @@ def main() -> None:
     container = build_container(auth)
     _load_default_world_state(container)
 
-    cmd_factory = CommandFactory(auth, container.authz, container)
+    cmd_factory = CommandFactory(container)
     Engine(
         cmd_factory,
         auth,
         container.authz,
-        container.save_world_state_use_case,
+        container.state_cases.save,
         container.default_world_state_path,
-        container.advance_world_state_use_case,
+        container.state_cases.advance,
         container.autosave_enabled,
     ).start()
 

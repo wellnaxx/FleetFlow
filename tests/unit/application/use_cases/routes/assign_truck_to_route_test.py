@@ -12,6 +12,7 @@ from src.domain.entities.truck import Truck
 from src.domain.enums.route_status import RouteStatus
 from src.domain.enums.truck_model import TruckModel
 from src.domain.enums.truck_status import TruckStatus
+from tests.unit.application.use_cases.authz_helpers import manager_authz
 
 
 class AssignTruckToRouteUseCase_Should(unittest.TestCase):
@@ -24,7 +25,9 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         self.mock_unit_of_work.__enter__.return_value = self.mock_unit_of_work
         self.mock_unit_of_work.routes = self.mock_uow_routes
         self.mock_unit_of_work.trucks = self.mock_uow_trucks
-        self.use_case = AssignTruckToRouteUseCase(self.mock_routes, self.mock_vehicles, self.mock_unit_of_work)
+        self.use_case = AssignTruckToRouteUseCase(
+            self.mock_routes, self.mock_vehicles, self.mock_unit_of_work, manager_authz()
+        )
 
     def test_raises_when_route_not_found(self) -> None:
         self.mock_routes.get_by_id.return_value = None

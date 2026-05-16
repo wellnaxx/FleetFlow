@@ -1,10 +1,11 @@
 """Use case for authenticating a user."""
 
 from src.application.services.auth_service import AuthService
+from src.application.use_cases.base.base_use_case import BaseUseCase
 from src.domain.entities.users.user import User
 
 
-class LoginUseCase:
+class LoginUseCase(BaseUseCase[User]):
     """Authenticate a user through the auth service."""
 
     def __init__(self, auth: AuthService) -> None:

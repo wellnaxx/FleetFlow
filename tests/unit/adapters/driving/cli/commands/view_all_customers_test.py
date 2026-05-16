@@ -8,29 +8,24 @@ class ViewAllCustomers_Should(unittest.TestCase):
     def make_cmd(
         self,
         params: list[str] | None = None,
-        *,
-        authorized: bool = True,
     ) -> ViewAllCustomers:
         cmd = ViewAllCustomers.__new__(ViewAllCustomers)
         cmd._params = params or []  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-
-        cmd._authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._authz.has.return_value = authorized  # type: ignore[reportAttributeAccessIssue]
-
         return cmd
 
-    def test_execute_without_permission_raises(self) -> None:
-        cmd = self.make_cmd(authorized=False)
+    def test_execute_propagates_permission_errors_from_use_case(self) -> None:
+        cmd = self.make_cmd()
+        cmd._use_case.execute.side_effect = PermissionError("Missing permission: CUSTOMER_VIEW")  # type: ignore[reportAttributeAccessIssue]
 
         with self.assertRaises(PermissionError) as ctx:
             cmd.execute()
 
         self.assertIn("CUSTOMER_VIEW", str(ctx.exception))
-        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
 
     def test_no_customers_returns_friendly_message(self) -> None:
-        cmd = self.make_cmd(authorized=True)
+        cmd = self.make_cmd()
         cmd._use_case.execute.return_value = []  # type: ignore[reportAttributeAccessIssue]
 
         out = cmd.execute()
@@ -39,7 +34,7 @@ class ViewAllCustomers_Should(unittest.TestCase):
         cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
 
     def test_formats_multiple_customers_separated_by_blank_line(self) -> None:
-        cmd = self.make_cmd(authorized=True)
+        cmd = self.make_cmd()
 
         c1 = MagicMock()
         c1.customer_id = 1
@@ -76,7 +71,7 @@ class ViewAllCustomers_Should(unittest.TestCase):
         )
 
     def test_execute_propagates_errors_from_use_case(self) -> None:
-        cmd = self.make_cmd(authorized=True)
+        cmd = self.make_cmd()
         cmd._use_case.execute.side_effect = RuntimeError("db down")  # type: ignore[reportAttributeAccessIssue]
 
         with self.assertRaises(RuntimeError) as ctx:
@@ -86,7 +81,7 @@ class ViewAllCustomers_Should(unittest.TestCase):
         cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
 
     def test_ignores_params_if_present(self) -> None:
-        cmd = self.make_cmd(params=["ignored"], authorized=True)
+        cmd = self.make_cmd(params=["ignored"])
         cmd._use_case.execute.return_value = []  # type: ignore[reportAttributeAccessIssue]
 
         _ = cmd.execute()

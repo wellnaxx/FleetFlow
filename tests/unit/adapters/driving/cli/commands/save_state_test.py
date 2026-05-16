@@ -5,25 +5,24 @@ from src.adapters.driving.cli.commands.save_state import SaveState
 
 
 class SaveStateShould(unittest.TestCase):
-    def make_cmd(self, params: list[str] | None = None, *, authorized: bool = True) -> SaveState:
+    def make_cmd(self, params: list[str] | None = None) -> SaveState:
         cmd = SaveState.__new__(SaveState)
         cmd._params = tuple(params or [])  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._authz.has.return_value = authorized  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
     def test_no_mutates_state_flag(self) -> None:
         self.assertFalse(getattr(SaveState, "mutates_state", False))
 
-    def test_execute_without_permission_raises(self) -> None:
-        cmd = self.make_cmd(["state.json"], authorized=False)
+    def test_execute_propagates_permission_errors_from_use_case(self) -> None:
+        cmd = self.make_cmd(["state.json"])
+        cmd._use_case.execute.side_effect = PermissionError("Missing permission: APP_SAVE_STATE")  # type: ignore[reportAttributeAccessIssue]
 
         with self.assertRaises(PermissionError) as ctx:
             cmd.execute()
 
         self.assertIn("APP_SAVE_STATE", str(ctx.exception))
-        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_called_once_with("state.json")  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.save_state.validate_params_count")
     def test_execute_with_explicit_path_returns_formatted_message(self, mock_validate: MagicMock) -> None:

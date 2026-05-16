@@ -5,24 +5,21 @@ from src.adapters.driving.cli.commands.view_package import ViewPackage
 
 
 class TestViewPackage_Should(unittest.TestCase):
-    def make_cmd(self, params: list[str], *, authorized: bool = True) -> ViewPackage:
+    def make_cmd(self, params: list[str]) -> ViewPackage:
         cmd = ViewPackage.__new__(ViewPackage)
         cmd._params = params  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-
-        cmd._authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._authz.has.return_value = authorized  # type: ignore[reportAttributeAccessIssue]
-
         return cmd
 
-    def test_execute_without_permission_raises(self) -> None:
-        cmd = self.make_cmd(["123"], authorized=False)
+    def test_execute_propagates_permission_errors_from_use_case(self) -> None:
+        cmd = self.make_cmd(["123"])
+        cmd._use_case.execute.side_effect = PermissionError("Missing permission: PACKAGE_VIEW")  # type: ignore[reportAttributeAccessIssue]
 
         with self.assertRaises(PermissionError) as context:
             cmd.execute()
 
         self.assertIn("PACKAGE_VIEW", str(context.exception))
-        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_called_once_with(123)  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.view_package.validate_params_exact")
     @patch("src.adapters.driving.cli.commands.view_package.try_parse_int")
@@ -31,7 +28,7 @@ class TestViewPackage_Should(unittest.TestCase):
         mock_try_parse: MagicMock,
         mock_validate: MagicMock,
     ) -> None:
-        cmd = self.make_cmd(["123"], authorized=True)
+        cmd = self.make_cmd(["123"])
         mock_try_parse.return_value = 123
 
         mock_package = MagicMock()
@@ -52,7 +49,7 @@ class TestViewPackage_Should(unittest.TestCase):
         mock_try_parse: MagicMock,
         mock_validate: MagicMock,
     ) -> None:
-        cmd = self.make_cmd(["999"], authorized=True)
+        cmd = self.make_cmd(["999"])
         mock_try_parse.return_value = 999
         cmd._use_case.execute.side_effect = ValueError("Package with ID 999 not found")  # type: ignore[reportAttributeAccessIssue]
 
@@ -66,7 +63,7 @@ class TestViewPackage_Should(unittest.TestCase):
 
     @patch("src.adapters.driving.cli.commands.view_package.validate_params_exact")
     def test_invalid_parameter_count(self, mock_validate: MagicMock) -> None:
-        cmd = self.make_cmd([], authorized=True)
+        cmd = self.make_cmd([])
         mock_validate.side_effect = ValueError("Expected 1 parameter(s).")
 
         with self.assertRaises(ValueError) as context:
@@ -83,7 +80,7 @@ class TestViewPackage_Should(unittest.TestCase):
         mock_try_parse: MagicMock,
         mock_validate: MagicMock,
     ) -> None:
-        cmd = self.make_cmd(["abc"], authorized=True)
+        cmd = self.make_cmd(["abc"])
         mock_try_parse.side_effect = ValueError("Parameter 'abc' is not a valid integer.")
 
         with self.assertRaises(ValueError) as context:

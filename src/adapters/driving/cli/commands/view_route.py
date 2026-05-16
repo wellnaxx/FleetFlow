@@ -2,15 +2,12 @@
 
 from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
 from src.adapters.driving.cli.commands.validation_helpers import try_parse_int, validate_params_exact
-from src.application.services.authorization_service import requires
 from src.application.use_cases.routes.view_route import ViewRouteUseCase
-from src.domain.enums.auth import Permission
 
 
 class ViewRoute(BaseCommand[ViewRouteUseCase]):
     """Render one route by id."""
 
-    @requires(Permission.ROUTE_VIEW)
     def execute(self) -> str:
         """Fetch a route and return display text.
 

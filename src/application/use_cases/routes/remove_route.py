@@ -4,27 +4,39 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from src.application.services.authorization_service import AuthorizationService, requires_all
+from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
+from src.domain.entities.delivery_route import DeliveryRoute
+from src.domain.enums.auth import Permission
+
 if TYPE_CHECKING:
     from src.domain.entities.delivery_package import DeliveryPackage
-    from src.domain.entities.delivery_route import DeliveryRoute
     from src.ports.output.route_repository import RouteRepositoryPort
     from src.ports.output.unit_of_work import UnitOfWorkPort
 
 
-class RemoveRouteUseCase:
+class RemoveRouteUseCase(AuthorizedUseCase[DeliveryRoute]):
     """Remove a route and detach its packages and truck."""
 
-    def __init__(self, routes: RouteRepositoryPort, unit_of_work: UnitOfWorkPort) -> None:
+    def __init__(
+        self,
+        routes: RouteRepositoryPort,
+        unit_of_work: UnitOfWorkPort,
+        authz: AuthorizationService,
+    ) -> None:
         """Initialize the use case.
 
         Args:
             routes: Repository used to fetch the target route.
             unit_of_work: Transaction boundary used to persist package and truck
                 state together with route removal.
+            authz: Service used for authorization checks.
         """
+        super().__init__(authz)
         self._routes = routes
         self._unit_of_work = unit_of_work
 
+    @requires_all(Permission.ROUTE_REMOVE, Permission.ROUTE_VIEW)
     def execute(self, route_id: int) -> DeliveryRoute:
         """Remove a route by id.
 

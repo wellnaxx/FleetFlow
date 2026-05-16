@@ -7,6 +7,7 @@ from src.application.dto.world_state_snapshot_dto import (
     WorldStateSnapshot,
 )
 from src.application.use_cases.state.save_world import SaveWorldStateUseCase
+from tests.unit.application.use_cases.authz_helpers import manager_authz
 
 
 class SaveWorldStateUseCaseTests(unittest.TestCase):
@@ -25,7 +26,7 @@ class SaveWorldStateUseCaseTests(unittest.TestCase):
         persistence = MagicMock()
         persistence.write.return_value = "/abs/state.json"
 
-        use_case = SaveWorldStateUseCase(gateway, persistence)
+        use_case = SaveWorldStateUseCase(gateway, persistence, manager_authz())
 
         result = use_case.execute("state.json")
 

@@ -9,6 +9,7 @@ from src.application.results.assign_packages_to_route_result import (
     PackageAssignmentSuccess,
 )
 from src.application.use_cases.routes.assign_packages_to_route import AssignPackagesToRouteUseCase
+from tests.unit.application.use_cases.authz_helpers import manager_authz
 
 
 class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
@@ -19,6 +20,7 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
         self.use_case = AssignPackagesToRouteUseCase(
             self.mock_routes,
             self.mock_packages,
+            manager_authz(),
             clock=lambda: self.now,
         )
 

@@ -1,9 +1,10 @@
 """Use case for ending the current auth session."""
 
 from src.application.services.auth_service import AuthService
+from src.application.use_cases.base.base_use_case import BaseUseCase
 
 
-class LogoutUseCase:
+class LogoutUseCase(BaseUseCase[None]):
     """Terminate the current authentication session."""
 
     def __init__(self, auth: AuthService) -> None:

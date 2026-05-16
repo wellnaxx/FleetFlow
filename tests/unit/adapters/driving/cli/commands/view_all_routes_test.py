@@ -5,28 +5,24 @@ from src.adapters.driving.cli.commands.view_all_routes import ViewAllRoutes
 
 
 class TestViewAllRoutes_Should(unittest.TestCase):
-    def make_cmd(self, *, authorized: bool = True) -> ViewAllRoutes:
+    def make_cmd(self) -> ViewAllRoutes:
         cmd = ViewAllRoutes.__new__(ViewAllRoutes)
         cmd._params = ()  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-
-        cmd._authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._authz.has.return_value = authorized  # type: ignore[reportAttributeAccessIssue]
-
-        cmd._auth = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
-    def test_execute_without_permission_raises(self) -> None:
-        cmd = self.make_cmd(authorized=False)
+    def test_execute_propagates_permission_errors_from_use_case(self) -> None:
+        cmd = self.make_cmd()
+        cmd._use_case.execute.side_effect = PermissionError("Missing permission: ROUTE_VIEW_ALL")  # type: ignore[reportAttributeAccessIssue]
 
         with self.assertRaises(PermissionError) as ctx:
             cmd.execute()
 
         self.assertIn("ROUTE_VIEW_ALL", str(ctx.exception))
-        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
 
     def test_no_routes_available(self) -> None:
-        cmd = self.make_cmd(authorized=True)
+        cmd = self.make_cmd()
         cmd._use_case.execute.return_value = []  # type: ignore[reportAttributeAccessIssue]
 
         result = cmd.execute()
@@ -35,7 +31,7 @@ class TestViewAllRoutes_Should(unittest.TestCase):
         cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
 
     def test_with_multiple_routes(self) -> None:
-        cmd = self.make_cmd(authorized=True)
+        cmd = self.make_cmd()
 
         mock_route1 = MagicMock()
         mock_route1.info.return_value = "Route 1 Info"
@@ -53,7 +49,7 @@ class TestViewAllRoutes_Should(unittest.TestCase):
         mock_route2.info.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
 
     def test_execute_propagates_errors_from_use_case(self) -> None:
-        cmd = self.make_cmd(authorized=True)
+        cmd = self.make_cmd()
         cmd._use_case.execute.side_effect = RuntimeError("db down")  # type: ignore[reportAttributeAccessIssue]
 
         with self.assertRaises(RuntimeError) as ctx:

@@ -44,7 +44,7 @@ class MainStartupTests(unittest.TestCase):
 
         main.main()
 
-        container.load_world_state_use_case.execute.assert_not_called()
+        container.state_cases.load.execute.assert_not_called()
         engine.start.assert_called_once_with()
 
     @patch("main.Engine")
@@ -80,7 +80,7 @@ class MainStartupTests(unittest.TestCase):
 
         main.main()
 
-        container.load_world_state_use_case.execute.assert_called_once_with("state.json")
+        container.state_cases.load.execute.assert_called_once_with("state.json")
         engine.start.assert_called_once_with()
 
     @patch("main.print")
@@ -117,11 +117,11 @@ class MainStartupTests(unittest.TestCase):
         build_container.return_value = container
         command_factory_cls.return_value = command_factory
         engine_cls.return_value = engine
-        container.load_world_state_use_case.execute.side_effect = WorldStateFileNotFoundError("missing")
+        container.state_cases.load.execute.side_effect = WorldStateFileNotFoundError("missing")
 
         main.main()
 
-        container.load_world_state_use_case.execute.assert_called_once_with("state.json")
+        container.state_cases.load.execute.assert_called_once_with("state.json")
         quarantine.assert_not_called()
         print_mock.assert_not_called()
         engine.start.assert_called_once_with()
@@ -163,11 +163,11 @@ class MainStartupTests(unittest.TestCase):
         command_factory_cls.return_value = command_factory
         engine_cls.return_value = engine
 
-        container.load_world_state_use_case.execute.side_effect = WorldStateCorruptionError("bad snapshot")
+        container.state_cases.load.execute.side_effect = WorldStateCorruptionError("bad snapshot")
 
         main.main()
 
-        container.load_world_state_use_case.execute.assert_called_once_with("state.json")
+        container.state_cases.load.execute.assert_called_once_with("state.json")
         logger.exception.assert_called_once_with(
             "Failed to load default world state from %r.",
             "state.json",
@@ -219,11 +219,11 @@ class MainStartupTests(unittest.TestCase):
         command_factory_cls.return_value = command_factory
         engine_cls.return_value = engine
 
-        container.load_world_state_use_case.execute.side_effect = WorldStateCorruptionError("bad snapshot")
+        container.state_cases.load.execute.side_effect = WorldStateCorruptionError("bad snapshot")
 
         main.main()
 
-        container.load_world_state_use_case.execute.assert_called_once_with("state.json")
+        container.state_cases.load.execute.assert_called_once_with("state.json")
         logger.exception.assert_called_once_with(
             "Failed to load default world state from %r.",
             "state.json",
@@ -268,7 +268,7 @@ class MainStartupTests(unittest.TestCase):
         container.autosave_enabled = True
         container.default_world_state_path = "state.json"
         build_container.return_value = container
-        container.load_world_state_use_case.execute.side_effect = RuntimeError("runtime bug")
+        container.state_cases.load.execute.side_effect = RuntimeError("runtime bug")
 
         with self.assertRaises(RuntimeError):
             main.main()
@@ -312,7 +312,7 @@ class MainStartupTests(unittest.TestCase):
         main.main()
 
         exists.assert_not_called()
-        container.load_world_state_use_case.execute.assert_not_called()
+        container.state_cases.load.execute.assert_not_called()
         engine.start.assert_called_once_with()
 
 
@@ -383,14 +383,14 @@ class QuarantineCorruptWorldStateTests(unittest.TestCase):
         container.autosave_enabled = True
         container.default_world_state_path = "state.json"
         build_container.return_value = container
-        container.load_world_state_use_case.execute.side_effect = WorldStateRuntimeSwapError(
+        container.state_cases.load.execute.side_effect = WorldStateRuntimeSwapError(
             "Failed to replace runtime world state."
         )
 
         with self.assertRaises(WorldStateRuntimeSwapError):
             main.main()
 
-        container.load_world_state_use_case.execute.assert_called_once_with("state.json")
+        container.state_cases.load.execute.assert_called_once_with("state.json")
         quarantine.assert_not_called()
         print_mock.assert_not_called()
         command_factory_cls.assert_not_called()

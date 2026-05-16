@@ -8,19 +8,23 @@ from src.application.results.assign_packages_to_route_result import (
     PackageAssignmentError,
     PackageAssignmentSuccess,
 )
+from src.application.services.authorization_service import AuthorizationService, requires
+from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.entities.delivery_route import DeliveryRoute
+from src.domain.enums.auth import Permission
 from src.ports.output.package_repository import PackageRepositoryPort
 from src.ports.output.route_repository import RouteRepositoryPort
 
 
-class AssignPackagesToRouteUseCase:
+class AssignPackagesToRouteUseCase(AuthorizedUseCase[AssignPackagesToRouteResult]):
     """Assign one or more packages to a route."""
 
     def __init__(
         self,
         routes: RouteRepositoryPort,
         packages: PackageRepositoryPort,
+        authz: AuthorizationService,
         clock: Callable[[], datetime] = datetime.now,
     ) -> None:
         """Initialize assignment dependencies.
@@ -28,12 +32,15 @@ class AssignPackagesToRouteUseCase:
         Args:
             routes: Repository used to fetch the target route.
             packages: Repository used to fetch requested packages.
+            authz: Service used for authorization checks.
             clock: Clock provider for assignment-time validation.
         """
+        super().__init__(authz)
         self._routes = routes
         self._packages = packages
         self._clock = clock
 
+    @requires(Permission.ROUTE_ASSIGN_PACKAGE)
     def execute(self, route_id: int, package_ids: list[int]) -> AssignPackagesToRouteResult:
         """Assign packages to the requested route.
 

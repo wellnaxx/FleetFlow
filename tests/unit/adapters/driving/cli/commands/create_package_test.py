@@ -6,27 +6,31 @@ from src.adapters.driving.cli.commands.create_package import CreatePackage
 
 
 class CreatePackage_Tests(unittest.TestCase):
-    def make_cmd(self, params: list[str], *, authorized: bool = True) -> CreatePackage:
+    def make_cmd(self, params: list[str]) -> CreatePackage:
         cmd = CreatePackage.__new__(CreatePackage)
         cmd._params = params  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-
-        cmd._authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._authz.has.return_value = authorized  # type: ignore[reportAttributeAccessIssue]
-
         return cmd
 
     def test_mutates_state_true(self) -> None:
         self.assertTrue(CreatePackage.mutates_state)
 
-    def test_execute_without_permission_raises(self) -> None:
-        cmd = self.make_cmd(["A1", "B2", "12.5", "Alice"], authorized=False)
+    def test_execute_propagates_permission_errors_from_use_case(self) -> None:
+        cmd = self.make_cmd(["A1", "B2", "12.5", "Alice"])
+        cmd._use_case.execute.side_effect = PermissionError("Missing permission: PACKAGE_CREATE")  # type: ignore[reportAttributeAccessIssue]
 
         with self.assertRaises(PermissionError) as ctx:
             cmd.execute()
 
         self.assertIn("PACKAGE_CREATE", str(ctx.exception))
-        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
+            start="A1",
+            end="B2",
+            weight=12.5,
+            name="Alice",
+            email="",
+            phone="",
+        )
 
     @patch("src.adapters.driving.cli.commands.create_package.validate_params_count")
     @patch("src.adapters.driving.cli.commands.create_package.try_parse_float")
@@ -36,7 +40,7 @@ class CreatePackage_Tests(unittest.TestCase):
         mock_validate: MagicMock,
     ) -> None:
         mock_parse_float.side_effect = float
-        cmd = self.make_cmd(["A1", "B2", "12.5", "Alice"], authorized=True)
+        cmd = self.make_cmd(["A1", "B2", "12.5", "Alice"])
 
         pkg = SimpleNamespace(package_id=123, customer=SimpleNamespace(customer_id=55))
         cmd._use_case.execute.return_value = pkg  # type: ignore[reportAttributeAccessIssue]
@@ -63,7 +67,7 @@ class CreatePackage_Tests(unittest.TestCase):
         mock_validate: MagicMock,
     ) -> None:
         mock_parse_float.return_value = 7.0
-        cmd = self.make_cmd(["S1", "E9", "7", "Bob", "bob@ex.com", "0412345678"], authorized=True)
+        cmd = self.make_cmd(["S1", "E9", "7", "Bob", "bob@ex.com", "0412345678"])
 
         pkg = SimpleNamespace(package_id=999, customer=SimpleNamespace(customer_id=1))
         cmd._use_case.execute.return_value = pkg  # type: ignore[reportAttributeAccessIssue]
@@ -90,7 +94,7 @@ class CreatePackage_Tests(unittest.TestCase):
         mock_validate: MagicMock,
     ) -> None:
         mock_parse_float.side_effect = ValueError("not a number")
-        cmd = self.make_cmd(["A1", "B2", "x", "Alice"], authorized=True)
+        cmd = self.make_cmd(["A1", "B2", "x", "Alice"])
 
         with self.assertRaises(ValueError) as ctx:
             cmd.execute()
@@ -106,7 +110,7 @@ class CreatePackage_Tests(unittest.TestCase):
         mock_validate: MagicMock,
     ) -> None:
         mock_parse_float.return_value = 2.5
-        cmd = self.make_cmd(["A1", "B2", "2.5", "Alice"], authorized=True)
+        cmd = self.make_cmd(["A1", "B2", "2.5", "Alice"])
         cmd._use_case.execute.side_effect = RuntimeError("db error")  # type: ignore[reportAttributeAccessIssue]
 
         with self.assertRaises(RuntimeError) as ctx:
@@ -131,7 +135,7 @@ class CreatePackage_Tests(unittest.TestCase):
     ) -> None:
         mock_parse_float.return_value = 1.0
         params = ["S", "E", "1", "N"]
-        cmd = self.make_cmd(params, authorized=True)
+        cmd = self.make_cmd(params)
         pkg = SimpleNamespace(package_id=1, customer=SimpleNamespace(customer_id=1))
         cmd._use_case.execute.return_value = pkg  # type: ignore[reportAttributeAccessIssue]
 
@@ -147,7 +151,7 @@ class CreatePackage_Tests(unittest.TestCase):
         mock_validate: MagicMock,
     ) -> None:
         mock_parse_float.return_value = 4.2
-        cmd = self.make_cmd(["S", "E", "4.2", "Name"], authorized=True)
+        cmd = self.make_cmd(["S", "E", "4.2", "Name"])
         pkg = SimpleNamespace(package_id=5, customer=SimpleNamespace(customer_id=6))
         cmd._use_case.execute.return_value = pkg  # type: ignore[reportAttributeAccessIssue]
 

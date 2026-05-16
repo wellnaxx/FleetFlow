@@ -14,25 +14,21 @@ def _parse_int(value: str) -> int:
 
 
 class AssignPackageToRoute_Should(unittest.TestCase):
-    def make_cmd(self, params: list[str], *, authorized: bool = True) -> AssignPackagesToRoute:
+    def make_cmd(self, params: list[str]) -> AssignPackagesToRoute:
         cmd = AssignPackagesToRoute.__new__(AssignPackagesToRoute)
         cmd._params = tuple(params)  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-
-        cmd._authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._authz.has.return_value = authorized  # type: ignore[reportAttributeAccessIssue]
-
-        cmd._auth = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
-    def test_execute_without_permission_raises(self) -> None:
-        cmd = self.make_cmd(["5", "42"], authorized=False)
+    def test_execute_propagates_permission_errors_from_use_case(self) -> None:
+        cmd = self.make_cmd(["5", "42"])
+        cmd._use_case.execute.side_effect = PermissionError("Missing permission: ROUTE_ASSIGN_PACKAGE")  # type: ignore[reportAttributeAccessIssue]
 
         with self.assertRaises(PermissionError) as ctx:
             cmd.execute()
 
         self.assertIn("ROUTE_ASSIGN_PACKAGE", str(ctx.exception))
-        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_called_once_with(5, [42])  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.assign_packages_to_route.validate_params_count")
     @patch("src.adapters.driving.cli.commands.assign_packages_to_route.try_parse_int")

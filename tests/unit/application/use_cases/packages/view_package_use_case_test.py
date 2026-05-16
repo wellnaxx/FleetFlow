@@ -2,12 +2,13 @@ import unittest
 from unittest.mock import MagicMock
 
 from src.application.use_cases.packages.view_package import ViewPackageUseCase
+from tests.unit.application.use_cases.authz_helpers import manager_authz
 
 
 class ViewPackageUseCase_Should(unittest.TestCase):
     def setUp(self) -> None:
         self.mock_packages = MagicMock()
-        self.use_case = ViewPackageUseCase(self.mock_packages)
+        self.use_case = ViewPackageUseCase(self.mock_packages, manager_authz())
 
     def test_returns_package_when_found(self) -> None:
         package = MagicMock()

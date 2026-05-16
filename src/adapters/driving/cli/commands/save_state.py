@@ -2,9 +2,7 @@
 
 from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
 from src.adapters.driving.cli.commands.validation_helpers import validate_params_count
-from src.application.services.authorization_service import requires
 from src.application.use_cases.state.save_world import SaveWorldStateUseCase
-from src.domain.enums.auth import Permission
 
 
 class SaveState(BaseCommand[SaveWorldStateUseCase]):
@@ -16,13 +14,8 @@ class SaveState(BaseCommand[SaveWorldStateUseCase]):
 
     autosaves_state = False
 
-    @requires(Permission.APP_SAVE_STATE)
     def execute(self) -> str:
         """Persist the current world state to disk.
-
-        The `@requires` decorator on this command is the authorization boundary
-        for save-state operations. The underlying use case remains
-        authorization-agnostic by design.
 
         Returns:
             A success message containing the resolved save path.

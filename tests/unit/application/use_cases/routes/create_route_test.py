@@ -4,12 +4,13 @@ from unittest.mock import MagicMock, patch
 
 from src.application.use_cases.routes.create_route import CreateRouteUseCase
 from src.domain.value_objects.location_code import LocationCode
+from tests.unit.application.use_cases.authz_helpers import manager_authz
 
 
 class CreateRouteUseCase_Should(unittest.TestCase):
     def setUp(self) -> None:
         self.mock_routes = MagicMock()
-        self.use_case = CreateRouteUseCase(self.mock_routes)
+        self.use_case = CreateRouteUseCase(self.mock_routes, manager_authz())
 
     @patch("src.application.use_cases.routes.create_route.Map.is_valid_location")
     def test_creates_route_when_inputs_are_valid(

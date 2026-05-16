@@ -5,12 +5,10 @@ from src.adapters.driving.cli.commands.load_state import LoadState
 
 
 class LoadStateTests(unittest.TestCase):
-    def make_cmd(self, params: list[str] | None = None, *, authorized: bool = True) -> LoadState:
+    def make_cmd(self, params: list[str] | None = None) -> LoadState:
         cmd = LoadState.__new__(LoadState)
         cmd._params = tuple(params or [])  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._authz.has.return_value = authorized  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
     def test_mutates_state_true(self) -> None:
@@ -22,14 +20,15 @@ class LoadStateTests(unittest.TestCase):
     def test_skips_heartbeat_true(self) -> None:
         self.assertTrue(LoadState.skips_heartbeat)
 
-    def test_execute_without_permission_raises(self) -> None:
-        cmd = self.make_cmd(["state.json"], authorized=False)
+    def test_execute_propagates_permission_errors_from_use_case(self) -> None:
+        cmd = self.make_cmd(["state.json"])
+        cmd._use_case.execute.side_effect = PermissionError("Missing permission: APP_LOAD_STATE")  # type: ignore[reportAttributeAccessIssue]
 
         with self.assertRaises(PermissionError) as ctx:
             cmd.execute()
 
         self.assertIn("APP_LOAD_STATE", str(ctx.exception))
-        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_called_once_with("state.json")  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.load_state.validate_params_count")
     def test_execute_with_explicit_path_returns_formatted_message(self, mock_validate: MagicMock) -> None:

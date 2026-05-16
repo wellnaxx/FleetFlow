@@ -2,15 +2,12 @@
 
 from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
 from src.adapters.driving.cli.commands.validation_helpers import try_parse_int, validate_params_exact
-from src.application.services.authorization_service import requires
 from src.application.use_cases.packages.view_package import ViewPackageUseCase
-from src.domain.enums.auth import Permission
 
 
 class ViewPackage(BaseCommand[ViewPackageUseCase]):
     """Render one package by id."""
 
-    @requires(Permission.PACKAGE_VIEW)
     def execute(self) -> str:
         """Fetch a package and return display text.
 

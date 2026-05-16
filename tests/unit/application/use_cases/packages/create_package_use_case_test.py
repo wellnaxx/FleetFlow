@@ -7,6 +7,7 @@ from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.enums.item_status import ItemStatus
 from src.domain.value_objects.location_code import LocationCode
+from tests.unit.application.use_cases.authz_helpers import manager_authz
 
 
 def package_factory(
@@ -33,7 +34,7 @@ class CreatePackageUseCaseLayerTests(unittest.TestCase):
     def setUp(self) -> None:
         self.customers = MagicMock()
         self.packages = MagicMock()
-        self.use_case = CreatePackageUseCase(self.customers, self.packages)
+        self.use_case = CreatePackageUseCase(self.customers, self.packages, manager_authz())
 
     @patch("src.application.use_cases.packages.create_package.Map.is_valid_location", side_effect=[False])
     def test_execute_raises_for_invalid_start_location(self, mock_is_valid: MagicMock) -> None:

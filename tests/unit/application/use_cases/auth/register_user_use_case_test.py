@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 
 from src.application.use_cases.auth.register_user import RegisterUserUseCase
 from src.domain.enums.auth import Role
+from tests.unit.application.use_cases.authz_helpers import employee_authz, manager_authz
 
 
 class RegisterUserUseCase_Should(unittest.TestCase):
@@ -11,7 +12,7 @@ class RegisterUserUseCase_Should(unittest.TestCase):
         auth = MagicMock()
         record = SimpleNamespace(username="alice", role=Role.MANAGER, user_id=1)
         auth.register_user.return_value = record
-        use_case = RegisterUserUseCase(auth)
+        use_case = RegisterUserUseCase(auth, manager_authz())
 
         result = use_case.execute(
             username="alice",
@@ -31,3 +32,20 @@ class RegisterUserUseCase_Should(unittest.TestCase):
             phone_number="0412345678",
             password="TempPass123",
         )
+
+    def test_requires_admin_permission(self) -> None:
+        auth = MagicMock()
+        use_case = RegisterUserUseCase(auth, employee_authz())
+
+        with self.assertRaises(PermissionError) as ctx:
+            use_case.execute(
+                username="alice",
+                role=Role.EMPLOYEE,
+                name="Alice",
+                email="alice@example.com",
+                phone_number="0412345678",
+                password="TempPass123",
+            )
+
+        self.assertIn("ADMIN_USER", str(ctx.exception))
+        auth.register_user.assert_not_called()

@@ -1,15 +1,12 @@
 """CLI command for listing packages."""
 
 from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
-from src.application.services.authorization_service import requires
 from src.application.use_cases.packages.view_all_packages import ViewAllPackagesUseCase
-from src.domain.enums.auth import Permission
 
 
 class ViewAllPackages(BaseCommand[ViewAllPackagesUseCase]):
     """Render all packages."""
 
-    @requires(Permission.PACKAGE_VIEW_ALL)
     def execute(self) -> str:
         """Return package listing text.
 

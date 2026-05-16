@@ -7,35 +7,31 @@ from src.adapters.driving.cli.commands.create_route import CreateRoute
 
 
 class CreateRoute_Should(unittest.TestCase):
-    def make_cmd(self, params: list[str], *, authorized: bool = True) -> CreateRoute:
+    def make_cmd(self, params: list[str]) -> CreateRoute:
         cmd = CreateRoute.__new__(CreateRoute)
         cmd._params = tuple(params)  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-
-        cmd._authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._authz.has.return_value = authorized  # type: ignore[reportAttributeAccessIssue]
-
-        cmd._auth = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
     def test_mutates_state_true(self) -> None:
         self.assertTrue(CreateRoute.mutates_state)
 
-    def test_execute_without_permission_raises(self) -> None:
-        cmd = self.make_cmd(["SYD", "MEL"], authorized=False)
+    def test_execute_propagates_permission_errors_from_use_case(self) -> None:
+        cmd = self.make_cmd(["SYD", "MEL"])
+        cmd._use_case.execute.side_effect = PermissionError("Missing permission: ROUTE_CREATE")  # type: ignore[reportAttributeAccessIssue]
 
         with self.assertRaises(PermissionError) as ctx:
             cmd.execute()
 
         self.assertIn("ROUTE_CREATE", str(ctx.exception))
-        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_called_once_with(["SYD", "MEL"], None)  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.create_route.parse_departure_from_tail")
     @patch("src.adapters.driving.cli.commands.create_route.validate_params_count")
     def test_success_unscheduled(self, mock_validate: MagicMock, mock_parse: MagicMock) -> None:
         locs = ["SYD", "MEL", "ADL"]
         mock_parse.return_value = (locs, None)
-        cmd = self.make_cmd(["SYD", "MEL", "ADL"], authorized=True)
+        cmd = self.make_cmd(["SYD", "MEL", "ADL"])
 
         route = SimpleNamespace(route_id=42, total_distance_km=1365)
         cmd._use_case.execute.return_value = route  # type: ignore[reportAttributeAccessIssue]
@@ -56,7 +52,7 @@ class CreateRoute_Should(unittest.TestCase):
         locs = ["SYD", "MEL"]
         departure = datetime(2025, 10, 12, 6, 0)
         mock_parse.return_value = (locs, departure)
-        cmd = self.make_cmd(["SYD", "MEL", "2025-10-12", "06:00"], authorized=True)
+        cmd = self.make_cmd(["SYD", "MEL", "2025-10-12", "06:00"])
 
         route = SimpleNamespace(route_id=7, total_distance_km=878)
         cmd._use_case.execute.return_value = route  # type: ignore[reportAttributeAccessIssue]
@@ -76,7 +72,7 @@ class CreateRoute_Should(unittest.TestCase):
     def test_message_joins_locations_correctly(self, mock_validate: MagicMock, mock_parse: MagicMock) -> None:
         locs = ["A", "B", "C", "D"]
         mock_parse.return_value = (locs, None)
-        cmd = self.make_cmd(locs, authorized=True)
+        cmd = self.make_cmd(locs)
 
         cmd._use_case.execute.return_value = SimpleNamespace(route_id=1, total_distance_km=10)  # type: ignore[reportAttributeAccessIssue]
 
@@ -86,7 +82,7 @@ class CreateRoute_Should(unittest.TestCase):
 
     @patch("src.adapters.driving.cli.commands.create_route.parse_departure_from_tail")
     def test_param_count_error_bubbles_and_stops(self, mock_parse: MagicMock) -> None:
-        cmd = self.make_cmd(["ONLYONE"], authorized=True)
+        cmd = self.make_cmd(["ONLYONE"])
 
         with (
             patch(
@@ -109,7 +105,7 @@ class CreateRoute_Should(unittest.TestCase):
         loc_tokens = ["X1", "Y2"]
         dep = datetime(2030, 1, 2, 3, 4)
         mock_parse.return_value = (loc_tokens, dep)
-        cmd = self.make_cmd(["X1", "Y2", "2030-01-02", "03:04"], authorized=True)
+        cmd = self.make_cmd(["X1", "Y2", "2030-01-02", "03:04"])
 
         cmd._use_case.execute.return_value = SimpleNamespace(route_id=9, total_distance_km=123)  # type: ignore[reportAttributeAccessIssue]
 
@@ -123,7 +119,7 @@ class CreateRoute_Should(unittest.TestCase):
     @patch("src.adapters.driving.cli.commands.create_route.validate_params_count")
     def test_downstream_error_propagates(self, mock_validate: MagicMock, mock_parse: MagicMock) -> None:
         mock_parse.return_value = (["SYD", "MEL"], None)
-        cmd = self.make_cmd(["SYD", "MEL"], authorized=True)
+        cmd = self.make_cmd(["SYD", "MEL"])
         cmd._use_case.execute.side_effect = RuntimeError("db failure")  # type: ignore[reportAttributeAccessIssue]
 
         with self.assertRaises(RuntimeError) as ctx:

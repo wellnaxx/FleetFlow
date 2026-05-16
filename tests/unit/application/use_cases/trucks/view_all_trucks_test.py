@@ -2,12 +2,13 @@ import unittest
 from unittest.mock import MagicMock
 
 from src.application.use_cases.trucks.view_all_trucks import ViewAllTrucksUseCase
+from tests.unit.application.use_cases.authz_helpers import manager_authz
 
 
 class ViewAllTrucksUseCase_Should(unittest.TestCase):
     def setUp(self) -> None:
         self.mock_vehicles = MagicMock()
-        self.use_case = ViewAllTrucksUseCase(self.mock_vehicles)
+        self.use_case = ViewAllTrucksUseCase(self.mock_vehicles, manager_authz())
 
     def test_returns_all_trucks_from_vehicle_manager(self) -> None:
         trucks = [MagicMock(), MagicMock()]

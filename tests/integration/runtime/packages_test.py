@@ -9,6 +9,7 @@ from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.enums.item_status import ItemStatus
 from src.domain.value_objects.contact_info import ContactInfo
 from src.domain.value_objects.location_code import LocationCode
+from tests.unit.application.use_cases.authz_helpers import manager_authz
 
 
 class RuntimePackageRemovalIntegrationTests(unittest.TestCase):
@@ -40,7 +41,7 @@ class RuntimePackageRemovalIntegrationTests(unittest.TestCase):
             route.assign_package(package)
             package_repo.add(package)
 
-        removed = RemovePackageUseCase(package_repo).execute(package.package_id)
+        removed = RemovePackageUseCase(package_repo, manager_authz()).execute(package.package_id)
 
         self.assertIs(removed, package)
         self.assertIsNone(package_repo.get_by_id(package.package_id))

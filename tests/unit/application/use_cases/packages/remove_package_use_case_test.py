@@ -2,12 +2,13 @@ import unittest
 from unittest.mock import MagicMock
 
 from src.application.use_cases.packages.remove_package import RemovePackageUseCase
+from tests.unit.application.use_cases.authz_helpers import manager_authz
 
 
 class RemovePackageUseCase_Should(unittest.TestCase):
     def setUp(self) -> None:
         self.mock_packages = MagicMock()
-        self.use_case = RemovePackageUseCase(self.mock_packages)
+        self.use_case = RemovePackageUseCase(self.mock_packages, manager_authz())
 
     def test_raises_when_package_not_found(self) -> None:
         self.mock_packages.get_by_id.return_value = None

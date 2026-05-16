@@ -2,12 +2,13 @@ import unittest
 from unittest.mock import MagicMock
 
 from src.application.use_cases.routes.view_route import ViewRouteUseCase
+from tests.unit.application.use_cases.authz_helpers import manager_authz
 
 
 class ViewRouteUseCase_Should(unittest.TestCase):
     def setUp(self) -> None:
         self.mock_routes = MagicMock()
-        self.use_case = ViewRouteUseCase(self.mock_routes)
+        self.use_case = ViewRouteUseCase(self.mock_routes, manager_authz())
 
     def test_returns_route_when_found(self) -> None:
         route = MagicMock()

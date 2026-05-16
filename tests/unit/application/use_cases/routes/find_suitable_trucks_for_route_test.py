@@ -2,13 +2,14 @@ import unittest
 from unittest.mock import MagicMock
 
 from src.application.use_cases.routes.find_suitable_trucks_for_route import FindSuitableTrucksForRouteUseCase
+from tests.unit.application.use_cases.authz_helpers import manager_authz
 
 
 class FindSuitableTrucksForRouteUseCase_Should(unittest.TestCase):
     def setUp(self) -> None:
         self.mock_routes = MagicMock()
         self.mock_vehicles = MagicMock()
-        self.use_case = FindSuitableTrucksForRouteUseCase(self.mock_routes, self.mock_vehicles)
+        self.use_case = FindSuitableTrucksForRouteUseCase(self.mock_routes, self.mock_vehicles, manager_authz())
 
     def test_raises_when_route_not_found(self) -> None:
         self.mock_routes.get_by_id.return_value = None

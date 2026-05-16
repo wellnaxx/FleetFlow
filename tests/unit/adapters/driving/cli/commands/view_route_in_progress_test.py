@@ -7,15 +7,10 @@ from src.adapters.driving.cli.commands.view_routes_in_progress import ViewRoutes
 
 
 class ViewRoutesInProgress_Should(unittest.TestCase):
-    def make_cmd(self, *, authorized: bool = True) -> ViewRoutesInProgress:
+    def make_cmd(self) -> ViewRoutesInProgress:
         cmd = ViewRoutesInProgress.__new__(ViewRoutesInProgress)
         cmd._params = ()  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-
-        cmd._authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._authz.has.return_value = authorized  # type: ignore[reportAttributeAccessIssue]
-
-        cmd._auth = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
     def _mk_route(self, text: str) -> MagicMock:
@@ -23,21 +18,22 @@ class ViewRoutesInProgress_Should(unittest.TestCase):
         r.info.return_value = text
         return r
 
-    def test_execute_without_permission_raises(self) -> None:
-        cmd = self.make_cmd(authorized=False)
+    def test_execute_propagates_permission_errors_from_use_case(self) -> None:
+        cmd = self.make_cmd()
+        cmd._use_case.execute.side_effect = PermissionError("Missing permission: ROUTE_VIEW_IN_PROGRESS")  # type: ignore[reportAttributeAccessIssue]
 
         with self.assertRaises(PermissionError) as ctx:
             cmd.execute()
 
         self.assertIn("ROUTE_VIEW_IN_PROGRESS", str(ctx.exception))
-        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_called_once()  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.view_routes_in_progress.datetime")
     def test_no_routes_returns_friendly_message(self, mock_dt: MagicMock) -> None:
         fixed_now = datetime(2025, 9, 27, 10, 0, 0)
         mock_dt.now.return_value = fixed_now
 
-        cmd = self.make_cmd(authorized=True)
+        cmd = self.make_cmd()
         cmd._use_case.execute.return_value = []  # type: ignore[reportAttributeAccessIssue]
 
         out = cmd.execute()
@@ -50,7 +46,7 @@ class ViewRoutesInProgress_Should(unittest.TestCase):
         fixed_now = datetime(2025, 9, 27, 11, 30)
         mock_dt.now.return_value = fixed_now
 
-        cmd = self.make_cmd(authorized=True)
+        cmd = self.make_cmd()
 
         route1 = self._mk_route("Route 7: SYD → MEL")
         pos1 = SimpleNamespace(kind="IN_TRANSIT", from_city="SYD", to_city="MEL", next_eta="2025-10-12 06:00")
@@ -81,7 +77,7 @@ class ViewRoutesInProgress_Should(unittest.TestCase):
     @patch("src.adapters.driving.cli.commands.view_routes_in_progress.datetime")
     def test_unknown_pos_kind_includes_only_route_info_and_blank_line(self, mock_dt: MagicMock) -> None:
         mock_dt.now.return_value = datetime(2025, 9, 27, 12, 0)
-        cmd = self.make_cmd(authorized=True)
+        cmd = self.make_cmd()
 
         route = self._mk_route("Route 1: A → B")
         pos = SimpleNamespace(kind="SOMETHING_ELSE")
@@ -97,7 +93,7 @@ class ViewRoutesInProgress_Should(unittest.TestCase):
     @patch("src.adapters.driving.cli.commands.view_routes_in_progress.datetime")
     def test_multiple_entries_have_blank_separators(self, mock_dt: MagicMock) -> None:
         mock_dt.now.return_value = datetime(2025, 9, 27, 13, 0)
-        cmd = self.make_cmd(authorized=True)
+        cmd = self.make_cmd()
 
         r1 = self._mk_route("R1")
         p1 = SimpleNamespace(kind="AT_STOP", stop_city="X")
@@ -116,7 +112,7 @@ class ViewRoutesInProgress_Should(unittest.TestCase):
         fixed_now = datetime(2025, 9, 27, 14, 0)
         mock_dt.now.return_value = fixed_now
 
-        cmd = self.make_cmd(authorized=True)
+        cmd = self.make_cmd()
         cmd._use_case.execute.side_effect = RuntimeError("db down")  # type: ignore[reportAttributeAccessIssue]
 
         with self.assertRaises(RuntimeError) as ctx:

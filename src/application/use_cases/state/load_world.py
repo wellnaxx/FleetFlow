@@ -1,31 +1,33 @@
 """Use case for loading persisted world state into runtime."""
 
+from src.application.services.authorization_service import AuthorizationService, requires
+from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
+from src.domain.enums.auth import Permission
 from src.ports.output.world_state_gateway import WorldStateGatewayPort
 from src.ports.output.world_state_persistence import WorldStatePersistencePort
 
 
-class LoadWorldStateUseCase:
-    """Load persisted world state into the active runtime.
-
-    Authorization is intentionally enforced by the driving adapter command
-    boundary, not inside this use case. Any caller outside that boundary is
-    responsible for applying authorization before invoking it.
-    """
+class LoadWorldStateUseCase(AuthorizedUseCase[str]):
+    """Load persisted world state into the active runtime."""
 
     def __init__(
         self,
         world_state_gateway: WorldStateGatewayPort,
         persistence: WorldStatePersistencePort,
+        authz: AuthorizationService,
     ) -> None:
         """Initialize load dependencies.
 
         Args:
             world_state_gateway: Runtime gateway used to apply loaded snapshots.
             persistence: Persistence adapter used to read snapshots from disk.
+            authz: Service used for authorization checks.
         """
+        super().__init__(authz)
         self._world_state_gateway = world_state_gateway
         self._persistence = persistence
 
+    @requires(Permission.APP_LOAD_STATE)
     def execute(self, path: str) -> str:
         """Read persisted state and replace runtime state with a reconciled snapshot.
 

@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 from src.application.use_cases.routes.find_suitable_routes_for_package import (
     FindSuitableRoutesForPackageUseCase,
 )
+from tests.unit.application.use_cases.authz_helpers import manager_authz
 
 
 class FindSuitableRoutesForPackageUseCase_Should(unittest.TestCase):
@@ -16,6 +17,7 @@ class FindSuitableRoutesForPackageUseCase_Should(unittest.TestCase):
         self.use_case = FindSuitableRoutesForPackageUseCase(
             self.mock_routes,
             self.mock_packages,
+            manager_authz(),
             clock=lambda: self.now,
         )
 

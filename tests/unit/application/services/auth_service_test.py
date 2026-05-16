@@ -32,7 +32,7 @@ class AuthService_Should(unittest.TestCase):
         hash_password.return_value = "HASHED!"
 
         svc.register_user(
-            username="user1",
+            username="  User1  ",
             role=SimpleNamespace(value="EMPLOYEE"),  # type: ignore[reportArgumentType]
             name="  Alice  ",
             email="  Alice@EX.com ",
@@ -48,6 +48,38 @@ class AuthService_Should(unittest.TestCase):
             phone_number="0412 345",
             password_hash="HASHED!",
         )
+
+    def test_register_user_rejects_blank_username(self) -> None:
+        svc, store = self.make_service()
+
+        with self.assertRaises(ValueError) as ctx:
+            svc.register_user(
+                username="  ",
+                role=SimpleNamespace(value="EMPLOYEE"),  # type: ignore[reportArgumentType]
+                name="Alice",
+                email="",
+                phone_number="",
+                password="Secret123",
+            )
+
+        self.assertIn("Username is required", str(ctx.exception))
+        store.create.assert_not_called()
+
+    def test_register_user_enforces_minimum_password_length(self) -> None:
+        svc, store = self.make_service()
+
+        with self.assertRaises(ValueError) as ctx:
+            svc.register_user(
+                username="alice",
+                role=SimpleNamespace(value="EMPLOYEE"),  # type: ignore[reportArgumentType]
+                name="Alice",
+                email="",
+                phone_number="",
+                password="short7",
+            )
+
+        self.assertIn("at least 8", str(ctx.exception))
+        store.create.assert_not_called()
 
     @patch("src.application.services.auth_service.Employee")
     @patch("src.application.services.auth_service.Manager")

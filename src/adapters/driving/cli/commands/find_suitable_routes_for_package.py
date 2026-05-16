@@ -2,17 +2,14 @@
 
 from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
 from src.adapters.driving.cli.commands.validation_helpers import try_parse_int, validate_params_exact
-from src.application.services.authorization_service import requires_all
 from src.application.use_cases.routes.find_suitable_routes_for_package import (
     FindSuitableRoutesForPackageUseCase,
 )
-from src.domain.enums.auth import Permission
 
 
 class FindSuitableRoutesForPackage(BaseCommand[FindSuitableRoutesForPackageUseCase]):
     """Find candidate routes for the package's origin-to-destination."""
 
-    @requires_all(Permission.PACKAGE_FIND_ROUTE_FOR, Permission.PACKAGE_VIEW, Permission.ROUTE_VIEW)
     def execute(self) -> str:
         """List route candidates for a package.
 

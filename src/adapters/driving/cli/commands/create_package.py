@@ -2,9 +2,7 @@
 
 from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
 from src.adapters.driving.cli.commands.validation_helpers import try_parse_float, validate_params_count
-from src.application.services.authorization_service import requires
 from src.application.use_cases.packages.create_package import CreatePackageUseCase
-from src.domain.enums.auth import Permission
 
 
 class CreatePackage(BaseCommand[CreatePackageUseCase]):
@@ -13,7 +11,6 @@ class CreatePackage(BaseCommand[CreatePackageUseCase]):
     mutates_state = True
     autosaves_state = True
 
-    @requires(Permission.PACKAGE_CREATE)
     def execute(self) -> str:
         """Validate CLI parameters and create a package.
 

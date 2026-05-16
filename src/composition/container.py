@@ -20,7 +20,6 @@ from src.adapters.driven.persistence.memory.world_state_gateway import (
     InMemoryWorldStateGateway,
     InMemoryWorldStateRuntime,
 )
-from src.application.dto.world_state_snapshot_dto import WorldStateSnapshot
 from src.application.services.auth_service import AuthService
 from src.application.services.authorization_service import AuthorizationService
 from src.application.services.customer_service import CustomerService
@@ -58,44 +57,28 @@ from src.application.use_cases.state.advance_world_state import AdvanceWorldStat
 from src.application.use_cases.state.load_world import LoadWorldStateUseCase
 from src.application.use_cases.state.save_world import SaveWorldStateUseCase
 from src.application.use_cases.trucks.view_all_trucks import ViewAllTrucksUseCase
+from src.application.use_cases.use_case_registry import (
+    AuthUseCases,
+    CustomerUseCases,
+    PackageUseCases,
+    RouteUseCases,
+    StateUseCases,
+    TruckUseCases,
+)
 from src.composition.config import AppConfig, PersistenceBackend, get_app_config
 from src.composition.seed_fleet import seed_fleet_if_empty
 from src.domain.services.vehicle_manager import VehicleManager
 
 
-class UnsupportedWorldStateGateway:
-    """World-state gateway placeholder for backends without JSON import/export."""
-
-    def __init__(self, message: str) -> None:
-        """Initialize the unsupported gateway.
-
-        Args:
-            message: Error message raised when snapshot operations are called.
-        """
-        self._message = message
-
-    def build_snapshot(self) -> WorldStateSnapshot:
-        """Raise because this backend cannot export world-state snapshots yet.
-
-        Raises:
-            NotImplementedError: Always raised.
-        """
-        raise NotImplementedError(self._message)
-
-    def apply_snapshot(self, snapshot: WorldStateSnapshot) -> None:
-        """Raise because this backend cannot import world-state snapshots yet.
-
-        Args:
-            snapshot: Snapshot that cannot currently be applied.
-
-        Raises:
-            NotImplementedError: Always raised.
-        """
-        raise NotImplementedError(self._message)
-
-
 class Container:
     """Wire repositories, services, and use cases for the CLI application."""
+
+    auth_cases: AuthUseCases
+    customer_cases: CustomerUseCases
+    package_cases: PackageUseCases
+    route_cases: RouteUseCases
+    truck_cases: TruckUseCases
+    state_cases: StateUseCases
 
     def __init__(self, auth: AuthService, config: AppConfig | None = None) -> None:
         """Construct the application dependency graph.
@@ -132,7 +115,8 @@ class Container:
         )
 
         self._wire_world_state(config)
-        self._wire_common(auth)
+        self._wire_services(auth)
+        self._wire_use_cases()
 
     def _wire_memory(self) -> None:
         """Wire in-memory persistence implementations."""
@@ -198,62 +182,67 @@ class Container:
         self.world_state_runtime = None
         self.world_state_snapshot_service = None
 
-    def _wire_common(self, auth: AuthService) -> None:
-        """Wire services and use cases common to all persistence backends."""
+    def _wire_services(self, auth: AuthService) -> None:
+        """Wire services common to all persistence backends."""
         self.customer_service = CustomerService(self.customer_repo)
         self.auth = auth
         self.authz = AuthorizationService(auth.current_user)
-
         self.heartbeat_service = HeartbeatService(self.route_repo, self.reconciler, self.unit_of_work)
-        self.advance_world_state_use_case = AdvanceWorldStateUseCase(self.heartbeat_service)
-
-        self.save_world_state_use_case = SaveWorldStateUseCase(
-            self.world_state_gateway,
-            self.world_state_persistence,
-        )
-        self.load_world_state_use_case = LoadWorldStateUseCase(
-            self.world_state_gateway,
-            self.world_state_persistence,
-        )
         self.default_world_state_path = str(get_json_config().state_path)
 
-        self.login_use_case = LoginUseCase(self.auth)
-        self.logout_use_case = LogoutUseCase(self.auth)
-        self.who_am_i_use_case = WhoAmIUseCase(self.auth)
-        self.register_user_use_case = RegisterUserUseCase(self.auth)
-        self.change_password_use_case = ChangePasswordUseCase(self.auth)
+    def _wire_use_cases(self) -> None:
+        """Wire use cases common to all persistence backends."""
+        self.auth_cases = AuthUseCases(
+            login=LoginUseCase(self.auth),
+            logout=LogoutUseCase(self.auth),
+            who_am_i=WhoAmIUseCase(self.auth),
+            register_user=RegisterUserUseCase(self.auth, self.authz),
+            change_password=ChangePasswordUseCase(self.auth, self.authz),
+        )
 
-        self.create_package_use_case = CreatePackageUseCase(
-            self.customer_service,
-            self.package_repo,
+        self.customer_cases = CustomerUseCases(
+            view_all=ViewAllCustomersUseCase(self.customer_repo, self.authz),
         )
-        self.view_package_use_case = ViewPackageUseCase(self.package_repo)
-        self.view_all_packages_use_case = ViewAllPackagesUseCase(self.package_repo)
-        self.remove_package_use_case = RemovePackageUseCase(self.package_repo)
-        self.view_unassigned_packages_use_case = ViewUnassignedPackagesUseCase(self.package_repo)
-        self.view_all_customers_use_case = ViewAllCustomersUseCase(self.customer_repo)
-        self.view_route_use_case = ViewRouteUseCase(self.route_repo)
-        self.view_all_routes_use_case = ViewAllRoutesUseCase(self.route_repo)
-        self.view_routes_in_progress_use_case = ViewRoutesInProgressUseCase(self.route_repo)
-        self.create_route_use_case = CreateRouteUseCase(self.route_repo)
-        self.remove_route_use_case = RemoveRouteUseCase(self.route_repo, self.unit_of_work)
-        self.assign_truck_to_route_use_case = AssignTruckToRouteUseCase(
-            self.route_repo, self.vehicle_manager, self.unit_of_work
+
+        self.package_cases = PackageUseCases(
+            create=CreatePackageUseCase(self.customer_service, self.package_repo, self.authz),
+            view=ViewPackageUseCase(self.package_repo, self.authz),
+            view_all=ViewAllPackagesUseCase(self.package_repo, self.authz),
+            remove=RemovePackageUseCase(self.package_repo, self.authz),
+            view_unassigned=ViewUnassignedPackagesUseCase(self.package_repo, self.authz),
         )
-        self.find_suitable_trucks_for_route_use_case = FindSuitableTrucksForRouteUseCase(
-            self.route_repo, self.vehicle_manager
+
+        self.route_cases = RouteUseCases(
+            create=CreateRouteUseCase(self.route_repo, self.authz),
+            view=ViewRouteUseCase(self.route_repo, self.authz),
+            view_all=ViewAllRoutesUseCase(self.route_repo, self.authz),
+            view_in_progress=ViewRoutesInProgressUseCase(self.route_repo, self.authz),
+            remove=RemoveRouteUseCase(self.route_repo, self.unit_of_work, self.authz),
+            assign_packages=AssignPackagesToRouteUseCase(
+                self.route_repo, self.package_repo, self.authz, clock=datetime.now
+            ),
+            assign_truck=AssignTruckToRouteUseCase(
+                self.route_repo, self.vehicle_manager, self.unit_of_work, self.authz
+            ),
+            find_suitable_trucks=FindSuitableTrucksForRouteUseCase(
+                self.route_repo, self.vehicle_manager, self.authz
+            ),
+            find_suitable_routes=FindSuitableRoutesForPackageUseCase(
+                self.route_repo, self.package_repo, self.authz, clock=datetime.now
+            ),
         )
-        self.assign_packages_to_route_use_case = AssignPackagesToRouteUseCase(
-            self.route_repo,
-            self.package_repo,
-            clock=datetime.now,
+        self.truck_cases = TruckUseCases(
+            view_all=ViewAllTrucksUseCase(self.vehicle_manager, self.authz),
         )
-        self.find_suitable_routes_for_package_use_case = FindSuitableRoutesForPackageUseCase(
-            self.route_repo,
-            self.package_repo,
-            clock=datetime.now,
+        self.state_cases = StateUseCases(
+            advance=AdvanceWorldStateUseCase(self.heartbeat_service),
+            save=SaveWorldStateUseCase(
+                self.world_state_gateway, self.world_state_persistence, self.authz
+            ),
+            load=LoadWorldStateUseCase(
+                self.world_state_gateway, self.world_state_persistence, self.authz
+            ),
         )
-        self.view_all_trucks_use_case = ViewAllTrucksUseCase(self.vehicle_manager)
 
 
 def build_container(auth: AuthService, config: AppConfig | None = None) -> Container:

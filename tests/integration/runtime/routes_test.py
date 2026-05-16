@@ -12,6 +12,7 @@ from src.application.use_cases.routes.assign_truck_to_route import (
 from src.application.use_cases.routes.create_route import CreateRouteUseCase
 from src.application.use_cases.routes.remove_route import RemoveRouteUseCase
 from src.domain.value_objects.location_code import LocationCode
+from tests.unit.application.use_cases.authz_helpers import manager_authz
 
 
 class _FakeTruck:
@@ -51,8 +52,9 @@ class RuntimeRoutesIntegrationTests(unittest.TestCase):
         package_repo = MagicMock()
         truck_repo = MagicMock()
         unit_of_work = InMemoryUnitOfWork(route_repo, package_repo, truck_repo)
-        create_route = CreateRouteUseCase(route_repo)
-        remove_route = RemoveRouteUseCase(route_repo, unit_of_work)
+        authz = manager_authz()
+        create_route = CreateRouteUseCase(route_repo, authz)
+        remove_route = RemoveRouteUseCase(route_repo, unit_of_work, authz)
 
         route = create_route.execute([LocationCode("SYD"), LocationCode("MEL")], None)
         self.assertIs(route_repo.get_by_id(route.route_id), route)
@@ -66,7 +68,8 @@ class RuntimeRoutesIntegrationTests(unittest.TestCase):
 
     def test_assign_truck_schedules_route_and_links_truck(self) -> None:
         route_repo = InMemoryRouteRepository()
-        route = CreateRouteUseCase(route_repo).execute([LocationCode("SYD"), LocationCode("MEL")], None)
+        authz = manager_authz()
+        route = CreateRouteUseCase(route_repo, authz).execute([LocationCode("SYD"), LocationCode("MEL")], None)
 
         truck = _FakeTruck(vehicle_id=5, capacity=10.0, current_location=LocationCode("SYD"))
         vehicles = MagicMock()
@@ -75,7 +78,7 @@ class RuntimeRoutesIntegrationTests(unittest.TestCase):
         truck_repo = MagicMock()
         unit_of_work = InMemoryUnitOfWork(route_repo, MagicMock(), truck_repo)
 
-        result = AssignTruckToRouteUseCase(route_repo, vehicles, unit_of_work).execute(
+        result = AssignTruckToRouteUseCase(route_repo, vehicles, unit_of_work, authz).execute(
             5,
             route.route_id,
             now=datetime(2025, 1, 1, 10, 0),

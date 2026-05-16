@@ -10,23 +10,21 @@ from src.domain.value_objects.location_code import LocationCode
 
 
 class FindSuitableRoutesForPackage_Should(unittest.TestCase):
-    def make_cmd(self, params: list[str], *, authorized: bool = True) -> FindSuitableRoutesForPackage:
+    def make_cmd(self, params: list[str]) -> FindSuitableRoutesForPackage:
         cmd = FindSuitableRoutesForPackage.__new__(FindSuitableRoutesForPackage)
         cmd._params = tuple(params)  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._authz.has.return_value = authorized  # type: ignore[reportAttributeAccessIssue]
-        cmd._auth = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
-    def test_execute_without_permission_raises(self) -> None:
-        cmd = self.make_cmd(["77"], authorized=False)
+    def test_execute_propagates_permission_errors_from_use_case(self) -> None:
+        cmd = self.make_cmd(["77"])
+        cmd._use_case.execute.side_effect = PermissionError("Missing permission: PACKAGE_FIND_ROUTE_FOR")  # type: ignore[reportAttributeAccessIssue]
 
         with self.assertRaises(PermissionError) as ctx:
             cmd.execute()
 
         self.assertIn("PACKAGE_FIND_ROUTE_FOR", str(ctx.exception))
-        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_called_once_with(77)  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.find_suitable_routes_for_package.validate_params_exact")
     @patch("src.adapters.driving.cli.commands.find_suitable_routes_for_package.try_parse_int")

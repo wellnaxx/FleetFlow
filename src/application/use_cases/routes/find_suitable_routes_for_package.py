@@ -4,6 +4,9 @@ from collections.abc import Callable
 from datetime import datetime
 
 from src.application.results.find_suitable_packages_for_route_result import SuitableRouteForPackage
+from src.application.services.authorization_service import AuthorizationService, requires_all
+from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
+from src.domain.enums.auth import Permission
 from src.ports.output.package_repository import PackageRepositoryPort
 from src.ports.output.route_repository import RouteRepositoryPort
 
@@ -12,13 +15,14 @@ def _sort_key(item: SuitableRouteForPackage) -> tuple[bool, datetime]:
     return (item.eta is None, item.eta or datetime.max)
 
 
-class FindSuitableRoutesForPackageUseCase:
+class FindSuitableRoutesForPackageUseCase(AuthorizedUseCase[list[SuitableRouteForPackage]]):
     """Find candidate routes that can accept a package."""
 
     def __init__(
         self,
         routes: RouteRepositoryPort,
         packages: PackageRepositoryPort,
+        authz: AuthorizationService,
         clock: Callable[[], datetime] = datetime.now,
     ) -> None:
         """Initialize route-search dependencies.
@@ -26,12 +30,15 @@ class FindSuitableRoutesForPackageUseCase:
         Args:
             routes: Repository used to list candidate routes.
             packages: Repository used to fetch the target package.
+            authz: Service used for authorization checks.
             clock: Clock provider for route acceptance checks.
         """
+        super().__init__(authz)
         self._routes = routes
         self._packages = packages
         self._clock = clock
 
+    @requires_all(Permission.PACKAGE_FIND_ROUTE_FOR, Permission.PACKAGE_VIEW, Permission.ROUTE_VIEW)
     def execute(self, package_id: int) -> list[SuitableRouteForPackage]:
         """Return suitable routes for a package ordered by ETA.
 

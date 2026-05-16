@@ -4,12 +4,13 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from src.application.use_cases.routes.view_routes_in_progress import ViewRoutesInProgressUseCase
+from tests.unit.application.use_cases.authz_helpers import manager_authz
 
 
 class ViewRoutesInProgressUseCase_Should(unittest.TestCase):
     def setUp(self) -> None:
         self.mock_routes = MagicMock()
-        self.use_case = ViewRoutesInProgressUseCase(self.mock_routes)
+        self.use_case = ViewRoutesInProgressUseCase(self.mock_routes, manager_authz())
 
     def test_returns_only_in_progress_routes(self) -> None:
         now = datetime(2025, 9, 27, 12, 0)

@@ -2,20 +2,25 @@
 
 from src.application.models.user_record import UserRecord
 from src.application.services.auth_service import AuthService
-from src.domain.enums.auth import Role
+from src.application.services.authorization_service import AuthorizationService, requires
+from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
+from src.domain.enums.auth import Permission, Role
 
 
-class RegisterUserUseCase:
+class RegisterUserUseCase(AuthorizedUseCase[UserRecord]):
     """Register a new user through the auth service."""
 
-    def __init__(self, auth: AuthService) -> None:
+    def __init__(self, auth: AuthService, authz: AuthorizationService) -> None:
         """Initialize the use case.
 
         Args:
             auth: Authentication service used to create users.
+            authz: Service used for authorization checks.
         """
+        super().__init__(authz)
         self._auth = auth
 
+    @requires(Permission.ADMIN_USER)
     def execute(
         self,
         username: str,

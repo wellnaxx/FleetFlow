@@ -50,6 +50,12 @@ class AuthService:
         Raises:
             ValueError: If validation fails or the repository rejects the user.
         """
+        clean_username = username.strip().lower()
+        if not clean_username:
+            raise ValueError("Username is required.")
+        if len(password) < 8:
+            raise ValueError("Password must be at least 8 characters.")
+
         ci = ContactInfo(name=name, email=email or "", phone_number=phone_number)
         clean_name = ci.name
         clean_email = ci.email
@@ -57,7 +63,7 @@ class AuthService:
         ph = hash_password(password)
         role_value = role.value
         return self._store.create(
-            username=username,
+            username=clean_username,
             role=role_value,
             name=clean_name,
             email=clean_email,

@@ -6,28 +6,27 @@ from src.adapters.driving.cli.commands.assign_truck_to_route import AssignTruckT
 
 
 class AssignTruckToRoute_Should(unittest.TestCase):
-    def make_cmd(self, params: list[str], *, authorized: bool = True) -> AssignTruckToRoute:
+    def make_cmd(self, params: list[str]) -> AssignTruckToRoute:
         cmd = AssignTruckToRoute.__new__(AssignTruckToRoute)
         cmd._params = tuple(params)  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-
-        cmd._authz = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._authz.has.return_value = authorized  # type: ignore[reportAttributeAccessIssue]
-
-        cmd._auth = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
     def test_mutates_state_true(self) -> None:
         self.assertTrue(AssignTruckToRoute.mutates_state)
 
-    def test_execute_without_permission_raises(self) -> None:
-        cmd = self.make_cmd(["11", "22"], authorized=False)
+    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.datetime")
+    def test_execute_propagates_permission_errors_from_use_case(self, mock_dt: MagicMock) -> None:
+        fixed_now = datetime(2025, 10, 12, 6, 0)
+        mock_dt.now.return_value = fixed_now
+        cmd = self.make_cmd(["11", "22"])
+        cmd._use_case.execute.side_effect = PermissionError("Missing permission: ROUTE_ASSIGN_TRUCK")  # type: ignore[reportAttributeAccessIssue]
 
         with self.assertRaises(PermissionError) as ctx:
             cmd.execute()
 
         self.assertIn("ROUTE_ASSIGN_TRUCK", str(ctx.exception))
-        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
+        cmd._use_case.execute.assert_called_once_with(11, 22, fixed_now)  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.assign_truck_to_route.datetime")
     @patch("src.adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
@@ -42,7 +41,7 @@ class AssignTruckToRoute_Should(unittest.TestCase):
         mock_dt.now.return_value = fixed_now
         mock_parse.side_effect = [11, 22]
 
-        cmd = self.make_cmd(["11", "22"], authorized=True)
+        cmd = self.make_cmd(["11", "22"])
         cmd._use_case.execute.return_value = MagicMock(route_id=22)  # type: ignore[reportAttributeAccessIssue]
 
         result = cmd.execute()
@@ -64,7 +63,7 @@ class AssignTruckToRoute_Should(unittest.TestCase):
         mock_dt.now.return_value = datetime(2025, 10, 12, 6, 0)
         mock_parse.side_effect = [5, 7]
 
-        cmd = self.make_cmd(["5", "7"], authorized=True)
+        cmd = self.make_cmd(["5", "7"])
         cmd._use_case.execute.return_value = MagicMock(route_id=999)  # type: ignore[reportAttributeAccessIssue]
 
         result = cmd.execute()
@@ -74,7 +73,7 @@ class AssignTruckToRoute_Should(unittest.TestCase):
     @patch("src.adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
     def test_execute_raises_when_param_count_invalid(self, mock_validate: MagicMock) -> None:
         mock_validate.side_effect = ValueError("expected exactly 2 params")
-        cmd = self.make_cmd(["only_one"], authorized=True)
+        cmd = self.make_cmd(["only_one"])
 
         with self.assertRaises(ValueError) as ctx:
             cmd.execute()
@@ -90,7 +89,7 @@ class AssignTruckToRoute_Should(unittest.TestCase):
         mock_validate: MagicMock,
     ) -> None:
         mock_parse.side_effect = ValueError("not an int")
-        cmd = self.make_cmd(["truckX", "2"], authorized=True)
+        cmd = self.make_cmd(["truckX", "2"])
 
         with self.assertRaises(ValueError) as ctx:
             cmd.execute()
@@ -108,7 +107,7 @@ class AssignTruckToRoute_Should(unittest.TestCase):
         mock_validate: MagicMock,
     ) -> None:
         mock_parse.side_effect = [13, ValueError("bad route id")]
-        cmd = self.make_cmd(["13", "routeY"], authorized=True)
+        cmd = self.make_cmd(["13", "routeY"])
 
         with self.assertRaises(ValueError) as ctx:
             cmd.execute()
@@ -131,7 +130,7 @@ class AssignTruckToRoute_Should(unittest.TestCase):
         mock_dt.now.return_value = fixed_now
         mock_parse.side_effect = [3, 4]
 
-        cmd = self.make_cmd(["3", "4"], authorized=True)
+        cmd = self.make_cmd(["3", "4"])
         cmd._use_case.execute.side_effect = ValueError("precondition failed")  # type: ignore[reportAttributeAccessIssue]
 
         with self.assertRaises(ValueError) as ctx:
@@ -152,7 +151,7 @@ class AssignTruckToRoute_Should(unittest.TestCase):
         mock_dt.now.return_value = datetime(2025, 10, 12, 6, 0)
         mock_parse.side_effect = [10, 20]
 
-        cmd = self.make_cmd(["10", "20"], authorized=True)
+        cmd = self.make_cmd(["10", "20"])
         cmd._use_case.execute.return_value = MagicMock(route_id=20)  # type: ignore[reportAttributeAccessIssue]
 
         _ = cmd.execute()
@@ -172,7 +171,7 @@ class AssignTruckToRoute_Should(unittest.TestCase):
         mock_dt.now.return_value = datetime(2025, 10, 12, 6, 0)
         mock_parse.side_effect = [1, 2]
 
-        cmd = self.make_cmd(["1", "2"], authorized=True)
+        cmd = self.make_cmd(["1", "2"])
         cmd._use_case.execute.return_value = MagicMock(route_id=2)  # type: ignore[reportAttributeAccessIssue]
 
         _ = cmd.execute()

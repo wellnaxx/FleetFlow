@@ -2,9 +2,7 @@
 
 from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
 from src.adapters.driving.cli.commands.validation_helpers import validate_params_count
-from src.application.services.authorization_service import requires
 from src.application.use_cases.state.load_world import LoadWorldStateUseCase
-from src.domain.enums.auth import Permission
 
 
 class LoadState(BaseCommand[LoadWorldStateUseCase]):
@@ -14,13 +12,8 @@ class LoadState(BaseCommand[LoadWorldStateUseCase]):
     autosaves_state = False
     skips_heartbeat = True
 
-    @requires(Permission.APP_LOAD_STATE)
     def execute(self) -> str:
         """Replace runtime state from a persisted snapshot.
-
-        The `@requires` decorator on this command is the authorization boundary
-        for load-state operations. The underlying use case remains
-        authorization-agnostic by design.
 
         Returns:
             A success message containing the resolved load path.

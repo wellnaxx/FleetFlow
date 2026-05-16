@@ -5,6 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from src.application.services.authorization_service import AuthorizationService, requires
+from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
+from src.domain.enums.auth import Permission
+
 if TYPE_CHECKING:
     from datetime import datetime
 
@@ -39,7 +43,7 @@ class AssignTruckToRouteResult:
     truck_id: int
 
 
-class AssignTruckToRouteUseCase:
+class AssignTruckToRouteUseCase(AuthorizedUseCase[AssignTruckToRouteResult]):
     """Assign a truck to a route after suitability checks."""
 
     def __init__(
@@ -47,6 +51,7 @@ class AssignTruckToRouteUseCase:
         routes: RouteRepositoryPort,
         vehicle_manager: VehicleManagerPort,
         unit_of_work: UnitOfWorkPort,
+        authz: AuthorizationService,
     ) -> None:
         """Initialize assignment dependencies.
 
@@ -55,11 +60,14 @@ class AssignTruckToRouteUseCase:
             vehicle_manager: Vehicle manager used to fetch and validate trucks.
             unit_of_work: Transaction boundary used to persist route and truck
                 state together after assignment.
+            authz: Service used for authorization checks.
         """
+        super().__init__(authz)
         self._routes = routes
         self._vehicle_manager = vehicle_manager
         self._unit_of_work = unit_of_work
 
+    @requires(Permission.ROUTE_ASSIGN_TRUCK)
     def execute(self, truck_id: int, route_id: int, now: datetime) -> AssignTruckToRouteResult:
         """Assign a truck to a route.
 

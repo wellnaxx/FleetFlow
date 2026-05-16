@@ -4,9 +4,10 @@ from datetime import datetime
 
 from src.application.results.heartbeat_summary_result import HeartbeatSummary
 from src.application.services.heartbeat_service import HeartbeatService
+from src.application.use_cases.base.base_use_case import BaseUseCase
 
 
-class AdvanceWorldStateUseCase:
+class AdvanceWorldStateUseCase(BaseUseCase[HeartbeatSummary]):
     """Advance the runtime world state using the heartbeat service."""
 
     def __init__(self, heartbeat_service: HeartbeatService) -> None:

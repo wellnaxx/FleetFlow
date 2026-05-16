@@ -1,20 +1,26 @@
 """Use case for removing a package from runtime state."""
 
+from src.application.services.authorization_service import AuthorizationService, requires_all
+from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.entities.delivery_package import DeliveryPackage
+from src.domain.enums.auth import Permission
 from src.ports.output.package_repository import PackageRepositoryPort
 
 
-class RemovePackageUseCase:
+class RemovePackageUseCase(AuthorizedUseCase[DeliveryPackage]):
     """Remove a package from the repository and any assigned route."""
 
-    def __init__(self, packages: PackageRepositoryPort) -> None:
+    def __init__(self, packages: PackageRepositoryPort, authz: AuthorizationService) -> None:
         """Initialize the use case.
 
         Args:
             packages: Repository used to fetch and remove packages.
+            authz: Service used for authorization checks.
         """
+        super().__init__(authz)
         self._packages = packages
 
+    @requires_all(Permission.PACKAGE_REMOVE, Permission.PACKAGE_VIEW)
     def execute(self, package_id: int) -> DeliveryPackage:
         """Remove a package by id.
 

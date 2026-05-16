@@ -1,15 +1,12 @@
 """CLI command for listing customers."""
 
 from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
-from src.application.services.authorization_service import requires
 from src.application.use_cases.customers.view_all_customers import ViewAllCustomersUseCase
-from src.domain.enums.auth import Permission
 
 
 class ViewAllCustomers(BaseCommand[ViewAllCustomersUseCase]):
     """Render all customers."""
 
-    @requires(Permission.CUSTOMER_VIEW)
     def execute(self) -> str:
         """Return customer listing text.
 

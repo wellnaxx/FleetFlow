@@ -8,6 +8,7 @@ from src.application.dto.world_state_snapshot_dto import (
 )
 from src.application.exceptions.world_state_errors import WorldStateCorruptionError
 from src.application.use_cases.state.load_world import LoadWorldStateUseCase
+from tests.unit.application.use_cases.authz_helpers import manager_authz
 
 
 class LoadWorldStateUseCaseTests(unittest.TestCase):
@@ -25,7 +26,7 @@ class LoadWorldStateUseCaseTests(unittest.TestCase):
         persistence = MagicMock()
         persistence.read.return_value = ("/abs/state.json", snapshot)
 
-        use_case = LoadWorldStateUseCase(gateway, persistence)
+        use_case = LoadWorldStateUseCase(gateway, persistence, manager_authz())
 
         result = use_case.execute("state.json")
 
@@ -48,7 +49,7 @@ class LoadWorldStateUseCaseTests(unittest.TestCase):
         persistence.read.return_value = ("/abs/state.json", snapshot)
         gateway.apply_snapshot.side_effect = WorldStateCorruptionError("bad snapshot")
 
-        use_case = LoadWorldStateUseCase(gateway, persistence)
+        use_case = LoadWorldStateUseCase(gateway, persistence, manager_authz())
 
         with self.assertRaises(WorldStateCorruptionError):
             use_case.execute("state.json")
