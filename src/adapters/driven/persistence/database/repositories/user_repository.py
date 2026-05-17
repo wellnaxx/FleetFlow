@@ -113,7 +113,14 @@ class PostgresUserRepository:
 
         user_id = execute_insert(
             QUERIES.users.add,
-            (raw_username, role_value, contact.name, contact.email, contact.phone_number, pw_serialized),
+            (
+                raw_username,
+                role_value,
+                contact.name,
+                contact.email,
+                contact.phone_number,
+                pw_serialized,
+            ),
         )
 
         return UserRecord(
@@ -124,6 +131,7 @@ class PostgresUserRepository:
             email=contact.email,
             phone_number=contact.phone_number,
             password=pw_serialized,
+            token_version=1,
         )
 
     def update_password(self, username: str, new_hash: PasswordHash) -> None:

@@ -126,6 +126,7 @@ class JSONUserStore:
         contact = ContactInfo(name=name, email=email, phone_number=phone_number)
         password = JSONUserStore._parse_string_field(raw, "password")
         password_hash = PasswordHash.parse(password)
+        token_version = JSONUserStore._parse_token_version(raw)
 
         return UserRecord(
             user_id=user_id,
@@ -135,7 +136,18 @@ class JSONUserStore:
             email=contact.email,
             phone_number=contact.phone_number,
             password=password_hash.serialize(),
+            token_version=token_version,
         )
+
+    @staticmethod
+    def _parse_token_version(raw: dict[object, object]) -> int:
+        """Read token version, defaulting legacy persisted users to version 1."""
+        value = raw.get("token_version", 1)
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise TypeError(f"'token_version' must be int, got {type(value).__name__}")
+        if value < 1:
+            raise ValueError("'token_version' must be positive")
+        return value
 
     @staticmethod
     def _parse_string_field(raw: dict[object, object], field: str) -> str:
@@ -263,6 +275,7 @@ class JSONUserStore:
             email=ci.email,
             phone_number=ci.phone_number,
             password=pw_serialized,
+            token_version=1,
         )
 
         self._by_username[norm] = rec

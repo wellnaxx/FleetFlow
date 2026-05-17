@@ -60,8 +60,68 @@ class JSONUserStore_Load_Save_Should(unittest.TestCase):
         # case-insensitive get
         self.assertIsInstance(store.get("ALICE"), UserRecord)
         self.assertEqual(store.get("bob").user_id, 4)  # type: ignore[reportOptionalMemberAccess]
+        self.assertEqual(store.get("bob").token_version, 1)  # type: ignore[reportOptionalMemberAccess]
         # next id was restored
         self.assertEqual(store._next_id, 7)  # type: ignore[reportPrivateUsage]
+
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
+    )
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=True)
+    @patch("src.adapters.driven.persistence.json.user_store.open", new_callable=mock_open)
+    @patch("src.adapters.driven.persistence.json.user_store.json.load")
+    def test_init_loads_persisted_token_version(
+        self, jload: MagicMock, mopen: MagicMock, exists: MagicMock, resolve: MagicMock
+    ) -> None:
+        jload.return_value = {
+            "_next_id": 2,
+            "users": [
+                {
+                    "user_id": 1,
+                    "username": "alice",
+                    "role": "EMPLOYEE",
+                    "name": "Alice",
+                    "email": "",
+                    "phone_number": "",
+                    "password": PERSISTED_PASSWORD,
+                    "token_version": 4,
+                },
+            ],
+        }
+
+        store = JSONUserStore()
+
+        self.assertEqual(store.get("alice").token_version, 4)  # type: ignore[reportOptionalMemberAccess]
+
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
+    )
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=True)
+    @patch("src.adapters.driven.persistence.json.user_store.open", new_callable=mock_open)
+    @patch("src.adapters.driven.persistence.json.user_store.json.load")
+    def test_init_rejects_invalid_token_version(
+        self, jload: MagicMock, mopen: MagicMock, exists: MagicMock, resolve: MagicMock
+    ) -> None:
+        jload.return_value = {
+            "_next_id": 2,
+            "users": [
+                {
+                    "user_id": 1,
+                    "username": "alice",
+                    "role": "EMPLOYEE",
+                    "name": "Alice",
+                    "email": "",
+                    "phone_number": "",
+                    "password": PERSISTED_PASSWORD,
+                    "token_version": 0,
+                },
+            ],
+        }
+
+        with self.assertRaises(ValueError) as ctx:
+            JSONUserStore()
+
+        self.assertIn("Malformed user store JSON", str(ctx.exception))
 
     @patch(
         "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
@@ -450,6 +510,7 @@ class JSONUserStore_Create_Get_Update_Should(unittest.TestCase):
             self.assertEqual(rec.email, "alice@ex.com")
             self.assertEqual(rec.phone_number, "0412 345")
             self.assertEqual(rec.password, "SER(pw1)")
+            self.assertEqual(rec.token_version, 1)
 
             # case-insensitive get
             self.assertIs(store.get("alice"), rec)

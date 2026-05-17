@@ -14,3 +14,4 @@ class UserRecord:
     email: str
     phone_number: str
     password: str
+    token_version: int = 1

@@ -68,6 +68,7 @@ class UserRecordRow(TypedDict):
     email: str
     phone: str
     password_hash: str
+    token_version: int
 
 
 def map_customer(row: RowDict) -> Customer:
@@ -457,7 +458,7 @@ def map_user_record(row: RowDict) -> UserRecord:
     Raises:
         KeyError: If a required user column is missing.
         TypeError: If a required user column has an unexpected type.
-        ValueError: If the stored role is invalid.
+        ValueError: If the token_version is not positive.
     """
     typed = _as_user_record_row(row)
     return UserRecord(
@@ -468,6 +469,7 @@ def map_user_record(row: RowDict) -> UserRecord:
         email=typed["email"],
         phone_number=typed["phone"],
         password=typed["password_hash"],
+        token_version=typed["token_version"],
     )
 
 
@@ -483,6 +485,7 @@ def _as_user_record_row(row: RowDict) -> UserRecordRow:
     Raises:
         KeyError: If a required user column is missing.
         TypeError: If a required user column has an unexpected type.
+        ValueError: If the token_version is not positive.
     """
     user_id = row["user_id"]
     username = row["username"]
@@ -491,6 +494,7 @@ def _as_user_record_row(row: RowDict) -> UserRecordRow:
     email = row["email"]
     phone_number = row["phone"]
     password_hash = row["password_hash"]
+    token_version = row["token_version"]
 
     if not isinstance(user_id, int) or isinstance(user_id, bool):
         raise TypeError(f"user_id: expected int, got {type(user_id).__name__}")
@@ -506,6 +510,10 @@ def _as_user_record_row(row: RowDict) -> UserRecordRow:
         raise TypeError(f"phone: expected str, got {type(phone_number).__name__}")
     if not isinstance(password_hash, str):
         raise TypeError(f"password_hash: expected str, got {type(password_hash).__name__}")
+    if not isinstance(token_version, int) or isinstance(token_version, bool):
+        raise TypeError(f"token_version: expected int, got {type(token_version).__name__}")
+    if token_version < 1:
+        raise ValueError("token_version must be positive")
 
     return UserRecordRow(
         user_id=user_id,
@@ -515,4 +523,5 @@ def _as_user_record_row(row: RowDict) -> UserRecordRow:
         email=email,
         phone=phone_number,
         password_hash=password_hash,
+        token_version=token_version,
     )

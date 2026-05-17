@@ -33,6 +33,7 @@ class InMemoryUserRepository_Should(unittest.TestCase):
                 email="alice@example.com",
                 phone_number="0412345678",
                 password="SER(pw1)",
+                token_version=1,
             ),
         )
 

@@ -89,6 +89,7 @@ class InMemoryUserRepository:
             email=ci.email,
             phone_number=ci.phone_number,
             password=pw_serialized,
+            token_version=1,
         )
         self._by_username[norm] = rec
         self._next_id += 1

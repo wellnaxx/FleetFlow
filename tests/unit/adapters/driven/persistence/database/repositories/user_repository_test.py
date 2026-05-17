@@ -99,6 +99,7 @@ class PostgresUserRepository_Should(unittest.TestCase):
         self.assertEqual(user.email, "alice@example.com")
         self.assertEqual(user.phone_number, "0412345678")
         self.assertEqual(user.password, self.password_hash.serialize())
+        self.assertEqual(user.token_version, 1)
 
     @patch(f"{MODULE}.fetch_one", return_value=None)
     def test_create_rejects_blank_username(self, fetch_one_mock: MagicMock) -> None:
@@ -193,6 +194,7 @@ class PostgresUserRepository_Should(unittest.TestCase):
             "email": "",
             "phone": "",
             "password_hash": self.password_hash.serialize(),
+            "token_version": 1,
         }
 
     def _user_record(self, user_id: int = 1, username: str = "Alice") -> UserRecord:
@@ -204,4 +206,5 @@ class PostgresUserRepository_Should(unittest.TestCase):
             email="",
             phone_number="",
             password=self.password_hash.serialize(),
+            token_version=1,
         )

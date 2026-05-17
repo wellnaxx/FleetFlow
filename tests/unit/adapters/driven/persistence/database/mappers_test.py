@@ -31,6 +31,7 @@ class DatabaseMappers_Should(unittest.TestCase):
             "email": "alice@example.com",
             "phone": "0412345678",
             "password_hash": "pbkdf2_sha256$200000$salt$hash",
+            "token_version": 3,
         }
 
     def _valid_route_rows(self) -> list[RowDict]:
@@ -151,6 +152,7 @@ class DatabaseMappers_Should(unittest.TestCase):
         self.assertEqual(user.email, "alice@example.com")
         self.assertEqual(user.phone_number, "0412345678")
         self.assertEqual(user.password, "pbkdf2_sha256$200000$salt$hash")
+        self.assertEqual(user.token_version, 3)
 
     def test_map_user_record_raises_key_error_for_missing_required_column(self) -> None:
         row = self._valid_user_row()
@@ -169,6 +171,8 @@ class DatabaseMappers_Should(unittest.TestCase):
             ("email", None),
             ("phone", None),
             ("password_hash", None),
+            ("token_version", None),
+            ("token_version", True),
         ]
 
         for column, value in cases:
@@ -180,6 +184,15 @@ class DatabaseMappers_Should(unittest.TestCase):
                     map_user_record(row)
 
                 self.assertIn(f"{column}: expected", str(ctx.exception))
+
+    def test_map_user_record_raises_value_error_for_invalid_token_version(self) -> None:
+        row = self._valid_user_row()
+        row["token_version"] = 0
+
+        with self.assertRaises(ValueError) as ctx:
+            map_user_record(row)
+
+        self.assertIn("token_version must be positive", str(ctx.exception))
 
     def test_map_route_builds_route_from_ordered_stop_rows(self) -> None:
         rows = self._valid_route_rows()
