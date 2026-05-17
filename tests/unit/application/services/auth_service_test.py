@@ -122,7 +122,7 @@ class AuthService_Should(unittest.TestCase):
             email="bea@ex.com",
             phone_number="0400",
         )
-        store.get.return_value = rec
+        store.get_by_username.return_value = rec
 
         # ContactInfo returns the same values for simplicity
         ContactInfo.side_effect = lambda name, email, phone_number: SimpleNamespace(  # type: ignore[reportUnknownLambdaType]
@@ -153,7 +153,7 @@ class AuthService_Should(unittest.TestCase):
             email="a@x",
             phone_number="0412",
         )
-        store.get.return_value = rec
+        store.get_by_username.return_value = rec
         ContactInfo.side_effect = lambda name, email, phone_number: SimpleNamespace(  # type: ignore[reportUnknownLambdaType]
             name=name, email=email, phone_number=phone_number
         )
@@ -169,7 +169,7 @@ class AuthService_Should(unittest.TestCase):
         self, _parse: MagicMock, _verify: MagicMock
     ) -> None:
         svc, store = self.make_service()
-        store.get.return_value = SimpleNamespace(
+        store.get_by_username.return_value = SimpleNamespace(
             user_id=1,
             username="u",
             password="hash",
@@ -186,7 +186,7 @@ class AuthService_Should(unittest.TestCase):
 
     def test_login_unknown_user_raises(self) -> None:
         svc, store = self.make_service()
-        store.get.return_value = None
+        store.get_by_username.return_value = None
         with self.assertRaises(ValueError) as ctx:
             svc.login("nouser", "pw")
         self.assertIn("Invalid username or password.", str(ctx.exception))
@@ -209,7 +209,7 @@ class AuthService_Should(unittest.TestCase):
     ) -> None:
         svc, store = self.make_service()
         rec = SimpleNamespace(username="alice", password="OLDHASH")
-        store.get.return_value = rec
+        store.get_by_username.return_value = rec
 
         # old matches, new does NOT match old
         verify_password.side_effect = [True, False]  # [old_ok, new_same?]
@@ -224,7 +224,7 @@ class AuthService_Should(unittest.TestCase):
     @patch("src.application.services.auth_service.PasswordHash.parse", return_value=object())
     def test_change_password_unknown_user_raises(self, _parse: MagicMock, verify_password: MagicMock) -> None:
         svc, store = self.make_service()
-        store.get.return_value = None
+        store.get_by_username.return_value = None
         with self.assertRaises(ValueError) as ctx:
             svc.change_password("nope", "x", "y")
         self.assertIn("User not found.", str(ctx.exception))
@@ -234,7 +234,7 @@ class AuthService_Should(unittest.TestCase):
     @patch("src.application.services.auth_service.PasswordHash.parse", return_value=object())
     def test_change_password_old_incorrect_raises(self, _parse: MagicMock, verify_password: MagicMock) -> None:
         svc, store = self.make_service()
-        store.get.return_value = SimpleNamespace(password="HASH")
+        store.get_by_username.return_value = SimpleNamespace(password="HASH")
         verify_password.side_effect = [False]  # old password fails
         with self.assertRaises(ValueError) as ctx:
             svc.change_password("u", "bad", "New123456")
@@ -246,7 +246,7 @@ class AuthService_Should(unittest.TestCase):
         self, _parse: MagicMock, verify_password: MagicMock
     ) -> None:
         svc, store = self.make_service()
-        store.get.return_value = SimpleNamespace(password="HASH")
+        store.get_by_username.return_value = SimpleNamespace(password="HASH")
         # old ok, new matches old
         verify_password.side_effect = [True, True]
         with self.assertRaises(ValueError) as ctx:
@@ -257,7 +257,7 @@ class AuthService_Should(unittest.TestCase):
     def test_reset_password_enforces_min_length_and_saves(self, hash_password: MagicMock) -> None:
         svc, store = self.make_service()
         rec = SimpleNamespace(username="u", password="OLD")
-        store.get.return_value = rec
+        store.get_by_username.return_value = rec
         hashed = SimpleNamespace(serialize=lambda: "NEWHASH")
         hash_password.return_value = hashed
 
@@ -273,7 +273,7 @@ class AuthService_Should(unittest.TestCase):
 
     def test_reset_password_enforces_password_strength_policy(self) -> None:
         svc, store = self.make_service()
-        store.get.return_value = SimpleNamespace(username="u", password="OLD")
+        store.get_by_username.return_value = SimpleNamespace(username="u", password="OLD")
 
         with self.assertRaises(ValueError) as ctx:
             svc.reset_password("u", "NoSpecial1")
@@ -319,7 +319,7 @@ class AuthService_Should(unittest.TestCase):
 
     def test_reset_password_unknown_user_raises(self) -> None:
         svc, store = self.make_service()
-        store.get.return_value = None
+        store.get_by_username.return_value = None
         with self.assertRaises(ValueError) as ctx:
             svc.reset_password("ghost", "NewPass123")
         self.assertIn("User not found.", str(ctx.exception))
@@ -329,7 +329,7 @@ class AuthService_Should(unittest.TestCase):
         store = MagicMock()
         auth = AuthService(store)
 
-        store.get.return_value = UserRecord(
+        store.get_by_username.return_value = UserRecord(
             user_id=42,
             username="alice",
             role="MANAGER",
@@ -352,7 +352,7 @@ class AuthService_Should(unittest.TestCase):
         store = MagicMock()
         auth = AuthService(store)
 
-        store.get.return_value = UserRecord(
+        store.get_by_username.return_value = UserRecord(
             user_id=17,
             username="bob",
             role="EMPLOYEE",
@@ -374,7 +374,7 @@ class AuthService_Should(unittest.TestCase):
     def test_login_rejects_unknown_persisted_role(self, mock_verify: MagicMock) -> None:
         store = MagicMock()
         auth = AuthService(store)
-        store.get.return_value = UserRecord(
+        store.get_by_username.return_value = UserRecord(
             user_id=99,
             username="badrole",
             role="OWNER",

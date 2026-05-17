@@ -89,7 +89,7 @@ class AuthService:
         Raises:
             ValueError: If the username is unknown or the password is invalid.
         """
-        rec = self._store.get(username)
+        rec = self._store.get_by_username(username)
         if not rec:
             raise ValueError("Invalid username or password.")
         ok = verify_password(password, PasswordHash.parse(rec.password))
@@ -140,7 +140,7 @@ class AuthService:
             ValueError: If the user is missing, the old password is wrong, or
                 the new password is invalid.
         """
-        rec = self._store.get(username)
+        rec = self._store.get_by_username(username)
         if not rec:
             raise ValueError("User not found.")
         if not verify_password(old_password, PasswordHash.parse(rec.password)):
@@ -159,7 +159,7 @@ class AuthService:
         Raises:
             ValueError: If the user is missing or the password is invalid.
         """
-        rec = self._store.get(username)
+        rec = self._store.get_by_username(username)
         if not rec:
             raise ValueError("User not found.")
         self._set_password(username, new_password)

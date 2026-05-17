@@ -56,9 +56,9 @@ class InMemoryUserRepository_Should(unittest.TestCase):
     def test_get_is_whitespace_and_case_insensitive(self) -> None:
         rec = self.repo.create("Alice", "EMPLOYEE", "Alice", "", "", _ph("pw1"))  # type: ignore[reportArgumentType]
 
-        self.assertIs(self.repo.get("alice"), rec)
-        self.assertIs(self.repo.get(" ALICE "), rec)
-        self.assertIs(self.repo.get("\tAlice\n"), rec)
+        self.assertIs(self.repo.get_by_username("alice"), rec)
+        self.assertIs(self.repo.get_by_username(" ALICE "), rec)
+        self.assertIs(self.repo.get_by_username("\tAlice\n"), rec)
 
     def test_update_password_updates_only_target_user(self) -> None:
         self.repo.create("alice", "EMPLOYEE", "Alice", "", "", _ph("old1"))  # type: ignore[reportArgumentType]
@@ -66,8 +66,10 @@ class InMemoryUserRepository_Should(unittest.TestCase):
 
         self.repo.update_password("ALICE", _ph("new1"))  # type: ignore[reportArgumentType]
 
-        self.assertEqual(self.repo.get("alice").password, "SER(new1)")  # type: ignore[reportOptionalMemberAccess]
-        self.assertEqual(self.repo.get("bob").password, "SER(old2)")  # type: ignore[reportOptionalMemberAccess]
+        self.assertEqual(self.repo.get_by_username("alice").password, "SER(new1)")  # type: ignore[reportOptionalMemberAccess]
+        self.assertEqual(self.repo.get_by_username("alice").token_version, 2)  # type: ignore[reportOptionalMemberAccess]
+        self.assertEqual(self.repo.get_by_username("bob").password, "SER(old2)")  # type: ignore[reportOptionalMemberAccess]
+        self.assertEqual(self.repo.get_by_username("bob").token_version, 1)  # type: ignore[reportOptionalMemberAccess]
 
     def test_update_password_unknown_user_raises(self) -> None:
         with self.assertRaises(ValueError) as ctx:
@@ -80,7 +82,35 @@ class InMemoryUserRepository_Should(unittest.TestCase):
 
         self.repo.update_password("  ALICE  ", _ph("new"))  # type: ignore[reportArgumentType]
 
-        self.assertEqual(self.repo.get("alice").password, "SER(new)")  # type: ignore[reportOptionalMemberAccess]
+        self.assertEqual(self.repo.get_by_username("alice").password, "SER(new)")  # type: ignore[reportOptionalMemberAccess]
+        self.assertEqual(self.repo.get_by_username("alice").token_version, 2)  # type: ignore[reportOptionalMemberAccess]
+
+    def test_get_by_id_returns_matching_user_or_none(self) -> None:
+        alice = self.repo.create("alice", "EMPLOYEE", "Alice", "", "", _ph("pw1"))  # type: ignore[reportArgumentType]
+        self.repo.create("bob", "MANAGER", "Bob", "", "", _ph("pw2"))  # type: ignore[reportArgumentType]
+
+        self.assertIs(self.repo.get_by_id(alice.user_id), alice)
+        self.assertIsNone(self.repo.get_by_id(999))
+
+    def test_increment_token_version_by_id_updates_stored_record(self) -> None:
+        alice = self.repo.create("alice", "EMPLOYEE", "Alice", "", "", _ph("pw1"))  # type: ignore[reportArgumentType]
+
+        updated = self.repo.increment_token_version_by_id(alice.user_id)
+
+        self.assertEqual(updated.token_version, 2)  # type: ignore[reportOptionalMemberAccess]
+        self.assertEqual(self.repo.get_by_username("alice").token_version, 2)  # type: ignore[reportOptionalMemberAccess]
+
+    def test_increment_token_version_by_username_is_case_insensitive(self) -> None:
+        self.repo.create("Alice", "EMPLOYEE", "Alice", "", "", _ph("pw1"))  # type: ignore[reportArgumentType]
+
+        updated = self.repo.increment_token_version_by_username("  ALICE  ")
+
+        self.assertEqual(updated.token_version, 2)  # type: ignore[reportOptionalMemberAccess]
+        self.assertEqual(self.repo.get_by_username("alice").token_version, 2)  # type: ignore[reportOptionalMemberAccess]
+
+    def test_increment_token_version_returns_none_for_missing_user(self) -> None:
+        self.assertIsNone(self.repo.increment_token_version_by_id(999))
+        self.assertIsNone(self.repo.increment_token_version_by_username("ghost"))
 
     def test_list_users_returns_all_records(self) -> None:
         self.repo.create("alice", "EMPLOYEE", "Alice", "", "", _ph("pw1"))  # type: ignore[reportArgumentType]

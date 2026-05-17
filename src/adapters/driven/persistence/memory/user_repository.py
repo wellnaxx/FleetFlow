@@ -19,13 +19,14 @@ class InMemoryUserRepository:
     def __init__(self) -> None:
         """Initialize an empty repository with ids starting at one."""
         self._by_username: dict[str, UserRecord] = {}
+        self._by_id: dict[int, UserRecord] = {}
         self._next_id = 1
 
     @staticmethod
     def _normalize_username(username: str | None) -> str:
         return (username or "").strip().lower()
 
-    def get(self, username: str) -> UserRecord | None:
+    def get_by_username(self, username: str) -> UserRecord | None:
         """Fetch a persisted user by username.
 
         Args:
@@ -92,6 +93,7 @@ class InMemoryUserRepository:
             token_version=1,
         )
         self._by_username[norm] = rec
+        self._by_id[rec.user_id] = rec
         self._next_id += 1
         self.save()
         return rec
@@ -110,7 +112,13 @@ class InMemoryUserRepository:
         rec = self._by_username.get(norm)
         if rec is None:
             raise ValueError("User not found.")
-        self._by_username[norm] = replace(rec, password=new_hash.serialize())
+        updated = replace(
+            rec,
+            password=new_hash.serialize(),
+            token_version=rec.token_version + 1,
+        )
+        self._by_username[norm] = updated
+        self._by_id[updated.user_id] = updated
         self.save()
 
     def save(self) -> None:
@@ -122,7 +130,36 @@ class InMemoryUserRepository:
 
     def list_users(self) -> list[UserRecord]:
         """Return all persisted user records."""
-        return list(self._by_username.values())
+        return list(self._by_id.values())
+
+    def get_by_id(self, user_id: int) -> UserRecord | None:
+        """Return a user by their id, or `None` when absent."""
+        return self._by_id.get(user_id)
+
+    def increment_token_version_by_id(self, user_id: int) -> UserRecord | None:
+        """Increment a user's token version by id and return the updated record."""
+        user = self.get_by_id(user_id)
+        if user is None:
+            return None
+
+        return self._increment_token_version(user)
+
+    def increment_token_version_by_username(self, username: str) -> UserRecord | None:
+        """Increment a user's token version by username and return the updated record."""
+        user = self.get_by_username(username)
+        if user is None:
+            return None
+
+        return self._increment_token_version(user)
+
+    def _increment_token_version(self, user: UserRecord) -> UserRecord:
+        """Store and return a copy of the user with token_version incremented."""
+        key = self._normalize_username(user.username)
+        updated = replace(user, token_version=user.token_version + 1)
+        self._by_username[key] = updated
+        self._by_id[updated.user_id] = updated
+        self.save()
+        return updated
 
     @staticmethod
     def _normalize_role(role: object) -> str:

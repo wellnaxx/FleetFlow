@@ -27,7 +27,7 @@ class PostgresUserRepository_Should(unittest.TestCase):
         map_user_record_mock: MagicMock,
         fetch_one_mock: MagicMock,
     ) -> None:
-        user = self.repo.get("   ")
+        user = self.repo.get_by_username("   ")
 
         self.assertIsNone(user)
         fetch_one_mock.assert_not_called()
@@ -40,7 +40,7 @@ class PostgresUserRepository_Should(unittest.TestCase):
         map_user_record_mock: MagicMock,
         fetch_one_mock: MagicMock,
     ) -> None:
-        user = self.repo.get(" Alice ")
+        user = self.repo.get_by_username(" Alice ")
 
         self.assertIsNone(user)
         fetch_one_mock.assert_called_once_with(QUERIES.users.get_by_username, ("alice",))
@@ -58,7 +58,7 @@ class PostgresUserRepository_Should(unittest.TestCase):
         fetch_one_mock.return_value = row
         map_user_record_mock.return_value = expected
 
-        user = self.repo.get(" Alice ")
+        user = self.repo.get_by_username(" Alice ")
 
         self.assertIs(user, expected)
         fetch_one_mock.assert_called_once_with(QUERIES.users.get_by_username, ("alice",))
@@ -184,6 +184,105 @@ class PostgresUserRepository_Should(unittest.TestCase):
         self.assertEqual(result, users)
         fetch_all_mock.assert_called_once_with(QUERIES.users.list_all)
         self.assertEqual([call.args[0] for call in map_user_record_mock.call_args_list], rows)
+
+    @patch(f"{MODULE}.fetch_one", return_value=None)
+    @patch(f"{MODULE}.map_user_record")
+    def test_get_by_id_returns_none_when_user_is_missing(
+        self,
+        map_user_record_mock: MagicMock,
+        fetch_one_mock: MagicMock,
+    ) -> None:
+        user = self.repo.get_by_id(99)
+
+        self.assertIsNone(user)
+        fetch_one_mock.assert_called_once_with(QUERIES.users.get_by_id, (99,))
+        map_user_record_mock.assert_not_called()
+
+    @patch(f"{MODULE}.fetch_one")
+    @patch(f"{MODULE}.map_user_record")
+    def test_get_by_id_maps_existing_user(
+        self,
+        map_user_record_mock: MagicMock,
+        fetch_one_mock: MagicMock,
+    ) -> None:
+        row = self._user_row()
+        expected = self._user_record()
+        fetch_one_mock.return_value = row
+        map_user_record_mock.return_value = expected
+
+        user = self.repo.get_by_id(1)
+
+        self.assertIs(user, expected)
+        fetch_one_mock.assert_called_once_with(QUERIES.users.get_by_id, (1,))
+        map_user_record_mock.assert_called_once_with(row)
+
+    @patch(f"{MODULE}.execute_returning_one", return_value=None)
+    @patch(f"{MODULE}.map_user_record")
+    def test_increment_token_version_by_id_returns_none_when_user_is_missing(
+        self,
+        map_user_record_mock: MagicMock,
+        execute_returning_one_mock: MagicMock,
+    ) -> None:
+        user = self.repo.increment_token_version_by_id(99)
+
+        self.assertIsNone(user)
+        execute_returning_one_mock.assert_called_once_with(QUERIES.users.increment_token_version_by_id, (99,))
+        map_user_record_mock.assert_not_called()
+
+    @patch(f"{MODULE}.execute_returning_one")
+    @patch(f"{MODULE}.map_user_record")
+    def test_increment_token_version_by_id_maps_returned_user(
+        self,
+        map_user_record_mock: MagicMock,
+        execute_returning_one_mock: MagicMock,
+    ) -> None:
+        row = {**self._user_row(), "token_version": 2}
+        expected = self._user_record()
+        execute_returning_one_mock.return_value = row
+        map_user_record_mock.return_value = expected
+
+        user = self.repo.increment_token_version_by_id(1)
+
+        self.assertIs(user, expected)
+        execute_returning_one_mock.assert_called_once_with(QUERIES.users.increment_token_version_by_id, (1,))
+        map_user_record_mock.assert_called_once_with(row)
+
+    @patch(f"{MODULE}.execute_returning_one", return_value=None)
+    @patch(f"{MODULE}.map_user_record")
+    def test_increment_token_version_by_username_returns_none_when_user_is_missing(
+        self,
+        map_user_record_mock: MagicMock,
+        execute_returning_one_mock: MagicMock,
+    ) -> None:
+        user = self.repo.increment_token_version_by_username(" Alice ")
+
+        self.assertIsNone(user)
+        execute_returning_one_mock.assert_called_once_with(
+            QUERIES.users.increment_token_version_by_username,
+            ("alice",),
+        )
+        map_user_record_mock.assert_not_called()
+
+    @patch(f"{MODULE}.execute_returning_one")
+    @patch(f"{MODULE}.map_user_record")
+    def test_increment_token_version_by_username_maps_returned_user(
+        self,
+        map_user_record_mock: MagicMock,
+        execute_returning_one_mock: MagicMock,
+    ) -> None:
+        row = {**self._user_row(), "token_version": 2}
+        expected = self._user_record()
+        execute_returning_one_mock.return_value = row
+        map_user_record_mock.return_value = expected
+
+        user = self.repo.increment_token_version_by_username(" Alice ")
+
+        self.assertIs(user, expected)
+        execute_returning_one_mock.assert_called_once_with(
+            QUERIES.users.increment_token_version_by_username,
+            ("alice",),
+        )
+        map_user_record_mock.assert_called_once_with(row)
 
     def _user_row(self) -> dict[str, object]:
         return {

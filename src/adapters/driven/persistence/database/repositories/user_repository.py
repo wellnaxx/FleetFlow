@@ -1,5 +1,6 @@
 from src.adapters.driven.persistence.database.executor import (
     execute_insert,
+    execute_returning_one,
     execute_write,
     fetch_all,
     fetch_one,
@@ -50,7 +51,7 @@ class PostgresUserRepository:
         except ValueError as exc:
             raise ValueError(f"Invalid role: {role!r}") from exc
 
-    def get(self, username: str) -> UserRecord | None:
+    def get_by_username(self, username: str) -> UserRecord | None:
         """Return a user by username.
 
         Args:
@@ -69,10 +70,8 @@ class PostgresUserRepository:
             return None
 
         user_row = fetch_one(QUERIES.users.get_by_username, (normalized_username,))
-        if user_row is None:
-            return None
 
-        return map_user_record(user_row)
+        return map_user_record(user_row) if user_row is not None else None
 
     def create(
         self, username: str, role: str, name: str, email: str, phone_number: str, password_hash: PasswordHash
@@ -100,7 +99,7 @@ class PostgresUserRepository:
 
         if not normalized_username:
             raise ValueError("Username is required.")
-        if self.get(normalized_username) is not None:
+        if self.get_by_username(normalized_username) is not None:
             raise ValueError("Username already exists.")
 
         role_value = self._normalize_role(role)
@@ -149,7 +148,7 @@ class PostgresUserRepository:
             ValueError: If the user does not exist.
         """
         normalized_username = self._normalize_username(username)
-        user_record_row = self.get(normalized_username)
+        user_record_row = self.get_by_username(normalized_username)
         if user_record_row is None:
             raise ValueError(f"User with username {username} not found")
         execute_write(QUERIES.users.update_password, (new_hash.serialize(), normalized_username))
@@ -177,3 +176,56 @@ class PostgresUserRepository:
         """
         user_rows = fetch_all(QUERIES.users.list_all)
         return [map_user_record(user_row) for user_row in user_rows]
+
+    def get_by_id(self, user_id: int) -> UserRecord | None:
+        """Return a user by their database id, or `None` when absent.
+
+        Args:
+            user_id: Database ID to look up.
+
+        Returns:
+            Matching user record, or `None`.
+
+        Raises:
+            DatabaseError: If the select operation fails.
+            KeyError: If a required user column is missing.
+            TypeError: If a required user column has an unexpected type.
+        """
+        user_row = fetch_one(QUERIES.users.get_by_id, (user_id,))
+        return map_user_record(user_row) if user_row is not None else None
+
+    def increment_token_version_by_id(self, user_id: int) -> UserRecord | None:
+        """Increment a user's token version by their database id to invalidate existing tokens.
+
+        Args:
+            user_id: Database ID of the user whose token version should increment.
+
+        Returns:
+            Updated user record, or `None` if no matching user was found.
+
+        Raises:
+            DatabaseError: If the update or select operation fails.
+            KeyError: If a required user column is missing.
+            TypeError: If a required user column has an unexpected type.
+        """
+        row = execute_returning_one(QUERIES.users.increment_token_version_by_id, (user_id,))
+        return map_user_record(row) if row is not None else None
+
+    def increment_token_version_by_username(self, username: str) -> UserRecord | None:
+        """Increment a user's token version by their username to invalidate existing tokens.
+
+        Args:
+            username: Username whose token version should increment.
+
+        Returns:
+            Updated user record, or `None` if no matching user was found.
+
+        Raises:
+            DatabaseError: If the update or select operation fails.
+            KeyError: If a required user column is missing.
+            TypeError: If a required user column has an unexpected type.
+        """
+        normalized_username = self._normalize_username(username)
+
+        row = execute_returning_one(QUERIES.users.increment_token_version_by_username, (normalized_username,))
+        return map_user_record(row) if row is not None else None

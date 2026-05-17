@@ -58,9 +58,9 @@ class JSONUserStore_Load_Save_Should(unittest.TestCase):
 
         store = JSONUserStore()  # triggers _load
         # case-insensitive get
-        self.assertIsInstance(store.get("ALICE"), UserRecord)
-        self.assertEqual(store.get("bob").user_id, 4)  # type: ignore[reportOptionalMemberAccess]
-        self.assertEqual(store.get("bob").token_version, 1)  # type: ignore[reportOptionalMemberAccess]
+        self.assertIsInstance(store.get_by_username("ALICE"), UserRecord)
+        self.assertEqual(store.get_by_username("bob").user_id, 4)  # type: ignore[reportOptionalMemberAccess]
+        self.assertEqual(store.get_by_username("bob").token_version, 1)  # type: ignore[reportOptionalMemberAccess]
         # next id was restored
         self.assertEqual(store._next_id, 7)  # type: ignore[reportPrivateUsage]
 
@@ -91,7 +91,7 @@ class JSONUserStore_Load_Save_Should(unittest.TestCase):
 
         store = JSONUserStore()
 
-        self.assertEqual(store.get("alice").token_version, 4)  # type: ignore[reportOptionalMemberAccess]
+        self.assertEqual(store.get_by_username("alice").token_version, 4)  # type: ignore[reportOptionalMemberAccess]
 
     @patch(
         "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
@@ -444,9 +444,9 @@ class JSONUserStore_Load_Save_Should(unittest.TestCase):
         store = JSONUserStore()
 
         self.assertEqual(store._next_id, 10)  # type: ignore[reportPrivateUsage]
-        self.assertEqual(store.get("alice").user_id, 2)  # type: ignore[reportOptionalMemberAccess]
-        self.assertEqual(store.get("BOB").user_id, 5)  # type: ignore[reportOptionalMemberAccess]
-        self.assertEqual(store.get("charlie").user_id, 9)  # type: ignore[reportOptionalMemberAccess]
+        self.assertEqual(store.get_by_username("alice").user_id, 2)  # type: ignore[reportOptionalMemberAccess]
+        self.assertEqual(store.get_by_username("BOB").user_id, 5)  # type: ignore[reportOptionalMemberAccess]
+        self.assertEqual(store.get_by_username("charlie").user_id, 9)  # type: ignore[reportOptionalMemberAccess]
 
     @patch.object(JSONUserStore, "_atomic_write", return_value="C:/fake/users.json")
     @patch(
@@ -462,6 +462,7 @@ class JSONUserStore_Load_Save_Should(unittest.TestCase):
         u2 = UserRecord(1, "a", "EMPLOYEE", "A", "a@x", "01", "p1")
         u3 = UserRecord(2, "b", "MANAGER", "B", "b@x", "02", "p2")
         store._by_username = {"a": u2, "b": u3, "c": u1}  # type: ignore[reportAttributeAccessIssue]
+        store._by_id = {1: u2, 2: u3, 3: u1}  # type: ignore[reportAttributeAccessIssue]
         store._next_id = 4  # type: ignore[reportAttributeAccessIssue]
 
         path = store.save()
@@ -513,8 +514,8 @@ class JSONUserStore_Create_Get_Update_Should(unittest.TestCase):
             self.assertEqual(rec.token_version, 1)
 
             # case-insensitive get
-            self.assertIs(store.get("alice"), rec)
-            self.assertIs(store.get("ALICE"), rec)
+            self.assertIs(store.get_by_username("alice"), rec)
+            self.assertIs(store.get_by_username("ALICE"), rec)
 
             # ensure it persisted (save called internally via create)
             aw.assert_called()
@@ -560,11 +561,12 @@ class JSONUserStore_Create_Get_Update_Should(unittest.TestCase):
         with patch.object(JSONUserStore, "_atomic_write", return_value="C:/fake/users.json"):
             store = JSONUserStore()
             store.create("anna", "EMPLOYEE", "Anna", "", "", _ph("old"))  # type: ignore[reportArgumentType]
-            rec = store.get("Anna")
+            rec = store.get_by_username("Anna")
             self.assertEqual(rec.password, "SER(old)")  # type: ignore[reportOptionalMemberAccess]
 
             store.update_password("anna", _ph("new"))  # type: ignore[reportArgumentType]
-            self.assertEqual(store.get("ANNA").password, "SER(new)")  # type: ignore[reportOptionalMemberAccess]
+            self.assertEqual(store.get_by_username("ANNA").password, "SER(new)")  # type: ignore[reportOptionalMemberAccess]
+            self.assertEqual(store.get_by_username("ANNA").token_version, 2)  # type: ignore[reportOptionalMemberAccess]
 
             with self.assertRaises(ValueError):
                 store.update_password("ghost", _ph("x"))  # type: ignore[reportArgumentType]
@@ -579,6 +581,10 @@ class JSONUserStore_Create_Get_Update_Should(unittest.TestCase):
             "a": UserRecord(1, "a", "E", "A", "", "", "p"),
             "b": UserRecord(2, "b", "E", "B", "", "", "p"),
         }
+        store._by_id = {  # type: ignore[reportAttributeAccessIssue]
+            1: store._by_username["a"],  # type: ignore[reportAttributeAccessIssue]
+            2: store._by_username["b"],  # type: ignore[reportAttributeAccessIssue]
+        }
         users = store.list_users()
         self.assertCountEqual([u.username for u in users], ["a", "b"])
 
@@ -591,9 +597,9 @@ class JSONUserStore_Create_Get_Update_Should(unittest.TestCase):
             store = JSONUserStore()
             rec = store.create("Alice", "EMPLOYEE", "Alice", "", "", _ph("pw1"))  # type: ignore[reportArgumentType]
 
-            self.assertIs(store.get("alice"), rec)
-            self.assertIs(store.get(" ALICE "), rec)
-            self.assertIs(store.get("\tAlice\n"), rec)
+            self.assertIs(store.get_by_username("alice"), rec)
+            self.assertIs(store.get_by_username(" ALICE "), rec)
+            self.assertIs(store.get_by_username("\tAlice\n"), rec)
 
     @patch(
         "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
@@ -624,7 +630,68 @@ class JSONUserStore_Create_Get_Update_Should(unittest.TestCase):
 
             store.update_password("  ALICE  ", _ph("new"))  # type: ignore[reportArgumentType]
 
-            self.assertEqual(store.get("alice").password, "SER(new)")  # type: ignore[reportOptionalMemberAccess]
+            self.assertEqual(store.get_by_username("alice").password, "SER(new)")  # type: ignore[reportOptionalMemberAccess]
+            self.assertEqual(store.get_by_username("alice").token_version, 2)  # type: ignore[reportOptionalMemberAccess]
+
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
+    )
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
+    def test_get_by_id_returns_matching_user_or_none(self, exists: MagicMock, resolve: MagicMock) -> None:
+        with patch.object(JSONUserStore, "_atomic_write", return_value="C:/fake/users.json"):
+            store = JSONUserStore()
+            alice = store.create("alice", "EMPLOYEE", "Alice", "", "", _ph("pw1"))  # type: ignore[reportArgumentType]
+            store.create("bob", "MANAGER", "Bob", "", "", _ph("pw2"))  # type: ignore[reportArgumentType]
+
+            self.assertIs(store.get_by_id(alice.user_id), alice)
+            self.assertIsNone(store.get_by_id(999))
+
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
+    )
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
+    def test_increment_token_version_by_id_updates_and_persists(
+        self, exists: MagicMock, resolve: MagicMock
+    ) -> None:
+        with patch.object(JSONUserStore, "_atomic_write", return_value="C:/fake/users.json") as atomic_write:
+            store = JSONUserStore()
+            alice = store.create("alice", "EMPLOYEE", "Alice", "", "", _ph("pw1"))  # type: ignore[reportArgumentType]
+
+            updated = store.increment_token_version_by_id(alice.user_id)
+
+            self.assertEqual(updated.token_version, 2)  # type: ignore[reportOptionalMemberAccess]
+            self.assertEqual(store.get_by_username("alice").token_version, 2)  # type: ignore[reportOptionalMemberAccess]
+            self.assertGreaterEqual(atomic_write.call_count, 2)
+
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
+    )
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
+    def test_increment_token_version_by_username_is_case_insensitive(
+        self, exists: MagicMock, resolve: MagicMock
+    ) -> None:
+        with patch.object(JSONUserStore, "_atomic_write", return_value="C:/fake/users.json"):
+            store = JSONUserStore()
+            store.create("Alice", "EMPLOYEE", "Alice", "", "", _ph("pw1"))  # type: ignore[reportArgumentType]
+
+            updated = store.increment_token_version_by_username("  ALICE  ")
+
+            self.assertEqual(updated.token_version, 2)  # type: ignore[reportOptionalMemberAccess]
+            self.assertEqual(store.get_by_username("alice").token_version, 2)  # type: ignore[reportOptionalMemberAccess]
+
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
+    )
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
+    def test_increment_token_version_returns_none_for_missing_user(
+        self, exists: MagicMock, resolve: MagicMock
+    ) -> None:
+        with patch.object(JSONUserStore, "_atomic_write", return_value="C:/fake/users.json") as atomic_write:
+            store = JSONUserStore()
+
+            self.assertIsNone(store.increment_token_version_by_id(999))
+            self.assertIsNone(store.increment_token_version_by_username("ghost"))
+            atomic_write.assert_not_called()
 
 
 class JSONUserStore_AtomicWrite_Should(unittest.TestCase):

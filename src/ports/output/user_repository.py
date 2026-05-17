@@ -9,7 +9,7 @@ from src.application.models.user_record import UserRecord
 class UserRepositoryPort(Protocol):
     """Persist and query registered application users."""
 
-    def get(self, username: str) -> UserRecord | None:
+    def get_by_username(self, username: str) -> UserRecord | None:
         """Return a user by username, or `None` when absent.
 
         Args:
@@ -59,4 +59,37 @@ class UserRepositoryPort(Protocol):
 
     def list_users(self) -> list[UserRecord]:
         """Return all registered users."""
+        ...
+
+    def get_by_id(self, user_id: int) -> UserRecord | None:
+        """Return a user by their database id, or `None` when absent.
+
+        Args:
+            user_id: Database ID to look up.
+
+        Returns:
+            Matching user record, or `None`.
+        """
+        ...
+
+    def increment_token_version_by_id(self, user_id: int) -> UserRecord | None:
+        """Increment a user's token version by their id to invalidate existing tokens.
+
+        Args:
+            user_id: Database ID of the user whose token version should increment.
+
+        Returns:
+            Updated user record, or `None` if no matching user was found.
+        """
+        ...
+
+    def increment_token_version_by_username(self, username: str) -> UserRecord | None:
+        """Increment a user's token version by their username to invalidate existing tokens.
+
+        Args:
+            username: Username whose token version should increment.
+
+        Returns:
+            Updated user record, or `None` if no matching user was found.
+        """
         ...
