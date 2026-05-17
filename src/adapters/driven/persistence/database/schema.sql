@@ -258,7 +258,7 @@ CREATE TABLE IF NOT EXISTS public.users (
     email         VARCHAR(255) NOT NULL DEFAULT '',
     phone         VARCHAR(50)  NOT NULL DEFAULT '',
     password_hash TEXT         NOT NULL,
-    token_version INT          NOT NULL DEFAULT 1
+    token_version INT          NOT NULL DEFAULT 1 CHECK (token_version >= 1),
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_non_empty
