@@ -4,12 +4,15 @@ from typing import Any
 from unittest.mock import patch
 
 from src.adapters.driven.security.password_hasher import (
+    MIN_PASSWORD_LENGTH,
     PBKDF2_ITERATIONS,
     SALT_BYTES,
     PasswordHash,
     hash_password,
     verify_password,
 )
+
+VALID_PASSWORD = "CorrectHorse1!"
 
 
 class Crypto_Should(unittest.TestCase):
@@ -18,8 +21,8 @@ class Crypto_Should(unittest.TestCase):
 
     @patch("src.adapters.driven.security.password_hasher.os.urandom", return_value=b"SALT" * 4)  # 16 bytes
     @patch("src.adapters.driven.security.password_hasher.PBKDF2_ITERATIONS", 100)  # speed up
-    def test_hash_password_generates_expected_shape_and_min_len(self, *_: Any) -> None:
-        ph = hash_password("CorrectHorse1")
+    def test_hash_password_generates_expected_shape(self, *_: Any) -> None:
+        ph = hash_password(VALID_PASSWORD)
         self.assertEqual(ph.algo, "sha256")
         self.assertIsInstance(ph.iterations, int)
         self.assertGreaterEqual(ph.iterations, 100)
@@ -36,10 +39,10 @@ class Crypto_Should(unittest.TestCase):
     @patch("src.adapters.driven.security.password_hasher.os.urandom", return_value=b"A" * 16)
     @patch("src.adapters.driven.security.password_hasher.PBKDF2_ITERATIONS", 50)
     def test_hash_password_different_salts_produce_different_hashes(self, *_: Any) -> None:
-        ph1 = hash_password("SamePassword123")
+        ph1 = hash_password("SamePassword123!")
         # change salt:
         with patch("src.adapters.driven.security.password_hasher.os.urandom", return_value=b"B" * 16):
-            ph2 = hash_password("SamePassword123")
+            ph2 = hash_password("SamePassword123!")
         self.assertNotEqual(ph1.hash_b64, ph2.hash_b64)
         self.assertNotEqual(ph1.salt_b64, ph2.salt_b64)
 
@@ -47,11 +50,11 @@ class Crypto_Should(unittest.TestCase):
     @patch("src.adapters.driven.security.password_hasher.PBKDF2_ITERATIONS", 100)  # fast & deterministic
     def test_verify_password_true_and_false(self, *_: Any) -> None:
         # Create a stored hash with the fixed salt + small iteration count
-        ph = hash_password("Password123")
+        ph = hash_password("Password123!")
         # Correct password must verify
-        self.assertTrue(verify_password("Password123", ph))
+        self.assertTrue(verify_password("Password123!", ph))
         # Wrong password must fail (different derived key)
-        self.assertFalse(verify_password("WrongPass123", ph))
+        self.assertFalse(verify_password("WrongPass123!", ph))
 
     @patch("src.adapters.driven.security.password_hasher.hmac.compare_digest", return_value=True)
     @patch("src.adapters.driven.security.password_hasher.hashlib.pbkdf2_hmac", return_value=b"\x11" * 32)
@@ -82,11 +85,36 @@ class Crypto_Should(unittest.TestCase):
         self.assertEqual(ph2, ph)
 
     def test_generated_password_hash_parses(self) -> None:
-        ph = hash_password("CorrectHorse1")
+        ph = hash_password(VALID_PASSWORD)
 
         parsed = PasswordHash.parse(ph.serialize())
 
         self.assertEqual(parsed, ph)
+
+    def test_hash_password_rejects_passwords_that_do_not_meet_strength_policy(self) -> None:
+        cases = (
+            ("Short1!", f"at least {MIN_PASSWORD_LENGTH} characters"),
+            ("lowercase1!", "at least one uppercase letter"),
+            ("UPPERCASE1!", "at least one lowercase letter"),
+            ("NoDigits!", "at least one digit"),
+            ("NoSpecial1", "at least one special character"),
+        )
+
+        for password, expected_message in cases:
+            with self.subTest(password=password), self.assertRaises(ValueError) as ctx:
+                hash_password(password)
+
+            self.assertIn(expected_message, str(ctx.exception))
+
+    def test_hash_password_reports_all_missing_strength_requirements(self) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            hash_password("short")
+
+        error = str(ctx.exception)
+        self.assertIn(f"at least {MIN_PASSWORD_LENGTH} characters", error)
+        self.assertIn("at least one uppercase letter", error)
+        self.assertIn("at least one digit", error)
+        self.assertIn("at least one special character", error)
 
     def test_parse_malformed_raises(self) -> None:
         valid_salt = self._b64(b"X" * SALT_BYTES)

@@ -5,11 +5,13 @@ import binascii
 import hashlib
 import hmac
 import os
+import re
 from dataclasses import dataclass
 
 PBKDF2_ALGO = "sha256"
 PBKDF2_ITERATIONS = 200_000
 SALT_BYTES = 16
+MIN_PASSWORD_LENGTH = 8
 
 
 @dataclass(frozen=True)
@@ -93,12 +95,11 @@ def hash_password(plain: str) -> PasswordHash:
         Password hash ready for persistence.
 
     Raises:
-        ValueError: If the password is too short.
+        ValueError: If the password does not meet security requirements.
     """
-    if len(plain) < 8:
-        raise ValueError("Password must be at least 8 characters.")
+    validated_password = _validate_password_strength(plain)
     salt = os.urandom(SALT_BYTES)
-    dk = hashlib.pbkdf2_hmac(PBKDF2_ALGO, plain.encode("utf-8"), salt, PBKDF2_ITERATIONS)
+    dk = hashlib.pbkdf2_hmac(PBKDF2_ALGO, validated_password.encode("utf-8"), salt, PBKDF2_ITERATIONS)
     return PasswordHash(
         algo=PBKDF2_ALGO,
         iterations=PBKDF2_ITERATIONS,
@@ -120,3 +121,24 @@ def verify_password(plain: str, stored: PasswordHash) -> bool:
     salt = base64.b64decode(stored.salt_b64)
     dk2 = hashlib.pbkdf2_hmac(stored.algo, plain.encode("utf-8"), salt, stored.iterations)
     return hmac.compare_digest(base64.b64encode(dk2).decode("ascii"), stored.hash_b64)
+
+
+def _validate_password_strength(password: str) -> str:
+    """Validate password meets security requirements."""
+    errors: list[str] = []
+
+    if len(password) < MIN_PASSWORD_LENGTH:
+        errors.append(f"at least {MIN_PASSWORD_LENGTH} characters")
+    if not re.search(r"[A-Z]", password):
+        errors.append("at least one uppercase letter")
+    if not re.search(r"[a-z]", password):
+        errors.append("at least one lowercase letter")
+    if not re.search(r"\d", password):
+        errors.append("at least one digit")
+    if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+        errors.append("at least one special character")
+
+    if errors:
+        raise ValueError(", ".join(errors))
+
+    return password

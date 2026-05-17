@@ -37,7 +37,7 @@ class AuthService_Should(unittest.TestCase):
             name="  Alice  ",
             email="  Alice@EX.com ",
             phone_number=" 0412 345 ",
-            password="Secret123",
+            password="Secret123!",
         )
 
         store.create.assert_called_once_with(
@@ -59,7 +59,7 @@ class AuthService_Should(unittest.TestCase):
                 name="Alice",
                 email="",
                 phone_number="",
-                password="Secret123",
+                password="Secret123!",
             )
 
         self.assertIn("Username is required", str(ctx.exception))
@@ -79,6 +79,22 @@ class AuthService_Should(unittest.TestCase):
             )
 
         self.assertIn("at least 8", str(ctx.exception))
+        store.create.assert_not_called()
+
+    def test_register_user_enforces_password_strength_policy(self) -> None:
+        svc, store = self.make_service()
+
+        with self.assertRaises(ValueError) as ctx:
+            svc.register_user(
+                username="alice",
+                role=SimpleNamespace(value="EMPLOYEE"),  # type: ignore[reportArgumentType]
+                name="Alice",
+                email="",
+                phone_number="",
+                password="NoSpecial1",
+            )
+
+        self.assertIn("at least one special character", str(ctx.exception))
         store.create.assert_not_called()
 
     @patch("src.application.services.auth_service.Employee")
@@ -252,8 +268,18 @@ class AuthService_Should(unittest.TestCase):
         store.update_password.assert_not_called()
 
         # Long enough -> ok
-        svc.reset_password("u", "LongEnough8")
+        svc.reset_password("u", "LongEnough8!")
         store.update_password.assert_called_once_with("u", hashed)
+
+    def test_reset_password_enforces_password_strength_policy(self) -> None:
+        svc, store = self.make_service()
+        store.get.return_value = SimpleNamespace(username="u", password="OLD")
+
+        with self.assertRaises(ValueError) as ctx:
+            svc.reset_password("u", "NoSpecial1")
+
+        self.assertIn("at least one special character", str(ctx.exception))
+        store.update_password.assert_not_called()
 
     @patch("src.application.services.auth_service.hash_password")
     def test_auth_service_works_with_in_memory_repository(self, hash_password: MagicMock) -> None:
@@ -272,7 +298,7 @@ class AuthService_Should(unittest.TestCase):
             name="Alice",
             email="alice@example.com",
             phone_number="0412345678",
-            password="Secret123",
+            password="Secret123!",
         )
 
         self.assertEqual(rec.password, "HASH1")
@@ -283,12 +309,12 @@ class AuthService_Should(unittest.TestCase):
                 "src.application.services.auth_service.verify_password", side_effect=[True, True, False, True]
             ),
         ):
-            user1 = svc.login("ALICE", "Secret123")
+            user1 = svc.login("ALICE", "Secret123!")
             self.assertEqual(user1.name, "Alice")
 
-            svc.change_password("alice", "Secret123", "NewSecret123")
+            svc.change_password("alice", "Secret123!", "NewSecret123!")
 
-            user2 = svc.login("alice", "NewSecret123")
+            user2 = svc.login("alice", "NewSecret123!")
             self.assertEqual(user2.name, "Alice")
 
     def test_reset_password_unknown_user_raises(self) -> None:
