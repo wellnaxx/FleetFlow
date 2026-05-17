@@ -174,3 +174,13 @@ def execute_write(sql: SQLQuery, params: SQLParams = ()) -> int:
         affected = cursor.rowcount
         conn.commit()
         return int(affected)
+
+
+def execute_returning_one(sql: SQLQuery, params: SQLParams = ()) -> RowDict | None:
+    """Execute a write query with RETURNING and return the first row as a dict, or None."""
+    logger.debug("WRITE RETURNING (one) %s | params=%s", sql, params)
+    with _db_operation("write"), get_connection() as conn, conn.cursor() as cursor:
+        cursor.execute(_as_query(sql), params)
+        row = _cursor_to_dict(cursor, cursor.fetchone())
+        conn.commit()
+        return row
