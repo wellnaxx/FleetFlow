@@ -70,6 +70,8 @@ class UserQueries:
     list_all: str
     update_password: str
     update_role: str
+    increment_token_version_by_username: str
+    increment_token_version_by_id: str
 
 
 @dataclass(frozen=True)
@@ -191,6 +193,8 @@ class QueryRegistry:
             list_all=load_sql("users/list_all.sql"),
             update_password=load_sql("users/update_password.sql"),
             update_role=load_sql("users/update_role.sql"),
+            increment_token_version_by_username=load_sql("users/increment_token_version_by_username.sql"),
+            increment_token_version_by_id=load_sql("users/increment_token_version_by_id.sql"),
         )
 
     @cached_property
