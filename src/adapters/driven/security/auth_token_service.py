@@ -86,21 +86,20 @@ _ACCESS: Final[TokenType] = "access"
 _REFRESH: Final[TokenType] = "refresh"
 
 
-def _get_expiration_time(token_type: TokenType) -> datetime:
+def _get_expiration_time(token_type: TokenType, base_time: datetime) -> datetime:
     """Calculate the expiration datetime for the given token type."""
     config = load_jwt_config()
-    now = datetime.now(UTC)
 
     if token_type == _ACCESS:
-        return now + timedelta(minutes=config.access_token_expire_minutes)
+        return base_time + timedelta(minutes=config.access_token_expire_minutes)
 
-    return now + timedelta(days=config.refresh_token_expire_days)
+    return base_time + timedelta(days=config.refresh_token_expire_days)
 
 
 def _build_payload(data: TokenInput, token_type: TokenType) -> TokenPayload:
     """Construct a TokenPayload with standard and custom claims."""
     now = datetime.now(UTC)
-    expire = _get_expiration_time(token_type)
+    expire = _get_expiration_time(token_type, now)
 
     return TokenPayload(
         sub=str(data["user_id"]),
@@ -132,11 +131,12 @@ def create_token(data: TokenInput, token_type: TokenType = _ACCESS) -> str:
     Custom Claims:
     - type: "access" or "refresh" to prevent token confusion
     - username: User's username
-    - role: User's role (USER or ADMIN)
+    - role: User's role (EMPLOYEE or MANAGER)
+    - token_version: Integer for token revocation control
 
     Args:
         data: Dictionary containing user information.
-              Must include: user_id, username, role
+              Must include: user_id, username, role, token_version.
         token_type: Type of token to create ("access" or "refresh")
 
     Returns:
@@ -144,9 +144,10 @@ def create_token(data: TokenInput, token_type: TokenType = _ACCESS) -> str:
 
     Raises:
         ValueError: If user_id is missing from data
+        KeyError: If any required field is missing from data
 
     Example:
-        >>> token_data = {"user_id": 123, "username": "johndoe", "role": "USER"}
+        >>> token_data = {"user_id": 123, "username": "johndoe", "role": "USER", "token_version": 1}
         >>> token = create_token(token_data)
         >>> print(token)
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
@@ -241,7 +242,7 @@ def create_access_token(user_data: TokenInput) -> str:
     Convenience wrapper around create_token() for access tokens.
 
     Args:
-        user_data: Dict with user_id, username, role
+        user_data: Dict with user_id, username, role, token_version
 
     Returns:
         str: Access token
@@ -262,7 +263,7 @@ def create_refresh_token(user_data: TokenInput) -> str:
     - Add revocation mechanism
 
     Args:
-        user_data: Dict with user_id, username, role
+        user_data: Dict with user_id, username, role, token_version
 
     Returns:
         str: Refresh token

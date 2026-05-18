@@ -1,7 +1,10 @@
 import unittest
+from datetime import UTC, datetime
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import patch
 
+from src.adapters.driven.security import auth_token_service
 from src.adapters.driven.security.auth_token_service import TokenPayload, create_token
 
 
@@ -77,10 +80,38 @@ class TokenPayloadShould(unittest.TestCase):
             ),
             self.assertRaises(KeyError),
         ):
-            create_token(  # type: ignore[typeddict-item]
+            missing_role: Any = {
+                "user_id": 42,
+                "username": "alice",
+                "token_version": 1,
+            }
+            create_token(missing_role)
+
+    def test_build_payload_uses_same_base_time_for_iat_and_exp(self) -> None:
+        fixed_now = datetime(2026, 5, 18, 12, 0, 0, tzinfo=UTC)
+        with (
+            patch(
+                "src.adapters.driven.security.auth_token_service.load_jwt_config",
+                return_value=SimpleNamespace(
+                    secret="x" * 32,
+                    algorithm="HS256",
+                    access_token_expire_minutes=15,
+                    refresh_token_expire_days=7,
+                ),
+            ),
+            patch("src.adapters.driven.security.auth_token_service.datetime") as datetime_mock,
+        ):
+            datetime_mock.now.return_value = fixed_now
+
+            payload = auth_token_service._build_payload(  # type: ignore[reportPrivateUsage]
                 {
                     "user_id": 42,
                     "username": "alice",
+                    "role": "EMPLOYEE",
                     "token_version": 1,
-                }
+                },
+                "access",
             )
+
+        self.assertEqual(payload.iat, int(fixed_now.timestamp()))
+        self.assertEqual(payload.exp - payload.iat, 15 * 60)
