@@ -21,6 +21,8 @@ class CustomerQueries:
     get_by_phone: str
     list_by_name: str
     list_all: str
+    list_page: str
+    count_all: str
     remove: str
 
 
@@ -108,6 +110,8 @@ class QueryRegistry:
             get_by_phone=load_sql("customers/get_by_phone.sql"),
             list_by_name=load_sql("customers/list_by_name.sql"),
             list_all=load_sql("customers/list_all.sql"),
+            list_page=load_sql("customers/list_page.sql"),
+            count_all=load_sql("customers/count_all.sql"),
             remove=load_sql("customers/remove.sql"),
         )
 
