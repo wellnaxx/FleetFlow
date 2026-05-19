@@ -3,14 +3,12 @@ from dataclasses import dataclass
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 
-from src.adapters.driven.security.auth_token_service import TokenPayload, decode_token
+from src.adapters.driven.security.auth_token_service import TokenPayload, TokenType, decode_token
 from src.application.models.user_record import UserRecord
 from src.application.services.authorization_service import AuthorizationService
+from src.application.services.runtime_user_factory import create_runtime_user_from_record
 from src.composition.runtime import get_user_repository
-from src.domain.entities.users.employee import Employee
-from src.domain.entities.users.manager import Manager
 from src.domain.entities.users.user import User
-from src.domain.enums.auth import Role
 from src.ports.output.user_repository import UserRepositoryPort
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
@@ -26,28 +24,54 @@ class AuthenticatedPrincipal:
 
 
 def _runtime_user_from_record(record: UserRecord) -> User:
+    """Convert a UserRecord from the repository into a runtime User entity for authentication and authorization purposes.
+    
+    Args:
+        record: The UserRecord retrieved from the user repository.
+
+    Returns:
+        A User entity (Manager or Employee) corresponding to the user's role.
+    
+    Raises:
+        HTTPException: If the user's role is invalid or unsupported.
+    """  # noqa: E501
     try:
-        role = Role(record.role)
+        return create_runtime_user_from_record(record)
     except ValueError as exc:
+        detail = "Unsupported user role" if str(exc).startswith("Unsupported role:") else "Invalid user role"
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid user role",
+            detail=detail,
         ) from exc
 
-    if role is Role.MANAGER:
-        return Manager(record.user_id, record.name, record.email, record.phone_number)
-    if role is Role.EMPLOYEE:
-        return Employee(record.user_id, record.name, record.email, record.phone_number)
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Unsupported user role",
-    )
 
+def principal_from_token(
+    token: str,
+    user_repo: UserRepositoryPort,
+    *,
+    expected_type: TokenType = "access",
+) -> AuthenticatedPrincipal:
+    """Validate a JWT token, retrieve the corresponding user, and construct an AuthenticatedPrincipal.
+    
+    Args:
+        token: The JWT token to validate.
+        user_repo: The user repository to retrieve user information.
+        expected_type: The expected type of the token ("access" or "refresh").
 
-def _principal_from_token(token: str, user_repo: UserRepositoryPort) -> AuthenticatedPrincipal:
-    payload = decode_token(token, expected_type="access")
+    Returns:
+        An AuthenticatedPrincipal containing the validated user information.
+
+    Raises:
+        HTTPException: If the token is invalid, expired, or the user is not found.
+    """
+    payload = decode_token(token, expected_type=expected_type)
     if payload is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token.")
+        detail = (
+            "Invalid or expired refresh token."
+            if expected_type == "refresh"
+            else "Invalid or expired token."
+        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail)
 
     try:
         user_id = int(payload.sub)
@@ -73,16 +97,37 @@ def get_current_user(
     token: str = Depends(oauth2_scheme),
     user_repo: UserRepositoryPort = Depends(get_user_repository),
 ) -> AuthenticatedPrincipal:
-    return _principal_from_token(token, user_repo)
+    """Dependency to retrieve the currently authenticated user based on the provided JWT token.
+    
+    Args:
+        token: The JWT token provided in the Authorization header.
+        user_repo: The user repository to retrieve user information.
+
+    Returns:
+        An AuthenticatedPrincipal representing the currently authenticated user.
+
+    Raises:
+        HTTPException: If authentication fails due to an invalid token or user not found.
+    """
+    return principal_from_token(token, user_repo)
 
 
 def get_optional_user(
     token: str | None = Depends(oauth2_scheme_optional),
     user_repo: UserRepositoryPort = Depends(get_user_repository),
 ) -> AuthenticatedPrincipal | None:
+    """Dependency to optionally retrieve the currently authenticated user based on the provided JWT token.
+
+    Args:
+        token: The JWT token provided in the Authorization header, or None if not provided.
+        user_repo: The user repository to retrieve user information.
+
+    Returns:
+        An AuthenticatedPrincipal representing the currently authenticated user, or None if no valid token is provided
+    """  # noqa: E501
     if not token:
         return None
     try:
-        return _principal_from_token(token, user_repo)
+        return principal_from_token(token, user_repo)
     except HTTPException:
         return None

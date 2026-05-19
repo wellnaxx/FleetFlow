@@ -2,8 +2,7 @@
 
 from src.adapters.driven.security.password_hasher import PasswordHash, hash_password, verify_password
 from src.application.models.user_record import UserRecord
-from src.domain.entities.users.employee import Employee
-from src.domain.entities.users.manager import Manager
+from src.application.services.runtime_user_factory import create_runtime_user_from_record
 from src.domain.entities.users.user import User
 from src.domain.enums.auth import Role
 from src.domain.value_objects.contact_info import ContactInfo
@@ -89,39 +88,36 @@ class AuthService:
         Raises:
             ValueError: If the username is unknown or the password is invalid.
         """
+        rec, user = self.authenticate(username, password)
+
+        self._current_user = user
+        self.last_username = rec.username
+        return user
+
+    def authenticate(self, username: str, password: str) -> tuple[UserRecord, User]:
+        """Verify credentials and return the persisted record plus runtime user without mutating session.
+
+        Args:
+            username: Login username.
+            password: Plain-text password supplied by the user.
+
+        Returns:
+            A tuple containing the persisted user record and the hydrated runtime user entity.
+
+        Raises:
+            ValueError: If the username is unknown or the password is invalid.
+        """
         rec = self._store.get_by_username(username)
+
         if not rec:
             raise ValueError("Invalid username or password.")
+
         ok = verify_password(password, PasswordHash.parse(rec.password))
         if not ok:
             raise ValueError("Invalid username or password.")
 
-        contact = ContactInfo(name=rec.name, email=rec.email, phone_number=rec.phone_number)
-
-        try:
-            role = Role(rec.role)
-        except ValueError as exc:
-            raise ValueError(f"Invalid persisted role for user {rec.username!r}: {rec.role!r}") from exc
-
-        if role == Role.MANAGER:
-            self._current_user = Manager(
-                rec.user_id,
-                contact.name,
-                contact.email,
-                contact.phone_number,
-            )
-        elif role == Role.EMPLOYEE:
-            self._current_user = Employee(
-                rec.user_id,
-                contact.name,
-                contact.email,
-                contact.phone_number,
-            )
-        else:
-            raise ValueError(f"Unsupported role: {role}")
-
-        self.last_username = rec.username
-        return self._current_user
+        user = create_runtime_user_from_record(rec)
+        return rec, user
 
     def logout(self) -> None:
         """Clear the active authentication session."""

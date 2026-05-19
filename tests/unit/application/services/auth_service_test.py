@@ -97,22 +97,15 @@ class AuthService_Should(unittest.TestCase):
         self.assertIn("at least one special character", str(ctx.exception))
         store.create.assert_not_called()
 
-    @patch("src.application.services.auth_service.Employee")
-    @patch("src.application.services.auth_service.Manager")
     @patch("src.application.services.auth_service.verify_password", return_value=True)
     @patch("src.application.services.auth_service.PasswordHash.parse", return_value=object())
-    @patch("src.application.services.auth_service.ContactInfo")
     def test_login_success_manager_and_sets_last_username(
         self,
-        ContactInfo: MagicMock,
         _parse: MagicMock,
         _verify: MagicMock,
-        Manager: MagicMock,
-        Employee: MagicMock,
     ) -> None:
         svc, store = self.make_service()
 
-        # Return a record for a manager
         rec = SimpleNamespace(
             user_id=101,
             username="boss",
@@ -120,47 +113,42 @@ class AuthService_Should(unittest.TestCase):
             role="MANAGER",
             name="Bea",
             email="bea@ex.com",
-            phone_number="0400",
+            phone_number="0412345678",
         )
         store.get_by_username.return_value = rec
 
-        # ContactInfo returns the same values for simplicity
-        ContactInfo.side_effect = lambda name, email, phone_number: SimpleNamespace(  # type: ignore[reportUnknownLambdaType]
-            name=name, email=email, phone_number=phone_number
-        )
-
         user = svc.login("boss", "CorrectHorse")
-        # Constructed as Manager
-        Manager.assert_called_once_with(101, "Bea", "bea@ex.com", "0400")
-        self.assertEqual(svc.current_user, Manager.return_value)
-        self.assertEqual(user, Manager.return_value)
+
+        self.assertIsInstance(user, Manager)
+        self.assertEqual(user.user_id, 101)
+        self.assertEqual(user.name, "Bea")
+        self.assertEqual(user.email, "bea@ex.com")
+        self.assertEqual(user.phone_number, "0412345678")
+        self.assertEqual(svc.current_user, user)
         self.assertEqual(svc.last_username, "boss")
 
-    @patch("src.application.services.auth_service.Employee")
     @patch("src.application.services.auth_service.verify_password", return_value=True)
     @patch("src.application.services.auth_service.PasswordHash.parse", return_value=object())
-    @patch("src.application.services.auth_service.ContactInfo")
-    def test_login_success_employee(
-        self, ContactInfo: MagicMock, _parse: MagicMock, _verify: MagicMock, Employee: MagicMock
-    ) -> None:
+    def test_login_success_employee(self, _parse: MagicMock, _verify: MagicMock) -> None:
         svc, store = self.make_service()
         rec = SimpleNamespace(
             user_id=202,
             username="alice",
             password="stored-hash",
-            role="EMPLOYEE",  # anything not equal to Role.MANAGER.value becomes Employee
+            role="EMPLOYEE",
             name="Alice",
-            email="a@x",
-            phone_number="0412",
+            email="alice@example.com",
+            phone_number="0498765432",
         )
         store.get_by_username.return_value = rec
-        ContactInfo.side_effect = lambda name, email, phone_number: SimpleNamespace(  # type: ignore[reportUnknownLambdaType]
-            name=name, email=email, phone_number=phone_number
-        )
 
         user = svc.login("alice", "ok")
-        Employee.assert_called_once_with(202, "Alice", "a@x", "0412")
-        self.assertEqual(user, Employee.return_value)
+
+        self.assertIsInstance(user, Employee)
+        self.assertEqual(user.user_id, 202)
+        self.assertEqual(user.name, "Alice")
+        self.assertEqual(user.email, "alice@example.com")
+        self.assertEqual(user.phone_number, "0498765432")
         self.assertEqual(svc.last_username, "alice")
 
     @patch("src.application.services.auth_service.verify_password", return_value=False)
