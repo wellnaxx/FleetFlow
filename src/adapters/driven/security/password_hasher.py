@@ -139,6 +139,6 @@ def _validate_password_strength(password: str) -> str:
         errors.append("at least one special character")
 
     if errors:
-        raise ValueError(", ".join(errors))
+        raise ValueError("Password must contain: " + ", ".join(errors))
 
     return password
