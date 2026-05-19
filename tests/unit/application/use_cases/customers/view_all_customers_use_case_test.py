@@ -27,3 +27,36 @@ class ViewAllCustomersUseCase_Should(unittest.TestCase):
 
         self.assertEqual(result, [])
         self.mock_customers.list_all.assert_called_once_with()
+
+    def test_returns_paginated_customers(self) -> None:
+        c1 = MagicMock()
+        c2 = MagicMock()
+        self.mock_customers.list_page.return_value = [c1, c2]
+
+        result = self.use_case.execute(limit=2, offset=4)
+
+        self.assertEqual(result, [c1, c2])
+        self.mock_customers.list_page.assert_called_once_with(limit=2, offset=4)
+        self.mock_customers.list_all.assert_not_called()
+
+    def test_rejects_invalid_limit(self) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            self.use_case.execute(limit=0, offset=0)
+
+        self.assertIn("Limit", str(ctx.exception))
+        self.mock_customers.list_page.assert_not_called()
+
+    def test_rejects_invalid_offset(self) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            self.use_case.execute(limit=1, offset=-1)
+
+        self.assertIn("Offset", str(ctx.exception))
+        self.mock_customers.list_page.assert_not_called()
+
+    def test_counts_customers(self) -> None:
+        self.mock_customers.count_all.return_value = 7
+
+        result = self.use_case.count()
+
+        self.assertEqual(result, 7)
+        self.mock_customers.count_all.assert_called_once_with()

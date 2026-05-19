@@ -39,22 +39,64 @@ class CustomersRouterShould(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [
-                {
-                    "customer_id": 1,
-                    "name": "Alice Smith",
-                    "email": "alice@example.com",
-                    "phone_number": "0412345678",
-                },
-                {
-                    "customer_id": 2,
-                    "name": "Bob Jones",
-                    "email": "",
-                    "phone_number": "",
-                },
-            ],
+            {
+                "items": [
+                    {
+                        "customer_id": 1,
+                        "name": "Alice Smith",
+                        "email": "alice@example.com",
+                        "phone_number": "0412345678",
+                    },
+                    {
+                        "customer_id": 2,
+                        "name": "Bob Jones",
+                        "email": "",
+                        "phone_number": "",
+                    },
+                ],
+                "total": None,
+                "count": 2,
+                "limit": 50,
+                "offset": 0,
+            },
         )
-        use_case.execute.assert_called_once_with()
+        use_case.execute.assert_called_once_with(limit=50, offset=0)
+        use_case.count.assert_not_called()
+
+    def test_list_customers_passes_pagination_params(self) -> None:
+        use_case = MagicMock()
+        use_case.execute.return_value = [self._customer(customer_id=3, name="Carol Smith")]
+        self.app.dependency_overrides[customers_router_module.get_view_all_customers_use_case] = (
+            lambda: use_case
+        )
+
+        response = self.client.get("/customers/?limit=1&offset=2")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json()["total"])
+        self.assertEqual(response.json()["count"], 1)
+        self.assertEqual(response.json()["limit"], 1)
+        self.assertEqual(response.json()["offset"], 2)
+        use_case.execute.assert_called_once_with(limit=1, offset=2)
+        use_case.count.assert_not_called()
+
+    def test_list_customers_includes_total_when_requested(self) -> None:
+        use_case = MagicMock()
+        use_case.execute.return_value = [self._customer(customer_id=3, name="Carol Smith")]
+        use_case.count.return_value = 12
+        self.app.dependency_overrides[customers_router_module.get_view_all_customers_use_case] = (
+            lambda: use_case
+        )
+
+        response = self.client.get("/customers/?limit=1&offset=2&include_total=true")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["total"], 12)
+        self.assertEqual(response.json()["count"], 1)
+        self.assertEqual(response.json()["limit"], 1)
+        self.assertEqual(response.json()["offset"], 2)
+        use_case.execute.assert_called_once_with(limit=1, offset=2)
+        use_case.count.assert_called_once_with()
 
     def test_list_customers_returns_empty_list(self) -> None:
         use_case = MagicMock()
@@ -66,8 +108,23 @@ class CustomersRouterShould(unittest.TestCase):
         response = self.client.get("/customers/")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
-        use_case.execute.assert_called_once_with()
+        self.assertEqual(
+            response.json(),
+            {"items": [], "total": None, "count": 0, "limit": 50, "offset": 0},
+        )
+        use_case.execute.assert_called_once_with(limit=50, offset=0)
+        use_case.count.assert_not_called()
+
+    def test_list_customers_rejects_invalid_pagination_params(self) -> None:
+        use_case = MagicMock()
+        self.app.dependency_overrides[customers_router_module.get_view_all_customers_use_case] = (
+            lambda: use_case
+        )
+
+        response = self.client.get("/customers/?limit=0&offset=-1")
+
+        self.assertEqual(response.status_code, 422)
+        use_case.execute.assert_not_called()
 
     def test_list_customers_returns_forbidden_for_permission_error(self) -> None:
         use_case = MagicMock()
@@ -80,7 +137,7 @@ class CustomersRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"], "Missing permission: CUSTOMER_VIEW")
-        use_case.execute.assert_called_once_with()
+        use_case.execute.assert_called_once_with(limit=50, offset=0)
 
     def _customer(
         self,

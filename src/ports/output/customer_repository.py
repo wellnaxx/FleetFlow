@@ -75,3 +75,19 @@ class CustomerRepositoryPort(Protocol):
     def list_all(self) -> list[Customer]:
         """Return all customers."""
         ...
+
+    def list_page(self, limit: int, offset: int) -> list[Customer]:
+        """Return a limited page of customers.
+
+        Args:
+            limit: Maximum number of customers to return.
+            offset: Number of customers to skip.
+
+        Returns:
+            Customers in the requested page.
+        """
+        ...
+
+    def count_all(self) -> int:
+        """Return the total number of customers."""
+        ...

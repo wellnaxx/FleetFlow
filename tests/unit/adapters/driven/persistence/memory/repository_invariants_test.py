@@ -55,6 +55,19 @@ class InMemoryRepositoryInvariants_Should(unittest.TestCase):
         self.assertIs(repo.get_by_phone("0412345678"), alice)
         self.assertEqual(repo.list_by_name("bob"), [bob])
 
+    def test_customer_repository_lists_pages_and_counts_customers(self) -> None:
+        repo = InMemoryCustomerRepository()
+        alice = Customer(customer_id=2, contact=ContactInfo(name="Alice"))
+        bob = Customer(customer_id=1, contact=ContactInfo(name="Bob"))
+        carol = Customer(customer_id=3, contact=ContactInfo(name="Carol"))
+
+        repo.add(alice)
+        repo.add(bob)
+        repo.add(carol)
+
+        self.assertEqual([customer.customer_id for customer in repo.list_page(limit=2, offset=1)], [2, 3])
+        self.assertEqual(repo.count_all(), 3)
+
     def test_package_repository_rejects_duplicate_id(self) -> None:
         repo = InMemoryPackageRepository()
         customer = Customer(customer_id=1, contact=ContactInfo(name="Alice"))

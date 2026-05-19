@@ -21,10 +21,30 @@ class ViewAllCustomersUseCase(AuthorizedUseCase[list[Customer]]):
         self._customers = customers
 
     @requires(Permission.CUSTOMER_VIEW)
-    def execute(self) -> list[Customer]:
+    def execute(self, limit: int | None = None, offset: int = 0) -> list[Customer]:
         """Return all persisted customers.
+
+        Args:
+            limit: Optional maximum number of customers to return.
+            offset: Number of customers to skip when `limit` is provided.
 
         Returns:
             Customer entities currently stored in the repository.
+
+        Raises:
+            ValueError: If pagination arguments are invalid.
         """
-        return self._customers.list_all()
+        if limit is None:
+            return self._customers.list_all()
+
+        if limit < 1:
+            raise ValueError("Limit must be greater than zero.")
+        if offset < 0:
+            raise ValueError("Offset must be greater than or equal to zero.")
+
+        return self._customers.list_page(limit=limit, offset=offset)
+
+    @requires(Permission.CUSTOMER_VIEW)
+    def count(self) -> int:
+        """Return the total number of persisted customers."""
+        return self._customers.count_all()

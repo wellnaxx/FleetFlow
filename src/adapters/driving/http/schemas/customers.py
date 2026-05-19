@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, PositiveInt
+from pydantic import BaseModel, Field, NonNegativeInt, PositiveInt
 
 
 class CustomerResponse(BaseModel):
@@ -8,3 +8,13 @@ class CustomerResponse(BaseModel):
     name: str
     email: str = Field(description="Customer email address, or empty when not provided.")
     phone_number: str = Field(description="Customer phone number, or empty when not provided.")
+
+
+class CustomerPageResponse(BaseModel):
+    """Paginated response model for customer listings."""
+
+    items: list[CustomerResponse]
+    total: NonNegativeInt | None = None
+    count: NonNegativeInt
+    limit: PositiveInt
+    offset: NonNegativeInt

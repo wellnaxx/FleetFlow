@@ -148,6 +148,22 @@ class InMemoryCustomerRepository:
         """Return all customers ordered by id."""
         return [self._customers_by_id[customer_id] for customer_id in sorted(self._customers_by_id)]
 
+    def list_page(self, limit: int, offset: int) -> list[Customer]:
+        """Return a page of customers ordered by id.
+
+        Args:
+            limit: Maximum number of customers to return.
+            offset: Number of customers to skip.
+
+        Returns:
+            Customers in the requested page.
+        """
+        return self.list_all()[offset : offset + limit]
+
+    def count_all(self) -> int:
+        """Return the total number of customers."""
+        return len(self._customers_by_id)
+
     def replace_customers(self, customers_by_id: Mapping[int, Customer], next_id: int) -> None:
         """Replace the full customer state from a snapshot load.
 

@@ -140,3 +140,42 @@ class PostgresCustomerRepository:
         """
         customer_rows = fetch_all(QUERIES.customers.list_all)
         return [map_customer(customer_row) for customer_row in customer_rows]
+
+    def list_page(self, limit: int, offset: int) -> list[Customer]:
+        """Return a limited page of customers.
+
+        Args:
+            limit: Maximum number of customers to return.
+            offset: Number of customers to skip.
+
+        Returns:
+            Customers in the requested page.
+
+        Raises:
+            DatabaseError: If the select operation fails.
+            KeyError: If a required customer column is missing.
+            TypeError: If a required customer column has an unexpected type.
+            ValueError: If persisted contact data is invalid.
+        """
+        customer_rows = fetch_all(QUERIES.customers.list_page, (limit, offset))
+        return [map_customer(customer_row) for customer_row in customer_rows]
+
+    def count_all(self) -> int:
+        """Return the total number of customers.
+
+        Returns:
+            Total persisted customer count.
+
+        Raises:
+            DatabaseError: If the count query fails.
+            KeyError: If the count column is missing.
+            TypeError: If the count column has an unexpected type.
+        """
+        row = fetch_one(QUERIES.customers.count_all)
+        if row is None:
+            return 0
+
+        total = row["total"]
+        if not isinstance(total, int):
+            raise TypeError("Customer count must be an integer.")
+        return total
