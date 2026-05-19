@@ -7,6 +7,7 @@ from src.application.services.auth_service import AuthService
 from src.application.use_cases.auth.login import LoginUseCase
 from src.application.use_cases.auth.register_user import RegisterUserUseCase
 from src.application.use_cases.customers.view_all_customers import ViewAllCustomersUseCase
+from src.composition.container import Container
 from src.composition.runtime import get_auth_service, get_container
 
 
@@ -21,5 +22,8 @@ def get_register_user_use_case(
     return RegisterUserUseCase(auth=auth_service, authz=principal.authz)
 
 
-def get_view_all_customers_use_case() -> ViewAllCustomersUseCase:
-    return get_container().customer_cases.view_all
+def get_view_all_customers_use_case(
+    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_user)],
+    container: Annotated[Container, Depends(get_container)],
+) -> ViewAllCustomersUseCase:
+    return ViewAllCustomersUseCase(container.customer_repo, authz=principal.authz)
