@@ -56,7 +56,7 @@ class AuthService:
         if len(password) < 8:
             raise ValueError("Password must be at least 8 characters.")
 
-        ci = ContactInfo(name=name, email=email or "", phone_number=phone_number)
+        ci = ContactInfo(name=name, email=email or "", phone_number=phone_number or "")
         clean_name = ci.name
         clean_email = ci.email
         clean_phone = ci.phone_number
