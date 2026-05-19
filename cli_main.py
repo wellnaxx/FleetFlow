@@ -4,22 +4,20 @@ import os
 import sys
 from datetime import datetime
 
-from src.adapters.driven.persistence.json.user_store import JSONUserStore
 from src.adapters.driving.cli.command_factory import CommandFactory
 from src.adapters.driving.cli.engine import Engine
 from src.application.exceptions.world_state_errors import WorldStateCorruptionError, WorldStateFileNotFoundError
 from src.application.services.auth_service import AuthService
-from src.composition.container import Container, build_container
+from src.composition.container import Container
+from src.composition.runtime import get_container, get_user_repository
 from src.domain.enums.auth import Role
 from src.ports.output.user_repository import UserRepositoryPort
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_WORLD_STATE_PATH = "state.json"
-
 
 def bootstrap_admin(auth: AuthService, store: UserRepositoryPort) -> None:
-    if store.get("admin"):
+    if store.get_by_username("admin"):
         return
 
     if not sys.stdin.isatty():
@@ -98,11 +96,11 @@ def _load_default_world_state(container: Container) -> None:
 
 
 def main() -> None:
-    store = JSONUserStore("users.json")
-    auth = AuthService(store)
+    container = get_container()
+    auth = container.auth
+    store = get_user_repository()
     bootstrap_admin(auth, store)
 
-    container = build_container(auth)
     _load_default_world_state(container)
 
     cmd_factory = CommandFactory(container)

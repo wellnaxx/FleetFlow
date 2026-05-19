@@ -7,6 +7,10 @@ requires-python = ">=3.13"
 dependencies = [
     "psycopg[binary]>=3.2",
     "python-dotenv>=1.0",
+    "fastapi>=0.127,<1.0",
+    "uvicorn>=0.40,<1.0",
+    "python-jose[cryptography]>=3.5,<4.0",
+    "python-multipart>=0.0.22,<1.0",
 ]
 
 [project.optional-dependencies]
@@ -96,7 +100,7 @@ unfixable = [
     "RUF003",   # ambiguous unicode in comments
 ]
 "src/adapters/driving/cli/engine.py" = ["T201"]  # CLI app, print is intentional
-"main.py" = ["T201"] # Warnings are intentionally printed
+"cli_main.py" = ["T201"] # Warnings are intentionally printed
 
 # ── Pyright (strict) ──────────────────────────────────────────────
 [tool.pyright]
