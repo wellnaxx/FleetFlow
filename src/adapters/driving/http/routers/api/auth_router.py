@@ -119,6 +119,19 @@ def register(
     request: RegisterUserRequest,
     use_case: Annotated[RegisterUserUseCase, Depends(get_register_user_use_case)],
 ) -> CurrentUserResponse:
+    """Register a new user account.
+    
+    Args:
+        request: The registration details extracted from the request body.
+        use_case: The RegisterUserUseCase instance for executing the registration logic.
+
+    Returns:
+        A CurrentUserResponse containing details about the newly registered user.
+
+    Raises:
+        HTTPException: If registration fails due to invalid input,
+        authentication issues, or authorization issues.
+    """
     try:
         record = use_case.execute(
             username=request.username,
@@ -204,6 +217,20 @@ def reset_password(
     request: ResetUserPasswordRequest,
     use_case: Annotated[ChangePasswordUseCase, Depends(get_change_password_use_case)],
 ) -> None:
+    """Reset another user's password. This endpoint is intended for admin use.
+    
+    Args:
+        username: The username of the user whose password is to be reset.
+        request: The new password extracted from the request.
+        use_case: The ChangePasswordUseCase instance for executing the password reset.
+
+    Returns:
+        None
+
+    Raises:
+        HTTPException: If the password reset fails due to invalid input,
+        authentication issues, or authorization issues.
+    """
     try:
         use_case.execute(username=username, new_password=request.new_password)
     except PermissionError as exc:
