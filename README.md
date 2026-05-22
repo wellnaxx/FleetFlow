@@ -12,7 +12,7 @@ FleetFlow is a logistics management system for packages, delivery routes, trucks
 FleetFlow currently supports:
 
 - Interactive menu-driven operation and command-mode workflows.
-- FastAPI HTTP adapter with authentication endpoints and paginated customer listing.
+- FastAPI HTTP adapter with authentication endpoints plus paginated customer and package workflows.
 - Package creation, lookup, removal, unassigned-package listing, and route assignment.
 - Route creation, lookup, removal, in-progress tracking, package assignment, and truck assignment.
 - Truck fleet management with deterministic city dispersion.
@@ -232,10 +232,10 @@ HTTP authentication uses JWT access and refresh tokens. Tokens include the persi
 
 - Python 3.13
 
-Install the runtime packages used by the current code before running the CLI or API:
+Install the project runtime dependencies before running the CLI or API:
 
 ```bash
-python -m pip install python-dotenv "psycopg[binary]" fastapi uvicorn "python-jose[cryptography]" python-multipart
+python -m pip install -e .
 ```
 
 The default backend is in-memory plus JSON world-state persistence. To select PostgreSQL, set the required environment variables before starting the app:
@@ -250,6 +250,17 @@ DB_PASSWORD=<password>
 ```
 
 Apply `src/adapters/driven/persistence/database/schema.sql` to the database before using the PostgreSQL backend. The composition root seeds the fixed fleet if the trucks table is empty.
+
+HTTP JWT issuance requires a secret before login or refresh tokens can be created:
+
+```text
+JWT_SECRET=<at least 32 characters>
+JWT_ALGORITHM=HS256
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=15
+JWT_REFRESH_TOKEN_EXPIRE_DAYS=7
+```
+
+Only `JWT_SECRET` is required. The other JWT settings use the defaults shown above when omitted.
 
 ### Windows PowerShell
 
@@ -392,10 +403,17 @@ The FastAPI adapter currently exposes:
 
 - `POST /api/auth/login`
 - `POST /api/auth/register`
+- `POST /api/auth/change-password`
+- `POST /api/auth/users/{username}/reset-password`
 - `POST /api/auth/refresh`
 - `POST /api/auth/logout`
 - `GET /api/auth/me`
 - `GET /api/customers/`
+- `POST /api/packages`
+- `GET /api/packages`
+- `GET /api/packages/unassigned`
+- `GET /api/packages/{package_id}`
+- `DELETE /api/packages/{package_id}`
 
 Login uses OAuth2-style form data:
 
@@ -427,7 +445,16 @@ GET /api/customers/?limit=50&offset=0
 GET /api/customers/?limit=50&offset=0&include_total=true
 ```
 
-`include_total` defaults to `false` so normal list requests do not run a count query. When omitted, the response contains `"total": null`.
+Package listing uses the same pagination shape:
+
+```text
+GET /api/packages?limit=50&offset=0
+GET /api/packages?limit=50&offset=0&include_total=true
+GET /api/packages/unassigned?limit=50&offset=0
+GET /api/packages/unassigned?limit=50&offset=0&include_total=true
+```
+
+`include_total` defaults to `false` so normal list requests do not run a count query. When omitted, the response contains `"total": null`. When requested, customer and package page totals are loaded with the page from one repository operation.
 
 ## Autosave and Heartbeat
 
@@ -497,7 +524,7 @@ This would allow the current use cases to act as command handlers without rewrit
 
 ### HTTP API expansion
 
-The current FastAPI adapter covers authentication and customer listing. Remaining HTTP work includes exposing package, route, truck, world-state, and operational query workflows through request-scoped authorization dependencies.
+The current FastAPI adapter covers authentication, customer listing, and package creation/read/removal/listing workflows. Remaining HTTP work includes exposing route, truck, world-state, and operational query workflows through request-scoped authorization dependencies.
 
 ### PostgreSQL persistence adapter
 
