@@ -17,6 +17,7 @@ from src.adapters.driving.http.schemas.packages import PackageCreateRequest
 from src.adapters.driving.http.schemas.routes import RouteResponse
 from src.adapters.driving.http.schemas.state import WorldStatePathRequest
 from src.adapters.driving.http.schemas.trucks import TruckResponse
+from src.domain.enums.auth import Role
 from src.domain.enums.route_status import RouteStatus
 from src.domain.enums.truck_status import TruckStatus
 
@@ -47,16 +48,19 @@ class HttpSchemasShould(unittest.TestCase):
 
     def test_auth_token_and_password_fields_hide_sensitive_values_from_repr(self) -> None:
         login = LoginRequest(username="alice", password="LoginPass123!")
-        register = RegisterUserRequest(
-            username="alice",
-            role="employee",
-            name="Alice",
-            password="RegisterPass123!",
+        register = RegisterUserRequest.model_validate(
+            {
+                "username": "alice",
+                "role": "employee",
+                "name": "Alice",
+                "password": "RegisterPass123!",
+            }
         )
         refresh = RefreshRequest(refresh_token="refresh-token")
         token_response = TokenResponse(
             access_token="access-token",
             refresh_token="refresh-token",
+            token_type="bearer",
         )
 
         self.assertNotIn("LoginPass123!", repr(login))
@@ -86,12 +90,14 @@ class HttpSchemasShould(unittest.TestCase):
 
     def test_register_user_request_validates_email(self) -> None:
         with self.assertRaises(ValidationError):
-            RegisterUserRequest(
-                username="alice",
-                role="employee",
-                name="Alice",
-                email="not-an-email",
-                password="Pass1234!",
+            RegisterUserRequest.model_validate(
+                {
+                    "username": "alice",
+                    "role": Role.EMPLOYEE,
+                    "name": "Alice",
+                    "email": "not-an-email",
+                    "password": "Pass1234!",
+                }
             )
 
     def test_route_response_uses_domain_route_status_values(self) -> None:
@@ -99,7 +105,7 @@ class HttpSchemasShould(unittest.TestCase):
             route_id=1,
             locations=["SYD", "MEL"],
             departure_time=None,
-            status=RouteStatus.PLANNED.value,
+            status=RouteStatus.PLANNED,
             truck_id=None,
             total_distance_km=1,
             eta_final=None,
@@ -115,20 +121,30 @@ class HttpSchemasShould(unittest.TestCase):
             name="Scania",
             capacity=1,
             max_range=1,
-            status=TruckStatus.FREE.value,
+            status=TruckStatus.FREE,
+            current_location=None,
+            route_id=None,
             busy_from=busy_from,
             busy_until=busy_from + timedelta(hours=1),
+            in_transit_to=None,
         )
 
         self.assertIs(truck.status, TruckStatus.FREE)
 
         with self.assertRaises(ValidationError):
-            TruckResponse(
-                vehicle_id=1001,
-                name="Scania",
-                capacity=1,
-                max_range=1,
-                status="maintenance",
+            TruckResponse.model_validate(
+                {
+                    "vehicle_id": 1001,
+                    "name": "Scania",
+                    "capacity": 1,
+                    "max_range": 1,
+                    "status": "maintenance",
+                    "current_location": None,
+                    "route_id": None,
+                    "busy_from": None,
+                    "busy_until": None,
+                    "in_transit_to": None,
+                }
             )
 
         with self.assertRaises(ValidationError):
@@ -138,8 +154,11 @@ class HttpSchemasShould(unittest.TestCase):
                 capacity=1,
                 max_range=1,
                 status=TruckStatus.ON_THE_WAY,
+                current_location=None,
+                route_id=None,
                 busy_from=busy_from,
                 busy_until=busy_from - timedelta(hours=1),
+                in_transit_to=None,
             )
 
     def test_world_state_path_request_resolves_safe_export_paths(self) -> None:
