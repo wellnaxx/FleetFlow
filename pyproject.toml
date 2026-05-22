@@ -108,6 +108,8 @@ unfixable = [
 # ── Pyright (strict) ──────────────────────────────────────────────
 [tool.pyright]
 pythonVersion = "3.13"
+venvPath = "."
+venv = ".venv"
 typeCheckingMode = "strict"
 reportMissingTypeStubs = false          # don't block on third-party stubs
 reportPrivateUsage = "warning"          # allow tests to access _private members
