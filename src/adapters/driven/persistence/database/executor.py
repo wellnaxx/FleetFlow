@@ -20,7 +20,7 @@ from src.adapters.driven.persistence.database.connection import get_connection
 from src.adapters.driven.persistence.database.errors import DatabaseError
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Generator
 
     from psycopg import Cursor
 
@@ -74,7 +74,7 @@ def _cursor_to_dict(cursor: Cursor[Row], row: Row | None) -> RowDict | None:
 
 
 @contextmanager
-def _db_operation(label: str) -> Iterator[None]:
+def _db_operation(label: str) -> Generator[None]:
     """Wrap a database operation with consistent exception handling."""
     try:
         yield
@@ -86,7 +86,7 @@ def _db_operation(label: str) -> Iterator[None]:
 
 
 @contextmanager
-def transaction_cursor() -> Iterator[Cursor[Row]]:
+def transaction_cursor() -> Generator[Cursor[Row]]:
     """Yield a cursor inside one transaction.
 
     The transaction commits on normal exit and rolls back on exception.
