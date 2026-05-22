@@ -75,9 +75,6 @@ def _token_response(record: UserRecord) -> TokenResponse:
 
     Returns:
         A TokenResponse containing the generated access token and refresh token.
-
-    Raises:
-        HTTPException: If token generation fails due to invalid user record data.
     """
     token_input: TokenInput = {
         "user_id": record.user_id,
@@ -100,9 +97,6 @@ def _current_user_response(record: UserRecord) -> CurrentUserResponse:
 
     Returns:
         A CurrentUserResponse containing the user's details.
-
-    Raises:
-        HTTPException: If the user record is invalid.
     """
     return CurrentUserResponse(
         user_id=record.user_id,
