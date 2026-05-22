@@ -137,7 +137,11 @@ class PackageGraphLoaderShould(unittest.TestCase):
 
         self.assertEqual([graph.package.package_id for graph in graphs], [12, 11])
         self.assertTrue(all(graph.route is None for graph in graphs))
-        fetch_all_tx_mock.assert_called_once_with(cursor, QUERIES.packages.list_unassigned)
+        fetch_all_tx_mock.assert_called_once_with(
+            cursor,
+            QUERIES.packages.list_unassigned,
+            (ItemStatus.TODO.value,),
+        )
 
     @patch(f"{MODULE}.transaction_cursor")
     @patch(f"{MODULE}.load_route_graph_tx")

@@ -100,6 +100,46 @@ class PostgresPackageRepository_Should(unittest.TestCase):
         self.assertEqual(result, packages)
         load_package_graphs_mock.assert_called_once_with()
 
+    @patch(f"{MODULE}.load_package_graph_page")
+    def test_list_page_returns_hydrated_packages(
+        self,
+        load_package_graph_page_mock: MagicMock,
+    ) -> None:
+        package = DeliveryPackage(LocationCode("SYD"), LocationCode("MEL"), 12.5, self.customer, 11)
+        load_package_graph_page_mock.return_value = [SimpleNamespace(package=package)]
+
+        result = self.repo.list_page(limit=10, offset=20)
+
+        self.assertEqual(result, [package])
+        load_package_graph_page_mock.assert_called_once_with(10, 20)
+
+    @patch(f"{MODULE}.load_package_graph_page_with_total")
+    def test_list_page_with_total_returns_hydrated_packages_and_count(
+        self,
+        load_package_graph_page_with_total_mock: MagicMock,
+    ) -> None:
+        package = DeliveryPackage(LocationCode("SYD"), LocationCode("MEL"), 12.5, self.customer, 11)
+        load_package_graph_page_with_total_mock.return_value = ([SimpleNamespace(package=package)], 3)
+
+        result = self.repo.list_page_with_total(limit=10, offset=20)
+
+        self.assertEqual(result, ([package], 3))
+        load_package_graph_page_with_total_mock.assert_called_once_with(10, 20)
+
+    @patch(f"{MODULE}.fetch_one", return_value={"total": 3})
+    def test_count_all_returns_package_count(self, fetch_one_mock: MagicMock) -> None:
+        result = self.repo.count_all()
+
+        self.assertEqual(result, 3)
+        fetch_one_mock.assert_called_once_with(QUERIES.packages.count_all)
+
+    @patch(f"{MODULE}.fetch_one", return_value=None)
+    def test_count_all_returns_zero_when_no_row_is_returned(self, fetch_one_mock: MagicMock) -> None:
+        result = self.repo.count_all()
+
+        self.assertEqual(result, 0)
+        fetch_one_mock.assert_called_once_with(QUERIES.packages.count_all)
+
     @patch(f"{MODULE}.load_unassigned_package_graphs")
     def test_list_unassigned_returns_hydrated_unassigned_packages_ordered_by_id(
         self,
@@ -116,6 +156,55 @@ class PostgresPackageRepository_Should(unittest.TestCase):
 
         self.assertEqual(result, [unassigned_1, unassigned_2])
         load_unassigned_package_graphs_mock.assert_called_once_with()
+
+    @patch(f"{MODULE}.load_unassigned_package_graph_page")
+    def test_list_unassigned_page_returns_hydrated_unassigned_packages(
+        self,
+        load_unassigned_package_graph_page_mock: MagicMock,
+    ) -> None:
+        package = DeliveryPackage(LocationCode("SYD"), LocationCode("MEL"), 12.5, self.customer, 11)
+        load_unassigned_package_graph_page_mock.return_value = [SimpleNamespace(package=package)]
+
+        result = self.repo.list_unassigned_page(limit=10, offset=20)
+
+        self.assertEqual(result, [package])
+        load_unassigned_package_graph_page_mock.assert_called_once_with(10, 20)
+
+    @patch(f"{MODULE}.load_unassigned_package_graph_page_with_total")
+    def test_list_unassigned_page_with_total_returns_hydrated_packages_and_count(
+        self,
+        load_unassigned_package_graph_page_with_total_mock: MagicMock,
+    ) -> None:
+        package = DeliveryPackage(LocationCode("SYD"), LocationCode("MEL"), 12.5, self.customer, 11)
+        load_unassigned_package_graph_page_with_total_mock.return_value = (
+            [SimpleNamespace(package=package)],
+            2,
+        )
+
+        result = self.repo.list_unassigned_page_with_total(limit=10, offset=20)
+
+        self.assertEqual(result, ([package], 2))
+        load_unassigned_package_graph_page_with_total_mock.assert_called_once_with(10, 20)
+
+    @patch(f"{MODULE}.fetch_one", return_value={"total": 2})
+    def test_count_unassigned_returns_package_count(self, fetch_one_mock: MagicMock) -> None:
+        result = self.repo.count_unassigned()
+
+        self.assertEqual(result, 2)
+        fetch_one_mock.assert_called_once_with(
+            QUERIES.packages.count_unassigned,
+            (ItemStatus.TODO.value,),
+        )
+
+    @patch(f"{MODULE}.fetch_one", return_value=None)
+    def test_count_unassigned_returns_zero_when_no_row_is_returned(self, fetch_one_mock: MagicMock) -> None:
+        result = self.repo.count_unassigned()
+
+        self.assertEqual(result, 0)
+        fetch_one_mock.assert_called_once_with(
+            QUERIES.packages.count_unassigned,
+            (ItemStatus.TODO.value,),
+        )
 
     @patch(f"{MODULE}.load_route_graph")
     def test_list_by_route_returns_hydrated_route_packages(

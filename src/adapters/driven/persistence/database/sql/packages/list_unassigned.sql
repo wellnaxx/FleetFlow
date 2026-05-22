@@ -14,5 +14,5 @@ SELECT
 FROM public.packages p
 JOIN public.customers c
     ON c.customer_id = p.customer_id
-WHERE p.status = 'To Do' AND p.route_id IS NULL
+WHERE p.status = %s AND p.route_id IS NULL
 ORDER BY p.package_id;

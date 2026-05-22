@@ -66,6 +66,9 @@ class InMemoryRepositoryInvariants_Should(unittest.TestCase):
         repo.add(carol)
 
         self.assertEqual([customer.customer_id for customer in repo.list_page(limit=2, offset=1)], [2, 3])
+        page, total = repo.list_page_with_total(limit=2, offset=1)
+        self.assertEqual([customer.customer_id for customer in page], [2, 3])
+        self.assertEqual(total, 3)
         self.assertEqual(repo.count_all(), 3)
 
     def test_package_repository_rejects_duplicate_id(self) -> None:
@@ -119,6 +122,30 @@ class InMemoryRepositoryInvariants_Should(unittest.TestCase):
         self.assertEqual(repo.peek_next_id(), 3)
         self.assertEqual([package.package_id for package in repo.list_all()], [1, 2])
         self.assertEqual([package.package_id for package in repo.list_unassigned()], [1])
+
+    def test_package_repository_lists_pages_and_counts_packages(self) -> None:
+        repo = InMemoryPackageRepository()
+        customer = Customer(customer_id=1, contact=ContactInfo(name="Alice"))
+        assigned_route = DeliveryRoute(LocationCode("SYD"), LocationCode("MEL"), route_id=9)
+        first = DeliveryPackage(LocationCode("SYD"), LocationCode("MEL"), 1.0, customer, 1)
+        second = DeliveryPackage(LocationCode("SYD"), LocationCode("ADL"), 2.0, customer, 2)
+        third = DeliveryPackage(LocationCode("MEL"), LocationCode("ADL"), 3.0, customer, 3)
+        third.route = assigned_route
+
+        repo.add(third)
+        repo.add(first)
+        repo.add(second)
+
+        self.assertEqual([package.package_id for package in repo.list_page(limit=2, offset=1)], [2, 3])
+        self.assertEqual([package.package_id for package in repo.list_unassigned_page(limit=1, offset=1)], [2])
+        page, total = repo.list_page_with_total(limit=2, offset=1)
+        unassigned_page, unassigned_total = repo.list_unassigned_page_with_total(limit=1, offset=1)
+        self.assertEqual([package.package_id for package in page], [2, 3])
+        self.assertEqual(total, 3)
+        self.assertEqual([package.package_id for package in unassigned_page], [2])
+        self.assertEqual(unassigned_total, 2)
+        self.assertEqual(repo.count_all(), 3)
+        self.assertEqual(repo.count_unassigned(), 2)
 
     def test_package_repository_replaces_packages_and_counter(self) -> None:
         repo = InMemoryPackageRepository()

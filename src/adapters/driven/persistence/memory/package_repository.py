@@ -99,9 +99,53 @@ class InMemoryPackageRepository:
         """Return all packages ordered by id."""
         return [self._packages[package_id] for package_id in sorted(self._packages)]
 
+    def list_page(self, limit: int, offset: int) -> list[DeliveryPackage]:
+        """Return a page of packages ordered by id.
+
+        Args:
+            limit: Maximum number of packages to return.
+            offset: Number of packages to skip.
+
+        Returns:
+            Packages in the requested page.
+        """
+        return self.list_all()[offset : offset + limit]
+
+    def list_page_with_total(self, limit: int, offset: int) -> tuple[list[DeliveryPackage], int]:
+        """Return a package page and total count from the current memory snapshot."""
+        packages = self.list_all()
+        return packages[offset : offset + limit], len(packages)
+
+    def count_all(self) -> int:
+        """Return the total number of packages."""
+        return len(self._packages)
+
     def list_unassigned(self) -> list[DeliveryPackage]:
         """Return packages that are not assigned to a route."""
         return [package for package in self.list_all() if package.route is None]
+
+    def list_unassigned_page(self, limit: int, offset: int) -> list[DeliveryPackage]:
+        """Return a page of unassigned packages ordered by id.
+
+        Args:
+            limit: Maximum number of packages to return.
+            offset: Number of packages to skip.
+
+        Returns:
+            Unassigned packages in the requested page.
+        """
+        return self.list_unassigned()[offset : offset + limit]
+
+    def list_unassigned_page_with_total(
+        self, limit: int, offset: int
+    ) -> tuple[list[DeliveryPackage], int]:
+        """Return an unassigned page and total count from the current memory snapshot."""
+        packages = self.list_unassigned()
+        return packages[offset : offset + limit], len(packages)
+
+    def count_unassigned(self) -> int:
+        """Return the total number of unassigned packages."""
+        return sum(package.route is None for package in self._packages.values())
 
     def list_by_route(self, route_id: int) -> list[DeliveryPackage]:
         """Return packages that are assigned to a specific route.

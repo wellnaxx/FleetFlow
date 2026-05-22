@@ -53,8 +53,50 @@ class PackageRepositoryPort(Protocol):
         """Return all packages."""
         ...
 
+    def list_page(self, limit: int, offset: int) -> list[DeliveryPackage]:
+        """Return a limited page of packages.
+
+        Args:
+            limit: Maximum number of packages to return.
+            offset: Number of packages to skip.
+
+        Returns:
+            Packages in the requested page.
+        """
+        ...
+
+    def list_page_with_total(self, limit: int, offset: int) -> tuple[list[DeliveryPackage], int]:
+        """Return a package page and total count from one repository operation."""
+        ...
+
+    def count_all(self) -> int:
+        """Return the total number of packages."""
+        ...
+
     def list_unassigned(self) -> list[DeliveryPackage]:
         """Return packages that are not assigned to a route."""
+        ...
+
+    def list_unassigned_page(self, limit: int, offset: int) -> list[DeliveryPackage]:
+        """Return a limited page of unassigned packages.
+
+        Args:
+            limit: Maximum number of packages to return.
+            offset: Number of packages to skip.
+
+        Returns:
+            Unassigned packages in the requested page.
+        """
+        ...
+
+    def list_unassigned_page_with_total(
+        self, limit: int, offset: int
+    ) -> tuple[list[DeliveryPackage], int]:
+        """Return an unassigned package page and total from one repository operation."""
+        ...
+
+    def count_unassigned(self) -> int:
+        """Return the total number of unassigned packages."""
         ...
 
     def list_by_route(self, route_id: int) -> list[DeliveryPackage]:
