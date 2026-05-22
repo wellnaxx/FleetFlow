@@ -160,6 +160,11 @@ class InMemoryCustomerRepository:
         """
         return self.list_all()[offset : offset + limit]
 
+    def list_page_with_total(self, limit: int, offset: int) -> tuple[list[Customer], int]:
+        """Return a customer page and total count from the current memory snapshot."""
+        customers = self.list_all()
+        return customers[offset : offset + limit], len(customers)
+
     def count_all(self) -> int:
         """Return the total number of customers."""
         return len(self._customers_by_id)

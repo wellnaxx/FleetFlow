@@ -82,8 +82,10 @@ class CustomersRouterShould(unittest.TestCase):
 
     def test_list_customers_includes_total_when_requested(self) -> None:
         use_case = MagicMock()
-        use_case.execute.return_value = [self._customer(customer_id=3, name="Carol Smith")]
-        use_case.count.return_value = 12
+        use_case.execute_with_count.return_value = (
+            [self._customer(customer_id=3, name="Carol Smith")],
+            12,
+        )
         self.app.dependency_overrides[customers_router_module.get_view_all_customers_use_case] = (
             lambda: use_case
         )
@@ -95,8 +97,9 @@ class CustomersRouterShould(unittest.TestCase):
         self.assertEqual(response.json()["count"], 1)
         self.assertEqual(response.json()["limit"], 1)
         self.assertEqual(response.json()["offset"], 2)
-        use_case.execute.assert_called_once_with(limit=1, offset=2)
-        use_case.count.assert_called_once_with()
+        use_case.execute_with_count.assert_called_once_with(limit=1, offset=2)
+        use_case.execute.assert_not_called()
+        use_case.count.assert_not_called()
 
     def test_list_customers_returns_empty_list(self) -> None:
         use_case = MagicMock()

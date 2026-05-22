@@ -53,6 +53,15 @@ class ViewAllCustomersUseCase_Should(unittest.TestCase):
         self.assertIn("Offset", str(ctx.exception))
         self.mock_customers.list_page.assert_not_called()
 
+    def test_returns_paginated_customers_with_count(self) -> None:
+        customer = MagicMock()
+        self.mock_customers.list_page_with_total.return_value = ([customer], 7)
+
+        result = self.use_case.execute_with_count(limit=2, offset=4)
+
+        self.assertEqual(result, ([customer], 7))
+        self.mock_customers.list_page_with_total.assert_called_once_with(limit=2, offset=4)
+
     def test_counts_customers(self) -> None:
         self.mock_customers.count_all.return_value = 7
 

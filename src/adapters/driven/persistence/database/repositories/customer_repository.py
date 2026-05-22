@@ -160,6 +160,19 @@ class PostgresCustomerRepository:
         customer_rows = fetch_all(QUERIES.customers.list_page, (limit, offset))
         return [map_customer(customer_row) for customer_row in customer_rows]
 
+    def list_page_with_total(self, limit: int, offset: int) -> tuple[list[Customer], int]:
+        """Return a customer page and total count from one database query."""
+        rows = fetch_all(QUERIES.customers.list_page_with_total, (limit, offset))
+        if not rows:
+            return [], 0
+
+        total = rows[0]["total"]
+        if not isinstance(total, int) or isinstance(total, bool):
+            raise TypeError("Customer count must be an integer.")
+
+        customer_rows = [row for row in rows if row["customer_id"] is not None]
+        return [map_customer(customer_row) for customer_row in customer_rows], total
+
     def count_all(self) -> int:
         """Return the total number of customers.
 
@@ -176,6 +189,6 @@ class PostgresCustomerRepository:
             return 0
 
         total = row["total"]
-        if not isinstance(total, int):
+        if not isinstance(total, int) or isinstance(total, bool):
             raise TypeError("Customer count must be an integer.")
         return total

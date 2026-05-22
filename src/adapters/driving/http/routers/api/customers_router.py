@@ -31,7 +31,11 @@ def list_customers(
         HTTPException: If the caller lacks permission to view customers.
     """
     try:
-        customers = use_case.execute(limit=limit, offset=offset)
+        if include_total:
+            customers, total = use_case.execute_with_count(limit=limit, offset=offset)
+        else:
+            customers = use_case.execute(limit=limit, offset=offset)
+            total = None
         items = [
             CustomerResponse(
                 customer_id=customer.customer_id,
@@ -43,7 +47,7 @@ def list_customers(
         ]
         return CustomerPageResponse(
             items=items,
-            total=use_case.count() if include_total else None,
+            total=total,
             count=len(items),
             limit=limit,
             offset=offset,

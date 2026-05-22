@@ -88,6 +88,10 @@ class CustomerRepositoryPort(Protocol):
         """
         ...
 
+    def list_page_with_total(self, limit: int, offset: int) -> tuple[list[Customer], int]:
+        """Return a customer page and total count from one repository operation."""
+        ...
+
     def count_all(self) -> int:
         """Return the total number of customers."""
         ...

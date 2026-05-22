@@ -191,6 +191,32 @@ class PostgresCustomerRepository_Should(unittest.TestCase):
         fetch_all_mock.assert_called_once_with(QUERIES.customers.list_page, (10, 20))
         map_customer_mock.assert_called_once_with(rows[0])
 
+    @patch(f"{MODULE}.fetch_all")
+    @patch(f"{MODULE}.map_customer")
+    def test_list_page_with_total_fetches_rows_and_count(
+        self,
+        map_customer_mock: MagicMock,
+        fetch_all_mock: MagicMock,
+    ) -> None:
+        rows = [
+            {
+                "customer_id": 2,
+                "name": "Bob",
+                "email": "",
+                "phone": "0412345678",
+                "total": 3,
+            }
+        ]
+        customer = Customer(customer_id=2, contact=ContactInfo(name="Bob", phone_number="0412345678"))
+        fetch_all_mock.return_value = rows
+        map_customer_mock.return_value = customer
+
+        result = self.repo.list_page_with_total(limit=10, offset=20)
+
+        self.assertEqual(result, ([customer], 3))
+        fetch_all_mock.assert_called_once_with(QUERIES.customers.list_page_with_total, (10, 20))
+        map_customer_mock.assert_called_once_with(rows[0])
+
     @patch(f"{MODULE}.fetch_one", return_value={"total": 3})
     def test_count_all_returns_customer_count(self, fetch_one_mock: MagicMock) -> None:
         result = self.repo.count_all()

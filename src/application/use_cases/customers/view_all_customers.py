@@ -35,6 +35,8 @@ class ViewAllCustomersUseCase(AuthorizedUseCase[list[Customer]]):
             ValueError: If pagination arguments are invalid.
         """
         if limit is None:
+            if offset != 0:
+                raise ValueError("Offset cannot be used without a limit.")
             return self._customers.list_all()
 
         if limit < 1:
@@ -43,6 +45,16 @@ class ViewAllCustomersUseCase(AuthorizedUseCase[list[Customer]]):
             raise ValueError("Offset must be greater than or equal to zero.")
 
         return self._customers.list_page(limit=limit, offset=offset)
+
+    @requires(Permission.CUSTOMER_VIEW)
+    def execute_with_count(self, limit: int, offset: int = 0) -> tuple[list[Customer], int]:
+        """Return a customer page and total from one repository operation."""
+        if limit < 1:
+            raise ValueError("Limit must be greater than zero.")
+        if offset < 0:
+            raise ValueError("Offset must be greater than or equal to zero.")
+
+        return self._customers.list_page_with_total(limit=limit, offset=offset)
 
     @requires(Permission.CUSTOMER_VIEW)
     def count(self) -> int:
