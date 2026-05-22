@@ -13,15 +13,21 @@ from src.adapters.driving.http.dependencies.auth import (
     get_current_user,
     principal_from_token,
 )
-from src.adapters.driving.http.dependencies.use_cases import get_register_user_use_case
+from src.adapters.driving.http.dependencies.use_cases import (
+    get_change_password_use_case,
+    get_register_user_use_case,
+)
 from src.adapters.driving.http.schemas.auth import (
+    ChangeOwnPasswordRequest,
     CurrentUserResponse,
     RefreshRequest,
     RegisterUserRequest,
+    ResetUserPasswordRequest,
     TokenResponse,
 )
 from src.application.models.user_record import UserRecord
 from src.application.services.auth_service import AuthService
+from src.application.use_cases.auth.change_password import ChangePasswordUseCase
 from src.application.use_cases.auth.register_user import RegisterUserUseCase
 from src.composition.runtime import get_auth_service, get_user_repository
 from src.ports.output.user_repository import UserRepositoryPort
@@ -88,13 +94,13 @@ def _token_response(record: UserRecord) -> TokenResponse:
 
 def _current_user_response(record: UserRecord) -> CurrentUserResponse:
     """Convert a UserRecord into a CurrentUserResponse for API responses.
-    
+
     Args:
         record: The user record to convert.
-    
+
     Returns:
         A CurrentUserResponse containing the user's details.
-    
+
     Raises:
         HTTPException: If the user record is invalid.
     """
@@ -158,6 +164,52 @@ def login(
         ) from exc
 
     return _token_response(record)
+
+
+@auth_router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
+def change_password(
+    request: ChangeOwnPasswordRequest,
+    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_user)],
+    use_case: Annotated[ChangePasswordUseCase, Depends(get_change_password_use_case)],
+) -> None:
+    """Change the current user's password.
+
+    Args:
+        request: The current and new passwords extracted from the request.
+        principal: The currently authenticated user, provided by the `get_current_user` dependency.
+        use_case: The ChangePasswordUseCase instance for executing the password change.
+
+    Returns:
+        None
+
+    Raises:
+        HTTPException: If the password change fails due to invalid input,
+        authentication issues, or authorization issue
+    """
+    try:
+        use_case.execute_current_user(
+            username=principal.record.username,
+            new_password=request.new_password,
+            old_password=request.current_password,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@auth_router.post("/users/{username}/reset-password", status_code=status.HTTP_204_NO_CONTENT)
+def reset_password(
+    username: str,
+    request: ResetUserPasswordRequest,
+    use_case: Annotated[ChangePasswordUseCase, Depends(get_change_password_use_case)],
+) -> None:
+    try:
+        use_case.execute(username=username, new_password=request.new_password)
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @auth_router.post("/refresh", status_code=status.HTTP_200_OK)

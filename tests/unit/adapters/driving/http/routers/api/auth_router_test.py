@@ -104,6 +104,101 @@ class AuthRouterShould(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"], "Missing permission: ADMIN_USER")
 
+    def test_change_password_changes_current_user_password(self) -> None:
+        principal = self._principal()
+        use_case = MagicMock()
+        self.app.dependency_overrides[auth_router_module.get_current_user] = lambda: principal
+        self.app.dependency_overrides[auth_router_module.get_change_password_use_case] = lambda: use_case
+
+        response = self.client.post(
+            "/auth/change-password",
+            json={
+                "current_password": "OldSecret123!",
+                "new_password": "NewSecret123!",
+            },
+        )
+
+        self.assertEqual(response.status_code, 204)
+        use_case.execute_current_user.assert_called_once_with(
+            username="alice",
+            new_password="NewSecret123!",
+            old_password="OldSecret123!",
+        )
+
+    def test_change_password_returns_bad_request_for_invalid_password(self) -> None:
+        principal = self._principal()
+        use_case = MagicMock()
+        use_case.execute_current_user.side_effect = ValueError("Old password incorrect.")
+        self.app.dependency_overrides[auth_router_module.get_current_user] = lambda: principal
+        self.app.dependency_overrides[auth_router_module.get_change_password_use_case] = lambda: use_case
+
+        response = self.client.post(
+            "/auth/change-password",
+            json={
+                "current_password": "OldSecret123!",
+                "new_password": "NewSecret123!",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["detail"], "Old password incorrect.")
+
+    def test_change_password_returns_forbidden_for_permission_error(self) -> None:
+        principal = self._principal()
+        use_case = MagicMock()
+        use_case.execute_current_user.side_effect = PermissionError("Unauthenticated")
+        self.app.dependency_overrides[auth_router_module.get_current_user] = lambda: principal
+        self.app.dependency_overrides[auth_router_module.get_change_password_use_case] = lambda: use_case
+
+        response = self.client.post(
+            "/auth/change-password",
+            json={
+                "current_password": "OldSecret123!",
+                "new_password": "NewSecret123!",
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["detail"], "Unauthenticated")
+
+    def test_reset_password_resets_target_password(self) -> None:
+        use_case = MagicMock()
+        self.app.dependency_overrides[auth_router_module.get_change_password_use_case] = lambda: use_case
+
+        response = self.client.post(
+            "/auth/users/bob/reset-password",
+            json={"new_password": "ResetSecret123!"},
+        )
+
+        self.assertEqual(response.status_code, 204)
+        use_case.execute.assert_called_once_with(username="bob", new_password="ResetSecret123!")
+
+    def test_reset_password_returns_bad_request_for_invalid_password(self) -> None:
+        use_case = MagicMock()
+        use_case.execute.side_effect = ValueError("Password must be at least 8 characters.")
+        self.app.dependency_overrides[auth_router_module.get_change_password_use_case] = lambda: use_case
+
+        response = self.client.post(
+            "/auth/users/bob/reset-password",
+            json={"new_password": "ResetSecret123!"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["detail"], "Password must be at least 8 characters.")
+
+    def test_reset_password_returns_forbidden_for_permission_error(self) -> None:
+        use_case = MagicMock()
+        use_case.execute.side_effect = PermissionError("Missing permission: ADMIN_USER")
+        self.app.dependency_overrides[auth_router_module.get_change_password_use_case] = lambda: use_case
+
+        response = self.client.post(
+            "/auth/users/bob/reset-password",
+            json={"new_password": "ResetSecret123!"},
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["detail"], "Missing permission: ADMIN_USER")
+
     def test_refresh_returns_new_token_pair(self) -> None:
         user_repo = MagicMock()
         self.app.dependency_overrides[auth_router_module.get_user_repository] = lambda: user_repo
