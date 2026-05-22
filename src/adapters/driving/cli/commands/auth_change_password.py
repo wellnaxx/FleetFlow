@@ -43,5 +43,9 @@ class AuthChangePassword(BaseCommand[ChangePasswordUseCase]):
         if new_pw != confirm:
             raise ValueError("Passwords do not match.")
 
-        self._use_case.execute_current_user(new_pw, old_password=old_pw)
+        self._use_case.execute_current_user(
+            self._use_case.current_session_username,
+            new_pw,
+            old_password=old_pw,
+        )
         return "Password changed."

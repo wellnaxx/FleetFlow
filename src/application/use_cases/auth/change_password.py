@@ -30,6 +30,7 @@ class ChangePasswordUseCase(AuthorizedUseCase[None]):
 
         Raises:
             ValueError: If the user is missing or the password change is invalid.
+            PermissionError: If the caller is not authorized to perform the action.
         """
         if old_password is None:
             if self.authz.current_user is None:
@@ -49,27 +50,31 @@ class ChangePasswordUseCase(AuthorizedUseCase[None]):
 
         self._auth.change_password(username, old_password, new_password)
 
-    def execute_current_user(self, new_password: str, old_password: str) -> None:
+    @property
+    def current_session_username(self) -> str | None:
+        """Return the username recorded by a session-oriented auth service."""
+        return self._current_username()
+
+    def execute_current_user(self, username: str | None, new_password: str, old_password: str) -> None:
         """Change the currently authenticated user's password.
 
         Args:
+            username: Authenticated username supplied by the driving adapter.
             new_password: Replacement plain-text password.
             old_password: Existing password required for verification.
 
         Raises:
             PermissionError: If no user is authenticated.
-            PermissionError: If the authenticated session has no recorded login
-                username.
+            PermissionError: If the driving adapter does not provide a username.
             ValueError: If password validation fails.
         """
         if self.authz.current_user is None:
             raise PermissionError("Unauthenticated")
 
-        username = self._current_username()
-        if username is None:
-            raise PermissionError("Authenticated session has no username. Please log in again.")
+        if not isinstance(username, str) or not username.strip():
+            raise PermissionError("Authenticated user has no username.")
 
-        self._auth.change_password(username, old_password, new_password)
+        self._auth.change_password(username.strip().lower(), old_password, new_password)
 
     def _current_username(self) -> str | None:
         """Return the authenticated username from auth session state."""

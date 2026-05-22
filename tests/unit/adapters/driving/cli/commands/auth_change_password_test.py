@@ -9,6 +9,7 @@ class AuthChangePassword_Should(unittest.TestCase):
         cmd = AuthChangePassword.__new__(AuthChangePassword)
         cmd._params = params or []  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.current_session_username = "alice"  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
     def test_change_password_skips_heartbeat(self) -> None:
@@ -67,6 +68,7 @@ class AuthChangePassword_Should(unittest.TestCase):
             cmd.execute()
         self.assertIn("Unauthenticated", str(ctx.exception))
         cmd._use_case.execute_current_user.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
+            "alice",
             "BrandNew123",
             old_password="OldPass123",
         )
@@ -75,14 +77,16 @@ class AuthChangePassword_Should(unittest.TestCase):
     def test_selfservice_session_errors_from_use_case_propagate(self, mock_gp: MagicMock) -> None:
         cmd = self.make_cmd(params=[])
         mock_gp.side_effect = ["OldPass123", "BrandNew123", "BrandNew123"]
+        cmd._use_case.current_session_username = None  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case.execute_current_user.side_effect = PermissionError(  # type: ignore[reportAttributeAccessIssue]
-            "Authenticated session has no username. Please log in again."
+            "Authenticated user has no username."
         )
 
         with self.assertRaises(PermissionError) as ctx:
             cmd.execute()
         self.assertIn("no username", str(ctx.exception))
         cmd._use_case.execute_current_user.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
+            None,
             "BrandNew123",
             old_password="OldPass123",
         )
@@ -107,6 +111,7 @@ class AuthChangePassword_Should(unittest.TestCase):
             cmd.execute()
         self.assertIn("at least 8", str(ctx.exception))
         cmd._use_case.execute_current_user.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
+            "alice",
             "short",
             old_password="OldPass123",
         )
@@ -123,6 +128,7 @@ class AuthChangePassword_Should(unittest.TestCase):
             cmd.execute()
         self.assertIn("must be different", str(ctx.exception))
         cmd._use_case.execute_current_user.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
+            "alice",
             "SamePass123",
             old_password="SamePass123",
         )
@@ -135,6 +141,7 @@ class AuthChangePassword_Should(unittest.TestCase):
         result = cmd.execute()
 
         cmd._use_case.execute_current_user.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
+            "alice",
             "BrandNew123",
             old_password="OldPass123",
         )
