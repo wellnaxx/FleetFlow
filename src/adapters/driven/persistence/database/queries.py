@@ -22,6 +22,7 @@ class CustomerQueries:
     list_by_name: str
     list_all: str
     list_page: str
+    list_page_with_total: str
     count_all: str
     remove: str
 
@@ -45,9 +46,15 @@ class PackageQueries:
     get_by_id_with_customer: str
     list_all: str
     list_all_with_customers: str
+    list_page_with_customers: str
+    list_page_with_total: str
+    count_all: str
     list_by_route: str
     list_assigned: str
     list_unassigned: str
+    list_unassigned_page: str
+    list_unassigned_page_with_total: str
+    count_unassigned: str
     remove: str
     update_state: str
 
@@ -111,6 +118,7 @@ class QueryRegistry:
             list_by_name=load_sql("customers/list_by_name.sql"),
             list_all=load_sql("customers/list_all.sql"),
             list_page=load_sql("customers/list_page.sql"),
+            list_page_with_total=load_sql("customers/list_page_with_total.sql"),
             count_all=load_sql("customers/count_all.sql"),
             remove=load_sql("customers/remove.sql"),
         )
@@ -152,9 +160,15 @@ class QueryRegistry:
             get_by_id_with_customer=load_sql("packages/get_by_id_with_customer.sql"),
             list_all=load_sql("packages/list_all.sql"),
             list_all_with_customers=load_sql("packages/list_all_with_customers.sql"),
+            list_page_with_customers=load_sql("packages/list_page_with_customers.sql"),
+            list_page_with_total=load_sql("packages/list_page_with_total.sql"),
+            count_all=load_sql("packages/count_all.sql"),
             list_by_route=load_sql("packages/list_by_route.sql"),
             list_assigned=load_sql("packages/list_assigned.sql"),
             list_unassigned=load_sql("packages/list_unassigned.sql"),
+            list_unassigned_page=load_sql("packages/list_unassigned_page.sql"),
+            list_unassigned_page_with_total=load_sql("packages/list_unassigned_page_with_total.sql"),
+            count_unassigned=load_sql("packages/count_unassigned.sql"),
             remove=load_sql("packages/remove.sql"),
             update_state=load_sql("packages/update_state.sql"),
         )
