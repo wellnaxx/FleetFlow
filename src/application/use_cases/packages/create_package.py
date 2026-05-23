@@ -46,6 +46,7 @@ class CreatePackageUseCase(AuthorizedUseCase[DeliveryPackage]):
 
         Raises:
             ValueError: If a location is invalid or customer resolution fails.
+            TypeError: If the location codes are not strings.
         """
         start_code = LocationCode(start)
         end_code = LocationCode(end)
