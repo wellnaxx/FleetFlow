@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from src.adapters.driving.http.routers.api import customers_router as customers_router_module
 from src.adapters.driving.http.routers.api.customers_router import customers_router
+from src.application.use_cases.pagination import PageQuery, PageResult
 from src.domain.entities.customer import Customer
 from src.domain.value_objects.contact_info import ContactInfo
 
@@ -21,15 +22,20 @@ class CustomersRouterShould(unittest.TestCase):
 
     def test_list_customers_returns_customer_responses(self) -> None:
         use_case = MagicMock()
-        use_case.execute.return_value = [
-            self._customer(
-                customer_id=1,
-                name="Alice Smith",
-                email="alice@example.com",
-                phone_number="0412345678",
+        use_case.execute.return_value = PageResult(
+            items=(
+                self._customer(
+                    customer_id=1,
+                    name="Alice Smith",
+                    email="alice@example.com",
+                    phone_number="0412345678",
+                ),
+                self._customer(customer_id=2, name="Bob Jones"),
             ),
-            self._customer(customer_id=2, name="Bob Jones"),
-        ]
+            total=None,
+            limit=50,
+            offset=0,
+        )
         self.app.dependency_overrides[customers_router_module.get_view_all_customers_use_case] = (
             lambda: use_case
         )
@@ -60,12 +66,16 @@ class CustomersRouterShould(unittest.TestCase):
                 "offset": 0,
             },
         )
-        use_case.execute.assert_called_once_with(limit=50, offset=0)
-        use_case.count.assert_not_called()
+        use_case.execute.assert_called_once_with(PageQuery(limit=50, offset=0, include_total=False))
 
     def test_list_customers_passes_pagination_params(self) -> None:
         use_case = MagicMock()
-        use_case.execute.return_value = [self._customer(customer_id=3, name="Carol Smith")]
+        use_case.execute.return_value = PageResult(
+            items=(self._customer(customer_id=3, name="Carol Smith"),),
+            total=None,
+            limit=1,
+            offset=2,
+        )
         self.app.dependency_overrides[customers_router_module.get_view_all_customers_use_case] = (
             lambda: use_case
         )
@@ -77,14 +87,15 @@ class CustomersRouterShould(unittest.TestCase):
         self.assertEqual(response.json()["count"], 1)
         self.assertEqual(response.json()["limit"], 1)
         self.assertEqual(response.json()["offset"], 2)
-        use_case.execute.assert_called_once_with(limit=1, offset=2)
-        use_case.count.assert_not_called()
+        use_case.execute.assert_called_once_with(PageQuery(limit=1, offset=2, include_total=False))
 
     def test_list_customers_includes_total_when_requested(self) -> None:
         use_case = MagicMock()
-        use_case.execute_with_count.return_value = (
-            [self._customer(customer_id=3, name="Carol Smith")],
-            12,
+        use_case.execute.return_value = PageResult(
+            items=(self._customer(customer_id=3, name="Carol Smith"),),
+            total=12,
+            limit=1,
+            offset=2,
         )
         self.app.dependency_overrides[customers_router_module.get_view_all_customers_use_case] = (
             lambda: use_case
@@ -97,13 +108,11 @@ class CustomersRouterShould(unittest.TestCase):
         self.assertEqual(response.json()["count"], 1)
         self.assertEqual(response.json()["limit"], 1)
         self.assertEqual(response.json()["offset"], 2)
-        use_case.execute_with_count.assert_called_once_with(limit=1, offset=2)
-        use_case.execute.assert_not_called()
-        use_case.count.assert_not_called()
+        use_case.execute.assert_called_once_with(PageQuery(limit=1, offset=2, include_total=True))
 
     def test_list_customers_returns_empty_list(self) -> None:
         use_case = MagicMock()
-        use_case.execute.return_value = []
+        use_case.execute.return_value = PageResult(items=(), total=None, limit=50, offset=0)
         self.app.dependency_overrides[customers_router_module.get_view_all_customers_use_case] = (
             lambda: use_case
         )
@@ -115,8 +124,7 @@ class CustomersRouterShould(unittest.TestCase):
             response.json(),
             {"items": [], "total": None, "count": 0, "limit": 50, "offset": 0},
         )
-        use_case.execute.assert_called_once_with(limit=50, offset=0)
-        use_case.count.assert_not_called()
+        use_case.execute.assert_called_once_with(PageQuery(limit=50, offset=0, include_total=False))
 
     def test_list_customers_rejects_invalid_pagination_params(self) -> None:
         use_case = MagicMock()
@@ -140,7 +148,7 @@ class CustomersRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"], "Missing permission: CUSTOMER_VIEW")
-        use_case.execute.assert_called_once_with(limit=50, offset=0)
+        use_case.execute.assert_called_once_with(PageQuery(limit=50, offset=0, include_total=False))
 
     def _customer(
         self,

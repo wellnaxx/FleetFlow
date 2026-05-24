@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import MagicMock
 
 from src.adapters.driving.cli.commands.view_all_customers import ViewAllCustomers
+from src.application.use_cases.pagination import PageResult
 
 
 class ViewAllCustomers_Should(unittest.TestCase):
@@ -26,7 +27,7 @@ class ViewAllCustomers_Should(unittest.TestCase):
 
     def test_no_customers_returns_friendly_message(self) -> None:
         cmd = self.make_cmd()
-        cmd._use_case.execute.return_value = []  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = PageResult(items=(), total=None, limit=None, offset=0)  # type: ignore[reportAttributeAccessIssue]
 
         out = cmd.execute()
 
@@ -54,11 +55,16 @@ class ViewAllCustomers_Should(unittest.TestCase):
         c3.email = ""
         c3.phone_number = ""
 
-        cmd._use_case.execute.return_value = [  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = PageResult(  # type: ignore[reportAttributeAccessIssue]
+            items=(
             c1,
             c2,
             c3,
-        ]
+            ),
+            total=None,
+            limit=None,
+            offset=0,
+        )
 
         out = cmd.execute()
 
@@ -82,7 +88,7 @@ class ViewAllCustomers_Should(unittest.TestCase):
 
     def test_ignores_params_if_present(self) -> None:
         cmd = self.make_cmd(params=["ignored"])
-        cmd._use_case.execute.return_value = []  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = PageResult(items=(), total=None, limit=None, offset=0)  # type: ignore[reportAttributeAccessIssue]
 
         _ = cmd.execute()
 

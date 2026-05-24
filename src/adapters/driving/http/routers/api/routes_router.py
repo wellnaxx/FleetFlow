@@ -28,6 +28,7 @@ from src.adapters.driving.http.schemas.routes import (
 )
 from src.adapters.driving.http.schemas.trucks import TruckResponse
 from src.application.results.assign_packages_to_route_result import AssignPackagesToRouteResult
+from src.application.use_cases.pagination import PageQuery
 from src.application.use_cases.routes.assign_packages_to_route import AssignPackagesToRouteUseCase
 from src.application.use_cases.routes.assign_truck_to_route import AssignTruckToRouteUseCase
 from src.application.use_cases.routes.create_route import CreateRouteUseCase
@@ -206,18 +207,14 @@ def list_routes(
         HTTPException: If the caller lacks permission to view routes.
     """
     try:
-        if include_total:
-            routes, total = use_case.execute_with_count(limit=limit, offset=offset)
-        else:
-            routes = use_case.execute(limit=limit, offset=offset)
-            total = None
-        items = [_route_response(route) for route in routes]
+        result = use_case.execute(PageQuery(limit=limit, offset=offset, include_total=include_total))
+        items = [_route_response(route) for route in result.items]
         return RoutePageResponse(
             items=items,
-            total=total,
-            count=len(items),
-            limit=limit,
-            offset=offset,
+            total=result.total,
+            count=result.count,
+            limit=result.limit or limit,
+            offset=result.offset,
         )
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e

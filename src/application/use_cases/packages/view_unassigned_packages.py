@@ -2,13 +2,18 @@
 
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
-from src.application.use_cases.packages.pagination import validate_pagination
+from src.application.use_cases.pagination import (
+    PageQuery,
+    PageResult,
+    validate_page,
+    validate_unpaginated_offset,
+)
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.enums.auth import Permission
 from src.ports.output.package_repository import PackageRepositoryPort
 
 
-class ViewUnassignedPackagesUseCase(AuthorizedUseCase[list[DeliveryPackage]]):
+class ViewUnassignedPackagesUseCase(AuthorizedUseCase[PageResult[DeliveryPackage]]):
     """List packages that are not assigned to any route."""
 
     def __init__(self, packages: PackageRepositoryPort, authz: AuthorizationService) -> None:
@@ -22,32 +27,41 @@ class ViewUnassignedPackagesUseCase(AuthorizedUseCase[list[DeliveryPackage]]):
         self._packages = packages
 
     @requires(Permission.PACKAGE_VIEW_UNASSIGNED)
-    def execute(self, limit: int | None = None, offset: int = 0) -> list[DeliveryPackage]:
+    def execute(self, query: PageQuery = PageQuery()) -> PageResult[DeliveryPackage]:
         """Return all packages that are currently unassigned.
 
         Args:
-            limit: Optional maximum number of packages to return.
-            offset: Number of packages to skip when `limit` is provided.
+            query: Pagination request. Defaults to a full uncounted list.
 
         Returns:
-            Packages without a route assignment.
+            Unassigned package page result.
 
         Raises:
             ValueError: If pagination arguments are invalid.
         """
-        if not validate_pagination(limit, offset):
-            return self._packages.list_unassigned()
+        if query.limit is None:
+            validate_unpaginated_offset(query.offset)
+            return PageResult(
+                items=tuple(self._packages.list_unassigned()),
+                total=None,
+                limit=None,
+                offset=query.offset,
+            )
 
-        assert limit is not None
-        return self._packages.list_unassigned_page(limit=limit, offset=offset)
+        validate_page(query.limit, query.offset)
+        if query.include_total:
+            packages, total = self._packages.list_unassigned_page_with_total(
+                limit=query.limit, offset=query.offset
+            )
+        else:
+            packages = self._packages.list_unassigned_page(
+                limit=query.limit, offset=query.offset
+            )
+            total = None
 
-    @requires(Permission.PACKAGE_VIEW_UNASSIGNED)
-    def execute_with_count(self, limit: int, offset: int = 0) -> tuple[list[DeliveryPackage], int]:
-        """Return an unassigned package page and total from one repository operation."""
-        validate_pagination(limit, offset)
-        return self._packages.list_unassigned_page_with_total(limit=limit, offset=offset)
-
-    @requires(Permission.PACKAGE_VIEW_UNASSIGNED)
-    def count(self) -> int:
-        """Return the total number of unassigned packages."""
-        return self._packages.count_unassigned()
+        return PageResult(
+            items=tuple(packages),
+            total=total,
+            limit=query.limit,
+            offset=query.offset,
+        )

@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from src.adapters.driving.http.dependencies.use_cases import get_view_all_customers_use_case
 from src.adapters.driving.http.schemas.customers import CustomerPageResponse, CustomerResponse
 from src.application.use_cases.customers.view_all_customers import ViewAllCustomersUseCase
+from src.application.use_cases.pagination import PageQuery
 
 customers_router = APIRouter(prefix="/customers", tags=["customers"])
 
@@ -31,11 +32,9 @@ def list_customers(
         HTTPException: If the caller lacks permission to view customers.
     """
     try:
-        if include_total:
-            customers, total = use_case.execute_with_count(limit=limit, offset=offset)
-        else:
-            customers = use_case.execute(limit=limit, offset=offset)
-            total = None
+        result = use_case.execute(
+            PageQuery(limit=limit, offset=offset, include_total=include_total)
+        )
         items = [
             CustomerResponse(
                 customer_id=customer.customer_id,
@@ -43,14 +42,14 @@ def list_customers(
                 email=customer.email,
                 phone_number=customer.phone_number,
             )
-            for customer in customers
+            for customer in result.items
         ]
         return CustomerPageResponse(
             items=items,
-            total=total,
-            count=len(items),
-            limit=limit,
-            offset=offset,
+            total=result.total,
+            count=result.count,
+            limit=result.limit or limit,
+            offset=result.offset,
         )
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e

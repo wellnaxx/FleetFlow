@@ -2,12 +2,18 @@
 
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
+from src.application.use_cases.pagination import (
+    PageQuery,
+    PageResult,
+    validate_page,
+    validate_unpaginated_offset,
+)
 from src.domain.entities.customer import Customer
 from src.domain.enums.auth import Permission
 from src.ports.output.customer_repository import CustomerRepositoryPort
 
 
-class ViewAllCustomersUseCase(AuthorizedUseCase[list[Customer]]):
+class ViewAllCustomersUseCase(AuthorizedUseCase[PageResult[Customer]]):
     """List all customers from the repository."""
 
     def __init__(self, customers: CustomerRepositoryPort, authz: AuthorizationService) -> None:
@@ -21,42 +27,39 @@ class ViewAllCustomersUseCase(AuthorizedUseCase[list[Customer]]):
         self._customers = customers
 
     @requires(Permission.CUSTOMER_VIEW)
-    def execute(self, limit: int | None = None, offset: int = 0) -> list[Customer]:
+    def execute(self, query: PageQuery = PageQuery()) -> PageResult[Customer]:
         """Return all persisted customers.
 
         Args:
-            limit: Optional maximum number of customers to return.
-            offset: Number of customers to skip when `limit` is provided.
+            query: Pagination request. Defaults to a full uncounted list.
 
         Returns:
-            Customer entities currently stored in the repository.
+            Customer page result.
 
         Raises:
             ValueError: If pagination arguments are invalid.
         """
-        if limit is None:
-            if offset != 0:
-                raise ValueError("Offset cannot be used without a limit.")
-            return self._customers.list_all()
+        if query.limit is None:
+            validate_unpaginated_offset(query.offset)
+            return PageResult(
+                items=tuple(self._customers.list_all()),
+                total=None,
+                limit=None,
+                offset=query.offset,
+            )
 
-        if limit < 1:
-            raise ValueError("Limit must be greater than zero.")
-        if offset < 0:
-            raise ValueError("Offset must be greater than or equal to zero.")
+        validate_page(query.limit, query.offset)
+        if query.include_total:
+            customers, total = self._customers.list_page_with_total(
+                limit=query.limit, offset=query.offset
+            )
+        else:
+            customers = self._customers.list_page(limit=query.limit, offset=query.offset)
+            total = None
 
-        return self._customers.list_page(limit=limit, offset=offset)
-
-    @requires(Permission.CUSTOMER_VIEW)
-    def execute_with_count(self, limit: int, offset: int = 0) -> tuple[list[Customer], int]:
-        """Return a customer page and total from one repository operation."""
-        if limit < 1:
-            raise ValueError("Limit must be greater than zero.")
-        if offset < 0:
-            raise ValueError("Offset must be greater than or equal to zero.")
-
-        return self._customers.list_page_with_total(limit=limit, offset=offset)
-
-    @requires(Permission.CUSTOMER_VIEW)
-    def count(self) -> int:
-        """Return the total number of persisted customers."""
-        return self._customers.count_all()
+        return PageResult(
+            items=tuple(customers),
+            total=total,
+            limit=query.limit,
+            offset=query.offset,
+        )

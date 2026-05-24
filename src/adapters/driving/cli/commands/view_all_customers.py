@@ -16,7 +16,7 @@ class ViewAllCustomers(BaseCommand[ViewAllCustomersUseCase]):
         Raises:
             PermissionError: If the caller lacks customer view permission.
         """
-        customers = self._use_case.execute()
+        customers = self._use_case.execute().items
         return (
             "\n\n".join(f"Customer {c.customer_id}: {c.name} ({c.email}, {c.phone_number})" for c in customers)
             if customers

@@ -16,5 +16,5 @@ class ViewAllRoutes(BaseCommand[ViewAllRoutesUseCase]):
         Raises:
             PermissionError: If the caller lacks route listing permission.
         """
-        routes = self._use_case.execute()
+        routes = self._use_case.execute().items
         return "\n\n".join(r.info() for r in routes) if routes else "No routes available."

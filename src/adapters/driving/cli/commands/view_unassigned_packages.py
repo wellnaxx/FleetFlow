@@ -16,7 +16,7 @@ class ViewUnassignedPackages(BaseCommand[ViewUnassignedPackagesUseCase]):
         Raises:
             PermissionError: If the caller lacks unassigned package permission.
         """
-        packages = self._use_case.execute()
+        packages = self._use_case.execute().items
         if not packages:
             return "No unassigned packages."
         return "\n\n".join(p.info() for p in packages)

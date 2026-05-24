@@ -16,5 +16,5 @@ class ViewAllPackages(BaseCommand[ViewAllPackagesUseCase]):
         Raises:
             PermissionError: If the caller lacks package listing permission.
         """
-        packages = self._use_case.execute()
+        packages = self._use_case.execute().items
         return "\n\n".join(package.info() for package in packages) if packages else "No packages."

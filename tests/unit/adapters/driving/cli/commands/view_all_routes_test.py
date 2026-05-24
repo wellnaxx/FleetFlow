@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import MagicMock
 
 from src.adapters.driving.cli.commands.view_all_routes import ViewAllRoutes
+from src.application.use_cases.pagination import PageResult
 
 
 class TestViewAllRoutes_Should(unittest.TestCase):
@@ -23,7 +24,7 @@ class TestViewAllRoutes_Should(unittest.TestCase):
 
     def test_no_routes_available(self) -> None:
         cmd = self.make_cmd()
-        cmd._use_case.execute.return_value = []  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = PageResult(items=(), total=None, limit=None, offset=0)  # type: ignore[reportAttributeAccessIssue]
 
         result = cmd.execute()
 
@@ -39,7 +40,12 @@ class TestViewAllRoutes_Should(unittest.TestCase):
         mock_route2 = MagicMock()
         mock_route2.info.return_value = "Route 2 Info"
 
-        cmd._use_case.execute.return_value = [mock_route1, mock_route2]  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = PageResult(  # type: ignore[reportAttributeAccessIssue]
+            items=(mock_route1, mock_route2),
+            total=None,
+            limit=None,
+            offset=0,
+        )
 
         result = cmd.execute()
 

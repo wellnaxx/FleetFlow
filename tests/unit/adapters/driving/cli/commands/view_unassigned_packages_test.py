@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import MagicMock
 
 from src.adapters.driving.cli.commands.view_unassigned_packages import ViewUnassignedPackages
+from src.application.use_cases.pagination import PageResult
 
 
 class ViewUnassignedPackages_Should(unittest.TestCase):
@@ -26,7 +27,7 @@ class ViewUnassignedPackages_Should(unittest.TestCase):
 
     def test_no_packages_returns_friendly_message(self) -> None:
         cmd = self.make_cmd()
-        cmd._use_case.execute.return_value = []  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = PageResult(items=(), total=None, limit=None, offset=0)  # type: ignore[reportAttributeAccessIssue]
 
         out = cmd.execute()
 
@@ -43,11 +44,12 @@ class ViewUnassignedPackages_Should(unittest.TestCase):
         p2.info.return_value = "PKG#2 info"
         p3.info.return_value = "PKG#3 info"
 
-        cmd._use_case.execute.return_value = [  # type: ignore[reportAttributeAccessIssue]
-            p1,
-            p2,
-            p3,
-        ]
+        cmd._use_case.execute.return_value = PageResult(  # type: ignore[reportAttributeAccessIssue]
+            items=(p1, p2, p3),
+            total=None,
+            limit=None,
+            offset=0,
+        )
 
         out = cmd.execute()
 
@@ -70,7 +72,7 @@ class ViewUnassignedPackages_Should(unittest.TestCase):
 
     def test_ignores_params_if_present(self) -> None:
         cmd = self.make_cmd(params=["ignored", "also-ignored"])
-        cmd._use_case.execute.return_value = []  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = PageResult(items=(), total=None, limit=None, offset=0)  # type: ignore[reportAttributeAccessIssue]
 
         _ = cmd.execute()
 

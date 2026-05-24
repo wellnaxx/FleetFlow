@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from src.adapters.driving.http.routers.api import packages_router as packages_router_module
 from src.adapters.driving.http.routers.api.packages_router import packages_router
 from src.application.results.find_suitable_packages_for_route_result import SuitableRouteForPackage
+from src.application.use_cases.pagination import PageQuery, PageResult
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.entities.delivery_route import DeliveryRoute
@@ -91,7 +92,12 @@ class PackagesRouterShould(unittest.TestCase):
 
     def test_list_packages_returns_paginated_package_responses(self) -> None:
         use_case = MagicMock()
-        use_case.execute_with_count.return_value = ([self._package(package_id=2, with_route=True)], 12)
+        use_case.execute.return_value = PageResult(
+            items=(self._package(package_id=2, with_route=True),),
+            total=12,
+            limit=1,
+            offset=2,
+        )
         self.app.dependency_overrides[packages_router_module.get_view_all_packages_use_case] = (
             lambda: use_case
         )
@@ -104,9 +110,7 @@ class PackagesRouterShould(unittest.TestCase):
         self.assertEqual(response.json()["count"], 1)
         self.assertEqual(response.json()["limit"], 1)
         self.assertEqual(response.json()["offset"], 2)
-        use_case.execute_with_count.assert_called_once_with(limit=1, offset=2)
-        use_case.execute.assert_not_called()
-        use_case.count.assert_not_called()
+        use_case.execute.assert_called_once_with(PageQuery(limit=1, offset=2, include_total=True))
 
     def test_list_packages_returns_forbidden_for_permission_error(self) -> None:
         use_case = MagicMock()
@@ -119,11 +123,16 @@ class PackagesRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"], "Missing permission: PACKAGE_VIEW_ALL")
-        use_case.execute.assert_called_once_with(limit=50, offset=0)
+        use_case.execute.assert_called_once_with(PageQuery(limit=50, offset=0, include_total=False))
 
     def test_list_unassigned_packages_returns_page_without_total_by_default(self) -> None:
         use_case = MagicMock()
-        use_case.execute.return_value = [self._package(package_id=3)]
+        use_case.execute.return_value = PageResult(
+            items=(self._package(package_id=3),),
+            total=None,
+            limit=1,
+            offset=2,
+        )
         self.app.dependency_overrides[packages_router_module.get_view_unassigned_packages_use_case] = (
             lambda: use_case
         )
@@ -135,8 +144,7 @@ class PackagesRouterShould(unittest.TestCase):
         self.assertEqual(response.json()["count"], 1)
         self.assertEqual(response.json()["limit"], 1)
         self.assertEqual(response.json()["offset"], 2)
-        use_case.execute.assert_called_once_with(limit=1, offset=2)
-        use_case.count.assert_not_called()
+        use_case.execute.assert_called_once_with(PageQuery(limit=1, offset=2, include_total=False))
 
     def test_list_packages_rejects_invalid_pagination_params(self) -> None:
         use_case = MagicMock()

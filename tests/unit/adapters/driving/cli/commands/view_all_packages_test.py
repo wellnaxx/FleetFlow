@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import MagicMock
 
 from src.adapters.driving.cli.commands.view_all_packages import ViewAllPackages
+from src.application.use_cases.pagination import PageResult
 
 
 class TestViewAllPackages_Should(unittest.TestCase):
@@ -23,7 +24,7 @@ class TestViewAllPackages_Should(unittest.TestCase):
 
     def test_no_packages_available(self) -> None:
         cmd = self.make_cmd()
-        cmd._use_case.execute.return_value = []  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = PageResult(items=(), total=None, limit=None, offset=0)  # type: ignore[reportAttributeAccessIssue]
 
         result = cmd.execute()
 
@@ -39,10 +40,12 @@ class TestViewAllPackages_Should(unittest.TestCase):
         mock_package2 = MagicMock()
         mock_package2.info.return_value = "Package 2 Info"
 
-        cmd._use_case.execute.return_value = [  # type: ignore[reportAttributeAccessIssue]
-            mock_package1,
-            mock_package2,
-        ]
+        cmd._use_case.execute.return_value = PageResult(  # type: ignore[reportAttributeAccessIssue]
+            items=(mock_package1, mock_package2),
+            total=None,
+            limit=None,
+            offset=0,
+        )
 
         result = cmd.execute()
 

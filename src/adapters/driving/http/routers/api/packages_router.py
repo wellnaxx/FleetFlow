@@ -23,6 +23,7 @@ from src.application.use_cases.packages.remove_package import RemovePackageUseCa
 from src.application.use_cases.packages.view_all_packages import ViewAllPackagesUseCase
 from src.application.use_cases.packages.view_package import ViewPackageUseCase
 from src.application.use_cases.packages.view_unassigned_packages import ViewUnassignedPackagesUseCase
+from src.application.use_cases.pagination import PageQuery, PageResult
 from src.application.use_cases.routes.find_suitable_routes_for_package import (
     FindSuitableRoutesForPackageUseCase,
 )
@@ -74,21 +75,19 @@ def _package_page_response(
 ) -> PackagePageResponse:
     """Build one paginated package response from a package listing use case."""
     try:
-        if include_total:
-            packages, total = use_case.execute_with_count(limit=limit, offset=offset)
-        else:
-            packages = use_case.execute(limit=limit, offset=offset)
-            total = None
+        result: PageResult[DeliveryPackage] = use_case.execute(
+            PageQuery(limit=limit, offset=offset, include_total=include_total)
+        )
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
 
-    items = [mapper(package) for package in packages]
+    items = [mapper(package) for package in result.items]
     return PackagePageResponse(
         items=items,
-        total=total,
-        count=len(items),
-        limit=limit,
-        offset=offset,
+        total=result.total,
+        count=result.count,
+        limit=result.limit or limit,
+        offset=result.offset,
     )
 
 
