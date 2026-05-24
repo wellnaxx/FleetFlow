@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime
 from unittest.mock import MagicMock
 
 from fastapi import FastAPI
@@ -6,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from src.adapters.driving.http.routers.api import packages_router as packages_router_module
 from src.adapters.driving.http.routers.api.packages_router import packages_router
+from src.application.results.find_suitable_packages_for_route_result import SuitableRouteForPackage
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.entities.delivery_route import DeliveryRoute
@@ -167,6 +169,58 @@ class PackagesRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["detail"], "Package with ID 4 not found")
+
+    def test_find_suitable_routes_for_package_returns_route_options(self) -> None:
+        use_case = MagicMock()
+        eta = datetime(2026, 5, 24, 10, 30)
+        use_case.execute.return_value = [
+            SuitableRouteForPackage(
+                route_id=21,
+                start_location=LocationCode("SYD"),
+                end_location=LocationCode("MEL"),
+                eta=eta,
+                capacity_left=125.5,
+                end_city=LocationCode("MEL"),
+            )
+        ]
+        self.app.dependency_overrides[
+            packages_router_module.get_find_suitable_routes_for_package_use_case
+        ] = lambda: use_case
+
+        response = self.client.get("/packages/4/suitable-routes")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()[0]["route_id"], 21)
+        self.assertEqual(response.json()[0]["start_location"], "SYD")
+        self.assertEqual(response.json()[0]["end_location"], "MEL")
+        self.assertEqual(response.json()[0]["eta"], "2026-05-24T10:30:00")
+        self.assertEqual(response.json()[0]["capacity_left"], 125.5)
+        self.assertEqual(response.json()[0]["end_city"], "MEL")
+        use_case.execute.assert_called_once_with(package_id=4)
+
+    def test_find_suitable_routes_for_package_returns_not_found_for_missing_package(self) -> None:
+        use_case = MagicMock()
+        use_case.execute.side_effect = ValueError("Package with ID 4 not found.")
+        self.app.dependency_overrides[
+            packages_router_module.get_find_suitable_routes_for_package_use_case
+        ] = lambda: use_case
+
+        response = self.client.get("/packages/4/suitable-routes")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["detail"], "Package with ID 4 not found.")
+
+    def test_find_suitable_routes_for_package_returns_forbidden_for_permission_error(self) -> None:
+        use_case = MagicMock()
+        use_case.execute.side_effect = PermissionError("Missing permission: PACKAGE_FIND_ROUTE_FOR")
+        self.app.dependency_overrides[
+            packages_router_module.get_find_suitable_routes_for_package_use_case
+        ] = lambda: use_case
+
+        response = self.client.get("/packages/4/suitable-routes")
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["detail"], "Missing permission: PACKAGE_FIND_ROUTE_FOR")
 
     def test_delete_package_removes_package(self) -> None:
         use_case = MagicMock()

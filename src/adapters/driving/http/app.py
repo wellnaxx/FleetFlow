@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from src.adapters.driving.http.routers.api.auth_router import auth_router
 from src.adapters.driving.http.routers.api.customers_router import customers_router
 from src.adapters.driving.http.routers.api.packages_router import packages_router
+from src.adapters.driving.http.routers.api.routes_router import routes_router
 
 API_PREFIX = "/api"
 
@@ -10,3 +11,4 @@ app = FastAPI(title="FleetFlow API", description="REST API for managing FleetFlo
 app.include_router(auth_router, prefix=API_PREFIX)
 app.include_router(customers_router, prefix=API_PREFIX)
 app.include_router(packages_router, prefix=API_PREFIX)
+app.include_router(routes_router, prefix=API_PREFIX)

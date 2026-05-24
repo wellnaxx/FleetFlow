@@ -1,8 +1,11 @@
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel, Field, NonNegativeFloat, NonNegativeInt, PositiveInt
+from pydantic import BaseModel, Field, NonNegativeInt, PositiveInt
 
 from src.domain.enums.route_status import RouteStatus
+
+type RouteInProgressPositionKind = Literal["AT_STOP", "IN_TRANSIT"]
 
 
 class RouteCreateRequest(BaseModel):
@@ -33,6 +36,20 @@ class RouteResponse(BaseModel):
     package_ids: list[PositiveInt] = Field(
         ..., description="List of package identifiers assigned to this route."
     )
+
+
+class RouteInProgressResponse(BaseModel):
+    """Response model for a delivery route in-progress."""
+
+    route: RouteResponse
+    position_kind: RouteInProgressPositionKind = Field(
+        ...,
+        description="Computed active-route position kind. Allowed values are AT_STOP or IN_TRANSIT.",
+        examples=["AT_STOP"],
+    )
+    current_location: str | None = None
+    in_transit_from: str | None = None
+    in_transit_to: str | None = None
 
 
 class RoutePageResponse(BaseModel):
@@ -94,20 +111,3 @@ class AssignTruckToRouteResponse(BaseModel):
 
     route_id: PositiveInt = Field(..., description="Identifier of the route to which the truck was assigned.")
     truck_id: PositiveInt = Field(..., description="Identifier of the truck that was assigned to the route.")
-
-
-class SuitableRouteForPackageResponse(BaseModel):
-    """Response model for a route that can carry a package."""
-
-    route_id: PositiveInt = Field(..., description="Identifier of the suitable route.")
-    start_location: str = Field(..., description="First location on the suitable route.")
-    end_location: str = Field(..., description="Final location on the suitable route.")
-    eta: datetime | None = Field(
-        None,
-        description="Expected arrival at the package destination, or null when unscheduled.",
-    )
-    capacity_left: NonNegativeFloat | None = Field(
-        None,
-        description="Remaining truck capacity, or null when no truck is assigned.",
-    )
-    end_city: str = Field(..., description="Package destination city used for the route match.")

@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from src.adapters.driving.http.dependencies.use_cases import (
     get_create_package_use_case,
+    get_find_suitable_routes_for_package_use_case,
     get_remove_package_use_case,
     get_view_all_packages_use_case,
     get_view_package_use_case,
@@ -15,12 +16,16 @@ from src.adapters.driving.http.schemas.packages import (
     PackageCreateRequest,
     PackagePageResponse,
     PackageResponse,
+    PackageSuitableRouteResponse,
 )
 from src.application.use_cases.packages.create_package import CreatePackageUseCase
 from src.application.use_cases.packages.remove_package import RemovePackageUseCase
 from src.application.use_cases.packages.view_all_packages import ViewAllPackagesUseCase
 from src.application.use_cases.packages.view_package import ViewPackageUseCase
 from src.application.use_cases.packages.view_unassigned_packages import ViewUnassignedPackagesUseCase
+from src.application.use_cases.routes.find_suitable_routes_for_package import (
+    FindSuitableRoutesForPackageUseCase,
+)
 from src.domain.entities.delivery_package import DeliveryPackage
 
 packages_router = APIRouter(prefix="/packages", tags=["packages"])
@@ -188,6 +193,44 @@ def get_package(
     try:
         package = use_case.execute(package_id=package_id)
         return _package_response(package)
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+
+
+@packages_router.get("/{package_id}/suitable-routes", status_code=status.HTTP_200_OK)
+def find_suitable_routes_for_package(
+    package_id: int,
+    use_case: Annotated[
+        FindSuitableRoutesForPackageUseCase, Depends(get_find_suitable_routes_for_package_use_case)
+    ],
+) -> list[PackageSuitableRouteResponse]:
+    """Return routes that can currently carry the requested package.
+
+    Args:
+        package_id: Identifier of the package to place on a route.
+        use_case: Use case for finding suitable routes, injected by FastAPI.
+
+    Returns:
+        Routes that can accept the requested package.
+
+    Raises:
+        HTTPException: If the caller lacks permission or the package does not exist.
+    """
+    try:
+        results = use_case.execute(package_id=package_id)
+        return [
+            PackageSuitableRouteResponse(
+                route_id=result.route_id,
+                start_location=str(result.start_location),
+                end_location=str(result.end_location),
+                eta=result.eta,
+                capacity_left=result.capacity_left,
+                end_city=str(result.end_city),
+            )
+            for result in results
+        ]
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
     except ValueError as e:
