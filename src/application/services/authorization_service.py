@@ -30,7 +30,7 @@ class AuthorizationService:
         """
         if not self.current_user:
             return False
-        allowed: set[Permission] = ROLE_PERMISSIONS.get(self.current_user.role, set())
+        allowed: frozenset[Permission] = ROLE_PERMISSIONS.get(self.current_user.role, frozenset())
         return perm in allowed
 
 
