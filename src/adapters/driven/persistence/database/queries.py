@@ -34,6 +34,9 @@ class RouteQueries:
     add_stop: str
     get_by_id: str
     list_all: str
+    list_page: str
+    list_page_with_total: str
+    count_all: str
     remove: str
     update_state: str
 
@@ -51,6 +54,7 @@ class PackageQueries:
     count_all: str
     list_by_route: str
     list_assigned: str
+    list_assigned_by_routes: str
     list_unassigned: str
     list_unassigned_page: str
     list_unassigned_page_with_total: str
@@ -68,6 +72,7 @@ class TruckQueries:
     list_all: str
     list_all_with_route: str
     list_assigned: str
+    list_assigned_by_routes: str
     update_state: str
 
 
@@ -139,6 +144,9 @@ class QueryRegistry:
             add_stop=load_sql("routes/add_stop.sql"),
             get_by_id=load_sql("routes/get_by_id.sql"),
             list_all=load_sql("routes/list_all.sql"),
+            list_page=load_sql("routes/list_page.sql"),
+            list_page_with_total=load_sql("routes/list_page_with_total.sql"),
+            count_all=load_sql("routes/count_all.sql"),
             remove=load_sql("routes/remove.sql"),
             update_state=load_sql("routes/update_state.sql"),
         )
@@ -165,6 +173,7 @@ class QueryRegistry:
             count_all=load_sql("packages/count_all.sql"),
             list_by_route=load_sql("packages/list_by_route.sql"),
             list_assigned=load_sql("packages/list_assigned.sql"),
+            list_assigned_by_routes=load_sql("packages/list_assigned_by_routes.sql"),
             list_unassigned=load_sql("packages/list_unassigned.sql"),
             list_unassigned_page=load_sql("packages/list_unassigned_page.sql"),
             list_unassigned_page_with_total=load_sql("packages/list_unassigned_page_with_total.sql"),
@@ -191,6 +200,7 @@ class QueryRegistry:
             list_all=load_sql("trucks/list_all.sql"),
             list_all_with_route=load_sql("trucks/list_all_with_route.sql"),
             list_assigned=load_sql("trucks/list_assigned.sql"),
+            list_assigned_by_routes=load_sql("trucks/list_assigned_by_routes.sql"),
             update_state=load_sql("trucks/update_state.sql"),
         )
 
