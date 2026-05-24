@@ -21,10 +21,42 @@ class ViewAllRoutesUseCase(AuthorizedUseCase[list[DeliveryRoute]]):
         self._routes = routes
 
     @requires(Permission.ROUTE_VIEW_ALL)
-    def execute(self) -> list[DeliveryRoute]:
+    def execute(self, limit: int | None = None, offset: int = 0) -> list[DeliveryRoute]:
         """Return all persisted routes.
+
+        Args:
+            limit: Optional maximum number of routes to return.
+            offset: Number of routes to skip when `limit` is provided.
 
         Returns:
             Route entities currently stored in the repository.
+
+        Raises:
+            ValueError: If pagination arguments are invalid.
         """
-        return self._routes.list_all()
+        if limit is None:
+            if offset != 0:
+                raise ValueError("Offset cannot be used without a limit.")
+            return self._routes.list_all()
+
+        if limit < 1:
+            raise ValueError("Limit must be greater than zero.")
+        if offset < 0:
+            raise ValueError("Offset must be greater than or equal to zero.")
+
+        return self._routes.list_page(limit=limit, offset=offset)
+
+    @requires(Permission.ROUTE_VIEW_ALL)
+    def execute_with_count(self, limit: int, offset: int = 0) -> tuple[list[DeliveryRoute], int]:
+        """Return a route page and total from one repository operation."""
+        if limit < 1:
+            raise ValueError("Limit must be greater than zero.")
+        if offset < 0:
+            raise ValueError("Offset must be greater than or equal to zero.")
+
+        return self._routes.list_page_with_total(limit=limit, offset=offset)
+
+    @requires(Permission.ROUTE_VIEW_ALL)
+    def count(self) -> int:
+        """Return the total number of persisted routes."""
+        return self._routes.count_all()

@@ -183,6 +183,11 @@ class InMemoryRepositoryInvariants_Should(unittest.TestCase):
 
         self.assertEqual(repo.peek_next_id(), 3)
         self.assertEqual([route.route_id for route in repo.list_all()], [1, 2])
+        self.assertEqual([route.route_id for route in repo.list_page(limit=1, offset=1)], [2])
+        page, total = repo.list_page_with_total(limit=1, offset=1)
+        self.assertEqual([route.route_id for route in page], [2])
+        self.assertEqual(total, 2)
+        self.assertEqual(repo.count_all(), 2)
 
     def test_route_repository_replaces_routes_and_counter(self) -> None:
         repo = InMemoryRouteRepository()

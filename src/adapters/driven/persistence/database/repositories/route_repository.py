@@ -5,10 +5,13 @@ from src.adapters.driven.persistence.database.executor import (
     execute_insert_tx,
     execute_write,
     execute_write_tx,
+    fetch_one,
     transaction_cursor,
 )
 from src.adapters.driven.persistence.database.graph_loaders.route_graph_loader import (
     load_route_graph,
+    load_route_graph_page,
+    load_route_graph_page_with_total,
     load_route_graphs,
 )
 from src.adapters.driven.persistence.database.queries import QUERIES
@@ -89,6 +92,26 @@ class PostgresRouteRepository:
             ValueError: If persisted route data is invalid.
         """
         return [graph.route for graph in load_route_graphs()]
+
+    def list_page(self, limit: int, offset: int) -> list[DeliveryRoute]:
+        """Return a limited page of routes ordered by route id."""
+        return [graph.route for graph in load_route_graph_page(limit, offset)]
+
+    def list_page_with_total(self, limit: int, offset: int) -> tuple[list[DeliveryRoute], int]:
+        """Return a route page and total count from one repository operation."""
+        graphs, total = load_route_graph_page_with_total(limit, offset)
+        return [graph.route for graph in graphs], total
+
+    def count_all(self) -> int:
+        """Return the total number of routes."""
+        row = fetch_one(QUERIES.routes.count_all)
+        if row is None:
+            return 0
+
+        total = row["total"]
+        if not isinstance(total, int) or isinstance(total, bool):
+            raise TypeError("Route count must be an integer.")
+        return total
 
     def update_state(self, route: DeliveryRoute) -> None:
         """Persist mutable route runtime state.

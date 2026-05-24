@@ -156,6 +156,66 @@ class PostgresRouteRepository_Should(unittest.TestCase):
 
         self.assertIn("route_id: expected int", str(ctx.exception))
 
+    @patch(f"{MODULE}.load_route_graph_page")
+    def test_list_page_returns_hydrated_routes(
+        self,
+        load_route_graph_page_mock: MagicMock,
+    ) -> None:
+        route = DeliveryRoute(LocationCode("SYD"), LocationCode("MEL"), route_id=21)
+        load_route_graph_page_mock.return_value = [SimpleNamespace(route=route)]
+
+        result = self.repo.list_page(limit=10, offset=20)
+
+        self.assertEqual(result, [route])
+        load_route_graph_page_mock.assert_called_once_with(10, 20)
+
+    @patch(f"{MODULE}.load_route_graph_page_with_total")
+    def test_list_page_with_total_returns_hydrated_routes_and_count(
+        self,
+        load_route_graph_page_with_total_mock: MagicMock,
+    ) -> None:
+        route = DeliveryRoute(LocationCode("SYD"), LocationCode("MEL"), route_id=21)
+        load_route_graph_page_with_total_mock.return_value = ([SimpleNamespace(route=route)], 3)
+
+        result = self.repo.list_page_with_total(limit=10, offset=20)
+
+        self.assertEqual(result, ([route], 3))
+        load_route_graph_page_with_total_mock.assert_called_once_with(10, 20)
+
+    @patch(f"{MODULE}.fetch_one", return_value={"total": 3})
+    def test_count_all_returns_route_count(self, fetch_one_mock: MagicMock) -> None:
+        result = self.repo.count_all()
+
+        self.assertEqual(result, 3)
+        fetch_one_mock.assert_called_once_with(QUERIES.routes.count_all)
+
+    @patch(f"{MODULE}.fetch_one", return_value=None)
+    def test_count_all_returns_zero_when_no_row_is_returned(self, fetch_one_mock: MagicMock) -> None:
+        result = self.repo.count_all()
+
+        self.assertEqual(result, 0)
+        fetch_one_mock.assert_called_once_with(QUERIES.routes.count_all)
+
+    @patch(f"{MODULE}.fetch_one", return_value={"total": "3"})
+    def test_count_all_raises_type_error_when_total_is_string(
+        self, fetch_one_mock: MagicMock
+    ) -> None:
+        with self.assertRaises(TypeError) as ctx:
+            self.repo.count_all()
+
+        self.assertIn("Route count must be an integer", str(ctx.exception))
+        fetch_one_mock.assert_called_once_with(QUERIES.routes.count_all)
+
+    @patch(f"{MODULE}.fetch_one", return_value={"total": True})
+    def test_count_all_raises_type_error_when_total_is_bool(
+        self, fetch_one_mock: MagicMock
+    ) -> None:
+        with self.assertRaises(TypeError) as ctx:
+            self.repo.count_all()
+
+        self.assertIn("Route count must be an integer", str(ctx.exception))
+        fetch_one_mock.assert_called_once_with(QUERIES.routes.count_all)
+
     @patch(f"{MODULE}.execute_write")
     def test_update_state_writes_mutable_route_state(self, execute_write_mock: MagicMock) -> None:
         departure_time = datetime(2026, 5, 2, 9, 0)

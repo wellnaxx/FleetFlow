@@ -88,6 +88,19 @@ class InMemoryRouteRepository:
         """Return all routes ordered by id."""
         return [self._routes[route_id] for route_id in sorted(self._routes)]
 
+    def list_page(self, limit: int, offset: int) -> list[DeliveryRoute]:
+        """Return a page of routes ordered by id."""
+        return self.list_all()[offset : offset + limit]
+
+    def list_page_with_total(self, limit: int, offset: int) -> tuple[list[DeliveryRoute], int]:
+        """Return a route page and total count from the current memory snapshot."""
+        routes = self.list_all()
+        return routes[offset : offset + limit], len(routes)
+
+    def count_all(self) -> int:
+        """Return the total number of routes."""
+        return len(self._routes)
+
     def update_state(self, route: DeliveryRoute) -> None:
         """Persist mutable route runtime state.
 

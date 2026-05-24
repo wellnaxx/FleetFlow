@@ -163,9 +163,67 @@ def load_route_graphs() -> list[HydratedRouteGraph]:
         TypeError: If required database columns have unexpected types.
         ValueError: If persisted route relationships are inconsistent.
     """
-    route_rows, truck_rows, package_rows = _load_all_route_rows()
+    with transaction_cursor() as cursor:
+        route_rows = fetch_all_tx(cursor, QUERIES.routes.list_all)
+        return _hydrate_route_graphs_from_rows_tx(cursor, route_rows)
 
+
+def load_route_graph_page(limit: int, offset: int) -> list[HydratedRouteGraph]:
+    """Load a page of route aggregates and their connected assigned objects.
+    
+    Args:
+        limit: Maximum number of routes to return.
+        offset: Number of routes to skip.
+
+    Returns:
+        Hydrated route graphs for the requested page, ordered by route id.
+
+    Raises:
+        DatabaseError: If any SQL query fails.
+        KeyError: If a required database column is missing.
+        TypeError: If required database columns have unexpected types.
+        ValueError: If persisted route relationships are inconsistent.
+    """
+    with transaction_cursor() as cursor:
+        route_rows = fetch_all_tx(cursor, QUERIES.routes.list_page, (limit, offset))
+        return _hydrate_route_graphs_from_rows_tx(cursor, route_rows)
+
+
+def load_route_graph_page_with_total(limit: int, offset: int) -> tuple[list[HydratedRouteGraph], int]:
+    """Load a route page and total count from one route-page query.
+    
+    Args:
+        limit: Maximum number of routes to return.
+        offset: Number of routes to skip.
+
+    Returns:
+        Tuple of (hydrated route graphs for the page, total count of all routes).
+
+    Raises:
+        DatabaseError: If any SQL query fails.
+        KeyError: If a required database column is missing.
+        TypeError: If required database columns have unexpected types or total is not an integer.
+        ValueError: If persisted route relationships are inconsistent.
+    """
+    with transaction_cursor() as cursor:
+        rows = fetch_all_tx(cursor, QUERIES.routes.list_page_with_total, (limit, offset))
+        route_rows, total = _split_route_page_rows_and_total(rows)
+        return _hydrate_route_graphs_from_rows_tx(cursor, route_rows), total
+
+
+def _hydrate_route_graphs_from_rows_tx(
+    cursor: Cursor[Row],
+    route_rows: list[RowDict],
+) -> list[HydratedRouteGraph]:
+    """Hydrate route graphs from already-loaded route/stop rows."""
     routes, route_truck_ids = map_routes(route_rows)
+    route_ids = sorted(routes)
+    if not route_ids:
+        return []
+
+    truck_rows = fetch_all_tx(cursor, QUERIES.trucks.list_assigned_by_routes, (route_ids,))
+    package_rows = fetch_all_tx(cursor, QUERIES.packages.list_assigned_by_routes, (route_ids,))
+
     trucks = map_trucks(truck_rows)
     packages, _customers, package_route_ids = map_joined_package_rows(package_rows)
 
@@ -173,6 +231,18 @@ def load_route_graphs() -> list[HydratedRouteGraph]:
     link_packages_to_routes(routes, packages, package_route_ids)
 
     return [_build_route_graph(route) for route in sorted(routes.values(), key=lambda route: route.route_id)]
+
+
+def _split_route_page_rows_and_total(rows: list[RowDict]) -> tuple[list[RowDict], int]:
+    """Extract route rows and a validated total from page-with-total rows."""
+    if not rows:
+        return [], 0
+
+    total = rows[0]["total"]
+    if not isinstance(total, int) or isinstance(total, bool):
+        raise TypeError("Route count must be an integer.")
+
+    return [row for row in rows if row["route_id"] is not None], total
 
 
 def _load_route_rows_tx(
@@ -196,23 +266,6 @@ def _load_route_rows_tx(
     package_rows = fetch_all_tx(cursor, QUERIES.packages.list_by_route, (route_id,))
 
     return route_rows, truck_row, package_rows
-
-
-def _load_all_route_rows() -> tuple[list[RowDict], list[RowDict], list[RowDict]]:
-    """Load rows needed to hydrate all route graphs.
-
-    Returns:
-        Route/stop rows, assigned truck rows, and assigned package/customer rows.
-
-    Raises:
-        DatabaseError: If any SQL query fails.
-    """
-    with transaction_cursor() as cursor:
-        route_rows = fetch_all_tx(cursor, QUERIES.routes.list_all)
-        truck_rows = fetch_all_tx(cursor, QUERIES.trucks.list_assigned)
-        package_rows = fetch_all_tx(cursor, QUERIES.packages.list_assigned)
-
-    return route_rows, truck_rows, package_rows
 
 
 def _build_route_graph(route: DeliveryRoute) -> HydratedRouteGraph:

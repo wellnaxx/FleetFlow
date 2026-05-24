@@ -5,6 +5,8 @@ from unittest.mock import MagicMock, call, patch
 
 from src.adapters.driven.persistence.database.graph_loaders.route_graph_loader import (
     load_route_graph,
+    load_route_graph_page,
+    load_route_graph_page_with_total,
     load_route_graph_tx,
     load_route_graphs,
 )
@@ -190,11 +192,94 @@ class RouteGraphLoaderShould(unittest.TestCase):
         fetch_all_tx_mock.assert_has_calls(
             [
                 call(cursor, QUERIES.routes.list_all),
-                call(cursor, QUERIES.trucks.list_assigned),
-                call(cursor, QUERIES.packages.list_assigned),
+                call(cursor, QUERIES.trucks.list_assigned_by_routes, ([21, 22],)),
+                call(cursor, QUERIES.packages.list_assigned_by_routes, ([21, 22],)),
             ]
         )
         self.assertEqual(fetch_all_tx_mock.call_count, 3)
+
+    @patch(f"{MODULE}.transaction_cursor")
+    @patch(f"{MODULE}.fetch_all_tx")
+    def test_load_route_graph_page_maps_requested_route_page(
+        self,
+        fetch_all_tx_mock: MagicMock,
+        transaction_cursor_mock: MagicMock,
+    ) -> None:
+        cursor = self._transaction_cursor(transaction_cursor_mock)
+        fetch_all_tx_mock.side_effect = [
+            [
+                self._route_row(22, 0, "ADL"),
+                self._route_row(22, 1, "PER"),
+            ],
+            [],
+            [],
+        ]
+
+        graphs = load_route_graph_page(limit=10, offset=20)
+
+        self.assertEqual([graph.route.route_id for graph in graphs], [22])
+        fetch_all_tx_mock.assert_has_calls(
+            [
+                call(cursor, QUERIES.routes.list_page, (10, 20)),
+                call(cursor, QUERIES.trucks.list_assigned_by_routes, ([22],)),
+                call(cursor, QUERIES.packages.list_assigned_by_routes, ([22],)),
+            ]
+        )
+
+    @patch(f"{MODULE}.transaction_cursor")
+    @patch(f"{MODULE}.fetch_all_tx")
+    def test_load_route_graph_page_with_total_maps_page_and_total(
+        self,
+        fetch_all_tx_mock: MagicMock,
+        transaction_cursor_mock: MagicMock,
+    ) -> None:
+        cursor = self._transaction_cursor(transaction_cursor_mock)
+        fetch_all_tx_mock.side_effect = [
+            [
+                self._route_row(22, 0, "ADL", total=3),
+                self._route_row(22, 1, "PER", total=3),
+            ],
+            [],
+            [],
+        ]
+
+        graphs, total = load_route_graph_page_with_total(limit=10, offset=20)
+
+        self.assertEqual([graph.route.route_id for graph in graphs], [22])
+        self.assertEqual(total, 3)
+        fetch_all_tx_mock.assert_has_calls(
+            [
+                call(cursor, QUERIES.routes.list_page_with_total, (10, 20)),
+                call(cursor, QUERIES.trucks.list_assigned_by_routes, ([22],)),
+                call(cursor, QUERIES.packages.list_assigned_by_routes, ([22],)),
+            ]
+        )
+
+    @patch(f"{MODULE}.transaction_cursor")
+    @patch(f"{MODULE}.fetch_all_tx")
+    def test_load_route_graph_page_with_total_returns_empty_page_with_total(
+        self,
+        fetch_all_tx_mock: MagicMock,
+        transaction_cursor_mock: MagicMock,
+    ) -> None:
+        cursor = self._transaction_cursor(transaction_cursor_mock)
+        fetch_all_tx_mock.return_value = [
+            {
+                "route_id": None,
+                "departure_time": None,
+                "status": None,
+                "truck_vehicle_id": None,
+                "stop_order": None,
+                "location_code": None,
+                "total": 3,
+            }
+        ]
+
+        graphs, total = load_route_graph_page_with_total(limit=10, offset=99)
+
+        self.assertEqual(graphs, [])
+        self.assertEqual(total, 3)
+        fetch_all_tx_mock.assert_called_once_with(cursor, QUERIES.routes.list_page_with_total, (10, 99))
 
     @patch(f"{MODULE}.transaction_cursor")
     @patch(f"{MODULE}.fetch_all_tx")
@@ -209,14 +294,7 @@ class RouteGraphLoaderShould(unittest.TestCase):
         graphs = load_route_graphs()
 
         self.assertEqual(graphs, [])
-        fetch_all_tx_mock.assert_has_calls(
-            [
-                call(cursor, QUERIES.routes.list_all),
-                call(cursor, QUERIES.trucks.list_assigned),
-                call(cursor, QUERIES.packages.list_assigned),
-            ]
-        )
-        self.assertEqual(fetch_all_tx_mock.call_count, 3)
+        fetch_all_tx_mock.assert_called_once_with(cursor, QUERIES.routes.list_all)
 
     @patch(f"{MODULE}.transaction_cursor")
     @patch(f"{MODULE}.fetch_all_tx")
@@ -251,8 +329,9 @@ class RouteGraphLoaderShould(unittest.TestCase):
         stop_order: int,
         location_code: str,
         truck_vehicle_id: int | None = None,
+        total: int | None = None,
     ) -> dict[str, object]:
-        return {
+        row: dict[str, object] = {
             "route_id": route_id,
             "departure_time": None,
             "status": RouteStatus.PLANNED.value,
@@ -260,6 +339,9 @@ class RouteGraphLoaderShould(unittest.TestCase):
             "stop_order": stop_order,
             "location_code": location_code,
         }
+        if total is not None:
+            row["total"] = total
+        return row
 
     def _truck_row(self, vehicle_id: int) -> dict[str, object]:
         return {
