@@ -13,7 +13,7 @@ from src.adapters.driven.persistence.database.graph_loaders.route_graph_loader i
     HydratedRouteGraph,
     load_route_graph_tx,
 )
-from src.adapters.driven.persistence.database.mappers import map_truck
+from src.adapters.driven.persistence.database.mappers.truck import map_truck
 from src.adapters.driven.persistence.database.queries import QUERIES
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.entities.truck import Truck

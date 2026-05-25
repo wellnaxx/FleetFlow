@@ -5,7 +5,7 @@ from src.adapters.driven.persistence.database.executor import (
     fetch_all,
     fetch_one,
 )
-from src.adapters.driven.persistence.database.mappers import map_user_record
+from src.adapters.driven.persistence.database.mappers.user import map_user_record
 from src.adapters.driven.persistence.database.queries import QUERIES
 from src.adapters.driven.security.password_hasher import PasswordHash
 from src.application.models.user_record import UserRecord

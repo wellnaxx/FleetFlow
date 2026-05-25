@@ -4,7 +4,7 @@ from src.adapters.driven.persistence.database.executor import (
     fetch_all,
     fetch_one,
 )
-from src.adapters.driven.persistence.database.mappers import map_customer
+from src.adapters.driven.persistence.database.mappers.customer import map_customer
 from src.adapters.driven.persistence.database.queries import QUERIES
 from src.domain.entities.customer import Customer
 from src.domain.value_objects.contact_info import ContactInfo

@@ -13,7 +13,7 @@ from src.adapters.driven.persistence.database.graph_loaders.route_graph_loader i
     HydratedRouteGraph,
     load_route_graph_tx,
 )
-from src.adapters.driven.persistence.database.mappers import as_package_row, map_package_with_customer
+from src.adapters.driven.persistence.database.mappers.package import as_package_row, map_package_with_customer
 from src.adapters.driven.persistence.database.queries import QUERIES
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage

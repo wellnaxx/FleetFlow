@@ -5,13 +5,11 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from src.adapters.driven.persistence.database.mappers import (
-    map_customer,
-    map_package,
-    map_route,
-    map_truck,
-    map_user_record,
-)
+from src.adapters.driven.persistence.database.mappers.customer import map_customer
+from src.adapters.driven.persistence.database.mappers.package import map_package
+from src.adapters.driven.persistence.database.mappers.route import map_route
+from src.adapters.driven.persistence.database.mappers.truck import map_truck
+from src.adapters.driven.persistence.database.mappers.user import map_user_record
 from src.domain.entities.customer import Customer
 from src.domain.enums.item_status import ItemStatus
 from src.domain.enums.route_status import RouteStatus

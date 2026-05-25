@@ -34,7 +34,8 @@ from src.adapters.driven.persistence.database.graph_loaders.shared import (
     route_stop_order,
     validate_same_customer,
 )
-from src.adapters.driven.persistence.database.mappers import map_route, map_truck
+from src.adapters.driven.persistence.database.mappers.route import map_route
+from src.adapters.driven.persistence.database.mappers.truck import map_truck
 from src.adapters.driven.persistence.database.queries import QUERIES
 
 if TYPE_CHECKING:
