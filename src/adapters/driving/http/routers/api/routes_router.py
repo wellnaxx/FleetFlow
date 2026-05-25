@@ -13,6 +13,7 @@ from src.adapters.driving.http.dependencies.use_cases import (
     get_view_route_use_case,
     get_view_routes_in_progress_use_case,
 )
+from src.adapters.driving.http.routers.shared import truck_response
 from src.adapters.driving.http.schemas.routes import (
     AssignPackagesToRouteRequest,
     AssignPackagesToRouteResponse,
@@ -38,7 +39,6 @@ from src.application.use_cases.routes.view_all_routes import ViewAllRoutesUseCas
 from src.application.use_cases.routes.view_route import ViewRouteUseCase
 from src.application.use_cases.routes.view_routes_in_progress import ViewRoutesInProgressUseCase
 from src.domain.entities.delivery_route import DeliveryRoute, RoutePosition
-from src.domain.entities.truck import Truck
 
 routes_router = APIRouter(prefix="/routes", tags=["routes"])
 
@@ -129,29 +129,6 @@ def _assign_packages_response(
             )
             for error in result.errors
         ],
-    )
-
-
-def _truck_response(truck: Truck) -> TruckResponse:
-    """Convert a Truck entity to a TruckResponse model.
-
-    Args:
-        truck: Truck entity to convert.
-
-    Returns:
-        HTTP response model representing the truck.
-    """
-    return TruckResponse(
-        vehicle_id=truck.vehicle_id,
-        name=str(truck.name),
-        capacity=truck.capacity,
-        max_range=truck.max_range,
-        status=truck.status,
-        current_location=str(truck.current_location) if truck.current_location is not None else None,
-        route_id=truck.route.route_id if truck.route is not None else None,
-        busy_from=truck.busy_from,
-        busy_until=truck.busy_until,
-        in_transit_to=str(truck.in_transit_to) if truck.in_transit_to is not None else None,
     )
 
 
@@ -372,7 +349,7 @@ def find_suitable_trucks_for_route(
     """
     try:
         trucks = use_case.execute(route_id=route_id)
-        return [_truck_response(truck) for truck in trucks]
+        return [truck_response(truck) for truck in trucks]
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except ValueError as exc:
