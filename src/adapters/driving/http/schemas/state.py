@@ -49,4 +49,5 @@ class WorldStatePathResponse(BaseModel):
     """Response model for a resolved world-state snapshot path."""
 
     path: str = Field(..., description="Resolved snapshot file path used by the state operation.")
+    message: str = Field(..., description="Message describing the result of the endpoint")
 
