@@ -7,10 +7,7 @@ from fastapi import Depends
 from src.adapters.driving.http.dependencies.auth import AuthenticatedPrincipal, get_current_user
 from src.application.services.auth_service import AuthService
 from src.application.use_cases.auth.change_password import ChangePasswordUseCase
-from src.application.use_cases.auth.login import LoginUseCase
-from src.application.use_cases.auth.logout import LogoutUseCase
 from src.application.use_cases.auth.register_user import RegisterUserUseCase
-from src.application.use_cases.auth.who_am_i import WhoAmIUseCase
 from src.application.use_cases.customers.view_all_customers import ViewAllCustomersUseCase
 from src.application.use_cases.packages.create_package import CreatePackageUseCase
 from src.application.use_cases.packages.remove_package import RemovePackageUseCase
@@ -34,48 +31,6 @@ from src.application.use_cases.state.save_world import SaveWorldStateUseCase
 from src.application.use_cases.trucks.view_all_trucks import ViewAllTrucksUseCase
 from src.composition.container import Container
 from src.composition.runtime import get_auth_service, get_container
-
-
-def get_login_use_case(
-    auth_service: Annotated[AuthService, Depends(get_auth_service)],
-) -> LoginUseCase:
-    """Build the login use case for an HTTP request.
-
-    Args:
-        auth_service: Shared authentication service.
-
-    Returns:
-        Login use case bound to the shared authentication service.
-    """
-    return LoginUseCase(auth_service)
-
-
-def get_logout_use_case(
-    auth_service: Annotated[AuthService, Depends(get_auth_service)],
-) -> LogoutUseCase:
-    """Build the logout use case for an HTTP request.
-
-    Args:
-        auth_service: Shared authentication service.
-
-    Returns:
-        Logout use case bound to the shared authentication service.
-    """
-    return LogoutUseCase(auth_service)
-
-
-def get_who_am_i_use_case(
-    auth_service: Annotated[AuthService, Depends(get_auth_service)],
-) -> WhoAmIUseCase:
-    """Build the current-user lookup use case for an HTTP request.
-
-    Args:
-        auth_service: Shared authentication service.
-
-    Returns:
-        Current-user lookup use case bound to the shared authentication service.
-    """
-    return WhoAmIUseCase(auth_service)
 
 
 def get_register_user_use_case(
