@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Self
 
-from pydantic import BaseModel, Field, NonNegativeInt, PositiveInt, model_validator
+from pydantic import BaseModel, Field, PositiveInt, model_validator
 
 from src.domain.enums.truck_status import TruckStatus
 
@@ -43,13 +43,3 @@ class TruckResponse(BaseModel):
         ):
             raise ValueError("busy_from must be before or equal to busy_until.")
         return self
-
-
-class TruckPageResponse(BaseModel):
-    """Paginated response model for truck listings."""
-
-    items: list[TruckResponse]
-    total: NonNegativeInt | None = None
-    count: NonNegativeInt
-    limit: PositiveInt
-    offset: NonNegativeInt
