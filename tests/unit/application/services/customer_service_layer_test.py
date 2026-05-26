@@ -1,6 +1,7 @@
 import unittest
 
 from src.adapters.driven.persistence.memory.customer_repository import InMemoryCustomerRepository
+from src.application.exceptions.application_errors import ConflictError
 from src.application.services.customer_service import CustomerService
 from src.domain.entities.customer import Customer
 from src.domain.value_objects.contact_info import ContactInfo
@@ -22,7 +23,7 @@ class CustomerServiceLayerTests(unittest.TestCase):
         self.make_customer(1, "Alice", email="alice@example.com")
         self.make_customer(2, "Alice", phone="0412345678")
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(ConflictError) as ctx:
             self.service.find_existing_customer("Alice", "alice@example.com", "0412345678")
 
         self.assertIn("Email belongs to customer ID: 1", str(ctx.exception))
@@ -38,7 +39,7 @@ class CustomerServiceLayerTests(unittest.TestCase):
     def test_find_existing_customer_raises_when_matching_email_customer_has_different_name(self) -> None:
         self.make_customer(1, "Alice", email="alice@example.com")
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(ConflictError) as ctx:
             self.service.find_existing_customer("Bob", "alice@example.com", "")
 
         self.assertIn("does not match existing customer ID 1", str(ctx.exception))

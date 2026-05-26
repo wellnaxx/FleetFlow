@@ -1,5 +1,23 @@
-"""Reserved module for future domain exception types.
+"""Domain exception types for validation and business-rule failures."""
 
-Application-specific exception boundaries currently live under
-`src.application.exceptions`.
-"""
+from src.application.exceptions.application_errors import ApplicationError
+
+
+class DomainError(ApplicationError):
+    """Base class for expected domain/business-rule failures."""
+
+
+class EntityNotFoundError(DomainError):
+    """Requested domain entity was not found."""
+
+
+class DomainValidationError(DomainError):
+    """Input or domain data failed validation."""
+
+
+class BusinessRuleViolationError(DomainError):
+    """A domain operation violates a business rule."""
+
+
+class DomainConflictError(DomainError):
+    """Operation conflicts with current domain state."""

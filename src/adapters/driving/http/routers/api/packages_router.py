@@ -3,6 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from src.adapters.driven.persistence.database.errors import DatabaseError
 from src.adapters.driving.http.dependencies.use_cases import (
     get_create_package_use_case,
     get_find_suitable_routes_for_package_use_case,
@@ -18,6 +19,7 @@ from src.adapters.driving.http.schemas.packages import (
     PackageResponse,
     PackageSuitableRouteResponse,
 )
+from src.application.exceptions.application_errors import ConflictError, NotFoundError
 from src.application.use_cases.packages.create_package import CreatePackageUseCase
 from src.application.use_cases.packages.remove_package import RemovePackageUseCase
 from src.application.use_cases.packages.view_all_packages import ViewAllPackagesUseCase
@@ -28,6 +30,7 @@ from src.application.use_cases.routes.find_suitable_routes_for_package import (
     FindSuitableRoutesForPackageUseCase,
 )
 from src.domain.entities.delivery_package import DeliveryPackage
+from src.domain.exceptions import DomainConflictError, DomainValidationError, EntityNotFoundError
 
 packages_router = APIRouter(prefix="/packages", tags=["packages"])
 
@@ -80,6 +83,12 @@ def _package_page_response(
         )
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
+    except DatabaseError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     items = [mapper(package) for package in result.items]
     return PackagePageResponse(
@@ -106,8 +115,13 @@ def create_package(
         A response model representing the newly created package.
 
     Raises:
-        HTTPException: If the caller lacks permission to create a package, or if the request data is invalid.
-    """
+        HTTPException 403: If the caller lacks permission to create a package.
+        HTTPException 500: If the database fails to create the package.
+        HTTPException 400: If the caller tries to create a package with invalid parameters.
+        HTTPException 409: If the caller tries to create a package with conflicting information,
+            or during this operation the package ownership transfer detects that the package is missing
+            from the previous customer's active collection.
+        """
     try:
         package = use_case.execute(
             start=request.start_location,
@@ -117,10 +131,16 @@ def create_package(
             email=request.customer_email or "",
             phone=request.customer_phone_number or "",
         )
-    except PermissionError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
-    except (ValueError, TypeError) as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except DatabaseError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
+        ) from exc
+    except DomainValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except (ConflictError, DomainConflictError, EntityNotFoundError) as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return _package_response(package)
 
 
@@ -143,7 +163,9 @@ def list_packages(
         A paginated package response.
 
     Raises:
-        HTTPException: If the caller lacks permission to view packages.
+        HTTPException 400: If pagination arguments are invalid.
+        HTTPException 403: If the caller lacks permission to view packages.
+        HTTPException 500: If the database fails to list packages.
     """
     return _package_page_response(use_case, _package_response, limit, offset, include_total)
 
@@ -167,7 +189,9 @@ def list_unassigned_packages(
         A paginated package response.
 
     Raises:
-        HTTPException: If the caller lacks permission to view packages.
+        HTTPException 400: If pagination arguments are invalid.
+        HTTPException 403: If the caller lacks permission to view unassigned packages.
+        HTTPException 500: If the database fails to list packages.
     """
     return _package_page_response(use_case, _package_response, limit, offset, include_total)
 
@@ -187,15 +211,21 @@ def get_package(
         A response model representing the requested package.
 
     Raises:
-        HTTPException: If the caller lacks permission to view the package or if the package is not found.
+        HTTPException 403: If the caller lacks permission to view the package.
+        HTTPException 404: If the package is not found.
+        HTTPException 500: If the database fails to fetch the package.
     """
     try:
         package = use_case.execute(package_id=package_id)
         return _package_response(package)
-    except PermissionError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except DatabaseError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
+        ) from exc
 
 
 @packages_router.get("/{package_id}/suitable-routes", status_code=status.HTTP_200_OK)
@@ -215,7 +245,9 @@ def find_suitable_routes_for_package(
         Routes that can accept the requested package.
 
     Raises:
-        HTTPException: If the caller lacks permission or the package does not exist.
+        HTTPException 403: If the caller lacks permission to view the package or routes.
+        HTTPException 404: If the package does not exist.
+        HTTPException 500: If the database fails to fetch package or route data.
     """
     try:
         results = use_case.execute(package_id=package_id)
@@ -230,10 +262,14 @@ def find_suitable_routes_for_package(
             )
             for result in results
         ]
-    except PermissionError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except DatabaseError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
+        ) from exc
 
 
 @packages_router.delete("/{package_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -250,11 +286,20 @@ def delete_package(
         None
 
     Raises:
-        HTTPException: If the caller lacks permission to delete the package or if the package is not found.
+        HTTPException 403: If the caller lacks permission to delete the package.
+        HTTPException 404: If the package is not found.
+        HTTPException 409: If persisted package ownership or route assignment state is inconsistent.
+        HTTPException 500: If the database fails to remove the package.
     """
     try:
         use_case.execute(package_id=package_id)
-    except PermissionError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except (DomainConflictError, EntityNotFoundError) as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except DatabaseError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
+        ) from exc

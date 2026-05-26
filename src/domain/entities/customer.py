@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from ..value_objects.contact_info import ContactInfo  # noqa: TC001
+from src.domain.exceptions import DomainConflictError, EntityNotFoundError
+from src.domain.value_objects.contact_info import ContactInfo  # noqa: TC001
 
 if TYPE_CHECKING:
     from src.domain.entities.delivery_package import DeliveryPackage
@@ -49,11 +50,14 @@ class Customer:
             package: Package to include in this customer's active collection.
 
         Raises:
-            ValueError: If the package is already linked to this customer.
+            DomainConflictError: If the package is already linked to this customer.
+            EntityNotFoundError: If the package is not in the old customer's active collection.
         """
         if package.customer.customer_id == self.customer_id:
             if any(p.package_id == package.package_id for p in self._delivery_packages):
-                raise ValueError(f"Package with id {package.package_id} is already assigned to this customer.")
+                raise DomainConflictError(
+                    f"Package with id {package.package_id} is already assigned to this customer."
+                )
             package.customer = self
             self._delivery_packages.append(package)
             return
@@ -86,10 +90,10 @@ class Customer:
             package: Package to remove from the active collection.
 
         Raises:
-            ValueError: If the package is not in this customer's active collection.
+            EntityNotFoundError: If the package is not in this customer's active collection.
         """
         for i, p in enumerate(self._delivery_packages):
             if p.package_id == package.package_id:
                 self._delivery_packages.pop(i)
                 return
-        raise ValueError(f"Package with id {package.package_id} does not exist.")
+        raise EntityNotFoundError(f"Package with id {package.package_id} does not exist.")

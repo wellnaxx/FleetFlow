@@ -13,6 +13,7 @@ from src.adapters.driven.persistence.database.mappers.user import map_user_recor
 from src.domain.entities.customer import Customer
 from src.domain.enums.item_status import ItemStatus
 from src.domain.enums.route_status import RouteStatus
+from src.domain.exceptions import DomainValidationError
 from src.domain.value_objects.contact_info import ContactInfo
 
 if TYPE_CHECKING:
@@ -127,7 +128,7 @@ class DatabaseMappers_Should(unittest.TestCase):
 
                 self.assertIn(f"{column}: expected", str(ctx.exception))
 
-    def test_map_customer_raises_value_error_for_invalid_contact_data(self) -> None:
+    def test_map_customer_raises_domain_validation_error_for_invalid_contact_data(self) -> None:
         row: RowDict = {
             "customer_id": 7,
             "name": "Al",
@@ -135,7 +136,7 @@ class DatabaseMappers_Should(unittest.TestCase):
             "phone": "0412345678",
         }
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainValidationError):
             map_customer(row)
 
     def test_map_user_record_builds_user_record_from_valid_row(self) -> None:

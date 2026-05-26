@@ -4,6 +4,8 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from src.domain.exceptions import DomainValidationError
+
 
 @dataclass
 class ContactInfo:
@@ -25,8 +27,7 @@ class ContactInfo:
         """Normalize and validate contact fields after dataclass initialization.
 
         Raises:
-            TypeError: If a field has an invalid type.
-            ValueError: If a field violates contact validation rules.
+            DomainValidationError: If a field has an invalid type or violates contact validation rules.
         """
         object.__setattr__(self, "name", self._clean_name(self.name))
         object.__setattr__(self, "email", self._clean_email(self.email))
@@ -40,8 +41,7 @@ class ContactInfo:
             value: New field value.
 
         Raises:
-            TypeError: If a field has an invalid type.
-            ValueError: If a field violates contact validation rules.
+            DomainValidationError: If a field has an invalid type or violates contact validation rules.
         """
         if key == "name":
             value = self._clean_name(value)
@@ -53,44 +53,44 @@ class ContactInfo:
 
     def _clean_name(self, v: Any) -> str:
         if not isinstance(v, str):
-            raise TypeError("Name must be a string.")
+            raise DomainValidationError("Name must be a string.")
         v = v.strip()
         if len(v) < 3:
-            raise ValueError("Name is too short")
+            raise DomainValidationError("Name is too short")
         if len(v) > 30:
-            raise ValueError("Name is too long")
+            raise DomainValidationError("Name is too long")
         return v
 
     def _clean_email(self, v: Any) -> str:
         if v is None:
             return ""
         if not isinstance(v, str):
-            raise TypeError("Email must be a string.")
+            raise DomainValidationError("Email must be a string.")
         v = v.strip().lower()
         if v == "":
             return ""
 
         parts = v.split("@")
         if len(parts) != 2:
-            raise ValueError("Invalid email address format.")
+            raise DomainValidationError("Invalid email address format.")
         local, domain = parts
         if not local or not domain:
-            raise ValueError("Invalid email address format.")
+            raise DomainValidationError("Invalid email address format.")
 
         if ".." in v:
-            raise ValueError("Invalid email address format.")
+            raise DomainValidationError("Invalid email address format.")
 
         labels = domain.split(".")
         if len(labels) < 2 or any(label == "" for label in labels):
-            raise ValueError("Invalid email address format.")
+            raise DomainValidationError("Invalid email address format.")
         for label in labels:
             if not re.fullmatch(r"[a-z0-9-]+", label):
-                raise ValueError("Invalid email address format.")
+                raise DomainValidationError("Invalid email address format.")
             if label.startswith("-") or label.endswith("-"):
-                raise ValueError("Invalid email address format.")
+                raise DomainValidationError("Invalid email address format.")
 
         if not re.fullmatch(r"[a-z0-9.!#$%&'*+/=?^_`{|}~-]+", local):
-            raise ValueError("Invalid email address format.")
+            raise DomainValidationError("Invalid email address format.")
 
         return v
 
@@ -98,12 +98,12 @@ class ContactInfo:
         if not v:
             return ""
         if not isinstance(v, str):
-            raise TypeError("Phone number must be a string")
+            raise DomainValidationError("Phone number must be a string")
         v = v.strip()
         if not v.isdigit():
-            raise ValueError("Phone number must contain only digits")
+            raise DomainValidationError("Phone number must contain only digits")
         if len(v) != 10:
-            raise ValueError("Invalid phone number. Phone number must be exactly 10 digits.")
+            raise DomainValidationError("Invalid phone number. Phone number must be exactly 10 digits.")
         if not v.startswith("04"):
-            raise ValueError("Australian mobile numbers start with '04'.")
+            raise DomainValidationError("Australian mobile numbers start with '04'.")
         return v

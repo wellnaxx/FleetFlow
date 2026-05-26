@@ -1,5 +1,6 @@
 import unittest
 
+from src.domain.exceptions import DomainValidationError
 from src.domain.value_objects.contact_info import ContactInfo
 
 
@@ -9,15 +10,15 @@ class ContactInfo_Should(unittest.TestCase):
         self.assertEqual(ci.name, "Alice")
 
     def test_name_too_short_raises(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainValidationError):
             ContactInfo("Al")
 
     def test_name_too_long_raises(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainValidationError):
             ContactInfo("A" * 31)
 
     def test_name_non_string_raises(self):
-        with self.assertRaises(TypeError):
+        with self.assertRaises(DomainValidationError):
             ContactInfo(123)  # type: ignore[arg-type]
 
     def test_email_is_lowercased_and_stripped(self):
@@ -44,7 +45,7 @@ class ContactInfo_Should(unittest.TestCase):
             "local@domain!.com",  # invalid char
         ]
         for e in bad_emails:
-            with self.subTest(e=e), self.assertRaises(ValueError):
+            with self.subTest(e=e), self.assertRaises(DomainValidationError):
                 ContactInfo("Bob", e)
 
     def test_email_local_charclass_allows_specified_symbols(self):
@@ -58,15 +59,15 @@ class ContactInfo_Should(unittest.TestCase):
         self.assertEqual(ContactInfo("Carl", phone_number=None).phone_number, "")  # type: ignore[arg-type]
 
     def test_phone_must_be_string_of_digits_exactly_10_and_start_04(self):
-        with self.assertRaises(TypeError):
+        with self.assertRaises(DomainValidationError):
             ContactInfo("Carl", phone_number=412345678)  # type: ignore[arg-type]
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainValidationError):
             ContactInfo("Carl", phone_number="04123O5678")  # letter O
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainValidationError):
             ContactInfo("Carl", phone_number="041234567")  # 9 digits
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainValidationError):
             ContactInfo("Carl", phone_number="04123456789")  # 11 digits
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainValidationError):
             ContactInfo("Carl", phone_number="0012345678")  # wrong prefix
 
     def test_phone_is_stripped_and_kept_as_digits(self):
@@ -92,9 +93,9 @@ class ContactInfo_Should(unittest.TestCase):
         self.assertEqual(ci.phone_number, "0411222333")
 
         # invalid assignment raises
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainValidationError):
             ci.email = "bad@domain"  # missing TLD dot
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainValidationError):
             ci.phone_number = "0312345678"  # wrong prefix
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainValidationError):
             ci.name = "ab"  # too short

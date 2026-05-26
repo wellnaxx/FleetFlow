@@ -1,5 +1,6 @@
 import unittest
 
+from src.domain.exceptions import DomainValidationError
 from src.domain.value_objects.location_code import LocationCode, location_code_or_none
 
 
@@ -11,12 +12,13 @@ class LocationCode_Should(unittest.TestCase):
         self.assertEqual(code, "SYD")
 
     def test_rejects_non_string_values(self) -> None:
-        with self.assertRaises(TypeError):
+        with self.assertRaises(DomainValidationError):
             LocationCode(123)  # type: ignore[reportArgumentType]
 
     def test_rejects_blank_values(self) -> None:
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainValidationError):
             LocationCode("")
+        with self.assertRaises(DomainValidationError):
             LocationCode("     ")
 
     def test_location_code_normalizes_whitespace_and_case(self) -> None:

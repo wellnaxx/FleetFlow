@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from src.domain.enums.item_status import ItemStatus
+from src.domain.exceptions import DomainValidationError
 from src.domain.services.map import Map
 from src.domain.value_objects.location_code import LocationCode, location_code_or_none
 
@@ -47,19 +48,19 @@ class DeliveryPackage:
             package_id: Stable package identifier.
 
         Raises:
-            ValueError: If locations are invalid, equal, or the weight is not
+            DomainValidationError: If locations are invalid, equal, or the weight is not
                 positive.
         """
         start_location = LocationCode(start_location)
         end_location = LocationCode(end_location)
         if not Map.is_valid_location(start_location):
-            raise ValueError(f"Invalid start location: {start_location}")
+            raise DomainValidationError(f"Invalid start location: {start_location}")
         if not Map.is_valid_location(end_location):
-            raise ValueError(f"Invalid end location: {end_location}")
+            raise DomainValidationError(f"Invalid end location: {end_location}")
         if start_location == end_location:
-            raise ValueError("Start and end locations must be different.")
+            raise DomainValidationError("Start and end locations must be different.")
         if float(weight) <= 0:
-            raise ValueError("Weight must be positive.")
+            raise DomainValidationError("Weight must be positive.")
         self._package_id: int = package_id
         self.start_location: LocationCode = start_location
         self.end_location: LocationCode = end_location

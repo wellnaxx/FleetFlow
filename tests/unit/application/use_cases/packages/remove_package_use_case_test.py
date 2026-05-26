@@ -1,7 +1,9 @@
 import unittest
 from unittest.mock import MagicMock
 
+from src.application.exceptions.application_errors import NotFoundError
 from src.application.use_cases.packages.remove_package import RemovePackageUseCase
+from src.domain.exceptions import DomainConflictError, EntityNotFoundError
 from tests.unit.application.use_cases.authz_helpers import manager_authz
 
 
@@ -13,7 +15,7 @@ class RemovePackageUseCase_Should(unittest.TestCase):
     def test_raises_when_package_not_found(self) -> None:
         self.mock_packages.get_by_id.return_value = None
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(NotFoundError) as ctx:
             self.use_case.execute(42)
 
         self.assertIn("Package with ID 42 not found", str(ctx.exception))
@@ -52,10 +54,10 @@ class RemovePackageUseCase_Should(unittest.TestCase):
         package = MagicMock()
         package.package_id = 42
         package.route = None
-        package.customer.remove_package.side_effect = ValueError("customer unlink failed")
+        package.customer.remove_package.side_effect = EntityNotFoundError("customer unlink failed")
         self.mock_packages.get_by_id.return_value = package
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(EntityNotFoundError) as ctx:
             self.use_case.execute(42)
 
         self.assertIn("customer unlink failed", str(ctx.exception))
@@ -71,7 +73,7 @@ class RemovePackageUseCase_Should(unittest.TestCase):
         package.route = route
         self.mock_packages.get_by_id.return_value = package
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(DomainConflictError) as ctx:
             self.use_case.execute(42)
 
         self.assertIn("Package is not assigned to this route", str(ctx.exception))

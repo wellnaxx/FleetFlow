@@ -1,5 +1,6 @@
 """Use case for viewing one package."""
 
+from src.application.exceptions.application_errors import NotFoundError
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.entities.delivery_package import DeliveryPackage
@@ -31,9 +32,10 @@ class ViewPackageUseCase(AuthorizedUseCase[DeliveryPackage]):
             The matching package entity.
 
         Raises:
-            ValueError: If the package does not exist.
+            PermissionError: If the caller lacks package view permission.
+            NotFoundError: If the package does not exist.
         """
         package = self._packages.get_by_id(package_id)
         if not package:
-            raise ValueError(f"Package with ID {package_id} not found")
+            raise NotFoundError(f"Package with ID {package_id} not found.")
         return package

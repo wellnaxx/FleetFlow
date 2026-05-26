@@ -1,11 +1,12 @@
 import unittest
 from collections.abc import Callable
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from src.application.use_cases.packages.create_package import CreatePackageUseCase
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.enums.item_status import ItemStatus
+from src.domain.exceptions import DomainValidationError
 from src.domain.value_objects.location_code import LocationCode
 from tests.unit.application.use_cases.authz_helpers import manager_authz
 
@@ -36,30 +37,23 @@ class CreatePackageUseCaseLayerTests(unittest.TestCase):
         self.packages = MagicMock()
         self.use_case = CreatePackageUseCase(self.customers, self.packages, manager_authz())
 
-    @patch("src.application.use_cases.packages.create_package.Map.is_valid_location", side_effect=[False])
-    def test_execute_raises_for_invalid_start_location(self, mock_is_valid: MagicMock) -> None:
-        with self.assertRaises(ValueError) as ctx:
-            self.use_case.execute("BAD", "MEL", 10.0, "Alice")
+    def test_execute_raises_for_invalid_start_location(self) -> None:
+        with self.assertRaises(DomainValidationError) as ctx:
+            self.use_case.execute("", "MEL", 10.0, "Alice")
 
-        self.assertIn("Invalid start location: BAD", str(ctx.exception))
-        self.customers.find_existing_customer.assert_not_called()
-        self.packages.create.assert_not_called()
-        self.assertEqual(mock_is_valid.call_count, 1)
-
-    @patch("src.application.use_cases.packages.create_package.Map.is_valid_location", side_effect=[True, False])
-    def test_execute_raises_for_invalid_end_location(self, mock_is_valid: MagicMock) -> None:
-        with self.assertRaises(ValueError) as ctx:
-            self.use_case.execute("SYD", "BAD", 10.0, "Alice")
-
-        self.assertIn("Invalid end location: BAD", str(ctx.exception))
+        self.assertIn("Location code cannot be blank.", str(ctx.exception))
         self.customers.find_existing_customer.assert_not_called()
         self.packages.create.assert_not_called()
 
-    @patch("src.domain.entities.delivery_package.Map.is_valid_location", return_value=True)
-    @patch("src.application.use_cases.packages.create_package.Map.is_valid_location", side_effect=[True, True])
-    def test_execute_reuses_existing_customer_and_persists_package(
-        self, mock_is_valid: MagicMock, _mock_entity_map: MagicMock
-    ) -> None:
+    def test_execute_raises_for_invalid_end_location(self) -> None:
+        with self.assertRaises(DomainValidationError) as ctx:
+            self.use_case.execute("SYD", "", 10.0, "Alice")
+
+        self.assertIn("Location code cannot be blank.", str(ctx.exception))
+        self.customers.find_existing_customer.assert_not_called()
+        self.packages.create.assert_not_called()
+
+    def test_execute_reuses_existing_customer_and_persists_package(self) -> None:
         customer = MagicMock()
         self.customers.find_existing_customer.return_value = customer
         self.packages.create.side_effect = package_factory(42)
@@ -82,11 +76,7 @@ class CreatePackageUseCaseLayerTests(unittest.TestCase):
         self.assertIs(package.customer, customer)
         self.assertEqual(package.status, ItemStatus.TODO)
 
-    @patch("src.domain.entities.delivery_package.Map.is_valid_location", return_value=True)
-    @patch("src.application.use_cases.packages.create_package.Map.is_valid_location", side_effect=[True, True])
-    def test_execute_creates_customer_when_missing(
-        self, mock_is_valid: MagicMock, _mock_entity_map: MagicMock
-    ) -> None:
+    def test_execute_creates_customer_when_missing(self) -> None:
         customer = MagicMock()
         self.customers.find_existing_customer.return_value = None
         self.customers.create.return_value = customer

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from src.domain.exceptions import DomainValidationError
+
 
 class LocationCode(str):
     """String-compatible domain type for route and truck location codes."""
@@ -16,16 +18,18 @@ class LocationCode(str):
             Typed location code.
 
         Raises:
-            TypeError: If the value is not a string.
-            ValueError: If the value is blank.
+            DomainValidationError: If the value is not a string.
+            DomainValidationError: If the value is blank.
         """
         if not isinstance(value, str):
-            raise TypeError("Location code must be a string.")
+            raise DomainValidationError("Location code must be a string.")
 
-        text = value.strip().upper()
-        if not text:
-            raise ValueError("Location code cannot be blank.")
-        return str.__new__(cls, text)
+        normalized = value.strip().upper()
+
+        if not normalized:
+            raise DomainValidationError("Location code cannot be blank.")
+
+        return str.__new__(cls, normalized)
 
 
 def location_code_or_none(value: str | LocationCode | None) -> LocationCode | None:

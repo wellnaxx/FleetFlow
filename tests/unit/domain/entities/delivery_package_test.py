@@ -4,6 +4,7 @@ from datetime import datetime
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.enums.item_status import ItemStatus
+from src.domain.exceptions import DomainValidationError
 from src.domain.value_objects.contact_info import ContactInfo
 from src.domain.value_objects.location_code import LocationCode
 
@@ -31,73 +32,73 @@ class TestDeliveryPackage_Should(unittest.TestCase):
 
     def test_package_wrong_start_loc(self):
         customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainValidationError):
             DeliveryPackage(LocationCode("SOF"), LocationCode("BRI"), 500, customer, 1)
 
     def test_package_wrong_end_loc(self):
         customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainValidationError):
             DeliveryPackage(LocationCode("SYD"), LocationCode("SOF"), 500, customer, 1)
 
     def test_package_empty_start_loc(self):
         customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainValidationError):
             DeliveryPackage(LocationCode(""), LocationCode("SOF"), 500, customer, 1)
 
     def test_package_empty_end_loc(self):
         customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainValidationError):
             DeliveryPackage(LocationCode("SYD"), LocationCode(""), 500, customer, 1)
 
     def test_package_same_start_end_loc(self):
         customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainValidationError):
             DeliveryPackage(LocationCode("SYD"), LocationCode("SYD"), 500, customer, 1)
 
     def test_package_negative_weight(self):
         customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainValidationError):
             DeliveryPackage(LocationCode("SYD"), LocationCode("BRI"), -500, customer, 1)
 
     def test_package_zero_weight(self):
         customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainValidationError):
             DeliveryPackage(LocationCode("SYD"), LocationCode("BRI"), 0, customer, 1)
 
     def test_package_customer_empty_name(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainValidationError):
             Customer(ContactInfo(LocationCode(""), "dan@e.com", "0484568777"), 1)
 
     def test_package_customer_int_name(self):
-        with self.assertRaises(TypeError):
+        with self.assertRaises(DomainValidationError):
             Customer(ContactInfo(150, "dan@e.com", "0484568777"), 1)  # type: ignore[reportArgumentType]
 
     def test_package_customer_short_name(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainValidationError):
             Customer(ContactInfo("Da", "dan@e.com", "0484568777"), 1)
 
     def test_package_customer_long_name(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainValidationError):
             Customer(ContactInfo("Da" * 16, "dan@e.com", "0484568777"), 1)
 
     def test_package_customer_at_email(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainValidationError):
             Customer(ContactInfo("Dan", "dane.com", "0484568777"), 1)
 
     def test_package_customer_dot_email(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainValidationError):
             Customer(ContactInfo("Dan", "dan@ecom", "0484568777"), 1)
 
     def test_package_customer_int_phone(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainValidationError):
             Customer(ContactInfo("Dan", "dan@ecom", 484568777), 1)  # type: ignore[reportArgumentType]
 
     def test_package_customer_len_phone(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainValidationError):
             Customer(ContactInfo("Dan", "dan@ecom", "042588997"), 1)
 
     def test_package_customer_start_num_phone(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainValidationError):
             Customer(ContactInfo("Dan", "dan@ecom", "082588997"), 1)
 
     def test_snapshot_state_restores_mutable_assignment_state(self):

@@ -2,6 +2,7 @@
 
 from typing import ClassVar
 
+from src.domain.exceptions import DomainValidationError, EntityNotFoundError
 from src.domain.value_objects.location_code import LocationCode
 
 
@@ -98,7 +99,7 @@ class Map:
         """
         try:
             normalized = LocationCode(code)
-        except (TypeError, ValueError):
+        except DomainValidationError:
             return False
 
         return normalized in cls._locations
@@ -115,7 +116,7 @@ class Map:
             Distance in kilometres.
 
         Raises:
-            ValueError: If no distance is known for the pair.
+            EntityNotFoundError: If no distance is known for the pair.
         """
         a = LocationCode(a)
         b = LocationCode(b)
@@ -125,4 +126,4 @@ class Map:
             return cls._distances[a][b]
         if a in cls._distances.get(b, {}):
             return cls._distances[b][a]
-        raise ValueError(f"No distance between {a} and {b}")
+        raise EntityNotFoundError(f"No distance between {a} and {b}")

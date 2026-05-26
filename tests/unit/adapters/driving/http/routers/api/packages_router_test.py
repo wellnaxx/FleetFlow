@@ -7,11 +7,13 @@ from fastapi.testclient import TestClient
 
 from src.adapters.driving.http.routers.api import packages_router as packages_router_module
 from src.adapters.driving.http.routers.api.packages_router import packages_router
+from src.application.exceptions.application_errors import NotFoundError
 from src.application.results.find_suitable_packages_for_route_result import SuitableRouteForPackage
 from src.application.use_cases.pagination import PageQuery, PageResult
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.entities.delivery_route import DeliveryRoute
+from src.domain.exceptions import DomainValidationError
 from src.domain.value_objects.contact_info import ContactInfo
 from src.domain.value_objects.location_code import LocationCode
 
@@ -56,7 +58,7 @@ class PackagesRouterShould(unittest.TestCase):
 
     def test_create_package_returns_bad_request_for_invalid_input(self) -> None:
         use_case = MagicMock()
-        use_case.execute.side_effect = ValueError("Invalid start location: BAD")
+        use_case.execute.side_effect = DomainValidationError("Invalid start location: BAD")
         self.app.dependency_overrides[packages_router_module.get_create_package_use_case] = lambda: use_case
 
         response = self.client.post(
@@ -170,7 +172,7 @@ class PackagesRouterShould(unittest.TestCase):
 
     def test_get_package_returns_not_found_for_missing_package(self) -> None:
         use_case = MagicMock()
-        use_case.execute.side_effect = ValueError("Package with ID 4 not found")
+        use_case.execute.side_effect = NotFoundError("Package with ID 4 not found")
         self.app.dependency_overrides[packages_router_module.get_view_package_use_case] = lambda: use_case
 
         response = self.client.get("/packages/4")
@@ -208,7 +210,7 @@ class PackagesRouterShould(unittest.TestCase):
 
     def test_find_suitable_routes_for_package_returns_not_found_for_missing_package(self) -> None:
         use_case = MagicMock()
-        use_case.execute.side_effect = ValueError("Package with ID 4 not found.")
+        use_case.execute.side_effect = NotFoundError("Package with ID 4 not found.")
         self.app.dependency_overrides[
             packages_router_module.get_find_suitable_routes_for_package_use_case
         ] = lambda: use_case
@@ -241,7 +243,7 @@ class PackagesRouterShould(unittest.TestCase):
 
     def test_delete_package_returns_not_found_for_missing_package(self) -> None:
         use_case = MagicMock()
-        use_case.execute.side_effect = ValueError("Package with ID 4 not found")
+        use_case.execute.side_effect = NotFoundError("Package with ID 4 not found")
         self.app.dependency_overrides[packages_router_module.get_remove_package_use_case] = lambda: use_case
 
         response = self.client.delete("/packages/4")

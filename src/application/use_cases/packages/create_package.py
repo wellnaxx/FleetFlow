@@ -5,7 +5,6 @@ from src.application.services.customer_service import CustomerService
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.enums.auth import Permission
-from src.domain.services.map import Map
 from src.domain.value_objects.location_code import LocationCode
 from src.ports.output.package_repository import PackageRepositoryPort
 
@@ -45,16 +44,17 @@ class CreatePackageUseCase(AuthorizedUseCase[DeliveryPackage]):
             The newly created delivery package.
 
         Raises:
-            ValueError: If a location is invalid or customer resolution fails.
-            TypeError: If the location codes are not strings.
+            PermissionError: If the caller lacks package creation permission.
+            DatabaseError: If customer or package persistence fails.
+            DomainValidationError: If location code, delivery package, or contact information validation fails.
+            ConflictError: If the supplied details point to conflicting customers or
+                contradict the name on an existing customer.
+            DomainConflictError: If the package is already linked to the customer.
+            EntityNotFoundError: If package ownership transfer detects that the package is missing
+                from the previous customer's active collection.
         """
         start_code = LocationCode(start)
         end_code = LocationCode(end)
-
-        if not Map.is_valid_location(start_code):
-            raise ValueError(f"Invalid start location: {start}")
-        if not Map.is_valid_location(end_code):
-            raise ValueError(f"Invalid end location: {end}")
 
         customer = self._customers.find_existing_customer(name, email, phone)
         if customer is None:

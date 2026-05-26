@@ -1,5 +1,6 @@
 import unittest
 
+from src.domain.exceptions import EntityNotFoundError
 from src.domain.services.map import Map
 from src.domain.value_objects.location_code import LocationCode
 
@@ -100,19 +101,19 @@ class TestMap_Should(unittest.TestCase):
                 self.assertEqual(Map.get_distance(loc1, loc2), expected_distance)
 
     def test_get_distance_rejects_invalid_first_location(self) -> None:
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(EntityNotFoundError) as context:
             Map.get_distance("INVALID", "SYD")
 
         self.assertIn("No distance between INVALID and SYD", str(context.exception))
 
     def test_get_distance_rejects_invalid_second_location(self) -> None:
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(EntityNotFoundError) as context:
             Map.get_distance("SYD", "INVALID")
 
         self.assertIn("No distance between SYD and INVALID", str(context.exception))
 
     def test_get_distance_rejects_two_invalid_locations(self) -> None:
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(EntityNotFoundError) as context:
             Map.get_distance("INVALID1", "INVALID2")
 
         self.assertIn("No distance between INVALID1 and INVALID2", str(context.exception))

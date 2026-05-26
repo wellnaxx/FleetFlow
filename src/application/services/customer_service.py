@@ -1,5 +1,6 @@
 """Customer resolution and creation service."""
 
+from src.application.exceptions.application_errors import ConflictError
 from src.domain.entities.customer import Customer
 from src.domain.value_objects.contact_info import ContactInfo
 from src.ports.output.customer_repository import CustomerRepositoryPort
@@ -29,7 +30,7 @@ class CustomerService:
             otherwise `None`.
 
         Raises:
-            ValueError: If the supplied details point to conflicting customers or
+            ConflictError: If the supplied details point to conflicting customers or
                 contradict the name on an existing customer.
         """
         name = (name or "").strip()
@@ -64,7 +65,7 @@ class CustomerService:
             The newly created customer entity.
 
         Raises:
-            ValueError: If the contact information fails validation.
+            DomainValidationError: If the contact information fails validation.
         """
         contact_info = ContactInfo(name=name, email=email, phone_number=phone)
         return self._customers.create(contact_info)
@@ -74,12 +75,12 @@ class CustomerService:
     ) -> Customer | None:
         if by_email and by_phone:
             if by_email.customer_id != by_phone.customer_id:
-                raise ValueError(
+                raise ConflictError(
                     f"Email belongs to customer ID: {by_email.customer_id}, "
                     f"and phone belongs to customer ID: {by_phone.customer_id}."
                 )
             if name and not self._same_name(name, by_email.name):
-                raise ValueError(
+                raise ConflictError(
                     f"Provided name '{name}' does not match existing customer "
                     f"ID {by_email.customer_id} ('{by_email.name}')."
                 )
@@ -87,14 +88,14 @@ class CustomerService:
 
         if by_email and not by_phone:
             if name and not self._same_name(name, by_email.name):
-                raise ValueError(
+                raise ConflictError(
                     f"Email already in use by customer ID {by_email.customer_id} ('{by_email.name}')."
                 )
             return by_email
 
         if by_phone and not by_email:
             if name and not self._same_name(name, by_phone.name):
-                raise ValueError(
+                raise ConflictError(
                     f"Phone already in use by customer ID {by_phone.customer_id} ('{by_phone.name}')."
                 )
             return by_phone
@@ -116,7 +117,7 @@ class CustomerService:
 
     def _ensure_name_matches(self, name: str, customer: Customer) -> None:
         if name and not self._same_name(name, customer.name):
-            raise ValueError(
+            raise ConflictError(
                 f"Provided name {name} does not match existing customer ID {customer.customer_id} ('{customer.name}')."  # noqa: E501
             )
 

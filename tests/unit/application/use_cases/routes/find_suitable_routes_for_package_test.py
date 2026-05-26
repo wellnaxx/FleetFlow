@@ -3,6 +3,7 @@ from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from src.application.exceptions.application_errors import NotFoundError
 from src.application.use_cases.routes.find_suitable_routes_for_package import (
     FindSuitableRoutesForPackageUseCase,
 )
@@ -24,7 +25,7 @@ class FindSuitableRoutesForPackageUseCase_Should(unittest.TestCase):
     def test_raises_when_package_not_found(self) -> None:
         self.mock_packages.get_by_id.return_value = None
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(NotFoundError) as ctx:
             self.use_case.execute(42)
 
         self.assertIn("Package with ID 42 not found.", str(ctx.exception))

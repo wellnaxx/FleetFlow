@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from datetime import datetime
 
+from src.application.exceptions.application_errors import NotFoundError
 from src.application.results.find_suitable_packages_for_route_result import SuitableRouteForPackage
 from src.application.services.authorization_service import AuthorizationService, requires_all
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
@@ -49,11 +50,12 @@ class FindSuitableRoutesForPackageUseCase(AuthorizedUseCase[list[SuitableRouteFo
             Candidate routes ordered by the best available ETA.
 
         Raises:
-            ValueError: If the package does not exist.
+            PermissionError: If the caller lacks required package or route permissions.
+            NotFoundError: If the package does not exist.
         """
         package = self._packages.get_by_id(package_id)
         if package is None:
-            raise ValueError(f"Package with ID {package_id} not found.")
+            raise NotFoundError(f"Package with ID {package_id} not found.")
 
         results: list[SuitableRouteForPackage] = []
         now = self._clock()

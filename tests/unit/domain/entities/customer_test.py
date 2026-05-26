@@ -1,6 +1,7 @@
 import unittest
 
 from src.domain.entities.customer import Customer
+from src.domain.exceptions import DomainConflictError, EntityNotFoundError
 from src.domain.value_objects.contact_info import ContactInfo
 
 
@@ -45,7 +46,7 @@ class Customer_Should(unittest.TestCase):
         self.assertIs(p.customer, c)
         self.assertIn(p, c.delivery_packages)
         # Duplicate add -> error
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainConflictError):
             c.add_package(p)  # type: ignore[reportArgumentType]
 
     def test_add_package_reassigns_from_other_customer(self) -> None:
@@ -73,5 +74,5 @@ class Customer_Should(unittest.TestCase):
     def test_remove_package_missing_raises(self) -> None:
         c = Customer(self.make_contact("Frank"), 7)
         p = _FakePackage(11, c)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(EntityNotFoundError):
             c.remove_package(p)  # type: ignore[reportArgumentType]

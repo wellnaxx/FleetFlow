@@ -11,6 +11,7 @@ from src.adapters.driven.persistence.json.paths import ensure_data_dir, resolve_
 from src.adapters.driven.security.password_hasher import PasswordHash
 from src.application.models.user_record import UserRecord
 from src.domain.enums.auth import Role
+from src.domain.exceptions import DomainValidationError
 from src.domain.value_objects.contact_info import ContactInfo
 
 logger = logging.getLogger(__name__)
@@ -49,7 +50,7 @@ class JSONUserStore:
 
         try:
             next_id, users_by_username = self._parse_loaded_payload(data)
-        except (AttributeError, KeyError, TypeError, ValueError) as exc:
+        except (AttributeError, DomainValidationError, KeyError, TypeError, ValueError) as exc:
             raise ValueError(f"Malformed user store JSON: {self.path}") from exc
 
         self._by_username = users_by_username
