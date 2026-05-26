@@ -8,6 +8,7 @@ from src.adapters.driven.security.auth_token_service import TokenPayload
 from src.adapters.driving.http.dependencies.auth import AuthenticatedPrincipal
 from src.adapters.driving.http.routers.api import auth_router as auth_router_module
 from src.adapters.driving.http.routers.api.auth_router import auth_router
+from src.application.exceptions.application_errors import AuthenticationError, ValidationError
 from src.application.models.user_record import UserRecord
 from src.application.services.authorization_service import AuthorizationService
 from src.domain.entities.users.manager import Manager
@@ -47,7 +48,7 @@ class AuthRouterShould(unittest.TestCase):
 
     def test_login_returns_unauthorized_for_invalid_credentials(self) -> None:
         auth_service = MagicMock()
-        auth_service.authenticate.side_effect = ValueError("bad credentials")
+        auth_service.authenticate.side_effect = AuthenticationError("bad credentials")
         self.app.dependency_overrides[auth_router_module.get_auth_service] = lambda: auth_service
 
         response = self.client.post(
@@ -128,7 +129,7 @@ class AuthRouterShould(unittest.TestCase):
     def test_change_password_returns_bad_request_for_invalid_password(self) -> None:
         principal = self._principal()
         use_case = MagicMock()
-        use_case.execute_current_user.side_effect = ValueError("Old password incorrect.")
+        use_case.execute_current_user.side_effect = AuthenticationError("Old password incorrect.")
         self.app.dependency_overrides[auth_router_module.get_current_user] = lambda: principal
         self.app.dependency_overrides[auth_router_module.get_change_password_use_case] = lambda: use_case
 
@@ -175,7 +176,7 @@ class AuthRouterShould(unittest.TestCase):
 
     def test_reset_password_returns_bad_request_for_invalid_password(self) -> None:
         use_case = MagicMock()
-        use_case.execute.side_effect = ValueError("Password must be at least 8 characters.")
+        use_case.execute.side_effect = ValidationError("Password must be at least 8 characters.")
         self.app.dependency_overrides[auth_router_module.get_change_password_use_case] = lambda: use_case
 
         response = self.client.post(

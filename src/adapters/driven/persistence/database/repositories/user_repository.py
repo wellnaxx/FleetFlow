@@ -11,6 +11,7 @@ from src.adapters.driven.security.password_hasher import PasswordHash
 from src.application.models.user_record import UserRecord
 from src.domain.enums.auth import Role
 from src.domain.value_objects.contact_info import ContactInfo
+from src.ports.output.repository_errors import DuplicateKeyError
 
 
 class PostgresUserRepository:
@@ -92,7 +93,8 @@ class PostgresUserRepository:
         Raises:
             DatabaseError: If the insert fails or does not return an id.
             TypeError: If role or password hash has the wrong type.
-            ValueError: If validation fails or username already exists.
+            ValueError: If validation fails.
+            DuplicateKeyError: If username already exists.
         """
         raw_username = (username or "").strip()
         normalized_username = self._normalize_username(username)
@@ -100,7 +102,7 @@ class PostgresUserRepository:
         if not normalized_username:
             raise ValueError("Username is required.")
         if self.get_by_username(normalized_username) is not None:
-            raise ValueError("Username already exists.")
+            raise DuplicateKeyError("Username already exists.")
 
         role_value = self._normalize_role(role)
         contact = ContactInfo(name=name, email=email, phone_number=phone_number)

@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 from src.adapters.driven.persistence.memory.user_repository import InMemoryUserRepository
 from src.application.models.user_record import UserRecord
+from src.ports.output.repository_errors import DuplicateKeyError
 
 
 def _ph(s: str = "hash") -> SimpleNamespace:
@@ -40,7 +41,7 @@ class InMemoryUserRepository_Should(unittest.TestCase):
     def test_duplicate_username_is_rejected_case_insensitively(self) -> None:
         self.repo.create("Alice", "EMPLOYEE", "Alice", "", "", _ph("pw1"))  # type: ignore[reportArgumentType]
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(DuplicateKeyError) as ctx:
             self.repo.create("alice", "EMPLOYEE", "Alice", "", "", _ph("pw2"))  # type: ignore[reportArgumentType]
 
         self.assertIn("Username already exists.", str(ctx.exception))
@@ -48,7 +49,7 @@ class InMemoryUserRepository_Should(unittest.TestCase):
     def test_duplicate_username_is_rejected_with_whitespace_and_case_variants(self) -> None:
         self.repo.create("Alice", "EMPLOYEE", "Alice", "", "", _ph("pw1"))  # type: ignore[reportArgumentType]
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(DuplicateKeyError) as ctx:
             self.repo.create("  alice  ", "EMPLOYEE", "Alice 2", "", "", _ph("pw2"))  # type: ignore[reportArgumentType]
 
         self.assertIn("Username already exists.", str(ctx.exception))

@@ -4,6 +4,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 
 from src.adapters.driven.security.auth_token_service import TokenPayload, TokenType, decode_token
+from src.application.exceptions.application_errors import UnsupportedRoleError, ValidationError
 from src.application.models.user_record import UserRecord
 from src.application.services.authorization_service import AuthorizationService
 from src.application.services.runtime_user_factory import create_runtime_user_from_record
@@ -37,8 +38,8 @@ def _runtime_user_from_record(record: UserRecord) -> User:
     """  # noqa: E501
     try:
         return create_runtime_user_from_record(record)
-    except ValueError as exc:
-        detail = "Unsupported user role" if str(exc).startswith("Unsupported role:") else "Invalid user role"
+    except ValidationError as exc:
+        detail = "Unsupported user role" if isinstance(exc, UnsupportedRoleError) else "Invalid user role"
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=detail,

@@ -2,10 +2,16 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from src.application.exceptions.application_errors import (
+    AuthenticationError,
+    NotFoundError,
+    ValidationError,
+)
 from src.application.models.user_record import UserRecord
 from src.application.services.auth_service import AuthService
 from src.domain.entities.users.employee import Employee
 from src.domain.entities.users.manager import Manager
+from src.domain.enums.auth import Role
 
 VALID_PASSWORD_HASH = "pbkdf2_sha256$200000$U0FMVFNBTFRTQUxUU0FMVA==$SEFTSEhBU0hIQVNI"
 
@@ -13,6 +19,7 @@ VALID_PASSWORD_HASH = "pbkdf2_sha256$200000$U0FMVFNBTFRTQUxUU0FMVA==$SEFTSEhBU0h
 class AuthService_Should(unittest.TestCase):
     def make_service(self) -> tuple[AuthService, MagicMock]:
         store = MagicMock()
+        store.get_by_username.return_value = None
         svc = AuthService(user_store=store)  # type: ignore[reportArgumentType]
         return svc, store
 
@@ -33,7 +40,7 @@ class AuthService_Should(unittest.TestCase):
 
         svc.register_user(
             username="  User1  ",
-            role=SimpleNamespace(value="EMPLOYEE"),  # type: ignore[reportArgumentType]
+            role=Role.EMPLOYEE,
             name="  Alice  ",
             email="  Alice@EX.com ",
             phone_number=" 0412 345 ",
@@ -52,10 +59,10 @@ class AuthService_Should(unittest.TestCase):
     def test_register_user_rejects_blank_username(self) -> None:
         svc, store = self.make_service()
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(ValidationError) as ctx:
             svc.register_user(
                 username="  ",
-                role=SimpleNamespace(value="EMPLOYEE"),  # type: ignore[reportArgumentType]
+                role=Role.EMPLOYEE,
                 name="Alice",
                 email="",
                 phone_number="",
@@ -68,10 +75,10 @@ class AuthService_Should(unittest.TestCase):
     def test_register_user_enforces_minimum_password_length(self) -> None:
         svc, store = self.make_service()
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(ValidationError) as ctx:
             svc.register_user(
                 username="alice",
-                role=SimpleNamespace(value="EMPLOYEE"),  # type: ignore[reportArgumentType]
+                role=Role.EMPLOYEE,
                 name="Alice",
                 email="",
                 phone_number="",
@@ -84,10 +91,10 @@ class AuthService_Should(unittest.TestCase):
     def test_register_user_enforces_password_strength_policy(self) -> None:
         svc, store = self.make_service()
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(ValidationError) as ctx:
             svc.register_user(
                 username="alice",
-                role=SimpleNamespace(value="EMPLOYEE"),  # type: ignore[reportArgumentType]
+                role=Role.EMPLOYEE,
                 name="Alice",
                 email="",
                 phone_number="",
@@ -166,7 +173,7 @@ class AuthService_Should(unittest.TestCase):
             email="",
             phone_number="",
         )
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(AuthenticationError) as ctx:
             svc.login("u", "bad")
         self.assertIn("Invalid username or password.", str(ctx.exception))
         self.assertIsNone(svc.current_user)
@@ -175,7 +182,7 @@ class AuthService_Should(unittest.TestCase):
     def test_login_unknown_user_raises(self) -> None:
         svc, store = self.make_service()
         store.get_by_username.return_value = None
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(AuthenticationError) as ctx:
             svc.login("nouser", "pw")
         self.assertIn("Invalid username or password.", str(ctx.exception))
         self.assertIsNone(svc.current_user)
@@ -213,7 +220,7 @@ class AuthService_Should(unittest.TestCase):
     def test_change_password_unknown_user_raises(self, _parse: MagicMock, verify_password: MagicMock) -> None:
         svc, store = self.make_service()
         store.get_by_username.return_value = None
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(NotFoundError) as ctx:
             svc.change_password("nope", "x", "y")
         self.assertIn("User not found.", str(ctx.exception))
         verify_password.assert_not_called()
@@ -224,7 +231,7 @@ class AuthService_Should(unittest.TestCase):
         svc, store = self.make_service()
         store.get_by_username.return_value = SimpleNamespace(password="HASH")
         verify_password.side_effect = [False]  # old password fails
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(AuthenticationError) as ctx:
             svc.change_password("u", "bad", "New123456")
         self.assertIn("Old password incorrect.", str(ctx.exception))
 
@@ -237,7 +244,7 @@ class AuthService_Should(unittest.TestCase):
         store.get_by_username.return_value = SimpleNamespace(password="HASH")
         # old ok, new matches old
         verify_password.side_effect = [True, True]
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(ValidationError) as ctx:
             svc.change_password("u", "Old123456", "Old123456")
         self.assertIn("New password must be different from the old one.", str(ctx.exception))
 
@@ -250,7 +257,7 @@ class AuthService_Should(unittest.TestCase):
         hash_password.return_value = hashed
 
         # Too short -> error (via _set_password)
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(ValidationError) as ctx:
             svc.reset_password("u", "short7")
         self.assertIn("at least 8", str(ctx.exception))
         store.update_password.assert_not_called()
@@ -259,11 +266,13 @@ class AuthService_Should(unittest.TestCase):
         svc.reset_password("u", "LongEnough8!")
         store.update_password.assert_called_once_with("u", hashed)
 
-    def test_reset_password_enforces_password_strength_policy(self) -> None:
+    @patch("src.application.services.auth_service.hash_password")
+    def test_reset_password_enforces_password_strength_policy(self, hash_password: MagicMock) -> None:
         svc, store = self.make_service()
         store.get_by_username.return_value = SimpleNamespace(username="u", password="OLD")
+        hash_password.side_effect = ValueError("at least one special character")
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(ValidationError) as ctx:
             svc.reset_password("u", "NoSpecial1")
 
         self.assertIn("at least one special character", str(ctx.exception))
@@ -272,8 +281,6 @@ class AuthService_Should(unittest.TestCase):
     @patch("src.application.services.auth_service.hash_password")
     def test_auth_service_works_with_in_memory_repository(self, hash_password: MagicMock) -> None:
         from src.adapters.driven.persistence.memory.user_repository import InMemoryUserRepository
-        from src.domain.enums.auth import Role
-
         hash_password.side_effect = [
             SimpleNamespace(serialize=lambda: "HASH1"),
             SimpleNamespace(serialize=lambda: "HASH2"),
@@ -308,7 +315,7 @@ class AuthService_Should(unittest.TestCase):
     def test_reset_password_unknown_user_raises(self) -> None:
         svc, store = self.make_service()
         store.get_by_username.return_value = None
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(NotFoundError) as ctx:
             svc.reset_password("ghost", "NewPass123")
         self.assertIn("User not found.", str(ctx.exception))
 
@@ -372,7 +379,7 @@ class AuthService_Should(unittest.TestCase):
             password=VALID_PASSWORD_HASH,
         )
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(ValidationError) as ctx:
             auth.login("badrole", "pw")
 
         self.assertIn("Invalid persisted role", str(ctx.exception))

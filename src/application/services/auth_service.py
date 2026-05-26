@@ -1,11 +1,18 @@
 """Authentication service for persisted users and runtime sessions."""
 
 from src.adapters.driven.security.password_hasher import PasswordHash, hash_password, verify_password
+from src.application.exceptions.application_errors import (
+    AuthenticationError,
+    ConflictError,
+    NotFoundError,
+    ValidationError,
+)
 from src.application.models.user_record import UserRecord
 from src.application.services.runtime_user_factory import create_runtime_user_from_record
 from src.domain.entities.users.user import User
 from src.domain.enums.auth import Role
 from src.domain.value_objects.contact_info import ContactInfo
+from src.ports.output.repository_errors import DuplicateKeyError
 from src.ports.output.user_repository import UserRepositoryPort
 
 
@@ -47,33 +54,51 @@ class AuthService:
             The persisted user record.
 
         Raises:
-            ValueError: If validation fails or the repository rejects the user.
+            ValidationError: If command input fails validation.
+            ConflictError: If the username already exists.
         """
         clean_username = username.strip().lower()
         if not clean_username:
-            raise ValueError("Username is required.")
+            raise ValidationError("Username is required.")
         if len(password) < 8:
-            raise ValueError("Password must be at least 8 characters.")
+            raise ValidationError("Password must be at least 8 characters.")
+        if self._store.get_by_username(clean_username) is not None:
+            raise ConflictError("Username already exists.")
 
         ci = ContactInfo(name=name, email=email or "", phone_number=phone_number or "")
         clean_name = ci.name
         clean_email = ci.email
         clean_phone = ci.phone_number
-        ph = hash_password(password)
+        try:
+            ph = hash_password(password)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
         role_value = role.value
-        return self._store.create(
-            username=clean_username,
-            role=role_value,
-            name=clean_name,
-            email=clean_email,
-            phone_number=clean_phone,
-            password_hash=ph,
-        )
+        try:
+            return self._store.create(
+                username=clean_username,
+                role=role_value,
+                name=clean_name,
+                email=clean_email,
+                phone_number=clean_phone,
+                password_hash=ph,
+            )
+        except DuplicateKeyError as exc:
+            raise ConflictError("Username already exists.") from exc
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
 
     def _set_password(self, username: str, new_password: str) -> None:
         if len(new_password) < 8:
-            raise ValueError("Password must be at least 8 characters.")
-        self._store.update_password(username, hash_password(new_password))
+            raise ValidationError("Password must be at least 8 characters.")
+        try:
+            password_hash = hash_password(new_password)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+        try:
+            self._store.update_password(username, password_hash)
+        except ValueError as exc:
+            raise NotFoundError("User not found.") from exc
 
     def login(self, username: str, password: str) -> User:
         """Authenticate a user and hydrate the runtime user entity.
@@ -86,7 +111,7 @@ class AuthService:
             The authenticated runtime user entity.
 
         Raises:
-            ValueError: If the username is unknown or the password is invalid.
+            AuthenticationError: If the username is unknown or the password is invalid.
         """
         rec, user = self.authenticate(username, password)
 
@@ -105,18 +130,25 @@ class AuthService:
             A tuple containing the persisted user record and the hydrated runtime user entity.
 
         Raises:
-            ValueError: If the username is unknown or the password is invalid.
+            AuthenticationError: If the username is unknown or the password is invalid.
+            ValidationError: If persisted user data is invalid.
         """
         rec = self._store.get_by_username(username)
 
         if not rec:
-            raise ValueError("Invalid username or password.")
+            raise AuthenticationError("Invalid username or password.")
 
-        ok = verify_password(password, PasswordHash.parse(rec.password))
+        try:
+            ok = verify_password(password, PasswordHash.parse(rec.password))
+        except (TypeError, ValueError) as exc:
+            raise ValidationError("Invalid persisted password hash.") from exc
         if not ok:
-            raise ValueError("Invalid username or password.")
+            raise AuthenticationError("Invalid username or password.")
 
-        user = create_runtime_user_from_record(rec)
+        try:
+            user = create_runtime_user_from_record(rec)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
         return rec, user
 
     def logout(self) -> None:
@@ -133,16 +165,21 @@ class AuthService:
             new_password: Replacement plain-text password.
 
         Raises:
-            ValueError: If the user is missing, the old password is wrong, or
-                the new password is invalid.
+            NotFoundError: If the user does not exist.
+            AuthenticationError: If the old password is wrong.
+            ValidationError: If the new password is invalid or unchanged.
         """
         rec = self._store.get_by_username(username)
         if not rec:
-            raise ValueError("User not found.")
-        if not verify_password(old_password, PasswordHash.parse(rec.password)):
-            raise ValueError("Old password incorrect.")
-        if verify_password(new_password, PasswordHash.parse(rec.password)):
-            raise ValueError("New password must be different from the old one.")
+            raise NotFoundError("User not found.")
+        try:
+            password_hash = PasswordHash.parse(rec.password)
+        except (TypeError, ValueError) as exc:
+            raise ValidationError("Invalid persisted password hash.") from exc
+        if not verify_password(old_password, password_hash):
+            raise AuthenticationError("Old password incorrect.")
+        if verify_password(new_password, password_hash):
+            raise ValidationError("New password must be different from the old one.")
         self._set_password(username, new_password)
 
     def reset_password(self, username: str, new_password: str) -> None:
@@ -153,9 +190,10 @@ class AuthService:
             new_password: Replacement plain-text password.
 
         Raises:
-            ValueError: If the user is missing or the password is invalid.
+            NotFoundError: If the user does not exist.
+            ValidationError: If the password is invalid.
         """
         rec = self._store.get_by_username(username)
         if not rec:
-            raise ValueError("User not found.")
+            raise NotFoundError("User not found.")
         self._set_password(username, new_password)

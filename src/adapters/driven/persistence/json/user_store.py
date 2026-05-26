@@ -13,6 +13,7 @@ from src.application.models.user_record import UserRecord
 from src.domain.enums.auth import Role
 from src.domain.exceptions import DomainValidationError
 from src.domain.value_objects.contact_info import ContactInfo
+from src.ports.output.repository_errors import DuplicateKeyError
 
 logger = logging.getLogger(__name__)
 
@@ -250,8 +251,8 @@ class JSONUserStore:
 
         Raises:
             TypeError: If `password_hash` does not expose the expected hash API.
-            ValueError: If the username is blank, already exists, or the role is
-                invalid.
+            ValueError: If the username is blank or the role is invalid.
+            DuplicateKeyError: If the username already exists.
         """
         raw_username = (username or "").strip()
         norm = self._normalize_username(username)
@@ -259,7 +260,7 @@ class JSONUserStore:
         if not norm:
             raise ValueError("Username is required.")
         if norm in self._by_username:
-            raise ValueError("Username already exists.")
+            raise DuplicateKeyError("Username already exists.")
 
         role_value = JSONUserStore._normalize_role(role)
 

@@ -3,6 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, status
 
+from src.adapters.driven.persistence.database.errors import DatabaseError
 from src.adapters.driven.security.auth_token_service import (
     TokenInput,
     create_access_token,
@@ -25,11 +26,18 @@ from src.adapters.driving.http.schemas.auth import (
     ResetUserPasswordRequest,
     TokenResponse,
 )
+from src.application.exceptions.application_errors import (
+    AuthenticationError,
+    ConflictError,
+    NotFoundError,
+    ValidationError,
+)
 from src.application.models.user_record import UserRecord
 from src.application.services.auth_service import AuthService
 from src.application.use_cases.auth.change_password import ChangePasswordUseCase
 from src.application.use_cases.auth.register_user import RegisterUserUseCase
 from src.composition.runtime import get_auth_service, get_user_repository
+from src.domain.exceptions import DomainValidationError
 from src.ports.output.user_repository import UserRepositoryPort
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
@@ -68,13 +76,13 @@ def _get_login_form_data(
 
 
 def _token_response(record: UserRecord) -> TokenResponse:
-    """Generate a TokenResponse containing new access and refresh tokens for the given user record.
+    """Build an auth token response for a persisted user.
 
     Args:
-        record: The user record for which to generate tokens.
+        record: User record used to populate token claims.
 
     Returns:
-        A TokenResponse containing the generated access token and refresh token.
+        A token response containing a new access token and refresh token.
     """
     token_input: TokenInput = {
         "user_id": record.user_id,
@@ -90,13 +98,13 @@ def _token_response(record: UserRecord) -> TokenResponse:
 
 
 def _current_user_response(record: UserRecord) -> CurrentUserResponse:
-    """Convert a UserRecord into a CurrentUserResponse for API responses.
+    """Convert a persisted user record to a current-user response model.
 
     Args:
-        record: The user record to convert.
+        record: User record to convert.
 
     Returns:
-        A CurrentUserResponse containing the user's details.
+        A response model representing the user.
     """
     return CurrentUserResponse(
         user_id=record.user_id,
@@ -114,17 +122,19 @@ def register(
     use_case: Annotated[RegisterUserUseCase, Depends(get_register_user_use_case)],
 ) -> CurrentUserResponse:
     """Register a new user account.
-    
+
     Args:
-        request: The registration details extracted from the request body.
-        use_case: The RegisterUserUseCase instance for executing the registration logic.
+        request: Registration request body.
+        use_case: Use case for registering users, injected by FastAPI.
 
     Returns:
-        A CurrentUserResponse containing details about the newly registered user.
+        A response model representing the newly registered user.
 
     Raises:
-        HTTPException: If registration fails due to invalid input,
-        authentication issues, or authorization issues.
+        HTTPException 400: If the registration request contains invalid input.
+        HTTPException 403: If the caller lacks permission to register users.
+        HTTPException 409: If the username already exists.
+        HTTPException 500: If the database fails to create the user.
     """
     try:
         record = use_case.execute(
@@ -137,8 +147,14 @@ def register(
         )
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    except ValueError as exc:
+    except (ValidationError, DomainValidationError) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except ConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except DatabaseError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
+        ) from exc
     except TypeError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -153,21 +169,32 @@ def login(
     """Authenticate with username/password and return an access + refresh token pair.
 
     Args:
-        form_data: The login credentials extracted from the form data.
-        auth_service: The authentication service for handling the login logic.
+        form_data: Login credentials extracted from form data.
+        auth_service: Authentication service, injected by FastAPI.
 
     Returns:
-        A TokenResponse containing the access token and refresh token.
+        A token response containing a new access token and refresh token.
 
     Raises:
-        HTTPException: If authentication fails due to invalid credentials or user record issues.
+        HTTPException 400: If persisted user auth data is invalid.
+        HTTPException 401: If the username or password is invalid.
+        HTTPException 500: If the database fails during authentication.
     """
     try:
         record, _ = auth_service.authenticate(form_data.username, form_data.password)
-    except ValueError as exc:
+    except AuthenticationError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password.",
+        ) from exc
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except DatabaseError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
         ) from exc
 
     return _token_response(record)
@@ -182,16 +209,18 @@ def change_password(
     """Change the current user's password.
 
     Args:
-        request: The current and new passwords extracted from the request.
-        principal: The currently authenticated user, provided by the `get_current_user` dependency.
-        use_case: The ChangePasswordUseCase instance for executing the password change.
+        request: Current and new password request body.
+        principal: Currently authenticated user, injected by FastAPI.
+        use_case: Use case for changing passwords, injected by FastAPI.
 
     Returns:
         None
 
     Raises:
-        HTTPException: If the password change fails due to invalid input,
-        authentication issues, or authorization issue
+        HTTPException 400: If the current password is wrong or the new password is invalid.
+        HTTPException 403: If the caller lacks permission to change their password.
+        HTTPException 404: If the current user record no longer exists.
+        HTTPException 500: If the database fails to update the password.
     """
     try:
         use_case.execute_current_user(
@@ -201,8 +230,16 @@ def change_password(
         )
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    except ValueError as exc:
+    except AuthenticationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except DatabaseError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
+        ) from exc
 
 
 @auth_router.post("/users/{username}/reset-password", status_code=status.HTTP_204_NO_CONTENT)
@@ -212,25 +249,33 @@ def reset_password(
     use_case: Annotated[ChangePasswordUseCase, Depends(get_change_password_use_case)],
 ) -> None:
     """Reset another user's password. This endpoint is intended for admin use.
-    
+
     Args:
-        username: The username of the user whose password is to be reset.
-        request: The new password extracted from the request.
-        use_case: The ChangePasswordUseCase instance for executing the password reset.
+        username: Username of the user whose password should be reset.
+        request: New password request body.
+        use_case: Use case for changing passwords, injected by FastAPI.
 
     Returns:
         None
 
     Raises:
-        HTTPException: If the password reset fails due to invalid input,
-        authentication issues, or authorization issues.
+        HTTPException 400: If the new password is invalid.
+        HTTPException 403: If the caller lacks permission to reset passwords.
+        HTTPException 404: If the target user does not exist.
+        HTTPException 500: If the database fails to update the password.
     """
     try:
         use_case.execute(username=username, new_password=request.new_password)
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    except ValueError as exc:
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ValidationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except DatabaseError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
+        ) from exc
 
 
 @auth_router.post("/refresh", status_code=status.HTTP_200_OK)
@@ -240,14 +285,14 @@ def refresh_token(
     """Exchange a valid refresh token for a new access token.
 
     Args:
-        data: The refresh token request payload, containing the refresh token to exchange.
-        user_repository: Repository for querying user records to validate the token and generate new tokens.
+        data: Refresh token request body.
+        user_repository: Repository used to validate the token's user record, injected by FastAPI.
 
     Returns:
-        A TokenResponse containing the new access token and refresh token.
+        A token response containing a new access token and refresh token.
 
     Raises:
-        HTTPException: If the refresh token is invalid or expired.
+        HTTPException 401: If the refresh token is invalid, expired, revoked, or references an invalid user.
     """
     principal = principal_from_token(data.refresh_token, user_repository, expected_type="refresh")
     return _token_response(principal.record)
@@ -260,16 +305,15 @@ def logout(
 ) -> None:
     """Invalidate all sessions for the current user.
 
-    Implementation: increments `users.token_version`, which invalidates all existing
-    access and refresh tokens for that user immediately.
-
     Args:
-        principal: The currently authenticated user, provided by the `get_current_user` dependency.
-        user_repository: Repository for querying and updating user records.
+        principal: Currently authenticated user, injected by FastAPI.
+        user_repository: Repository used to increment token version, injected by FastAPI.
 
-    Missing users are treated as already logged out because the endpoint is
-    idempotent. Repository write failures should surface as repository
-    exceptions.
+    Returns:
+        None
+
+    Raises:
+        HTTPException 401: If the access token is invalid, expired, revoked, or references an invalid user.
     """
     user_repository.increment_token_version_by_id(principal.record.user_id)
 
@@ -281,12 +325,12 @@ def me(
     """Get details about the currently authenticated user.
 
     Args:
-        principal: The currently authenticated user, provided by the `get_current_user` dependency.
+        principal: Currently authenticated user, injected by FastAPI.
 
     Returns:
-        A CurrentUserResponse containing details about the authenticated user.
+        A response model representing the authenticated user.
 
     Raises:
-        HTTPException: If the user details cannot be retrieved.
+        HTTPException 401: If the access token is invalid, expired, revoked, or references an invalid user.
     """
     return _current_user_response(principal.record)

@@ -6,6 +6,7 @@ from src.adapters.driven.security.password_hasher import PasswordHash
 from src.application.models.user_record import UserRecord
 from src.domain.enums.auth import Role
 from src.domain.value_objects.contact_info import ContactInfo
+from src.ports.output.repository_errors import DuplicateKeyError
 
 
 class InMemoryUserRepository:
@@ -64,7 +65,8 @@ class InMemoryUserRepository:
 
         Raises:
             TypeError: If the role or password hash has the wrong type.
-            ValueError: If validation fails or the username already exists.
+            ValueError: If validation fails.
+            DuplicateKeyError: If the username already exists.
         """
         raw_username = (username or "").strip()
         norm = self._normalize_username(username)
@@ -72,7 +74,7 @@ class InMemoryUserRepository:
         if not norm:
             raise ValueError("Username is required.")
         if norm in self._by_username:
-            raise ValueError("Username already exists.")
+            raise DuplicateKeyError("Username already exists.")
 
         role_value = InMemoryUserRepository._normalize_role(role)
         ci = ContactInfo(name=name, email=email, phone_number=phone_number)

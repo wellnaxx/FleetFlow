@@ -6,6 +6,7 @@ from src.adapters.driven.persistence.database.repositories.user_repository impor
 from src.adapters.driven.security.password_hasher import PasswordHash
 from src.application.models.user_record import UserRecord
 from src.domain.enums.auth import Role
+from src.ports.output.repository_errors import DuplicateKeyError
 
 MODULE = "src.adapters.driven.persistence.database.repositories.user_repository"
 
@@ -113,7 +114,7 @@ class PostgresUserRepository_Should(unittest.TestCase):
     def test_create_rejects_duplicate_username(self, fetch_one_mock: MagicMock) -> None:
         fetch_one_mock.return_value = self._user_row()
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(DuplicateKeyError) as ctx:
             self.repo.create("Alice", "EMPLOYEE", "Alice", "", "", self.password_hash)
 
         self.assertIn("Username already exists.", str(ctx.exception))

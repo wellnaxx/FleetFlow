@@ -27,6 +27,7 @@ class LoginUseCase(BaseUseCase[User]):
             The authenticated runtime user entity.
 
         Raises:
-            ValueError: If the credentials are invalid.
+            AuthenticationError: If the credentials are invalid.
+            ValidationError: If persisted user data is invalid.
         """
         return self._auth.login(username, password)

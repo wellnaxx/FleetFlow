@@ -8,6 +8,7 @@ from src.adapters.driven.persistence.json.user_store import JSONUserStore
 from src.adapters.driven.security.password_hasher import PasswordHash
 from src.application.models.user_record import UserRecord
 from src.domain.enums.auth import Role
+from src.ports.output.repository_errors import DuplicateKeyError
 
 PERSISTED_PASSWORD = PasswordHash(
     algo="sha256",
@@ -546,7 +547,7 @@ class JSONUserStore_Create_Get_Update_Should(unittest.TestCase):
             with self.assertRaises(ValueError):
                 store.create("", "EMPLOYEE", "N", "", "", _ph("pw"))  # type: ignore[reportArgumentType]
             store.create("user", "EMPLOYEE", "Name", "", "", _ph("pw"))  # type: ignore[reportArgumentType]
-            with self.assertRaises(ValueError):
+            with self.assertRaises(DuplicateKeyError):
                 store.create("user", "EMPLOYEE", "Name", "", "", _ph("pw"))  # type: ignore[reportArgumentType]  # duplicate username
             with self.assertRaises(ValueError):
                 store.create("badrole", "garbage", "Name", "", "", _ph("pw"))  # type: ignore[reportArgumentType]
@@ -612,7 +613,7 @@ class JSONUserStore_Create_Get_Update_Should(unittest.TestCase):
             store = JSONUserStore()
             store.create("Alice", "EMPLOYEE", "Alice", "", "", _ph("pw1"))  # type: ignore[reportArgumentType]
 
-            with self.assertRaises(ValueError) as ctx:
+            with self.assertRaises(DuplicateKeyError) as ctx:
                 store.create("  alice  ", "EMPLOYEE", "Alice 2", "", "", _ph("pw2"))  # type: ignore[reportArgumentType]
 
             self.assertIn("Username already exists.", str(ctx.exception))

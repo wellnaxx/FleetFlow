@@ -29,7 +29,9 @@ class ChangePasswordUseCase(AuthorizedUseCase[None]):
                 change. When omitted, the flow becomes a reset.
 
         Raises:
-            ValueError: If the user is missing or the password change is invalid.
+            NotFoundError: If the user is missing.
+            AuthenticationError: If the old password is wrong.
+            ValidationError: If password validation fails.
             PermissionError: If the caller is not authorized to perform the action.
         """
         if old_password is None:
@@ -66,7 +68,9 @@ class ChangePasswordUseCase(AuthorizedUseCase[None]):
         Raises:
             PermissionError: If no user is authenticated.
             PermissionError: If the driving adapter does not provide a username.
-            ValueError: If password validation fails.
+            AuthenticationError: If the old password is wrong.
+            NotFoundError: If the user is missing.
+            ValidationError: If password validation fails.
         """
         if self.authz.current_user is None:
             raise PermissionError("Unauthenticated")

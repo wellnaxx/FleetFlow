@@ -44,7 +44,9 @@ class RegisterUserUseCase(AuthorizedUseCase[UserRecord]):
             The persisted user record.
 
         Raises:
-            ValueError: If validation fails or the repository rejects the user.
+            PermissionError: If the caller lacks admin-user permission.
+            ValidationError: If command input fails validation.
+            ConflictError: If the username already exists.
         """
         return self._auth.register_user(
             username=username,
