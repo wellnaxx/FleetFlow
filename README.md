@@ -5,14 +5,14 @@
 ![Architecture](https://img.shields.io/badge/Architecture-Hexagonal--style-8B5CF6)
 ![Tests](https://img.shields.io/badge/Tests-pytest%20%2B%20unittest-2563EB)
 
-FleetFlow is a logistics management system for packages, delivery routes, trucks, customers, and authenticated users across Australian freight hub locations. It currently exposes an interactive CLI and an early FastAPI HTTP adapter. The internals are structured around domain entities, application use cases, services, ports, adapters, and a composition root so workflows can be reused by multiple driving adapters.
+FleetFlow is a logistics management system for packages, delivery routes, trucks, customers, and authenticated users across Australian freight hub locations. It currently exposes an interactive CLI and a FastAPI HTTP adapter. The internals are structured around domain entities, application use cases, services, ports, adapters, and a composition root so workflows can be reused by multiple driving adapters.
 
 ## Capabilities
 
 FleetFlow currently supports:
 
 - Interactive menu-driven operation and command-mode workflows.
-- FastAPI HTTP adapter with authentication endpoints plus paginated customer and package workflows.
+- FastAPI HTTP adapter with authentication plus customer, package, route, truck, and world-state workflows.
 - Package creation, lookup, removal, unassigned-package listing, and route assignment.
 - Route creation, lookup, removal, in-progress tracking, package assignment, and truck assignment.
 - Truck fleet management with deterministic city dispersion.
@@ -21,6 +21,7 @@ FleetFlow currently supports:
 - Customer records derived from package creation, including email and phone lookup indexes.
 - User authentication with manager and employee roles.
 - JWT access/refresh tokens for HTTP authentication, with token-version revocation.
+- Typed application and repository errors for common auth failures such as invalid credentials, duplicate usernames, missing users, and invalid persisted role data.
 - Role-based authorization around CLI commands and application use cases.
 - Password hashing with PBKDF2-HMAC and strict persisted password-hash validation.
 - Environment-selected in-memory or PostgreSQL logistics persistence backend.
@@ -226,6 +227,8 @@ If the application is started non-interactively and no admin user exists, startu
 
 HTTP authentication uses JWT access and refresh tokens. Tokens include the persisted user id, username, role, and token version. Password changes and HTTP logout increment the user's token version so existing access and refresh tokens are rejected. Refresh tokens are not stored server-side in this version, so refresh-token rotation is limited by token-version revocation.
 
+Authentication failures are intentionally reported with safe messages. Invalid credentials return `401`, malformed persisted auth data returns `400`, duplicate usernames return `409`, and database failures return generic `500` responses without leaking adapter details.
+
 ## Running the App
 
 ### Prerequisite
@@ -413,7 +416,19 @@ The FastAPI adapter currently exposes:
 - `GET /api/packages`
 - `GET /api/packages/unassigned`
 - `GET /api/packages/{package_id}`
+- `GET /api/packages/{package_id}/suitable-routes`
 - `DELETE /api/packages/{package_id}`
+- `POST /api/routes/`
+- `GET /api/routes/`
+- `GET /api/routes/in-progress`
+- `GET /api/routes/{route_id}`
+- `DELETE /api/routes/{route_id}`
+- `PATCH /api/routes/{route_id}/packages`
+- `PATCH /api/routes/{route_id}/truck`
+- `GET /api/routes/{route_id}/suitable-trucks`
+- `GET /api/trucks/`
+- `POST /api/state/save`
+- `POST /api/state/load`
 
 Login uses OAuth2-style form data:
 
@@ -454,7 +469,18 @@ GET /api/packages/unassigned?limit=50&offset=0
 GET /api/packages/unassigned?limit=50&offset=0&include_total=true
 ```
 
-`include_total` defaults to `false` so normal list requests do not run a count query. When omitted, the response contains `"total": null`. When requested, customer and package page totals are loaded with the page from one repository operation.
+Route listing also supports the same `limit`, `offset`, and `include_total` query parameters.
+
+`include_total` defaults to `false` so normal list requests do not run a count query. When omitted, the response contains `"total": null`. When requested, customer, package, and route page totals are loaded with the page from one repository operation.
+
+Common HTTP error mappings are:
+
+- `400 Bad Request` for invalid request/use-case input.
+- `401 Unauthorized` for invalid, expired, revoked, or malformed tokens and invalid login credentials.
+- `403 Forbidden` for missing permissions.
+- `404 Not Found` for requested resources that do not exist.
+- `409 Conflict` for duplicate usernames or inconsistent domain state.
+- `500 Internal Server Error` for persistence failures, reported with generic details.
 
 ## Autosave and Heartbeat
 
@@ -524,7 +550,7 @@ This would allow the current use cases to act as command handlers without rewrit
 
 ### HTTP API expansion
 
-The current FastAPI adapter covers authentication, customer listing, and package creation/read/removal/listing workflows. Remaining HTTP work includes exposing route, truck, world-state, and operational query workflows through request-scoped authorization dependencies.
+The current FastAPI adapter covers authentication, customer listing, package workflows, route workflows, truck listing, and world-state import/export. Remaining HTTP work is mostly hardening the API surface, response contracts, and integration coverage.
 
 ### PostgreSQL persistence adapter
 
