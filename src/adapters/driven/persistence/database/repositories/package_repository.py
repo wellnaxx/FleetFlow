@@ -166,9 +166,7 @@ class PostgresPackageRepository:
         """
         return [graph.package for graph in load_unassigned_package_graph_page(limit, offset)]
 
-    def list_unassigned_page_with_total(
-        self, limit: int, offset: int
-    ) -> tuple[list[DeliveryPackage], int]:
+    def list_unassigned_page_with_total(self, limit: int, offset: int) -> tuple[list[DeliveryPackage], int]:
         """Return an unassigned package page and total from one database query."""
         graphs, total = load_unassigned_package_graph_page_with_total(limit, offset)
         return [graph.package for graph in graphs], total

@@ -171,7 +171,7 @@ def load_route_graphs() -> list[HydratedRouteGraph]:
 
 def load_route_graph_page(limit: int, offset: int) -> list[HydratedRouteGraph]:
     """Load a page of route aggregates and their connected assigned objects.
-    
+
     Args:
         limit: Maximum number of routes to return.
         offset: Number of routes to skip.
@@ -192,7 +192,7 @@ def load_route_graph_page(limit: int, offset: int) -> list[HydratedRouteGraph]:
 
 def load_route_graph_page_with_total(limit: int, offset: int) -> tuple[list[HydratedRouteGraph], int]:
     """Load a route page and total count from one route-page query.
-    
+
     Args:
         limit: Maximum number of routes to return.
         offset: Number of routes to skip.

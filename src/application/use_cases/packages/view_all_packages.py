@@ -50,9 +50,7 @@ class ViewAllPackagesUseCase(AuthorizedUseCase[PageResult[DeliveryPackage]]):
 
         validate_page(query.limit, query.offset)
         if query.include_total:
-            packages, total = self._packages.list_page_with_total(
-                limit=query.limit, offset=query.offset
-            )
+            packages, total = self._packages.list_page_with_total(limit=query.limit, offset=query.offset)
         else:
             packages = self._packages.list_page(limit=query.limit, offset=query.offset)
             total = None

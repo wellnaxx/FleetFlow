@@ -27,9 +27,7 @@ class TrucksRouterShould(unittest.TestCase):
         truck = Truck(vehicle_id=1, name="Scania", capacity=42000, max_range=8000)
         truck.current_location = "SYD"
         use_case.execute.return_value = [truck]
-        self.app.dependency_overrides[trucks_router_module.get_view_all_trucks_use_case] = (
-            lambda: use_case
-        )
+        self.app.dependency_overrides[trucks_router_module.get_view_all_trucks_use_case] = lambda: use_case
 
         response = self.client.get("/trucks/")
 
@@ -56,9 +54,7 @@ class TrucksRouterShould(unittest.TestCase):
     def test_list_trucks_returns_empty_list(self) -> None:
         use_case = MagicMock()
         use_case.execute.return_value = []
-        self.app.dependency_overrides[trucks_router_module.get_view_all_trucks_use_case] = (
-            lambda: use_case
-        )
+        self.app.dependency_overrides[trucks_router_module.get_view_all_trucks_use_case] = lambda: use_case
 
         response = self.client.get("/trucks/")
 
@@ -79,9 +75,7 @@ class TrucksRouterShould(unittest.TestCase):
         truck.busy_until = busy_until
         truck.in_transit_to = "MEL"
         use_case.execute.return_value = [truck]
-        self.app.dependency_overrides[trucks_router_module.get_view_all_trucks_use_case] = (
-            lambda: use_case
-        )
+        self.app.dependency_overrides[trucks_router_module.get_view_all_trucks_use_case] = lambda: use_case
 
         response = self.client.get("/trucks/")
 
@@ -99,9 +93,7 @@ class TrucksRouterShould(unittest.TestCase):
     def test_list_trucks_returns_forbidden_for_permission_error(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = PermissionError("Missing permission: TRUCK_VIEW")
-        self.app.dependency_overrides[trucks_router_module.get_view_all_trucks_use_case] = (
-            lambda: use_case
-        )
+        self.app.dependency_overrides[trucks_router_module.get_view_all_trucks_use_case] = lambda: use_case
 
         response = self.client.get("/trucks/")
 
@@ -112,9 +104,7 @@ class TrucksRouterShould(unittest.TestCase):
     def test_list_trucks_returns_generic_error_for_database_failure(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = DatabaseError.read_failed(Exception("boom"))
-        self.app.dependency_overrides[trucks_router_module.get_view_all_trucks_use_case] = (
-            lambda: use_case
-        )
+        self.app.dependency_overrides[trucks_router_module.get_view_all_trucks_use_case] = lambda: use_case
 
         response = self.client.get("/trucks/")
 

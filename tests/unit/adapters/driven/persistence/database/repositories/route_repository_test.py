@@ -197,9 +197,7 @@ class PostgresRouteRepository_Should(unittest.TestCase):
         fetch_one_mock.assert_called_once_with(QUERIES.routes.count_all)
 
     @patch(f"{MODULE}.fetch_one", return_value={"total": "3"})
-    def test_count_all_raises_type_error_when_total_is_string(
-        self, fetch_one_mock: MagicMock
-    ) -> None:
+    def test_count_all_raises_type_error_when_total_is_string(self, fetch_one_mock: MagicMock) -> None:
         with self.assertRaises(TypeError) as ctx:
             self.repo.count_all()
 
@@ -207,9 +205,7 @@ class PostgresRouteRepository_Should(unittest.TestCase):
         fetch_one_mock.assert_called_once_with(QUERIES.routes.count_all)
 
     @patch(f"{MODULE}.fetch_one", return_value={"total": True})
-    def test_count_all_raises_type_error_when_total_is_bool(
-        self, fetch_one_mock: MagicMock
-    ) -> None:
+    def test_count_all_raises_type_error_when_total_is_bool(self, fetch_one_mock: MagicMock) -> None:
         with self.assertRaises(TypeError) as ctx:
             self.repo.count_all()
 

@@ -50,9 +50,7 @@ class ViewAllRoutesUseCase(AuthorizedUseCase[PageResult[DeliveryRoute]]):
 
         validate_page(query.limit, query.offset)
         if query.include_total:
-            routes, total = self._routes.list_page_with_total(
-                limit=query.limit, offset=query.offset
-            )
+            routes, total = self._routes.list_page_with_total(limit=query.limit, offset=query.offset)
         else:
             routes = self._routes.list_page(limit=query.limit, offset=query.offset)
             total = None

@@ -281,6 +281,7 @@ class AuthService_Should(unittest.TestCase):
     @patch("src.application.services.auth_service.hash_password")
     def test_auth_service_works_with_in_memory_repository(self, hash_password: MagicMock) -> None:
         from src.adapters.driven.persistence.memory.user_repository import InMemoryUserRepository
+
         hash_password.side_effect = [
             SimpleNamespace(serialize=lambda: "HASH1"),
             SimpleNamespace(serialize=lambda: "HASH2"),

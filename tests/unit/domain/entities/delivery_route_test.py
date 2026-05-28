@@ -477,4 +477,3 @@ class DeliveryRoute_Should(unittest.TestCase):
                 ]
             )
         )
-

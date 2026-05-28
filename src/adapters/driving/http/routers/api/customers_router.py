@@ -32,9 +32,7 @@ def list_customers(
         HTTPException: If the caller lacks permission to view customers.
     """
     try:
-        result = use_case.execute(
-            PageQuery(limit=limit, offset=offset, include_total=include_total)
-        )
+        result = use_case.execute(PageQuery(limit=limit, offset=offset, include_total=include_total))
         items = [
             CustomerResponse(
                 customer_id=customer.customer_id,

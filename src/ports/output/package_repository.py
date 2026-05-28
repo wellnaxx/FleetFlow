@@ -89,9 +89,7 @@ class PackageRepositoryPort(Protocol):
         """
         ...
 
-    def list_unassigned_page_with_total(
-        self, limit: int, offset: int
-    ) -> tuple[list[DeliveryPackage], int]:
+    def list_unassigned_page_with_total(self, limit: int, offset: int) -> tuple[list[DeliveryPackage], int]:
         """Return an unassigned package page and total from one repository operation."""
         ...
 

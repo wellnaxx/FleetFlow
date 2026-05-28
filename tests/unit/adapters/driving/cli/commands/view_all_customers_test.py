@@ -57,9 +57,9 @@ class ViewAllCustomers_Should(unittest.TestCase):
 
         cmd._use_case.execute.return_value = PageResult(  # type: ignore[reportAttributeAccessIssue]
             items=(
-            c1,
-            c2,
-            c3,
+                c1,
+                c2,
+                c3,
             ),
             total=None,
             limit=None,

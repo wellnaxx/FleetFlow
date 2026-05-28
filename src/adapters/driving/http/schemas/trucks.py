@@ -36,10 +36,6 @@ class TruckResponse(BaseModel):
     @model_validator(mode="after")
     def validate_busy_window(self) -> Self:
         """Reject truck assignment windows whose end precedes the start."""
-        if (
-            self.busy_from is not None
-            and self.busy_until is not None
-            and self.busy_from > self.busy_until
-        ):
+        if self.busy_from is not None and self.busy_until is not None and self.busy_from > self.busy_until:
             raise ValueError("busy_from must be before or equal to busy_until.")
         return self

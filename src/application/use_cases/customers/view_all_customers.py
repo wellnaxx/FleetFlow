@@ -50,9 +50,7 @@ class ViewAllCustomersUseCase(AuthorizedUseCase[PageResult[Customer]]):
 
         validate_page(query.limit, query.offset)
         if query.include_total:
-            customers, total = self._customers.list_page_with_total(
-                limit=query.limit, offset=query.offset
-            )
+            customers, total = self._customers.list_page_with_total(limit=query.limit, offset=query.offset)
         else:
             customers = self._customers.list_page(limit=query.limit, offset=query.offset)
             total = None

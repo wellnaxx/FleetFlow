@@ -100,9 +100,7 @@ class PackagesRouterShould(unittest.TestCase):
             limit=1,
             offset=2,
         )
-        self.app.dependency_overrides[packages_router_module.get_view_all_packages_use_case] = (
-            lambda: use_case
-        )
+        self.app.dependency_overrides[packages_router_module.get_view_all_packages_use_case] = lambda: use_case
 
         response = self.client.get("/packages?limit=1&offset=2&include_total=true")
 
@@ -117,9 +115,7 @@ class PackagesRouterShould(unittest.TestCase):
     def test_list_packages_returns_forbidden_for_permission_error(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = PermissionError("Missing permission: PACKAGE_VIEW_ALL")
-        self.app.dependency_overrides[packages_router_module.get_view_all_packages_use_case] = (
-            lambda: use_case
-        )
+        self.app.dependency_overrides[packages_router_module.get_view_all_packages_use_case] = lambda: use_case
 
         response = self.client.get("/packages")
 
@@ -135,8 +131,8 @@ class PackagesRouterShould(unittest.TestCase):
             limit=1,
             offset=2,
         )
-        self.app.dependency_overrides[packages_router_module.get_view_unassigned_packages_use_case] = (
-            lambda: use_case
+        self.app.dependency_overrides[packages_router_module.get_view_unassigned_packages_use_case] = lambda: (
+            use_case
         )
 
         response = self.client.get("/packages/unassigned?limit=1&offset=2")
@@ -150,9 +146,7 @@ class PackagesRouterShould(unittest.TestCase):
 
     def test_list_packages_rejects_invalid_pagination_params(self) -> None:
         use_case = MagicMock()
-        self.app.dependency_overrides[packages_router_module.get_view_all_packages_use_case] = (
-            lambda: use_case
-        )
+        self.app.dependency_overrides[packages_router_module.get_view_all_packages_use_case] = lambda: use_case
 
         response = self.client.get("/packages?limit=0&offset=-1")
 
@@ -193,9 +187,9 @@ class PackagesRouterShould(unittest.TestCase):
                 end_city=LocationCode("MEL"),
             )
         ]
-        self.app.dependency_overrides[
-            packages_router_module.get_find_suitable_routes_for_package_use_case
-        ] = lambda: use_case
+        self.app.dependency_overrides[packages_router_module.get_find_suitable_routes_for_package_use_case] = (
+            lambda: use_case
+        )
 
         response = self.client.get("/packages/4/suitable-routes")
 
@@ -211,9 +205,9 @@ class PackagesRouterShould(unittest.TestCase):
     def test_find_suitable_routes_for_package_returns_not_found_for_missing_package(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = NotFoundError("Package with ID 4 not found.")
-        self.app.dependency_overrides[
-            packages_router_module.get_find_suitable_routes_for_package_use_case
-        ] = lambda: use_case
+        self.app.dependency_overrides[packages_router_module.get_find_suitable_routes_for_package_use_case] = (
+            lambda: use_case
+        )
 
         response = self.client.get("/packages/4/suitable-routes")
 
@@ -223,9 +217,9 @@ class PackagesRouterShould(unittest.TestCase):
     def test_find_suitable_routes_for_package_returns_forbidden_for_permission_error(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = PermissionError("Missing permission: PACKAGE_FIND_ROUTE_FOR")
-        self.app.dependency_overrides[
-            packages_router_module.get_find_suitable_routes_for_package_use_case
-        ] = lambda: use_case
+        self.app.dependency_overrides[packages_router_module.get_find_suitable_routes_for_package_use_case] = (
+            lambda: use_case
+        )
 
         response = self.client.get("/packages/4/suitable-routes")
 

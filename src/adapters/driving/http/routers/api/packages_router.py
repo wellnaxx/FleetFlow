@@ -121,7 +121,7 @@ def create_package(
         HTTPException 409: If the caller tries to create a package with conflicting information,
             or during this operation the package ownership transfer detects that the package is missing
             from the previous customer's active collection.
-        """
+    """
     try:
         package = use_case.execute(
             start=request.start_location,

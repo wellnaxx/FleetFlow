@@ -38,9 +38,7 @@ class RoutesRouterShould(unittest.TestCase):
             limit=1,
             offset=2,
         )
-        self.app.dependency_overrides[routes_router_module.get_view_all_routes_use_case] = (
-            lambda: use_case
-        )
+        self.app.dependency_overrides[routes_router_module.get_view_all_routes_use_case] = lambda: use_case
 
         response = self.client.get("/routes/?limit=1&offset=2")
 
@@ -60,9 +58,7 @@ class RoutesRouterShould(unittest.TestCase):
             limit=1,
             offset=2,
         )
-        self.app.dependency_overrides[routes_router_module.get_view_all_routes_use_case] = (
-            lambda: use_case
-        )
+        self.app.dependency_overrides[routes_router_module.get_view_all_routes_use_case] = lambda: use_case
 
         response = self.client.get("/routes/?limit=1&offset=2&include_total=true")
 
@@ -77,9 +73,7 @@ class RoutesRouterShould(unittest.TestCase):
     def test_list_routes_returns_forbidden_for_permission_error(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = PermissionError("Missing permission: ROUTE_VIEW_ALL")
-        self.app.dependency_overrides[routes_router_module.get_view_all_routes_use_case] = (
-            lambda: use_case
-        )
+        self.app.dependency_overrides[routes_router_module.get_view_all_routes_use_case] = lambda: use_case
 
         response = self.client.get("/routes/")
 
@@ -89,9 +83,7 @@ class RoutesRouterShould(unittest.TestCase):
 
     def test_list_routes_rejects_invalid_pagination_params(self) -> None:
         use_case = MagicMock()
-        self.app.dependency_overrides[routes_router_module.get_view_all_routes_use_case] = (
-            lambda: use_case
-        )
+        self.app.dependency_overrides[routes_router_module.get_view_all_routes_use_case] = lambda: use_case
 
         response = self.client.get("/routes/?limit=0&offset=-1")
 
@@ -143,8 +135,8 @@ class RoutesRouterShould(unittest.TestCase):
         route = self._route(route_id=41)
         position = routes_router_module.RoutePosition(kind="AT_STOP", stop_city=LocationCode("SYD"))
         use_case.execute.return_value = [(route, position)]
-        self.app.dependency_overrides[routes_router_module.get_view_routes_in_progress_use_case] = (
-            lambda: use_case
+        self.app.dependency_overrides[routes_router_module.get_view_routes_in_progress_use_case] = lambda: (
+            use_case
         )
 
         response = self.client.get("/routes/in-progress")
@@ -158,8 +150,8 @@ class RoutesRouterShould(unittest.TestCase):
     def test_list_in_progress_routes_returns_forbidden_for_permission_error(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = PermissionError("Missing permission: ROUTE_VIEW_IN_PROGRESS")
-        self.app.dependency_overrides[routes_router_module.get_view_routes_in_progress_use_case] = (
-            lambda: use_case
+        self.app.dependency_overrides[routes_router_module.get_view_routes_in_progress_use_case] = lambda: (
+            use_case
         )
 
         response = self.client.get("/routes/in-progress")
@@ -233,9 +225,9 @@ class RoutesRouterShould(unittest.TestCase):
             successes=[PackageAssignmentSuccess(package_id=1, route_id=71, eta_text="2026-05-24 10:00")],
             errors=[PackageAssignmentError(package_id=2, message="Package 2 not found.")],
         )
-        self.app.dependency_overrides[
-            routes_router_module.get_assign_packages_to_route_use_case
-        ] = lambda: use_case
+        self.app.dependency_overrides[routes_router_module.get_assign_packages_to_route_use_case] = lambda: (
+            use_case
+        )
 
         response = self.client.patch("/routes/71/packages", json={"package_ids": [1, 2]})
 
@@ -247,9 +239,9 @@ class RoutesRouterShould(unittest.TestCase):
     def test_assign_packages_to_route_returns_not_found_for_missing_route(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = ValueError("Route with ID 71 not found.")
-        self.app.dependency_overrides[
-            routes_router_module.get_assign_packages_to_route_use_case
-        ] = lambda: use_case
+        self.app.dependency_overrides[routes_router_module.get_assign_packages_to_route_use_case] = lambda: (
+            use_case
+        )
 
         response = self.client.patch("/routes/71/packages", json={"package_ids": [1]})
 
@@ -259,9 +251,9 @@ class RoutesRouterShould(unittest.TestCase):
     def test_assign_packages_to_route_returns_forbidden_for_permission_error(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = PermissionError("Missing permission: ROUTE_ASSIGN_PACKAGE")
-        self.app.dependency_overrides[
-            routes_router_module.get_assign_packages_to_route_use_case
-        ] = lambda: use_case
+        self.app.dependency_overrides[routes_router_module.get_assign_packages_to_route_use_case] = lambda: (
+            use_case
+        )
 
         response = self.client.patch("/routes/71/packages", json={"package_ids": [1]})
 
@@ -270,9 +262,9 @@ class RoutesRouterShould(unittest.TestCase):
 
     def test_assign_packages_to_route_rejects_empty_package_list(self) -> None:
         use_case = MagicMock()
-        self.app.dependency_overrides[
-            routes_router_module.get_assign_packages_to_route_use_case
-        ] = lambda: use_case
+        self.app.dependency_overrides[routes_router_module.get_assign_packages_to_route_use_case] = lambda: (
+            use_case
+        )
 
         response = self.client.patch("/routes/71/packages", json={"package_ids": []})
 
@@ -282,9 +274,9 @@ class RoutesRouterShould(unittest.TestCase):
     def test_assign_truck_to_route_returns_assignment_response(self) -> None:
         use_case = MagicMock()
         use_case.execute.return_value = AssignTruckToRouteResult(route_id=81, truck_id=7)
-        self.app.dependency_overrides[
-            routes_router_module.get_assign_truck_to_route_use_case
-        ] = lambda: use_case
+        self.app.dependency_overrides[routes_router_module.get_assign_truck_to_route_use_case] = lambda: (
+            use_case
+        )
 
         response = self.client.patch("/routes/81/truck", json={"truck_id": 7})
 
@@ -295,9 +287,9 @@ class RoutesRouterShould(unittest.TestCase):
     def test_assign_truck_to_route_returns_conflict_for_unsuitable_truck(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = ConflictError("Truck 7 is not suitable for route 81.")
-        self.app.dependency_overrides[
-            routes_router_module.get_assign_truck_to_route_use_case
-        ] = lambda: use_case
+        self.app.dependency_overrides[routes_router_module.get_assign_truck_to_route_use_case] = lambda: (
+            use_case
+        )
 
         response = self.client.patch("/routes/81/truck", json={"truck_id": 7})
 
@@ -307,9 +299,9 @@ class RoutesRouterShould(unittest.TestCase):
     def test_assign_truck_to_route_returns_not_found_for_missing_truck_or_route(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = NotFoundError("Truck with ID 7 not found")
-        self.app.dependency_overrides[
-            routes_router_module.get_assign_truck_to_route_use_case
-        ] = lambda: use_case
+        self.app.dependency_overrides[routes_router_module.get_assign_truck_to_route_use_case] = lambda: (
+            use_case
+        )
 
         response = self.client.patch("/routes/81/truck", json={"truck_id": 7})
 
@@ -319,9 +311,9 @@ class RoutesRouterShould(unittest.TestCase):
     def test_assign_truck_to_route_returns_generic_error_for_database_failure(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = DatabaseError.write_failed(Exception("boom"))
-        self.app.dependency_overrides[
-            routes_router_module.get_assign_truck_to_route_use_case
-        ] = lambda: use_case
+        self.app.dependency_overrides[routes_router_module.get_assign_truck_to_route_use_case] = lambda: (
+            use_case
+        )
 
         response = self.client.patch("/routes/81/truck", json={"truck_id": 7})
 
@@ -331,9 +323,9 @@ class RoutesRouterShould(unittest.TestCase):
     def test_assign_truck_to_route_returns_forbidden_for_permission_error(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = PermissionError("Missing permission: ROUTE_ASSIGN_TRUCK")
-        self.app.dependency_overrides[
-            routes_router_module.get_assign_truck_to_route_use_case
-        ] = lambda: use_case
+        self.app.dependency_overrides[routes_router_module.get_assign_truck_to_route_use_case] = lambda: (
+            use_case
+        )
 
         response = self.client.patch("/routes/81/truck", json={"truck_id": 7})
 
@@ -346,9 +338,9 @@ class RoutesRouterShould(unittest.TestCase):
         truck.current_location = LocationCode("SYD")
         truck.status = TruckStatus.FREE
         use_case.execute.return_value = [truck]
-        self.app.dependency_overrides[
-            routes_router_module.get_find_suitable_trucks_for_route_use_case
-        ] = lambda: use_case
+        self.app.dependency_overrides[routes_router_module.get_find_suitable_trucks_for_route_use_case] = (
+            lambda: use_case
+        )
 
         response = self.client.get("/routes/91/suitable-trucks")
 
@@ -361,9 +353,9 @@ class RoutesRouterShould(unittest.TestCase):
     def test_find_suitable_trucks_for_route_returns_not_found_for_missing_route(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = NotFoundError("Route with ID 91 not found")
-        self.app.dependency_overrides[
-            routes_router_module.get_find_suitable_trucks_for_route_use_case
-        ] = lambda: use_case
+        self.app.dependency_overrides[routes_router_module.get_find_suitable_trucks_for_route_use_case] = (
+            lambda: use_case
+        )
 
         response = self.client.get("/routes/91/suitable-trucks")
 
@@ -373,9 +365,9 @@ class RoutesRouterShould(unittest.TestCase):
     def test_find_suitable_trucks_for_route_returns_generic_error_for_database_failure(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = DatabaseError.read_failed(Exception("boom"))
-        self.app.dependency_overrides[
-            routes_router_module.get_find_suitable_trucks_for_route_use_case
-        ] = lambda: use_case
+        self.app.dependency_overrides[routes_router_module.get_find_suitable_trucks_for_route_use_case] = (
+            lambda: use_case
+        )
 
         response = self.client.get("/routes/91/suitable-trucks")
 
@@ -385,9 +377,9 @@ class RoutesRouterShould(unittest.TestCase):
     def test_find_suitable_trucks_for_route_returns_forbidden_for_permission_error(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = PermissionError("Missing permission: ROUTE_FIND_TRUCK_FOR")
-        self.app.dependency_overrides[
-            routes_router_module.get_find_suitable_trucks_for_route_use_case
-        ] = lambda: use_case
+        self.app.dependency_overrides[routes_router_module.get_find_suitable_trucks_for_route_use_case] = (
+            lambda: use_case
+        )
 
         response = self.client.get("/routes/91/suitable-trucks")
 

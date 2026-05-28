@@ -136,9 +136,7 @@ class InMemoryPackageRepository:
         """
         return self.list_unassigned()[offset : offset + limit]
 
-    def list_unassigned_page_with_total(
-        self, limit: int, offset: int
-    ) -> tuple[list[DeliveryPackage], int]:
+    def list_unassigned_page_with_total(self, limit: int, offset: int) -> tuple[list[DeliveryPackage], int]:
         """Return an unassigned page and total count from the current memory snapshot."""
         packages = self.list_unassigned()
         return packages[offset : offset + limit], len(packages)

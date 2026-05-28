@@ -36,8 +36,8 @@ class CustomersRouterShould(unittest.TestCase):
             limit=50,
             offset=0,
         )
-        self.app.dependency_overrides[customers_router_module.get_view_all_customers_use_case] = (
-            lambda: use_case
+        self.app.dependency_overrides[customers_router_module.get_view_all_customers_use_case] = lambda: (
+            use_case
         )
 
         response = self.client.get("/customers/")
@@ -76,8 +76,8 @@ class CustomersRouterShould(unittest.TestCase):
             limit=1,
             offset=2,
         )
-        self.app.dependency_overrides[customers_router_module.get_view_all_customers_use_case] = (
-            lambda: use_case
+        self.app.dependency_overrides[customers_router_module.get_view_all_customers_use_case] = lambda: (
+            use_case
         )
 
         response = self.client.get("/customers/?limit=1&offset=2")
@@ -97,8 +97,8 @@ class CustomersRouterShould(unittest.TestCase):
             limit=1,
             offset=2,
         )
-        self.app.dependency_overrides[customers_router_module.get_view_all_customers_use_case] = (
-            lambda: use_case
+        self.app.dependency_overrides[customers_router_module.get_view_all_customers_use_case] = lambda: (
+            use_case
         )
 
         response = self.client.get("/customers/?limit=1&offset=2&include_total=true")
@@ -113,8 +113,8 @@ class CustomersRouterShould(unittest.TestCase):
     def test_list_customers_returns_empty_list(self) -> None:
         use_case = MagicMock()
         use_case.execute.return_value = PageResult(items=(), total=None, limit=50, offset=0)
-        self.app.dependency_overrides[customers_router_module.get_view_all_customers_use_case] = (
-            lambda: use_case
+        self.app.dependency_overrides[customers_router_module.get_view_all_customers_use_case] = lambda: (
+            use_case
         )
 
         response = self.client.get("/customers/")
@@ -128,8 +128,8 @@ class CustomersRouterShould(unittest.TestCase):
 
     def test_list_customers_rejects_invalid_pagination_params(self) -> None:
         use_case = MagicMock()
-        self.app.dependency_overrides[customers_router_module.get_view_all_customers_use_case] = (
-            lambda: use_case
+        self.app.dependency_overrides[customers_router_module.get_view_all_customers_use_case] = lambda: (
+            use_case
         )
 
         response = self.client.get("/customers/?limit=0&offset=-1")
@@ -140,8 +140,8 @@ class CustomersRouterShould(unittest.TestCase):
     def test_list_customers_returns_forbidden_for_permission_error(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = PermissionError("Missing permission: CUSTOMER_VIEW")
-        self.app.dependency_overrides[customers_router_module.get_view_all_customers_use_case] = (
-            lambda: use_case
+        self.app.dependency_overrides[customers_router_module.get_view_all_customers_use_case] = lambda: (
+            use_case
         )
 
         response = self.client.get("/customers/")

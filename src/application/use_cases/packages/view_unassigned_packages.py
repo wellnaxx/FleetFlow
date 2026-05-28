@@ -54,9 +54,7 @@ class ViewUnassignedPackagesUseCase(AuthorizedUseCase[PageResult[DeliveryPackage
                 limit=query.limit, offset=query.offset
             )
         else:
-            packages = self._packages.list_unassigned_page(
-                limit=query.limit, offset=query.offset
-            )
+            packages = self._packages.list_unassigned_page(limit=query.limit, offset=query.offset)
             total = None
 
         return PageResult(

@@ -27,9 +27,7 @@ class StateRouterShould(unittest.TestCase):
     def test_save_world_returns_snapshot_metadata(self) -> None:
         use_case = MagicMock()
         use_case.execute.return_value = "C:/snapshots/world.json"
-        self.app.dependency_overrides[state_router_module.get_save_world_state_use_case] = (
-            lambda: use_case
-        )
+        self.app.dependency_overrides[state_router_module.get_save_world_state_use_case] = lambda: use_case
 
         response = self.client.post("/state/save", json={"path": "world.json"})
 
@@ -43,9 +41,7 @@ class StateRouterShould(unittest.TestCase):
 
     def test_save_world_rejects_invalid_path_before_use_case(self) -> None:
         use_case = MagicMock()
-        self.app.dependency_overrides[state_router_module.get_save_world_state_use_case] = (
-            lambda: use_case
-        )
+        self.app.dependency_overrides[state_router_module.get_save_world_state_use_case] = lambda: use_case
 
         response = self.client.post("/state/save", json={"path": "../world.json"})
 
@@ -55,9 +51,7 @@ class StateRouterShould(unittest.TestCase):
     def test_save_world_returns_forbidden_for_permission_error(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = PermissionError("Missing permission: APP_SAVE_STATE")
-        self.app.dependency_overrides[state_router_module.get_save_world_state_use_case] = (
-            lambda: use_case
-        )
+        self.app.dependency_overrides[state_router_module.get_save_world_state_use_case] = lambda: use_case
 
         response = self.client.post("/state/save", json={"path": "world.json"})
 
@@ -67,9 +61,7 @@ class StateRouterShould(unittest.TestCase):
     def test_save_world_returns_bad_request_for_value_error(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = ValueError("Invalid snapshot path.")
-        self.app.dependency_overrides[state_router_module.get_save_world_state_use_case] = (
-            lambda: use_case
-        )
+        self.app.dependency_overrides[state_router_module.get_save_world_state_use_case] = lambda: use_case
 
         response = self.client.post("/state/save", json={"path": "world.json"})
 
@@ -79,9 +71,7 @@ class StateRouterShould(unittest.TestCase):
     def test_save_world_returns_generic_error_for_persistence_failure(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = OSError("C:/secret/path/world.json denied")
-        self.app.dependency_overrides[state_router_module.get_save_world_state_use_case] = (
-            lambda: use_case
-        )
+        self.app.dependency_overrides[state_router_module.get_save_world_state_use_case] = lambda: use_case
 
         response = self.client.post("/state/save", json={"path": "world.json"})
 
@@ -91,9 +81,7 @@ class StateRouterShould(unittest.TestCase):
     def test_save_world_returns_generic_error_for_database_failure(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = DatabaseError.write_failed(Exception("secret connection info"))
-        self.app.dependency_overrides[state_router_module.get_save_world_state_use_case] = (
-            lambda: use_case
-        )
+        self.app.dependency_overrides[state_router_module.get_save_world_state_use_case] = lambda: use_case
 
         response = self.client.post("/state/save", json={"path": "world.json"})
 
@@ -103,9 +91,7 @@ class StateRouterShould(unittest.TestCase):
     def test_save_world_returns_generic_error_for_world_state_persistence_failure(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = WorldStatePersistenceError("C:/secret/world.json denied")
-        self.app.dependency_overrides[state_router_module.get_save_world_state_use_case] = (
-            lambda: use_case
-        )
+        self.app.dependency_overrides[state_router_module.get_save_world_state_use_case] = lambda: use_case
 
         response = self.client.post("/state/save", json={"path": "world.json"})
 
@@ -115,9 +101,7 @@ class StateRouterShould(unittest.TestCase):
     def test_load_world_returns_snapshot_metadata(self) -> None:
         use_case = MagicMock()
         use_case.execute.return_value = "C:/snapshots/world.json"
-        self.app.dependency_overrides[state_router_module.get_load_world_state_use_case] = (
-            lambda: use_case
-        )
+        self.app.dependency_overrides[state_router_module.get_load_world_state_use_case] = lambda: use_case
 
         response = self.client.post("/state/load", json={"path": "world.json"})
 
@@ -132,9 +116,7 @@ class StateRouterShould(unittest.TestCase):
     def test_load_world_returns_forbidden_for_permission_error(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = PermissionError("Missing permission: APP_LOAD_STATE")
-        self.app.dependency_overrides[state_router_module.get_load_world_state_use_case] = (
-            lambda: use_case
-        )
+        self.app.dependency_overrides[state_router_module.get_load_world_state_use_case] = lambda: use_case
 
         response = self.client.post("/state/load", json={"path": "world.json"})
 
@@ -144,9 +126,7 @@ class StateRouterShould(unittest.TestCase):
     def test_load_world_returns_not_found_without_leaking_path(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = WorldStateFileNotFoundError("missing C:/secret/world.json")
-        self.app.dependency_overrides[state_router_module.get_load_world_state_use_case] = (
-            lambda: use_case
-        )
+        self.app.dependency_overrides[state_router_module.get_load_world_state_use_case] = lambda: use_case
 
         response = self.client.post("/state/load", json={"path": "world.json"})
 
@@ -156,9 +136,7 @@ class StateRouterShould(unittest.TestCase):
     def test_load_world_returns_bad_request_for_corrupt_snapshot_without_leaking_path(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = WorldStateCorruptionError("bad C:/secret/world.json")
-        self.app.dependency_overrides[state_router_module.get_load_world_state_use_case] = (
-            lambda: use_case
-        )
+        self.app.dependency_overrides[state_router_module.get_load_world_state_use_case] = lambda: use_case
 
         response = self.client.post("/state/load", json={"path": "world.json"})
 
@@ -168,9 +146,7 @@ class StateRouterShould(unittest.TestCase):
     def test_load_world_returns_bad_request_for_value_error(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = ValueError("Invalid world state snapshot.")
-        self.app.dependency_overrides[state_router_module.get_load_world_state_use_case] = (
-            lambda: use_case
-        )
+        self.app.dependency_overrides[state_router_module.get_load_world_state_use_case] = lambda: use_case
 
         response = self.client.post("/state/load", json={"path": "world.json"})
 
@@ -180,9 +156,7 @@ class StateRouterShould(unittest.TestCase):
     def test_load_world_returns_generic_error_for_database_failure(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = DatabaseError.read_failed(Exception("secret connection info"))
-        self.app.dependency_overrides[state_router_module.get_load_world_state_use_case] = (
-            lambda: use_case
-        )
+        self.app.dependency_overrides[state_router_module.get_load_world_state_use_case] = lambda: use_case
 
         response = self.client.post("/state/load", json={"path": "world.json"})
 
@@ -192,9 +166,7 @@ class StateRouterShould(unittest.TestCase):
     def test_load_world_returns_generic_error_for_persistence_failure(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = WorldStatePersistenceError("C:/secret/world.json denied")
-        self.app.dependency_overrides[state_router_module.get_load_world_state_use_case] = (
-            lambda: use_case
-        )
+        self.app.dependency_overrides[state_router_module.get_load_world_state_use_case] = lambda: use_case
 
         response = self.client.post("/state/load", json={"path": "world.json"})
 

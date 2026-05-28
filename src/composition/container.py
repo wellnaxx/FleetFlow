@@ -236,12 +236,8 @@ class Container:
         )
         self.state_cases = StateUseCases(
             advance=AdvanceWorldStateUseCase(self.heartbeat_service),
-            save=SaveWorldStateUseCase(
-                self.world_state_gateway, self.world_state_persistence, self.authz
-            ),
-            load=LoadWorldStateUseCase(
-                self.world_state_gateway, self.world_state_persistence, self.authz
-            ),
+            save=SaveWorldStateUseCase(self.world_state_gateway, self.world_state_persistence, self.authz),
+            load=LoadWorldStateUseCase(self.world_state_gateway, self.world_state_persistence, self.authz),
         )
 
 

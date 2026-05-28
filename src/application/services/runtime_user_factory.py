@@ -34,9 +34,7 @@ def create_runtime_user_from_record(record: UserRecord) -> User:
     try:
         role = Role(record.role)
     except ValueError as exc:
-        raise ValidationError(
-            f"Invalid persisted role for user {record.username!r}: {record.role!r}"
-        ) from exc
+        raise ValidationError(f"Invalid persisted role for user {record.username!r}: {record.role!r}") from exc
 
     if role is Role.MANAGER:
         return Manager(record.user_id, contact.name, contact.email, contact.phone_number)

@@ -26,13 +26,13 @@ class AuthenticatedPrincipal:
 
 def _runtime_user_from_record(record: UserRecord) -> User:
     """Convert a UserRecord from the repository into a runtime User entity for authentication and authorization purposes.
-    
+
     Args:
         record: The UserRecord retrieved from the user repository.
 
     Returns:
         A User entity (Manager or Employee) corresponding to the user's role.
-    
+
     Raises:
         HTTPException: If the user's role is invalid or unsupported.
     """  # noqa: E501
@@ -53,7 +53,7 @@ def principal_from_token(
     expected_type: TokenType = "access",
 ) -> AuthenticatedPrincipal:
     """Validate a JWT token, retrieve the corresponding user, and construct an AuthenticatedPrincipal.
-    
+
     Args:
         token: The JWT token to validate.
         user_repo: The user repository to retrieve user information.
@@ -68,9 +68,7 @@ def principal_from_token(
     payload = decode_token(token, expected_type=expected_type)
     if payload is None:
         detail = (
-            "Invalid or expired refresh token."
-            if expected_type == "refresh"
-            else "Invalid or expired token."
+            "Invalid or expired refresh token." if expected_type == "refresh" else "Invalid or expired token."
         )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail)
 
@@ -99,7 +97,7 @@ def get_current_user(
     user_repo: UserRepositoryPort = Depends(get_user_repository),
 ) -> AuthenticatedPrincipal:
     """Dependency to retrieve the currently authenticated user based on the provided JWT token.
-    
+
     Args:
         token: The JWT token provided in the Authorization header.
         user_repo: The user repository to retrieve user information.

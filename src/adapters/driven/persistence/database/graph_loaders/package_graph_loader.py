@@ -109,9 +109,7 @@ def load_package_graph_page(limit: int, offset: int) -> list[HydratedPackageGrap
         return sorted(package_graphs, key=lambda graph: graph.package.package_id)
 
 
-def load_package_graph_page_with_total(
-    limit: int, offset: int
-) -> tuple[list[HydratedPackageGraph], int]:
+def load_package_graph_page_with_total(limit: int, offset: int) -> tuple[list[HydratedPackageGraph], int]:
     """Load a package page with the total count from one database query."""
     with transaction_cursor() as cursor:
         rows = fetch_all_tx(cursor, QUERIES.packages.list_page_with_total, (limit, offset))
