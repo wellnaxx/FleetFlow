@@ -1,5 +1,7 @@
 """Use case for loading persisted world state into runtime."""
 
+from src.application.exceptions.application_errors import ValidationError
+from src.application.exceptions.world_state_errors import WorldStatePersistenceError
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.enums.auth import Permission
@@ -38,10 +40,21 @@ class LoadWorldStateUseCase(AuthorizedUseCase[str]):
             The resolved absolute path read by the persistence adapter.
 
         Raises:
+            PermissionError: If the caller lacks load-state permission.
+            ValidationError: If the requested path is invalid.
             WorldStateFileNotFoundError: If the file is missing.
             WorldStateCorruptionError: If the file is malformed or fails validation.
-            WorldStatePersistenceError: If the persistence adapter cannot read the snapshot.
+            WorldStatePersistenceError: If the snapshot cannot be read or applied.
         """
-        abs_path, snapshot = self._persistence.read(path)
+        if not path.strip():
+            raise ValidationError("World state snapshot path is required.")
+
+        try:
+            abs_path, snapshot = self._persistence.read(path)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+        except OSError as exc:
+            raise WorldStatePersistenceError("Could not read world state snapshot.") from exc
+
         self._world_state_gateway.apply_snapshot(snapshot)
         return abs_path

@@ -1,5 +1,7 @@
 """Use case for saving runtime world state to persistence."""
 
+from src.application.exceptions.application_errors import ValidationError
+from src.application.exceptions.world_state_errors import WorldStatePersistenceError
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.enums.auth import Permission
@@ -38,8 +40,17 @@ class SaveWorldStateUseCase(AuthorizedUseCase[str]):
             The resolved absolute path written by the persistence adapter.
 
         Raises:
-            OSError: If the persistence adapter cannot write the snapshot.
-            ValueError: If the persistence adapter rejects the requested path.
+            PermissionError: If the caller lacks save-state permission.
+            ValidationError: If the requested path is invalid.
+            WorldStatePersistenceError: If the snapshot cannot be written.
         """
+        if not path.strip():
+            raise ValidationError("World state snapshot path is required.")
+
         snapshot = self._world_state_gateway.build_snapshot()
-        return self._persistence.write(path, snapshot)
+        try:
+            return self._persistence.write(path, snapshot)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+        except OSError as exc:
+            raise WorldStatePersistenceError("Could not write world state snapshot.") from exc

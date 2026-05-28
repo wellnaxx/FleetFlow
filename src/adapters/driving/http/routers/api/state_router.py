@@ -8,10 +8,12 @@ from src.adapters.driving.http.dependencies.use_cases import (
     get_save_world_state_use_case,
 )
 from src.adapters.driving.http.schemas.state import WorldStatePathRequest, WorldStatePathResponse
+from src.application.exceptions.application_errors import ValidationError
 from src.application.exceptions.world_state_errors import (
     WorldStateCorruptionError,
     WorldStateFileNotFoundError,
     WorldStatePersistenceError,
+    WorldStateRuntimeSwapError,
 )
 from src.application.use_cases.state.load_world import LoadWorldStateUseCase
 from src.application.use_cases.state.save_world import SaveWorldStateUseCase
@@ -34,16 +36,18 @@ def save_world(
         Resolved path metadata for the saved snapshot.
 
     Raises:
-        HTTPException: If authorization, validation, or persistence fails.
+        HTTPException 400: If the requested snapshot path is invalid.
+        HTTPException 403: If the caller lacks permission to save world state.
+        HTTPException 500: If snapshot export or persistence fails.
     """
     try:
         path = use_case.execute(request.path)
         return WorldStatePathResponse(path=path, message="World state saved.")
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    except ValueError as exc:
+    except ValidationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    except (DatabaseError, OSError, WorldStatePersistenceError) as exc:
+    except (DatabaseError, WorldStatePersistenceError) as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="World state persistence failed.",
@@ -65,7 +69,10 @@ def load_world(
         Resolved path metadata for the loaded snapshot.
 
     Raises:
-        HTTPException: If authorization, validation, loading, or persistence fails.
+        HTTPException 400: If the requested snapshot path is invalid or the snapshot is malformed.
+        HTTPException 403: If the caller lacks permission to load world state.
+        HTTPException 404: If the requested snapshot does not exist.
+        HTTPException 500: If snapshot import or persistence fails.
     """
     try:
         path = use_case.execute(request.path)
@@ -82,9 +89,9 @@ def load_world(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="World state snapshot is malformed.",
         ) from exc
-    except ValueError as exc:
+    except ValidationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    except (DatabaseError, OSError, WorldStatePersistenceError) as exc:
+    except (DatabaseError, WorldStatePersistenceError, WorldStateRuntimeSwapError) as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="World state persistence failed.",

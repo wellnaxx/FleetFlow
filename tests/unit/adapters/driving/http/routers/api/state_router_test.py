@@ -8,10 +8,12 @@ from fastapi.testclient import TestClient
 from src.adapters.driven.persistence.database.errors import DatabaseError
 from src.adapters.driving.http.routers.api import state_router as state_router_module
 from src.adapters.driving.http.routers.api.state_router import state_router
+from src.application.exceptions.application_errors import ValidationError
 from src.application.exceptions.world_state_errors import (
     WorldStateCorruptionError,
     WorldStateFileNotFoundError,
     WorldStatePersistenceError,
+    WorldStateRuntimeSwapError,
 )
 
 
@@ -58,9 +60,9 @@ class StateRouterShould(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"], "Missing permission: APP_SAVE_STATE")
 
-    def test_save_world_returns_bad_request_for_value_error(self) -> None:
+    def test_save_world_returns_bad_request_for_validation_error(self) -> None:
         use_case = MagicMock()
-        use_case.execute.side_effect = ValueError("Invalid snapshot path.")
+        use_case.execute.side_effect = ValidationError("Invalid snapshot path.")
         self.app.dependency_overrides[state_router_module.get_save_world_state_use_case] = lambda: use_case
 
         response = self.client.post("/state/save", json={"path": "world.json"})
@@ -70,7 +72,7 @@ class StateRouterShould(unittest.TestCase):
 
     def test_save_world_returns_generic_error_for_persistence_failure(self) -> None:
         use_case = MagicMock()
-        use_case.execute.side_effect = OSError("C:/secret/path/world.json denied")
+        use_case.execute.side_effect = WorldStatePersistenceError("C:/secret/path/world.json denied")
         self.app.dependency_overrides[state_router_module.get_save_world_state_use_case] = lambda: use_case
 
         response = self.client.post("/state/save", json={"path": "world.json"})
@@ -143,9 +145,9 @@ class StateRouterShould(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["detail"], "World state snapshot is malformed.")
 
-    def test_load_world_returns_bad_request_for_value_error(self) -> None:
+    def test_load_world_returns_bad_request_for_validation_error(self) -> None:
         use_case = MagicMock()
-        use_case.execute.side_effect = ValueError("Invalid world state snapshot.")
+        use_case.execute.side_effect = ValidationError("Invalid world state snapshot.")
         self.app.dependency_overrides[state_router_module.get_load_world_state_use_case] = lambda: use_case
 
         response = self.client.post("/state/load", json={"path": "world.json"})
@@ -166,6 +168,16 @@ class StateRouterShould(unittest.TestCase):
     def test_load_world_returns_generic_error_for_persistence_failure(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = WorldStatePersistenceError("C:/secret/world.json denied")
+        self.app.dependency_overrides[state_router_module.get_load_world_state_use_case] = lambda: use_case
+
+        response = self.client.post("/state/load", json={"path": "world.json"})
+
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.json()["detail"], "World state persistence failed.")
+
+    def test_load_world_returns_generic_error_for_runtime_swap_failure(self) -> None:
+        use_case = MagicMock()
+        use_case.execute.side_effect = WorldStateRuntimeSwapError("rollback failed with secret state")
         self.app.dependency_overrides[state_router_module.get_load_world_state_use_case] = lambda: use_case
 
         response = self.client.post("/state/load", json={"path": "world.json"})
