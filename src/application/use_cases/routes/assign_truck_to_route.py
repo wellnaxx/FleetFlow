@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from src.application.exceptions.application_errors import ConflictError, NotFoundError
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.enums.auth import Permission
@@ -80,20 +81,23 @@ class AssignTruckToRouteUseCase(AuthorizedUseCase[AssignTruckToRouteResult]):
             A summary of the successful truck assignment.
 
         Raises:
-            ValueError: If the route or truck is missing, the route already has a
-                truck, or the truck is unsuitable.
+            PermissionError: If the caller lacks truck assignment permission.
+            DatabaseError: If the truck assignment persistence fails.
+            NotFoundError: If the requested resource is not found.
+            ConflictError: If the selected route already has a truck assigned
+                or the selected truck is not suitable for the route.
         """
         route = self._routes.get_by_id(route_id)
         if route is None:
-            raise ValueError(f"Route with ID {route_id} not found")
+            raise NotFoundError(f"Route with ID {route_id} not found")
 
         truck = self._vehicle_manager.find_by_id(truck_id)
         if not truck:
-            raise ValueError(f"Truck with ID {truck_id} not found")
+            raise NotFoundError(f"Truck with ID {truck_id} not found")
 
         current_truck = route.truck
         if current_truck is not None:
-            raise ValueError(f"Route {route_id} already has truck {current_truck.vehicle_id} assigned")
+            raise ConflictError(f"Route {route_id} already has truck {current_truck.vehicle_id} assigned")
 
         effective_route: DeliveryRoute | _RouteSuitabilityProbe = route
         if route.departure_time is None:
@@ -106,9 +110,9 @@ class AssignTruckToRouteUseCase(AuthorizedUseCase[AssignTruckToRouteResult]):
 
         ok, reason = self._vehicle_manager.is_suitable_for_route(truck, effective_route)
         if not ok:
-            raise ValueError(
+            raise ConflictError(
                 f"Truck {truck_id} is not suitable for route {route_id}: {reason}. "
-                f"Use 'findsuitabletrucksforroute {route_id}' to list options."
+                f"Query suitable trucks for this route to see available options."
             )
 
         route_snapshot = route.snapshot_state()

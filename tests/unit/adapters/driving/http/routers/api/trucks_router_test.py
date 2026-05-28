@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from src.adapters.driven.persistence.database.errors import DatabaseError
 from src.adapters.driving.http.routers.api import trucks_router as trucks_router_module
 from src.adapters.driving.http.routers.api.trucks_router import trucks_router
 from src.domain.entities.delivery_route import DeliveryRoute
@@ -106,4 +107,17 @@ class TrucksRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"], "Missing permission: TRUCK_VIEW")
+        use_case.execute.assert_called_once_with()
+
+    def test_list_trucks_returns_generic_error_for_database_failure(self) -> None:
+        use_case = MagicMock()
+        use_case.execute.side_effect = DatabaseError.read_failed(Exception("boom"))
+        self.app.dependency_overrides[trucks_router_module.get_view_all_trucks_use_case] = (
+            lambda: use_case
+        )
+
+        response = self.client.get("/trucks/")
+
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.json()["detail"], "Database operation failed.")
         use_case.execute.assert_called_once_with()

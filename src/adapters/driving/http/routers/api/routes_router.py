@@ -3,6 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from src.adapters.driven.persistence.database.errors import DatabaseError
 from src.adapters.driving.http.dependencies.use_cases import (
     get_assign_packages_to_route_use_case,
     get_assign_truck_to_route_use_case,
@@ -28,6 +29,7 @@ from src.adapters.driving.http.schemas.routes import (
     RouteResponse,
 )
 from src.adapters.driving.http.schemas.trucks import TruckResponse
+from src.application.exceptions.application_errors import ConflictError, NotFoundError
 from src.application.results.assign_packages_to_route_result import AssignPackagesToRouteResult
 from src.application.use_cases.pagination import PageQuery
 from src.application.use_cases.routes.assign_packages_to_route import AssignPackagesToRouteUseCase
@@ -44,13 +46,13 @@ routes_router = APIRouter(prefix="/routes", tags=["routes"])
 
 
 def _route_response(route: DeliveryRoute) -> RouteResponse:
-    """Convert a Route entity to a RouteResponse model.
+    """Convert a route entity to an HTTP response model.
 
     Args:
-        route: The Route entity to convert.
+        route: Route entity to convert.
 
     Returns:
-        A RouteResponse model representing the given route.
+        Response model representing the route.
     """
     return RouteResponse(
         route_id=route.route_id,
@@ -147,7 +149,8 @@ def create_route(
         The created route details.
 
     Raises:
-        HTTPException: If the caller lacks permission to create routes or if validation fails.
+        HTTPException 400: If route creation input is invalid.
+        HTTPException 403: If the caller lacks permission to create routes.
     """
     try:
         route = use_case.execute(
@@ -181,7 +184,7 @@ def list_routes(
         A paginated response containing route details.
 
     Raises:
-        HTTPException: If the caller lacks permission to view routes.
+        HTTPException 403: If the caller lacks permission to view routes.
     """
     try:
         result = use_case.execute(PageQuery(limit=limit, offset=offset, include_total=include_total))
@@ -210,7 +213,7 @@ def list_in_progress_routes(
         Active route details with computed position information.
 
     Raises:
-        HTTPException: If the caller lacks permission to view in-progress routes.
+        HTTPException 403: If the caller lacks permission to view in-progress routes.
     """
     try:
         now = datetime.now()
@@ -234,7 +237,8 @@ def get_route(
         Route details for the requested route.
 
     Raises:
-        HTTPException: If the caller lacks permission or the route does not exist.
+        HTTPException 403: If the caller lacks permission to view the route.
+        HTTPException 404: If the route does not exist.
     """
     try:
         route = use_case.execute(route_id=route_id)
@@ -259,7 +263,8 @@ def delete_route(
         None.
 
     Raises:
-        HTTPException: If the caller lacks permission or the route does not exist.
+        HTTPException 403: If the caller lacks permission to remove routes.
+        HTTPException 404: If the route does not exist.
     """
     try:
         use_case.execute(route_id=route_id)
@@ -286,7 +291,8 @@ def assign_packages_to_route(
         Per-package assignment successes and errors.
 
     Raises:
-        HTTPException: If the caller lacks permission or the route does not exist.
+        HTTPException 403: If the caller lacks permission to assign packages.
+        HTTPException 404: If the route does not exist.
     """
     try:
         result = use_case.execute(route_id=route_id, package_ids=request.package_ids)
@@ -314,7 +320,10 @@ def assign_truck_to_route(
         Route and truck identifiers for the successful assignment.
 
     Raises:
-        HTTPException: If the caller lacks permission or the assignment is invalid.
+        HTTPException 403: If the caller lacks permission to assign trucks.
+        HTTPException 404: If the route or truck does not exist.
+        HTTPException 409: If the selected truck conflicts with route assignment rules.
+        HTTPException 500: If the database fails to persist assignment state.
     """
     try:
         now = datetime.now()
@@ -322,10 +331,14 @@ def assign_truck_to_route(
         return AssignTruckToRouteResponse(route_id=result.route_id, truck_id=result.truck_id)
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    except ValueError as exc:
+    except DatabaseError as exc:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
-        ) from exc # currently not found is masked by 400
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
+        ) from exc
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
 
 @routes_router.get("/{route_id}/suitable-trucks", status_code=status.HTTP_200_OK)
@@ -345,12 +358,18 @@ def find_suitable_trucks_for_route(
         Trucks suitable for the requested route.
 
     Raises:
-        HTTPException: If the caller lacks permission or the route does not exist.
+        HTTPException 403: If the caller lacks permission to find suitable trucks.
+        HTTPException 404: If the route does not exist.
+        HTTPException 500: If the database fails to fetch route or truck data.
     """
     try:
         trucks = use_case.execute(route_id=route_id)
         return [truck_response(truck) for truck in trucks]
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    except ValueError as exc:
+    except DatabaseError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
+        ) from exc
+    except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

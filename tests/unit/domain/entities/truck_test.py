@@ -5,6 +5,7 @@ from unittest.mock import Mock
 from src.domain.entities.truck import Truck
 from src.domain.enums.truck_model import TruckModel
 from src.domain.enums.truck_status import TruckStatus
+from src.domain.exceptions import DomainValidationError
 from src.domain.value_objects.location_code import LocationCode
 
 
@@ -35,7 +36,7 @@ class TestTruck_Should(unittest.TestCase):
                 self.assertIsNone(truck.in_transit_to)
 
     def test_init_with_invalid_name(self) -> None:
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(DomainValidationError) as context:
             Truck(vehicle_id=1, name="Invalid", capacity=1000, max_range=500)
 
         self.assertEqual(str(context.exception), f"Truck name must be {TruckModel.labels()}")

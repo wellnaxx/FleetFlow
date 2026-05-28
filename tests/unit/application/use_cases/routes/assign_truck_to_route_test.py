@@ -3,6 +3,7 @@ from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from src.application.exceptions.application_errors import ConflictError, NotFoundError
 from src.application.use_cases.routes.assign_truck_to_route import (
     AssignTruckToRouteResult,
     AssignTruckToRouteUseCase,
@@ -32,7 +33,7 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
     def test_raises_when_route_not_found(self) -> None:
         self.mock_routes.get_by_id.return_value = None
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(NotFoundError) as ctx:
             self.use_case.execute(11, 22, now=datetime(2025, 10, 12, 6, 0))
 
         self.assertIn("Route with ID 22 not found", str(ctx.exception))
@@ -48,7 +49,7 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         self.mock_routes.get_by_id.return_value = route
         self.mock_vehicles.find_by_id.return_value = None
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(NotFoundError) as ctx:
             self.use_case.execute(11, 22, now=datetime(2025, 10, 12, 6, 0))
 
         self.assertIn("Truck with ID 11 not found", str(ctx.exception))
@@ -157,7 +158,7 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         self.mock_vehicles.find_by_id.return_value = truck
         self.mock_vehicles.is_suitable_for_route.return_value = (False, "range too short")
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(ConflictError) as ctx:
             self.use_case.execute(11, 22, now=fixed_now)
 
         self.assertIn("Truck 11 is not suitable for route 22: range too short", str(ctx.exception))
@@ -235,7 +236,7 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         route.schedule = MagicMock()
         self.mock_routes.get_by_id.return_value = route
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(ConflictError) as ctx:
             self.use_case.execute(11, 22, now=datetime(2025, 10, 12, 6, 0))
 
         self.assertIn("Route 22 already has truck 7 assigned", str(ctx.exception))

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from enum import StrEnum
 
+from src.domain.exceptions import DomainValidationError
+
 
 class TruckModel(StrEnum):
     """Truck models available in the fixed fleet."""
@@ -25,10 +27,20 @@ class TruckModel(StrEnum):
 
     @classmethod
     def from_value(cls, value: str | TruckModel) -> TruckModel:
-        """Normalize a raw model name to a supported truck model."""
+        """Normalize a raw model name to a supported truck model.
+
+        Args:
+            value: Raw persisted/display model value or existing enum member.
+
+        Returns:
+            Supported truck model enum member.
+
+        Raises:
+            DomainValidationError: If the model value is unsupported.
+        """
         if isinstance(value, cls):
             return value
         try:
             return cls(value)
         except ValueError as exc:
-            raise ValueError(f"Truck name must be {cls.labels()}") from exc
+            raise DomainValidationError(f"Truck name must be {cls.labels()}") from exc

@@ -4,8 +4,10 @@ from unittest.mock import ANY, MagicMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from src.adapters.driven.persistence.database.errors import DatabaseError
 from src.adapters.driving.http.routers.api import routes_router as routes_router_module
 from src.adapters.driving.http.routers.api.routes_router import routes_router
+from src.application.exceptions.application_errors import ConflictError, NotFoundError
 from src.application.results.assign_packages_to_route_result import (
     AssignPackagesToRouteResult,
     PackageAssignmentError,
@@ -290,17 +292,41 @@ class RoutesRouterShould(unittest.TestCase):
         self.assertEqual(response.json(), {"route_id": 81, "truck_id": 7})
         use_case.execute.assert_called_once_with(truck_id=7, route_id=81, now=ANY)
 
-    def test_assign_truck_to_route_returns_bad_request_for_invalid_assignment(self) -> None:
+    def test_assign_truck_to_route_returns_conflict_for_unsuitable_truck(self) -> None:
         use_case = MagicMock()
-        use_case.execute.side_effect = ValueError("Truck 7 is not suitable for route 81.")
+        use_case.execute.side_effect = ConflictError("Truck 7 is not suitable for route 81.")
         self.app.dependency_overrides[
             routes_router_module.get_assign_truck_to_route_use_case
         ] = lambda: use_case
 
         response = self.client.patch("/routes/81/truck", json={"truck_id": 7})
 
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 409)
         self.assertEqual(response.json()["detail"], "Truck 7 is not suitable for route 81.")
+
+    def test_assign_truck_to_route_returns_not_found_for_missing_truck_or_route(self) -> None:
+        use_case = MagicMock()
+        use_case.execute.side_effect = NotFoundError("Truck with ID 7 not found")
+        self.app.dependency_overrides[
+            routes_router_module.get_assign_truck_to_route_use_case
+        ] = lambda: use_case
+
+        response = self.client.patch("/routes/81/truck", json={"truck_id": 7})
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["detail"], "Truck with ID 7 not found")
+
+    def test_assign_truck_to_route_returns_generic_error_for_database_failure(self) -> None:
+        use_case = MagicMock()
+        use_case.execute.side_effect = DatabaseError.write_failed(Exception("boom"))
+        self.app.dependency_overrides[
+            routes_router_module.get_assign_truck_to_route_use_case
+        ] = lambda: use_case
+
+        response = self.client.patch("/routes/81/truck", json={"truck_id": 7})
+
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.json()["detail"], "Database operation failed.")
 
     def test_assign_truck_to_route_returns_forbidden_for_permission_error(self) -> None:
         use_case = MagicMock()
@@ -334,7 +360,7 @@ class RoutesRouterShould(unittest.TestCase):
 
     def test_find_suitable_trucks_for_route_returns_not_found_for_missing_route(self) -> None:
         use_case = MagicMock()
-        use_case.execute.side_effect = ValueError("Route with ID 91 not found")
+        use_case.execute.side_effect = NotFoundError("Route with ID 91 not found")
         self.app.dependency_overrides[
             routes_router_module.get_find_suitable_trucks_for_route_use_case
         ] = lambda: use_case
@@ -343,6 +369,18 @@ class RoutesRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["detail"], "Route with ID 91 not found")
+
+    def test_find_suitable_trucks_for_route_returns_generic_error_for_database_failure(self) -> None:
+        use_case = MagicMock()
+        use_case.execute.side_effect = DatabaseError.read_failed(Exception("boom"))
+        self.app.dependency_overrides[
+            routes_router_module.get_find_suitable_trucks_for_route_use_case
+        ] = lambda: use_case
+
+        response = self.client.get("/routes/91/suitable-trucks")
+
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.json()["detail"], "Database operation failed.")
 
     def test_find_suitable_trucks_for_route_returns_forbidden_for_permission_error(self) -> None:
         use_case = MagicMock()

@@ -26,5 +26,9 @@ class ViewAllTrucksUseCase(AuthorizedUseCase[list[Truck]]):
 
         Returns:
             Trucks currently known to the vehicle manager.
+
+        Raises:
+            PermissionError: If the caller lacks truck view permission.
+            DatabaseError: If truck persistence lookup fails.
         """
         return self._vehicles.list_fleet()

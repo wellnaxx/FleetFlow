@@ -39,7 +39,7 @@ class Truck:
             max_range: Maximum route distance in kilometers.
 
         Raises:
-            ValueError: If the truck model name is unsupported.
+            DomainValidationError: If the truck model name is unsupported.
         """
         self.vehicle_id: int = vehicle_id
         self.name: TruckModel = TruckModel.from_value(name)

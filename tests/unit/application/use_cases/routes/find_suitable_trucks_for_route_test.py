@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import MagicMock
 
+from src.application.exceptions.application_errors import NotFoundError
 from src.application.use_cases.routes.find_suitable_trucks_for_route import FindSuitableTrucksForRouteUseCase
 from tests.unit.application.use_cases.authz_helpers import manager_authz
 
@@ -14,7 +15,7 @@ class FindSuitableTrucksForRouteUseCase_Should(unittest.TestCase):
     def test_raises_when_route_not_found(self) -> None:
         self.mock_routes.get_by_id.return_value = None
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(NotFoundError) as ctx:
             self.use_case.execute(15)
 
         self.assertIn("Route with ID 15 not found", str(ctx.exception))

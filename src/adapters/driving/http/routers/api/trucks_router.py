@@ -2,6 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from src.adapters.driven.persistence.database.errors import DatabaseError
 from src.adapters.driving.http.dependencies.use_cases import get_view_all_trucks_use_case
 from src.adapters.driving.http.routers.shared import truck_response
 from src.adapters.driving.http.schemas.trucks import TruckResponse
@@ -23,10 +24,15 @@ def list_trucks(
         Truck response models for the current fleet.
 
     Raises:
-        HTTPException: If the caller lacks permission to view trucks.
+        HTTPException 403: If the caller lacks permission to view trucks.
+        HTTPException 500: If the database fails to list trucks.
     """
     try:
         trucks = use_case.execute()
         return [truck_response(truck) for truck in trucks]
-    except PermissionError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except DatabaseError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
+        ) from exc
