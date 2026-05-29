@@ -66,7 +66,7 @@ class RemovePackageUseCase_Should(unittest.TestCase):
 
     def test_propagates_detach_error(self) -> None:
         route = MagicMock()
-        route.detach_package.side_effect = ValueError("Package is not assigned to this route")
+        route.detach_package.side_effect = EntityNotFoundError("Package is not assigned to this route")
 
         package = MagicMock()
         package.package_id = 42

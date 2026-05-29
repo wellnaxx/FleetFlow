@@ -5,7 +5,7 @@ from src.application.services.authorization_service import AuthorizationService,
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.enums.auth import Permission
-from src.domain.exceptions import DomainConflictError
+from src.domain.exceptions import DomainConflictError, EntityNotFoundError
 from src.ports.output.package_repository import PackageRepositoryPort
 
 
@@ -45,7 +45,7 @@ class RemovePackageUseCase(AuthorizedUseCase[DeliveryPackage]):
         if package.route is not None:
             try:
                 package.route.detach_package(package)
-            except ValueError as exc:
+            except EntityNotFoundError as exc:
                 raise DomainConflictError(str(exc)) from exc
 
         package.customer.remove_package(package)

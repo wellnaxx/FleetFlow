@@ -21,7 +21,7 @@ FleetFlow currently supports:
 - Customer records derived from package creation, including email and phone lookup indexes.
 - User authentication with manager and employee roles.
 - JWT access/refresh tokens for HTTP authentication, with token-version revocation.
-- Typed application and repository errors for common auth failures such as invalid credentials, duplicate usernames, missing users, and invalid persisted role data.
+- Typed domain, application, and repository errors for expected validation, not-found, conflict, authentication, and persistence failures.
 - Role-based authorization around CLI commands and application use cases.
 - Password hashing with PBKDF2-HMAC and strict persisted password-hash validation.
 - Environment-selected in-memory or PostgreSQL logistics persistence backend.
@@ -60,6 +60,7 @@ FleetFlow/
 |   |-- domain/
 |   |   |-- entities/             # customers, packages, routes, trucks, users
 |   |   |-- enums/                # roles, permissions, item/route/truck statuses
+|   |   |-- exceptions.py         # typed domain validation, not-found, and conflict errors
 |   |   |-- services/             # Map and VehicleManager domain services
 |   |   `-- value_objects/        # ContactInfo, LocationCode
 |   |-- ports/
@@ -130,6 +131,8 @@ FleetFlow enforces the main logistics invariants in the domain and application l
 - Truck assignment checks current location, route range, availability window, and carrying capacity.
 - Carrying capacity is checked by maximum segment load rather than total assigned package weight.
 - Heartbeat/reconciliation updates route statuses, truck positions, truck releases, package statuses, package current locations, and expected arrivals.
+
+Expected domain failures use typed exceptions. Validation problems, missing domain entities, and conflict/business-rule failures are translated by application use cases and HTTP routers into stable CLI/API-facing messages instead of relying on raw `ValueError` text.
 
 ## World-State Persistence
 
@@ -228,6 +231,15 @@ If the application is started non-interactively and no admin user exists, startu
 HTTP authentication uses JWT access and refresh tokens. Tokens include the persisted user id, username, role, and token version. Password changes and HTTP logout increment the user's token version so existing access and refresh tokens are rejected. Refresh tokens are not stored server-side in this version, so refresh-token rotation is limited by token-version revocation.
 
 Authentication failures are intentionally reported with safe messages. Invalid credentials return `401`, malformed persisted auth data returns `400`, duplicate usernames return `409`, and database failures return generic `500` responses without leaking adapter details.
+
+Application use cases use typed error boundaries for expected failures:
+
+- `ValidationError` and `DomainValidationError` for invalid command/request data or invalid domain state.
+- `NotFoundError` and `EntityNotFoundError` for missing requested resources.
+- `ConflictError` and `DomainConflictError` for operations that conflict with current state.
+- `AuthenticationError` for failed authentication.
+
+HTTP routers map those errors to stable status codes and safe response details.
 
 ## Running the App
 
@@ -471,7 +483,20 @@ GET /api/packages/unassigned?limit=50&offset=0&include_total=true
 
 Route listing also supports the same `limit`, `offset`, and `include_total` query parameters.
 
-`include_total` defaults to `false` so normal list requests do not run a count query. When omitted, the response contains `"total": null`. When requested, customer, package, and route page totals are loaded with the page from one repository operation.
+List-style use cases for customers, packages, unassigned packages, and all routes share the same `PageQuery` / `PageResult` pagination model. `include_total` defaults to `false` so normal list requests do not run a count query. When omitted, the response contains `"total": null`. When requested, customer, package, and route page totals are loaded with the page from one repository operation.
+
+Routes in progress intentionally remain unpaginated because the result is bounded by active truck assignments and includes computed route-position data:
+
+```text
+GET /api/routes/in-progress
+```
+
+World-state endpoints act as JSON snapshot export/import operations. With the in-memory backend they save/load runtime state; with the PostgreSQL backend they export/import the database-backed world graph through the same snapshot format:
+
+```text
+POST /api/state/save
+POST /api/state/load
+```
 
 Common HTTP error mappings are:
 
