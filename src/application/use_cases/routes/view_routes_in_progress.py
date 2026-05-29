@@ -31,6 +31,10 @@ class ViewRoutesInProgressUseCase(AuthorizedUseCase[list[tuple[DeliveryRoute, Ro
 
         Returns:
             A list of `(route, position)` tuples for active routes.
+
+        Raises:
+            PermissionError: If the caller lacks in-progress routes view permission.
+            DatabaseError: If the in-progress routes view persistence fails.
         """
         active: list[tuple[DeliveryRoute, RoutePosition]] = []
 

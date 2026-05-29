@@ -9,6 +9,7 @@ from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.entities.truck import Truck
 from src.domain.enums.route_status import RouteStatus
 from src.domain.enums.truck_model import TruckModel
+from src.domain.exceptions import DomainValidationError
 from src.domain.value_objects.location_code import LocationCode
 
 MODULE = "src.adapters.driven.persistence.database.repositories.route_repository"
@@ -89,7 +90,7 @@ class PostgresRouteRepository_Should(unittest.TestCase):
         execute_insert_tx_mock: MagicMock,
         transaction_cursor_mock: MagicMock,
     ) -> None:
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainValidationError):
             self.repo.create(locations=["SYD"], departure_time=None)
 
         transaction_cursor_mock.assert_not_called()

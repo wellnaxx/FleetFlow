@@ -3,12 +3,14 @@ from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from src.application.exceptions.application_errors import NotFoundError
 from src.application.results.assign_packages_to_route_result import (
     AssignPackagesToRouteResult,
     PackageAssignmentError,
     PackageAssignmentSuccess,
 )
 from src.application.use_cases.routes.assign_packages_to_route import AssignPackagesToRouteUseCase
+from src.domain.exceptions import DomainConflictError, DomainValidationError
 from tests.unit.application.use_cases.authz_helpers import manager_authz
 
 
@@ -46,7 +48,7 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
     def test_raises_when_route_not_found(self) -> None:
         self.mock_routes.get_by_id.return_value = None
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(NotFoundError) as ctx:
             self.use_case.execute(7, [8, 9])
 
         self.assertIn("Route with ID 7 not found.", str(ctx.exception))
@@ -141,7 +143,7 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
     def test_returns_errors_when_all_assignments_fail_on_route_validation(self) -> None:
         route = self._make_route(route_id=7, departure_time=None)
         package = self._make_package(8)
-        route.assign_package.side_effect = ValueError("capacity exceeded")
+        route.assign_package.side_effect = DomainConflictError("capacity exceeded")
 
         self.mock_routes.get_by_id.return_value = route
         self.mock_packages.get_by_id.return_value = package
@@ -188,7 +190,7 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
     def test_eta_falls_back_to_na_when_arrival_lookup_fails(self) -> None:
         route = self._make_route(route_id=7, departure_time=datetime(2025, 10, 1, 9, 0))
         package = self._make_package(8, end_location="MEL")
-        route.arrival_time_at.side_effect = ValueError("not on route")
+        route.arrival_time_at.side_effect = DomainValidationError("not on route")
 
         self.mock_routes.get_by_id.return_value = route
         self.mock_packages.get_by_id.return_value = package

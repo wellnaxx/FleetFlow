@@ -2,6 +2,7 @@ import unittest
 from datetime import datetime
 from unittest.mock import MagicMock, call
 
+from src.application.exceptions.application_errors import NotFoundError
 from src.application.use_cases.routes.remove_route import RemoveRouteUseCase
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
@@ -30,7 +31,7 @@ class RemoveRouteUseCase_Should(unittest.TestCase):
     def test_raises_when_route_not_found(self) -> None:
         self.mock_routes.get_by_id.return_value = None
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(NotFoundError) as ctx:
             self.use_case.execute(42)
 
         self.assertIn("Route with ID 42 not found", str(ctx.exception))

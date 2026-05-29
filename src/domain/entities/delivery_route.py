@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 from src.domain.enums.route_status import RouteStatus
+from src.domain.exceptions import DomainConflictError, DomainValidationError, EntityNotFoundError
 from src.domain.services.map import Map
 from src.domain.value_objects.location_code import LocationCode
 
@@ -55,20 +56,20 @@ class DeliveryRoute:
             route_id: Stable route identifier.
 
         Raises:
-            ValueError: If fewer than two locations are supplied, any location is
+            DomainValidationError: If fewer than two locations are supplied, any location is
                 unknown, or a location is repeated.
         """
         if len(locations) < 2:
-            raise ValueError("A route must have at least two locations.")
+            raise DomainValidationError("A route must have at least two locations.")
 
         typed_locations = [LocationCode(location) for location in locations]
         valid = set(Map.get_locations())
         for location in typed_locations:
             if location not in valid:
-                raise ValueError(f"Invalid location code: {location}.")
+                raise DomainValidationError(f"Invalid location code: {location}.")
 
         if len(set(typed_locations)) != len(typed_locations):
-            raise ValueError("A route cannot contain duplicate locations.")
+            raise DomainValidationError("A route cannot contain duplicate locations.")
 
         self._locations: list[LocationCode] = typed_locations
         self._departure_time: datetime | None = departure_time
@@ -168,7 +169,7 @@ class DeliveryRoute:
 
     def _build_schedule(self) -> None:
         if self._departure_time is None:
-            raise ValueError("Cannot build schedule without a departure time.")
+            raise DomainConflictError("Cannot build schedule without a departure time.")
 
         self._segments.clear()
         self._stop_times.clear()
@@ -193,13 +194,14 @@ class DeliveryRoute:
             Scheduled arrival time at the requested city.
 
         Raises:
-            ValueError: If the route is unscheduled or the city is not on it.
+            DomainConflictError: If the route is unscheduled.
+            DomainValidationError: If the city is not on the route path.
         """
         if self._departure_time is None:
-            raise ValueError("Route not scheduled yet (no departure time).")
+            raise DomainConflictError("Route not scheduled yet (no departure time).")
         city = LocationCode(city)
         if city not in self._stop_times:
-            raise ValueError(f"City {city} is not on route {self.route_id}.")
+            raise DomainValidationError(f"City {city} is not on route {self.route_id}.")
         return self._stop_times[city]
 
     def current_position(self, now: datetime | None = None) -> RoutePosition:
@@ -294,10 +296,10 @@ class DeliveryRoute:
             now: Clock value used for live pickup-pass validation.
 
         Raises:
-            ValueError: If the package is incompatible with the route.
+            DomainConflictError: If the package is incompatible with the route.
         """
         if error := self.can_accept_package(package, now=now):
-            raise ValueError(error)
+            raise DomainConflictError(error)
 
         if package in self._packages:
             return
@@ -313,7 +315,7 @@ class DeliveryRoute:
             package: Package to detach from this route.
 
         Raises:
-            ValueError: If the package is not assigned to this route.
+            EntityNotFoundError: If the package is not assigned to this route.
         """
         for i, existing in enumerate(self._packages):
             if existing.package_id == package.package_id:
@@ -321,7 +323,9 @@ class DeliveryRoute:
                 if package.route is self:
                     package.reset_assignment_state()
                 return
-        raise ValueError(f"Package with id {package.package_id} is not assigned to route {self.route_id}.")
+        raise EntityNotFoundError(
+            f"Package with id {package.package_id} is not assigned to route {self.route_id}."
+        )
 
     def release_truck(self, *, now: datetime | None = None, force: bool = False) -> bool:
         """Release the assigned truck if its route is complete or forced.

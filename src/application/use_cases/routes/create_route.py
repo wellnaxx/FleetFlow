@@ -7,8 +7,6 @@ from src.application.services.authorization_service import AuthorizationService,
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.enums.auth import Permission
-from src.domain.services.map import Map
-from src.domain.value_objects.location_code import LocationCode
 from src.ports.output.route_repository import RouteRepositoryPort
 
 
@@ -27,7 +25,7 @@ class CreateRouteUseCase(AuthorizedUseCase[DeliveryRoute]):
 
     @requires(Permission.ROUTE_CREATE)
     def execute(
-        self, locations: Sequence[str | LocationCode], departure_time: datetime | None
+        self, locations: Sequence[str], departure_time: datetime | None
     ) -> DeliveryRoute:
         """Create and persist a delivery route.
 
@@ -39,14 +37,9 @@ class CreateRouteUseCase(AuthorizedUseCase[DeliveryRoute]):
             The newly created route.
 
         Raises:
-            ValueError: If the route has too few stops or contains invalid
-                locations.
+            PermissionError: If the caller lacks route creation permission.
+            DatabaseError: If the route creation persistence fails.
+            DomainValidationError: If the route has too few stops or contains invalid locations.
         """
-        if len(locations) < 2:
-            raise ValueError("Invalid number of locations. A route must contain at least 2 locations.")
-
-        for location in locations:
-            if not Map.is_valid_location(location):
-                raise ValueError(f"Invalid location: {location}")
 
         return self._routes.create(locations=locations, departure_time=departure_time)

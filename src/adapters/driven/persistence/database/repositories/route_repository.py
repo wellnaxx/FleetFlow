@@ -34,7 +34,7 @@ class PostgresRouteRepository:
 
         Raises:
             DatabaseError: If the transaction, route insert, or stop insert fails.
-            ValueError: If route construction fails.
+            DomainValidationError: If route construction fails.
         """
         validated_route = DeliveryRoute(*locations, departure_time=departure_time, route_id=0)
         with transaction_cursor() as cursor:

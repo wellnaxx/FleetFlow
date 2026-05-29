@@ -7,6 +7,7 @@ from src.application.exceptions.application_errors import NotFoundError
 from src.application.use_cases.routes.find_suitable_routes_for_package import (
     FindSuitableRoutesForPackageUseCase,
 )
+from src.domain.exceptions import DomainConflictError
 from tests.unit.application.use_cases.authz_helpers import manager_authz
 
 
@@ -51,7 +52,7 @@ class FindSuitableRoutesForPackageUseCase_Should(unittest.TestCase):
         route_no_eta.can_accept_package.return_value = None
         route_no_eta.truck = None
         route_no_eta.total_assigned_weight.return_value = 0.0
-        route_no_eta.arrival_time_at.side_effect = ValueError("unscheduled")
+        route_no_eta.arrival_time_at.side_effect = DomainConflictError("unscheduled")
 
         route_rejected = MagicMock()
         route_rejected.can_accept_package.return_value = "not suitable"

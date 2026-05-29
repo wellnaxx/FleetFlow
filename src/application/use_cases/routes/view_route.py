@@ -1,5 +1,6 @@
 """Use case for viewing one route."""
 
+from src.application.exceptions.application_errors import NotFoundError
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.entities.delivery_route import DeliveryRoute
@@ -31,9 +32,11 @@ class ViewRouteUseCase(AuthorizedUseCase[DeliveryRoute]):
             The matching route entity.
 
         Raises:
-            ValueError: If the route does not exist.
+            PermissionError: If the caller lacks route view permission.
+            DatabaseError: If the route lookup persistence fails.
+            NotFoundError: If the route does not exist.
         """
         route = self._routes.get_by_id(route_id)
         if not route:
-            raise ValueError(f"Route with ID {route_id} not found")
+            raise NotFoundError(f"Route with ID {route_id} not found")
         return route

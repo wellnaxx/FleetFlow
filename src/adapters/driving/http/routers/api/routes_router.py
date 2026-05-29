@@ -41,6 +41,7 @@ from src.application.use_cases.routes.view_all_routes import ViewAllRoutesUseCas
 from src.application.use_cases.routes.view_route import ViewRouteUseCase
 from src.application.use_cases.routes.view_routes_in_progress import ViewRoutesInProgressUseCase
 from src.domain.entities.delivery_route import DeliveryRoute, RoutePosition
+from src.domain.exceptions import DomainValidationError
 
 routes_router = APIRouter(prefix="/routes", tags=["routes"])
 
@@ -151,6 +152,7 @@ def create_route(
     Raises:
         HTTPException 400: If route creation input is invalid.
         HTTPException 403: If the caller lacks permission to create routes.
+        HTTPException 500: If the database fails to create the route.
     """
     try:
         route = use_case.execute(
@@ -159,10 +161,14 @@ def create_route(
         )
         return _route_response(route)
 
-    except PermissionError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except DatabaseError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
+        ) from exc
+    except DomainValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @routes_router.get("/", status_code=status.HTTP_200_OK)
@@ -184,7 +190,9 @@ def list_routes(
         A paginated response containing route details.
 
     Raises:
+        HTTPException 400: If pagination arguments are invalid.
         HTTPException 403: If the caller lacks permission to view routes.
+        HTTPException 500: If the database fails to list routes.
     """
     try:
         result = use_case.execute(PageQuery(limit=limit, offset=offset, include_total=include_total))
@@ -196,8 +204,14 @@ def list_routes(
             limit=result.limit or limit,
             offset=result.offset,
         )
-    except PermissionError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except DatabaseError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @routes_router.get("/in-progress", status_code=status.HTTP_200_OK)
@@ -214,13 +228,18 @@ def list_in_progress_routes(
 
     Raises:
         HTTPException 403: If the caller lacks permission to view in-progress routes.
+        HTTPException 500: If the database fails to list routes.
     """
     try:
         now = datetime.now()
         active_routes = use_case.execute(now=now)
         return [_route_in_progress_response(route, position) for route, position in active_routes]
-    except PermissionError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except DatabaseError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
+        ) from exc
 
 
 @routes_router.get("/{route_id}", status_code=status.HTTP_200_OK)
@@ -239,14 +258,20 @@ def get_route(
     Raises:
         HTTPException 403: If the caller lacks permission to view the route.
         HTTPException 404: If the route does not exist.
+        HTTPException 500: If the database fails to fetch the route.
     """
     try:
         route = use_case.execute(route_id=route_id)
         return _route_response(route)
-    except PermissionError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except DatabaseError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
+        ) from exc
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
 
 
 @routes_router.delete("/{route_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -265,13 +290,18 @@ def delete_route(
     Raises:
         HTTPException 403: If the caller lacks permission to remove routes.
         HTTPException 404: If the route does not exist.
+        HTTPException 500: If the database fails to remove the route.
     """
     try:
         use_case.execute(route_id=route_id)
-    except PermissionError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except DatabaseError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
+        ) from exc
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @routes_router.patch("/{route_id}/packages", status_code=status.HTTP_200_OK)
@@ -293,13 +323,18 @@ def assign_packages_to_route(
     Raises:
         HTTPException 403: If the caller lacks permission to assign packages.
         HTTPException 404: If the route does not exist.
+        HTTPException 500: If the database fails during assignment.
     """
     try:
         result = use_case.execute(route_id=route_id, package_ids=request.package_ids)
         return _assign_packages_response(result)
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    except ValueError as exc:
+    except DatabaseError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
+        ) from exc
+    except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 

@@ -18,6 +18,7 @@ from src.application.use_cases.routes.assign_truck_to_route import AssignTruckTo
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.entities.truck import Truck
 from src.domain.enums.truck_status import TruckStatus
+from src.domain.exceptions import DomainValidationError
 from src.domain.value_objects.location_code import LocationCode
 
 
@@ -106,7 +107,7 @@ class RoutesRouterShould(unittest.TestCase):
 
     def test_create_route_returns_bad_request_for_invalid_route(self) -> None:
         use_case = MagicMock()
-        use_case.execute.side_effect = ValueError("Invalid location code: BAD.")
+        use_case.execute.side_effect = DomainValidationError("Invalid location code: BAD.")
         self.app.dependency_overrides[routes_router_module.get_create_route_use_case] = lambda: use_case
 
         response = self.client.post(
@@ -172,7 +173,7 @@ class RoutesRouterShould(unittest.TestCase):
 
     def test_get_route_returns_not_found_for_missing_route(self) -> None:
         use_case = MagicMock()
-        use_case.execute.side_effect = ValueError("Route with ID 51 not found")
+        use_case.execute.side_effect = NotFoundError("Route with ID 51 not found")
         self.app.dependency_overrides[routes_router_module.get_view_route_use_case] = lambda: use_case
 
         response = self.client.get("/routes/51")
@@ -201,7 +202,7 @@ class RoutesRouterShould(unittest.TestCase):
 
     def test_delete_route_returns_not_found_for_missing_route(self) -> None:
         use_case = MagicMock()
-        use_case.execute.side_effect = ValueError("Route with ID 61 not found")
+        use_case.execute.side_effect = NotFoundError("Route with ID 61 not found")
         self.app.dependency_overrides[routes_router_module.get_remove_route_use_case] = lambda: use_case
 
         response = self.client.delete("/routes/61")
@@ -238,7 +239,7 @@ class RoutesRouterShould(unittest.TestCase):
 
     def test_assign_packages_to_route_returns_not_found_for_missing_route(self) -> None:
         use_case = MagicMock()
-        use_case.execute.side_effect = ValueError("Route with ID 71 not found.")
+        use_case.execute.side_effect = NotFoundError("Route with ID 71 not found.")
         self.app.dependency_overrides[routes_router_module.get_assign_packages_to_route_use_case] = lambda: (
             use_case
         )

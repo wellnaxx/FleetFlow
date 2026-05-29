@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from datetime import datetime
 
+from src.application.exceptions.application_errors import NotFoundError
 from src.application.results.assign_packages_to_route_result import (
     AssignPackagesToRouteResult,
     PackageAssignmentError,
@@ -13,6 +14,7 @@ from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.enums.auth import Permission
+from src.domain.exceptions import DomainConflictError, DomainValidationError
 from src.ports.output.package_repository import PackageRepositoryPort
 from src.ports.output.route_repository import RouteRepositoryPort
 
@@ -53,11 +55,13 @@ class AssignPackagesToRouteUseCase(AuthorizedUseCase[AssignPackagesToRouteResult
             failures.
 
         Raises:
-            ValueError: If the target route does not exist.
+            PermissionError: If the caller lacks package assignment permission.
+            DatabaseError: If the package assignment persistence fails.
+            NotFoundError: If the target route does not exist.
         """
         route = self._routes.get_by_id(route_id)
         if route is None:
-            raise ValueError(f"Route with ID {route_id} not found.")
+            raise NotFoundError(f"Route with ID {route_id} not found.")
 
         result = AssignPackagesToRouteResult(successes=[], errors=[])
         seen_package_ids: set[int] = set()
@@ -94,7 +98,7 @@ class AssignPackagesToRouteUseCase(AuthorizedUseCase[AssignPackagesToRouteResult
                         eta_text=self._format_eta(route, package),
                     )
                 )
-            except ValueError as exc:
+            except DomainConflictError as exc:
                 result.errors.append(PackageAssignmentError(package_id=package_id, message=str(exc)))
 
         return result
@@ -106,5 +110,5 @@ class AssignPackagesToRouteUseCase(AuthorizedUseCase[AssignPackagesToRouteResult
         try:
             eta_dt = route.arrival_time_at(package.end_location)
             return eta_dt.strftime("%Y-%m-%d %H:%M")
-        except ValueError:
+        except (DomainConflictError, DomainValidationError):
             return "N/A"

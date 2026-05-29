@@ -8,6 +8,7 @@ from src.application.results.find_suitable_packages_for_route_result import Suit
 from src.application.services.authorization_service import AuthorizationService, requires_all
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.enums.auth import Permission
+from src.domain.exceptions import DomainConflictError, DomainValidationError
 from src.ports.output.package_repository import PackageRepositoryPort
 from src.ports.output.route_repository import RouteRepositoryPort
 
@@ -70,7 +71,7 @@ class FindSuitableRoutesForPackageUseCase(AuthorizedUseCase[list[SuitableRouteFo
 
             try:
                 eta = route.arrival_time_at(package.end_location)
-            except ValueError:
+            except (DomainConflictError, DomainValidationError):
                 eta = None
 
             results.append(

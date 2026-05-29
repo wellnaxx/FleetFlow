@@ -5,6 +5,7 @@ from unittest.mock import patch
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.enums.item_status import ItemStatus
 from src.domain.enums.route_status import RouteStatus
+from src.domain.exceptions import DomainConflictError, DomainValidationError, EntityNotFoundError
 from src.domain.value_objects.location_code import LocationCode
 
 LOCATIONS = [
@@ -96,14 +97,14 @@ class DeliveryRoute_Should(unittest.TestCase):
         )
         self.assertEqual(scheduled.status, RouteStatus.SCHEDULED)
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainValidationError):
             DeliveryRoute(LocationCode("AAA"), route_id=1)
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainValidationError):
             DeliveryRoute(LocationCode("AAA"), LocationCode("ZZZ"), route_id=1)
 
     def test_init_rejects_duplicate_locations(self, *_: object) -> None:
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(DomainValidationError) as ctx:
             DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), LocationCode("AAA"), route_id=1)
 
         self.assertIn("duplicate", str(ctx.exception).lower())
@@ -139,12 +140,12 @@ class DeliveryRoute_Should(unittest.TestCase):
     def test_arrival_time_at_validations(self, *_: object) -> None:
         route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), LocationCode("CCC"), route_id=1)
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainConflictError):
             route.arrival_time_at(LocationCode("AAA"))
 
         route.schedule(datetime(2025, 1, 1, 9, 0))
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DomainValidationError):
             route.arrival_time_at(LocationCode("DDD"))
 
     def test_current_position_all_cases(self, *_: object) -> None:
@@ -386,7 +387,7 @@ class DeliveryRoute_Should(unittest.TestCase):
         route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), LocationCode("CCC"), route_id=1)
         package = _Pkg(1, "AAA", "CCC", 5)
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(EntityNotFoundError) as ctx:
             route.detach_package(package)  # type: ignore[reportArgumentType]
 
         self.assertIn("1", str(ctx.exception))
@@ -400,7 +401,7 @@ class DeliveryRoute_Should(unittest.TestCase):
 
         route_2.assign_package(package)  # type: ignore[reportArgumentType]
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(EntityNotFoundError) as ctx:
             route_1.detach_package(package)  # type: ignore[reportArgumentType]
 
         self.assertIn("1", str(ctx.exception))

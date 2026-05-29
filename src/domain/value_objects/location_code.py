@@ -18,8 +18,7 @@ class LocationCode(str):
             Typed location code.
 
         Raises:
-            DomainValidationError: If the value is not a string.
-            DomainValidationError: If the value is blank.
+            DomainValidationError: If the value is not a string or if the value is blank.
         """
         if not isinstance(value, str):
             raise DomainValidationError("Location code must be a string.")
