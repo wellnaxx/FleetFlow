@@ -24,8 +24,9 @@ def list_trucks(
         Truck response models for the current fleet.
 
     Raises:
-        HTTPException 403: If the caller lacks permission to view trucks.
-        HTTPException 500: If the database fails to list trucks.
+        HTTPException: Raised with:
+            * 403 - Insufficient permissions.
+            * 500 - Database operation failure.
     """
     try:
         trucks = use_case.execute()

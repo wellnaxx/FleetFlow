@@ -115,12 +115,11 @@ def create_package(
         A response model representing the newly created package.
 
     Raises:
-        HTTPException 403: If the caller lacks permission to create a package.
-        HTTPException 500: If the database fails to create the package.
-        HTTPException 400: If the caller tries to create a package with invalid parameters.
-        HTTPException 409: If the caller tries to create a package with conflicting information,
-            or during this operation the package ownership transfer detects that the package is missing
-            from the previous customer's active collection.
+        HTTPException: Raised with:
+            * 400 - Invalid package creation input.
+            * 403 - Insufficient permissions.
+            * 409 - Conflicting package/customer information or inconsistent ownership state.
+            * 500 - Database operation failure.
     """
     try:
         package = use_case.execute(
@@ -163,9 +162,10 @@ def list_packages(
         A paginated package response.
 
     Raises:
-        HTTPException 400: If pagination arguments are invalid.
-        HTTPException 403: If the caller lacks permission to view packages.
-        HTTPException 500: If the database fails to list packages.
+        HTTPException: Raised with:
+            * 400 - Invalid pagination input.
+            * 403 - Insufficient permissions.
+            * 500 - Database operation failure.
     """
     return _package_page_response(use_case, _package_response, limit, offset, include_total)
 
@@ -189,9 +189,10 @@ def list_unassigned_packages(
         A paginated package response.
 
     Raises:
-        HTTPException 400: If pagination arguments are invalid.
-        HTTPException 403: If the caller lacks permission to view unassigned packages.
-        HTTPException 500: If the database fails to list packages.
+        HTTPException: Raised with:
+            * 400 - Invalid pagination input.
+            * 403 - Insufficient permissions.
+            * 500 - Database operation failure.
     """
     return _package_page_response(use_case, _package_response, limit, offset, include_total)
 
@@ -211,9 +212,10 @@ def get_package(
         A response model representing the requested package.
 
     Raises:
-        HTTPException 403: If the caller lacks permission to view the package.
-        HTTPException 404: If the package is not found.
-        HTTPException 500: If the database fails to fetch the package.
+        HTTPException: Raised with:
+            * 403 - Insufficient permissions.
+            * 404 - Package not found.
+            * 500 - Database operation failure.
     """
     try:
         package = use_case.execute(package_id=package_id)
@@ -245,9 +247,10 @@ def find_suitable_routes_for_package(
         Routes that can accept the requested package.
 
     Raises:
-        HTTPException 403: If the caller lacks permission to view the package or routes.
-        HTTPException 404: If the package does not exist.
-        HTTPException 500: If the database fails to fetch package or route data.
+        HTTPException: Raised with:
+            * 403 - Insufficient permissions.
+            * 404 - Package not found.
+            * 500 - Database operation failure.
     """
     try:
         results = use_case.execute(package_id=package_id)
@@ -286,10 +289,11 @@ def delete_package(
         None
 
     Raises:
-        HTTPException 403: If the caller lacks permission to delete the package.
-        HTTPException 404: If the package is not found.
-        HTTPException 409: If persisted package ownership or route assignment state is inconsistent.
-        HTTPException 500: If the database fails to remove the package.
+        HTTPException: Raised with:
+            * 403 - Insufficient permissions.
+            * 404 - Package not found.
+            * 409 - Inconsistent package ownership or route assignment state.
+            * 500 - Database operation failure.
     """
     try:
         use_case.execute(package_id=package_id)

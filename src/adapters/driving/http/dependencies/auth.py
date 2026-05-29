@@ -34,7 +34,8 @@ def _runtime_user_from_record(record: UserRecord) -> User:
         A User entity (Manager or Employee) corresponding to the user's role.
 
     Raises:
-        HTTPException: If the user's role is invalid or unsupported.
+        HTTPException: Raised with:
+            * 401 - Invalid or unsupported user role.
     """  # noqa: E501
     try:
         return create_runtime_user_from_record(record)
@@ -63,7 +64,8 @@ def principal_from_token(
         An AuthenticatedPrincipal containing the validated user information.
 
     Raises:
-        HTTPException: If the token is invalid, expired, or the user is not found.
+        HTTPException: Raised with:
+            * 401 - Invalid, expired, revoked, mismatched, or userless token.
     """
     payload = decode_token(token, expected_type=expected_type)
     if payload is None:
@@ -106,7 +108,8 @@ def get_current_user(
         An AuthenticatedPrincipal representing the currently authenticated user.
 
     Raises:
-        HTTPException: If authentication fails due to an invalid token or user not found.
+        HTTPException: Raised with:
+            * 401 - Invalid, expired, revoked, mismatched, or userless token.
     """
     return principal_from_token(token, user_repo)
 

@@ -36,9 +36,10 @@ def save_world(
         Resolved path metadata for the saved snapshot.
 
     Raises:
-        HTTPException 400: If the requested snapshot path is invalid.
-        HTTPException 403: If the caller lacks permission to save world state.
-        HTTPException 500: If snapshot export or persistence fails.
+        HTTPException: Raised with:
+            * 400 - Invalid snapshot path.
+            * 403 - Insufficient permissions.
+            * 500 - Snapshot export or persistence failure.
     """
     try:
         path = use_case.execute(request.path)
@@ -69,10 +70,11 @@ def load_world(
         Resolved path metadata for the loaded snapshot.
 
     Raises:
-        HTTPException 400: If the requested snapshot path is invalid or the snapshot is malformed.
-        HTTPException 403: If the caller lacks permission to load world state.
-        HTTPException 404: If the requested snapshot does not exist.
-        HTTPException 500: If snapshot import or persistence fails.
+        HTTPException: Raised with:
+            * 400 - Invalid snapshot path or malformed snapshot.
+            * 403 - Insufficient permissions.
+            * 404 - Snapshot not found.
+            * 500 - Snapshot import or persistence failure.
     """
     try:
         path = use_case.execute(request.path)

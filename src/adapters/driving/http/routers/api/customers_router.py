@@ -30,7 +30,9 @@ def list_customers(
         A paginated customer response.
 
     Raises:
-        HTTPException: If pagination arguments are invalid or the caller lacks permission to view customers.
+        HTTPException: Raised with:
+            * 400 - Invalid pagination input.
+            * 403 - Insufficient permissions.
     """
     try:
         result = use_case.execute(PageQuery(limit=limit, offset=offset, include_total=include_total))

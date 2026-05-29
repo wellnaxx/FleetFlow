@@ -78,7 +78,8 @@ def _route_in_progress_response(route: DeliveryRoute, position: RoutePosition) -
         Response model containing route details and active position fields.
 
     Raises:
-        HTTPException: If the route position calculation fails. 
+        HTTPException: Raised with:
+            * 500 - Route position calculation failure.
     """
     try:
         return RouteInProgressResponse(
@@ -159,9 +160,10 @@ def create_route(
         The created route details.
 
     Raises:
-        HTTPException 400: If route creation input is invalid.
-        HTTPException 403: If the caller lacks permission to create routes.
-        HTTPException 500: If the database fails to create the route.
+        HTTPException: Raised with:
+            * 400 - Invalid route creation input.
+            * 403 - Insufficient permissions.
+            * 500 - Database operation failure.
     """
     try:
         route = use_case.execute(
@@ -199,9 +201,10 @@ def list_routes(
         A paginated response containing route details.
 
     Raises:
-        HTTPException 400: If pagination arguments are invalid.
-        HTTPException 403: If the caller lacks permission to view routes.
-        HTTPException 500: If the database fails to list routes.
+        HTTPException: Raised with:
+            * 400 - Invalid pagination input.
+            * 403 - Insufficient permissions.
+            * 500 - Database operation failure.
     """
     try:
         result = use_case.execute(PageQuery(limit=limit, offset=offset, include_total=include_total))
@@ -236,8 +239,9 @@ def list_in_progress_routes(
         Active route details with computed position information.
 
     Raises:
-        HTTPException 403: If the caller lacks permission to view in-progress routes.
-        HTTPException 500: If the database fails to list routes.
+        HTTPException: Raised with:
+            * 403 - Insufficient permissions.
+            * 500 - Database operation failure.
     """
     try:
         now = datetime.now()
@@ -265,9 +269,10 @@ def get_route(
         Route details for the requested route.
 
     Raises:
-        HTTPException 403: If the caller lacks permission to view the route.
-        HTTPException 404: If the route does not exist.
-        HTTPException 500: If the database fails to fetch the route.
+        HTTPException: Raised with:
+            * 403 - Insufficient permissions.
+            * 404 - Route not found.
+            * 500 - Database operation failure.
     """
     try:
         route = use_case.execute(route_id=route_id)
@@ -297,9 +302,10 @@ def delete_route(
         None.
 
     Raises:
-        HTTPException 403: If the caller lacks permission to remove routes.
-        HTTPException 404: If the route does not exist.
-        HTTPException 500: If the database fails to remove the route.
+        HTTPException: Raised with:
+            * 403 - Insufficient permissions.
+            * 404 - Route not found.
+            * 500 - Database operation failure.
     """
     try:
         use_case.execute(route_id=route_id)
@@ -330,9 +336,10 @@ def assign_packages_to_route(
         Per-package assignment successes and errors.
 
     Raises:
-        HTTPException 403: If the caller lacks permission to assign packages.
-        HTTPException 404: If the route does not exist.
-        HTTPException 500: If the database fails during assignment.
+        HTTPException: Raised with:
+            * 403 - Insufficient permissions.
+            * 404 - Route not found.
+            * 500 - Database operation failure.
     """
     try:
         result = use_case.execute(route_id=route_id, package_ids=request.package_ids)
@@ -364,10 +371,11 @@ def assign_truck_to_route(
         Route and truck identifiers for the successful assignment.
 
     Raises:
-        HTTPException 403: If the caller lacks permission to assign trucks.
-        HTTPException 404: If the route or truck does not exist.
-        HTTPException 409: If the selected truck conflicts with route assignment rules.
-        HTTPException 500: If the database fails to persist assignment state.
+        HTTPException: Raised with:
+            * 403 - Insufficient permissions.
+            * 404 - Route or truck not found.
+            * 409 - Truck conflicts with route assignment rules.
+            * 500 - Database operation failure.
     """
     try:
         now = datetime.now()
@@ -402,9 +410,10 @@ def find_suitable_trucks_for_route(
         Trucks suitable for the requested route.
 
     Raises:
-        HTTPException 403: If the caller lacks permission to find suitable trucks.
-        HTTPException 404: If the route does not exist.
-        HTTPException 500: If the database fails to fetch route or truck data.
+        HTTPException: Raised with:
+            * 403 - Insufficient permissions.
+            * 404 - Route not found.
+            * 500 - Database operation failure.
     """
     try:
         trucks = use_case.execute(route_id=route_id)

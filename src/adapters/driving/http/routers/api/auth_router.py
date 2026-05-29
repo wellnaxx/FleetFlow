@@ -131,10 +131,11 @@ def register(
         A response model representing the newly registered user.
 
     Raises:
-        HTTPException 400: If the registration request contains invalid input.
-        HTTPException 403: If the caller lacks permission to register users.
-        HTTPException 409: If the username already exists.
-        HTTPException 500: If the database fails to create the user.
+        HTTPException: Raised with:
+            * 400 - Invalid registration input.
+            * 403 - Insufficient permissions.
+            * 409 - Username already exists.
+            * 500 - Database operation failure.
     """
     try:
         record = use_case.execute(
@@ -174,9 +175,10 @@ def login(
         A token response containing a new access token and refresh token.
 
     Raises:
-        HTTPException 400: If persisted user auth data is invalid.
-        HTTPException 401: If the username or password is invalid.
-        HTTPException 500: If the database fails during authentication.
+        HTTPException: Raised with:
+            * 400 - Invalid persisted user auth data.
+            * 401 - Invalid username or password.
+            * 500 - Database operation failure.
     """
     try:
         record, _ = auth_service.authenticate(form_data.username, form_data.password)
@@ -215,10 +217,11 @@ def change_password(
         None
 
     Raises:
-        HTTPException 400: If the current password is wrong or the new password is invalid.
-        HTTPException 403: If the caller lacks permission to change their password.
-        HTTPException 404: If the current user record no longer exists.
-        HTTPException 500: If the database fails to update the password.
+        HTTPException: Raised with:
+            * 400 - Incorrect current password or invalid new password.
+            * 403 - Insufficient permissions.
+            * 404 - Current user record no longer exists.
+            * 500 - Database operation failure.
     """
     try:
         use_case.execute_current_user(
@@ -257,10 +260,11 @@ def reset_password(
         None
 
     Raises:
-        HTTPException 400: If the new password is invalid.
-        HTTPException 403: If the caller lacks permission to reset passwords.
-        HTTPException 404: If the target user does not exist.
-        HTTPException 500: If the database fails to update the password.
+        HTTPException: Raised with:
+            * 400 - Invalid new password.
+            * 403 - Insufficient permissions.
+            * 404 - Target user does not exist.
+            * 500 - Database operation failure.
     """
     try:
         use_case.execute(username=username, new_password=request.new_password)
@@ -290,7 +294,8 @@ def refresh_token(
         A token response containing a new access token and refresh token.
 
     Raises:
-        HTTPException 401: If the refresh token is invalid, expired, revoked, or references an invalid user.
+        HTTPException: Raised with:
+            * 401 - Invalid, expired, revoked, or userless refresh token.
     """
     principal = principal_from_token(data.refresh_token, user_repository, expected_type="refresh")
     return _token_response(principal.record)
@@ -311,7 +316,8 @@ def logout(
         None
 
     Raises:
-        HTTPException 401: If the access token is invalid, expired, revoked, or references an invalid user.
+        HTTPException: Raised with:
+            * 401 - Invalid, expired, revoked, or userless access token.
     """
     user_repository.increment_token_version_by_id(principal.record.user_id)
 
@@ -329,6 +335,7 @@ def me(
         A response model representing the authenticated user.
 
     Raises:
-        HTTPException 401: If the access token is invalid, expired, revoked, or references an invalid user.
+        HTTPException: Raised with:
+            * 401 - Invalid, expired, revoked, or userless access token.
     """
     return _current_user_response(principal.record)
