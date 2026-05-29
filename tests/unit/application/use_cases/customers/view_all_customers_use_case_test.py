@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import MagicMock
 
+from src.application.exceptions.application_errors import ValidationError
 from src.application.services.authorization_service import AuthorizationService
 from src.application.use_cases.customers.view_all_customers import ViewAllCustomersUseCase
 from src.application.use_cases.pagination import PageQuery
@@ -52,14 +53,14 @@ class ViewAllCustomersUseCase_Should(unittest.TestCase):
         self.mock_customers.list_all.assert_not_called()
 
     def test_rejects_invalid_limit(self) -> None:
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(ValidationError) as ctx:
             self.use_case.execute(PageQuery(limit=0, offset=0))
 
         self.assertIn("Limit", str(ctx.exception))
         self.mock_customers.list_page.assert_not_called()
 
     def test_rejects_invalid_offset(self) -> None:
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(ValidationError) as ctx:
             self.use_case.execute(PageQuery(limit=1, offset=-1))
 
         self.assertIn("Offset", str(ctx.exception))
@@ -77,7 +78,7 @@ class ViewAllCustomersUseCase_Should(unittest.TestCase):
         self.mock_customers.list_page_with_total.assert_called_once_with(limit=2, offset=4)
 
     def test_rejects_offset_without_limit(self) -> None:
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(ValidationError) as ctx:
             self.use_case.execute(PageQuery(offset=1))
 
         self.assertIn("Offset", str(ctx.exception))

@@ -37,7 +37,7 @@ class ViewAllCustomersUseCase(AuthorizedUseCase[PageResult[Customer]]):
             Customer page result.
 
         Raises:
-            ValueError: If pagination arguments are invalid.
+            ValidationError: If pagination arguments are invalid.
         """
         if query.limit is None:
             validate_unpaginated_offset(query.offset)

@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 
+from src.application.exceptions.application_errors import ValidationError
+
 
 @dataclass(frozen=True)
 class PageQuery:
@@ -37,10 +39,10 @@ def validate_unpaginated_offset(offset: int) -> None:
         None.
 
     Raises:
-        ValueError: If an offset is provided without a page limit.
+        ValidationError: If an offset is provided without a page limit.
     """
     if offset != 0:
-        raise ValueError("Offset cannot be used without a limit.")
+        raise ValidationError("Offset cannot be used without a limit.")
 
 
 def validate_page(limit: int, offset: int) -> None:
@@ -54,9 +56,9 @@ def validate_page(limit: int, offset: int) -> None:
         None.
 
     Raises:
-        ValueError: If pagination arguments are out of range.
+        ValidationError: If pagination arguments are out of range.
     """
     if limit < 1:
-        raise ValueError("Limit must be greater than zero.")
+        raise ValidationError("Limit must be greater than zero.")
     if offset < 0:
-        raise ValueError("Offset must be greater than or equal to zero.")
+        raise ValidationError("Offset must be greater than or equal to zero.")

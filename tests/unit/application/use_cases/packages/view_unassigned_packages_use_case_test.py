@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import MagicMock
 
+from src.application.exceptions.application_errors import ValidationError
 from src.application.services.authorization_service import AuthorizationService
 from src.application.use_cases.packages.view_unassigned_packages import ViewUnassignedPackagesUseCase
 from src.application.use_cases.pagination import PageQuery
@@ -50,13 +51,13 @@ class ViewUnassignedPackagesUseCase_Should(unittest.TestCase):
         self.mock_packages.list_unassigned.assert_not_called()
 
     def test_rejects_invalid_pagination(self) -> None:
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValidationError):
             self.use_case.execute(PageQuery(limit=0))
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValidationError):
             self.use_case.execute(PageQuery(limit=1, offset=-1))
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValidationError):
             self.use_case.execute(PageQuery(offset=1))
 
         self.mock_packages.list_unassigned_page.assert_not_called()

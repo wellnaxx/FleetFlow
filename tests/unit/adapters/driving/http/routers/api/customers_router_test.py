@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from src.adapters.driving.http.routers.api import customers_router as customers_router_module
 from src.adapters.driving.http.routers.api.customers_router import customers_router
+from src.application.exceptions.application_errors import ValidationError
 from src.application.use_cases.pagination import PageQuery, PageResult
 from src.domain.entities.customer import Customer
 from src.domain.value_objects.contact_info import ContactInfo
@@ -136,6 +137,18 @@ class CustomersRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 422)
         use_case.execute.assert_not_called()
+
+    def test_list_customers_returns_bad_request_for_pagination_validation_error(self) -> None:
+        use_case = MagicMock()
+        use_case.execute.side_effect = ValidationError("Offset cannot be used without a limit.")
+        self.app.dependency_overrides[customers_router_module.get_view_all_customers_use_case] = lambda: (
+            use_case
+        )
+
+        response = self.client.get("/customers/")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["detail"], "Offset cannot be used without a limit.")
 
     def test_list_customers_returns_forbidden_for_permission_error(self) -> None:
         use_case = MagicMock()

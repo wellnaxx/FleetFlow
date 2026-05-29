@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from src.adapters.driving.http.routers.api import packages_router as packages_router_module
 from src.adapters.driving.http.routers.api.packages_router import packages_router
-from src.application.exceptions.application_errors import NotFoundError
+from src.application.exceptions.application_errors import NotFoundError, ValidationError
 from src.application.results.find_suitable_packages_for_route_result import SuitableRouteForPackage
 from src.application.use_cases.pagination import PageQuery, PageResult
 from src.domain.entities.customer import Customer
@@ -152,6 +152,16 @@ class PackagesRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 422)
         use_case.execute.assert_not_called()
+
+    def test_list_packages_returns_bad_request_for_pagination_validation_error(self) -> None:
+        use_case = MagicMock()
+        use_case.execute.side_effect = ValidationError("Offset cannot be used without a limit.")
+        self.app.dependency_overrides[packages_router_module.get_view_all_packages_use_case] = lambda: use_case
+
+        response = self.client.get("/packages")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["detail"], "Offset cannot be used without a limit.")
 
     def test_get_package_returns_package_response(self) -> None:
         use_case = MagicMock()

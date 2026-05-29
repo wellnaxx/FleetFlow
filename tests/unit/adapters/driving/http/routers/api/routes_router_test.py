@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from src.adapters.driven.persistence.database.errors import DatabaseError
 from src.adapters.driving.http.routers.api import routes_router as routes_router_module
 from src.adapters.driving.http.routers.api.routes_router import routes_router
-from src.application.exceptions.application_errors import ConflictError, NotFoundError
+from src.application.exceptions.application_errors import ConflictError, NotFoundError, ValidationError
 from src.application.results.assign_packages_to_route_result import (
     AssignPackagesToRouteResult,
     PackageAssignmentError,
@@ -90,6 +90,16 @@ class RoutesRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 422)
         use_case.execute.assert_not_called()
+
+    def test_list_routes_returns_bad_request_for_pagination_validation_error(self) -> None:
+        use_case = MagicMock()
+        use_case.execute.side_effect = ValidationError("Offset cannot be used without a limit.")
+        self.app.dependency_overrides[routes_router_module.get_view_all_routes_use_case] = lambda: use_case
+
+        response = self.client.get("/routes/")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["detail"], "Offset cannot be used without a limit.")
 
     def test_create_route_returns_created_route(self) -> None:
         use_case = MagicMock()

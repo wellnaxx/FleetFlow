@@ -39,7 +39,7 @@ class ViewAllRoutesUseCase(AuthorizedUseCase[PageResult[DeliveryRoute]]):
         Raises:
             PermissionError: If the caller lacks routes view permission.
             DatabaseError: If the route listing persistence fails.
-            ValueError: If pagination arguments are invalid.
+            ValidationError: If pagination arguments are invalid.
         """
         if query.limit is None:
             validate_unpaginated_offset(query.offset)

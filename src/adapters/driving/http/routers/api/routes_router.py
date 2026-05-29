@@ -29,7 +29,7 @@ from src.adapters.driving.http.schemas.routes import (
     RouteResponse,
 )
 from src.adapters.driving.http.schemas.trucks import TruckResponse
-from src.application.exceptions.application_errors import ConflictError, NotFoundError
+from src.application.exceptions.application_errors import ConflictError, NotFoundError, ValidationError
 from src.application.results.assign_packages_to_route_result import AssignPackagesToRouteResult
 from src.application.use_cases.pagination import PageQuery
 from src.application.use_cases.routes.assign_packages_to_route import AssignPackagesToRouteUseCase
@@ -76,14 +76,23 @@ def _route_in_progress_response(route: DeliveryRoute, position: RoutePosition) -
 
     Returns:
         Response model containing route details and active position fields.
+
+    Raises:
+        HTTPException: If the route position calculation fails. 
     """
-    return RouteInProgressResponse(
-        route=_route_response(route),
-        position_kind=_route_position_kind(position),
-        current_location=str(position.stop_city) if position.kind == "AT_STOP" else None,
-        in_transit_from=str(position.from_city) if position.kind == "IN_TRANSIT" else None,
-        in_transit_to=str(position.to_city) if position.kind == "IN_TRANSIT" else None,
-    )
+    try:
+        return RouteInProgressResponse(
+            route=_route_response(route),
+            position_kind=_route_position_kind(position),
+            current_location=str(position.stop_city) if position.kind == "AT_STOP" else None,
+            in_transit_from=str(position.from_city) if position.kind == "IN_TRANSIT" else None,
+            in_transit_to=str(position.to_city) if position.kind == "IN_TRANSIT" else None,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Route position calculation failed.",
+        ) from exc
 
 
 def _route_position_kind(position: RoutePosition) -> RouteInProgressPositionKind:
@@ -96,13 +105,13 @@ def _route_position_kind(position: RoutePosition) -> RouteInProgressPositionKind
         Supported active-route position kind.
 
     Raises:
-        ValueError: If the position is not an active in-progress position.
+        RuntimeError: If the position is not an active in-progress position.
     """
     if position.kind == "AT_STOP":
         return "AT_STOP"
     if position.kind == "IN_TRANSIT":
         return "IN_TRANSIT"
-    raise ValueError(f"Unsupported in-progress route position kind: {position.kind}")
+    raise RuntimeError(f"Unsupported in-progress route position kind: {position.kind}")
 
 
 def _assign_packages_response(
@@ -210,7 +219,7 @@ def list_routes(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
         ) from exc
-    except ValueError as exc:
+    except ValidationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
