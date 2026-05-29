@@ -155,8 +155,6 @@ def register(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
         ) from exc
-    except TypeError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     return _current_user_response(record)
 
