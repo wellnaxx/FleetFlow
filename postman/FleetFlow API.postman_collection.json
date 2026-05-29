@@ -1,0 +1,2027 @@
+{
+  "info": {
+    "name": "FleetFlow API",
+    "description": "Comprehensive FleetFlow API collection covering happy paths and common edge cases. Set adminUsername/adminPassword in the companion environment before running. The first login request initializes per-run usernames and captures tokens/IDs used by later requests.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "00 - Auth Setup And Edge Cases",
+      "item": [
+        {
+          "name": "Login Manager - Happy Path",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const runId = Date.now().toString();",
+                  "pm.collectionVariables.set('runId', runId);",
+                  "pm.collectionVariables.set('employeeUsername', `employee_${runId}`);",
+                  "pm.collectionVariables.set('employeePassword', 'FleetFlow1!');",
+                  "pm.collectionVariables.set('employeeNewPassword', 'FleetFlow2!');",
+                  "pm.collectionVariables.set('managerUsername', `manager_${runId}`);",
+                  "const phoneBase = Number(runId.slice(-8));",
+                  "const phone = (offset) => `04${String((phoneBase + offset) % 100000000).padStart(8, '0')}`;",
+                  "pm.collectionVariables.set('packagePhone', phone(0));",
+                  "pm.collectionVariables.set('deletePackagePhone', phone(1));",
+                  "pm.collectionVariables.set('invalidLocationPackagePhone', phone(2));",
+                  "pm.collectionVariables.set('invalidEmailPackagePhone', phone(3));",
+                  "pm.collectionVariables.set('invalidWeightPackagePhone', phone(4));",
+                  "pm.collectionVariables.set('packageId', '');",
+                  "pm.collectionVariables.set('deletePackageId', '');",
+                  "pm.collectionVariables.set('routeId', '');",
+                  "pm.collectionVariables.set('truckId', '1001');",
+                  "pm.collectionVariables.set('snapshotPath', `postman-${runId}.json`);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('manager login returns 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('manager login returns tokens', () => {",
+                  "  pm.expect(json.access_token).to.be.a('string').and.not.empty;",
+                  "  pm.expect(json.refresh_token).to.be.a('string').and.not.empty;",
+                  "  pm.expect(json.token_type).to.eql('bearer');",
+                  "});",
+                  "pm.collectionVariables.set('managerAccessToken', json.access_token);",
+                  "pm.collectionVariables.set('managerRefreshToken', json.refresh_token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "username",
+                  "value": "{{adminUsername}}",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{adminPassword}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "Get Current Manager - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('current manager returns 200', () => pm.response.to.have.status(200));",
+                  "pm.test('current user is manager account', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.username).to.eql(pm.environment.get('adminUsername'));",
+                  "  pm.expect(json.role).to.eql('MANAGER');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/me"
+          }
+        },
+        {
+          "name": "Get Current User Without Token - 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('missing token returns 401', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/auth/me"
+          }
+        },
+        {
+          "name": "Login Invalid Credentials - 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('invalid login returns 401', () => pm.response.to.have.status(401));",
+                  "pm.test('invalid login uses safe detail', () => pm.expect(pm.response.json().detail).to.eql('Invalid username or password.'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "username",
+                  "value": "{{adminUsername}}",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "wrong-password",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "Login Missing Password - 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('missing form field returns 422', () => pm.response.to.have.status(422));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "username",
+                  "value": "{{adminUsername}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "Refresh Manager Token - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('refresh returns 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('managerAccessToken', json.access_token);",
+                  "pm.collectionVariables.set('managerRefreshToken', json.refresh_token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{managerRefreshToken}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/refresh"
+          }
+        },
+        {
+          "name": "Refresh Invalid Token - 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('invalid refresh token returns 401', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"not-a-jwt\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/refresh"
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 - User Management",
+      "item": [
+        {
+          "name": "Register Employee - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('register employee returns 201', () => pm.response.to.have.status(201));",
+                  "pm.test('registered employee username matches', () => pm.expect(pm.response.json().username).to.eql(pm.collectionVariables.get('employeeUsername')));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{employeeUsername}}\",\n  \"role\": \"EMPLOYEE\",\n  \"name\": \"Postman Employee\",\n  \"email\": \"{{employeeUsername}}@example.com\",\n  \"phone_number\": \"0412345678\",\n  \"password\": \"{{employeePassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/register"
+          }
+        },
+        {
+          "name": "Register Duplicate Username - 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('duplicate username returns 409', () => pm.response.to.have.status(409));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{employeeUsername}}\",\n  \"role\": \"EMPLOYEE\",\n  \"name\": \"Postman Employee Duplicate\",\n  \"email\": \"duplicate_{{runId}}@example.com\",\n  \"phone_number\": \"0412345679\",\n  \"password\": \"{{employeePassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/register"
+          }
+        },
+        {
+          "name": "Register Invalid Email - 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('invalid email returns 422', () => pm.response.to.have.status(422));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"invalid_email_{{runId}}\",\n  \"role\": \"EMPLOYEE\",\n  \"name\": \"Invalid Email\",\n  \"email\": \"not-an-email\",\n  \"phone_number\": \"0412345680\",\n  \"password\": \"{{employeePassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/register"
+          }
+        },
+        {
+          "name": "Login Employee - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('employee login returns 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('employeeAccessToken', json.access_token);",
+                  "pm.collectionVariables.set('employeeRefreshToken', json.refresh_token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "username",
+                  "value": "{{employeeUsername}}",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{employeePassword}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "Employee Cannot Register User - 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('employee registration attempt returns 403', () => pm.response.to.have.status(403));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employeeAccessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"blocked_{{runId}}\",\n  \"role\": \"EMPLOYEE\",\n  \"name\": \"Blocked User\",\n  \"email\": \"blocked_{{runId}}@example.com\",\n  \"phone_number\": \"0412345681\",\n  \"password\": \"{{employeePassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/register"
+          }
+        },
+        {
+          "name": "Change Employee Password - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('change own password returns 204', () => pm.response.to.have.status(204));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employeeAccessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"current_password\": \"{{employeePassword}}\",\n  \"new_password\": \"{{employeeNewPassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/change-password"
+          }
+        },
+        {
+          "name": "Login Employee Old Password - 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('old password returns 401', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "username",
+                  "value": "{{employeeUsername}}",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{employeePassword}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "Login Employee New Password - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('new password login returns 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('employeeAccessToken', json.access_token);",
+                  "pm.collectionVariables.set('employeeRefreshToken', json.refresh_token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "username",
+                  "value": "{{employeeUsername}}",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{employeeNewPassword}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "Reset Employee Password As Manager - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('reset password returns 204', () => pm.response.to.have.status(204));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"new_password\": \"{{employeePassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/users/{{employeeUsername}}/reset-password"
+          }
+        },
+        {
+          "name": "Reset Missing User - 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('reset missing user returns 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"new_password\": \"{{employeePassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/users/missing_{{runId}}/reset-password"
+          }
+        },
+        {
+          "name": "Reset Weak Password - 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('weak reset password returns 400 or 422', () => pm.expect([400, 422]).to.include(pm.response.code));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"new_password\": \"weakpass\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/users/{{employeeUsername}}/reset-password"
+          }
+        },
+        {
+          "name": "Login Employee Restored Password - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('employee restored password login returns 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('employeeAccessToken', json.access_token);",
+                  "pm.collectionVariables.set('employeeRefreshToken', json.refresh_token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "username",
+                  "value": "{{employeeUsername}}",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{employeePassword}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Customers And Trucks",
+      "item": [
+        {
+          "name": "List Customers - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('list customers returns 200', () => pm.response.to.have.status(200));",
+                  "pm.test('customers response is paginated', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.items).to.be.an('array');",
+                  "  pm.expect(json.count).to.be.a('number');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/customers/?limit=50&offset=0&include_total=true"
+          }
+        },
+        {
+          "name": "List Customers Invalid Pagination - 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('invalid customer pagination returns 422', () => pm.response.to.have.status(422));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/customers/?limit=0&offset=-1"
+          }
+        },
+        {
+          "name": "List Trucks - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('list trucks returns 200', () => pm.response.to.have.status(200));",
+                  "const trucks = pm.response.json();",
+                  "pm.test('trucks response is non-empty array', () => pm.expect(trucks).to.be.an('array').and.not.empty);",
+                  "const sydTruck = trucks.find(t => t.current_location === 'SYD' && t.status === 'Free');",
+                  "if (sydTruck) { pm.collectionVariables.set('truckId', String(sydTruck.vehicle_id)); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/trucks/"
+          }
+        },
+        {
+          "name": "List Trucks Without Token - 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('trucks without token returns 401', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/trucks/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Packages",
+      "item": [
+        {
+          "name": "Create Package - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('create package returns 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('packageId', String(json.package_id));",
+                  "pm.test('created package is unassigned', () => pm.expect(json.route_id).to.eql(null));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"start_location\": \"SYD\",\n  \"end_location\": \"MEL\",\n  \"weight\": 12.5,\n  \"customer_name\": \"Pkg {{runId}}\",\n  \"customer_email\": \"customer_{{runId}}@example.com\",\n  \"customer_phone_number\": \"{{packagePhone}}\"\n}"
+            },
+            "url": "{{baseUrl}}/packages"
+          }
+        },
+        {
+          "name": "Create Package For Deletion - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('create delete-candidate package returns 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('deletePackageId', String(pm.response.json().package_id));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"start_location\": \"SYD\",\n  \"end_location\": \"MEL\",\n  \"weight\": 2.5,\n  \"customer_name\": \"Del {{runId}}\",\n  \"customer_email\": \"delete_customer_{{runId}}@example.com\",\n  \"customer_phone_number\": \"{{deletePackagePhone}}\"\n}"
+            },
+            "url": "{{baseUrl}}/packages"
+          }
+        },
+        {
+          "name": "Create Package Invalid Location - 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('invalid location returns 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"start_location\": \"\",\n  \"end_location\": \"MEL\",\n  \"weight\": 12.5,\n  \"customer_name\": \"Bad {{runId}}\",\n  \"customer_email\": \"invalid_pkg_{{runId}}@example.com\",\n  \"customer_phone_number\": \"{{invalidLocationPackagePhone}}\"\n}"
+            },
+            "url": "{{baseUrl}}/packages"
+          }
+        },
+        {
+          "name": "Create Package Invalid Email - 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('invalid package email returns 422', () => pm.response.to.have.status(422));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"start_location\": \"SYD\",\n  \"end_location\": \"MEL\",\n  \"weight\": 12.5,\n  \"customer_name\": \"Bad Email {{runId}}\",\n  \"customer_email\": \"bad-email\",\n  \"customer_phone_number\": \"{{invalidEmailPackagePhone}}\"\n}"
+            },
+            "url": "{{baseUrl}}/packages"
+          }
+        },
+        {
+          "name": "Create Package Invalid Weight - 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('invalid package weight returns 422', () => pm.response.to.have.status(422));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"start_location\": \"SYD\",\n  \"end_location\": \"MEL\",\n  \"weight\": 0,\n  \"customer_name\": \"Bad Weight {{runId}}\",\n  \"customer_phone_number\": \"{{invalidWeightPackagePhone}}\"\n}"
+            },
+            "url": "{{baseUrl}}/packages"
+          }
+        },
+        {
+          "name": "List Packages - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('list packages returns 200', () => pm.response.to.have.status(200));",
+                  "pm.test('packages response is paginated', () => pm.expect(pm.response.json().items).to.be.an('array'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/packages?limit=50&offset=0&include_total=true"
+          }
+        },
+        {
+          "name": "List Packages Invalid Pagination - 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('invalid package pagination returns 422', () => pm.response.to.have.status(422));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/packages?limit=0&offset=-1"
+          }
+        },
+        {
+          "name": "List Unassigned Packages - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('list unassigned packages returns 200', () => pm.response.to.have.status(200));",
+                  "pm.test('unassigned packages response is paginated', () => pm.expect(pm.response.json().items).to.be.an('array'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/packages/unassigned?limit=50&offset=0&include_total=true"
+          }
+        },
+        {
+          "name": "Get Package - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('get package returns 200', () => pm.response.to.have.status(200));",
+                  "pm.test('package id matches variable', () => pm.expect(String(pm.response.json().package_id)).to.eql(pm.collectionVariables.get('packageId')));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/packages/{{packageId}}"
+          }
+        },
+        {
+          "name": "Get Package Missing - 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('missing package returns 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/packages/999999"
+          }
+        },
+        {
+          "name": "Delete Package - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('delete package returns 204', () => pm.response.to.have.status(204));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/packages/{{deletePackageId}}"
+          }
+        },
+        {
+          "name": "Delete Package Missing - 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('delete missing package returns 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/packages/999999"
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Routes",
+      "item": [
+        {
+          "name": "Create Route - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('create route returns 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('routeId', String(json.route_id));",
+                  "pm.test('route contains SYD and MEL', () => pm.expect(json.locations).to.include.members(['SYD', 'MEL']));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"locations\": [\"SYD\", \"MEL\"],\n  \"departure_time\": \"2030-01-01T08:00:00\"\n}"
+            },
+            "url": "{{baseUrl}}/routes/"
+          }
+        },
+        {
+          "name": "Create Route Duplicate Stops - 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('duplicate stops return 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"locations\": [\"SYD\", \"SYD\"],\n  \"departure_time\": \"2030-01-01T08:00:00\"\n}"
+            },
+            "url": "{{baseUrl}}/routes/"
+          }
+        },
+        {
+          "name": "Create Route Too Few Stops - 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('too few stops returns 422', () => pm.response.to.have.status(422));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"locations\": [\"SYD\"],\n  \"departure_time\": \"2030-01-01T08:00:00\"\n}"
+            },
+            "url": "{{baseUrl}}/routes/"
+          }
+        },
+        {
+          "name": "List Routes - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('list routes returns 200', () => pm.response.to.have.status(200));",
+                  "pm.test('routes response is paginated', () => pm.expect(pm.response.json().items).to.be.an('array'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/routes/?limit=50&offset=0&include_total=true"
+          }
+        },
+        {
+          "name": "List Routes Invalid Pagination - 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('invalid route pagination returns 422', () => pm.response.to.have.status(422));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/routes/?limit=0&offset=-1"
+          }
+        },
+        {
+          "name": "Get Route - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('get route returns 200', () => pm.response.to.have.status(200));",
+                  "pm.test('route id matches variable', () => pm.expect(String(pm.response.json().route_id)).to.eql(pm.collectionVariables.get('routeId')));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/routes/{{routeId}}"
+          }
+        },
+        {
+          "name": "Get Route Missing - 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('missing route returns 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/routes/999999"
+          }
+        },
+        {
+          "name": "List In Progress Routes - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('list in-progress routes returns 200', () => pm.response.to.have.status(200));",
+                  "pm.test('in-progress response is an array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/routes/in-progress"
+          }
+        },
+        {
+          "name": "Find Suitable Routes For Package - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('find suitable routes returns 200', () => pm.response.to.have.status(200));",
+                  "pm.test('suitable routes response is an array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/packages/{{packageId}}/suitable-routes"
+          }
+        },
+        {
+          "name": "Find Suitable Routes Missing Package - 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('suitable routes for missing package returns 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/packages/999999/suitable-routes"
+          }
+        },
+        {
+          "name": "Assign Packages To Route - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('assign packages returns 200', () => pm.response.to.have.status(200));",
+                  "pm.test('assignment includes successes/errors arrays', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.successes).to.be.an('array');",
+                  "  pm.expect(json.errors).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"package_ids\": [{{packageId}}]\n}"
+            },
+            "url": "{{baseUrl}}/routes/{{routeId}}/packages"
+          }
+        },
+        {
+          "name": "Assign Packages Empty List - 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('empty package assignment returns 422', () => pm.response.to.have.status(422));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"package_ids\": []\n}"
+            },
+            "url": "{{baseUrl}}/routes/{{routeId}}/packages"
+          }
+        },
+        {
+          "name": "Assign Packages Missing Route - 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('assign packages to missing route returns 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"package_ids\": [{{packageId}}]\n}"
+            },
+            "url": "{{baseUrl}}/routes/999999/packages"
+          }
+        },
+        {
+          "name": "Find Suitable Trucks For Route - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('find suitable trucks returns 200', () => pm.response.to.have.status(200));",
+                  "const trucks = pm.response.json();",
+                  "pm.test('suitable trucks response is an array', () => pm.expect(trucks).to.be.an('array'));",
+                  "if (trucks.length > 0) { pm.collectionVariables.set('truckId', String(trucks[0].vehicle_id)); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/routes/{{routeId}}/suitable-trucks"
+          }
+        },
+        {
+          "name": "Find Suitable Trucks Missing Route - 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('suitable trucks for missing route returns 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/routes/999999/suitable-trucks"
+          }
+        },
+        {
+          "name": "Assign Truck To Route - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('assign truck returns 200', () => pm.response.to.have.status(200));",
+                  "pm.test('assigned truck id matches variable', () => pm.expect(String(pm.response.json().truck_id)).to.eql(pm.collectionVariables.get('truckId')));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"truck_id\": {{truckId}}\n}"
+            },
+            "url": "{{baseUrl}}/routes/{{routeId}}/truck"
+          }
+        },
+        {
+          "name": "Assign Truck To Route Already Assigned - 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('assign truck to already assigned route returns 409', () => pm.response.to.have.status(409));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"truck_id\": {{truckId}}\n}"
+            },
+            "url": "{{baseUrl}}/routes/{{routeId}}/truck"
+          }
+        },
+        {
+          "name": "Assign Truck Missing Truck - 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('assign missing truck returns 404 or 409 when route already assigned', () => pm.expect([404, 409]).to.include(pm.response.code));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"truck_id\": 999999\n}"
+            },
+            "url": "{{baseUrl}}/routes/{{routeId}}/truck"
+          }
+        },
+        {
+          "name": "Delete Route - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('delete route returns 204', () => pm.response.to.have.status(204));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/routes/{{routeId}}"
+          }
+        },
+        {
+          "name": "Delete Route Missing - 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('delete missing route returns 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/routes/999999"
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - State Import Export",
+      "item": [
+        {
+          "name": "Save State As Employee - 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('employee state save returns 403', () => pm.response.to.have.status(403));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employeeAccessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"path\": \"{{snapshotPath}}\"\n}"
+            },
+            "url": "{{baseUrl}}/state/save"
+          }
+        },
+        {
+          "name": "Save State - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('state save returns 200', () => pm.response.to.have.status(200));",
+                  "pm.test('state save returns path', () => pm.expect(pm.response.json().path).to.be.a('string').and.not.empty);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"path\": \"{{snapshotPath}}\"\n}"
+            },
+            "url": "{{baseUrl}}/state/save"
+          }
+        },
+        {
+          "name": "Save State Invalid Path - 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('invalid state path returns 422', () => pm.response.to.have.status(422));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"path\": \"../bad.json\"\n}"
+            },
+            "url": "{{baseUrl}}/state/save"
+          }
+        },
+        {
+          "name": "Load State - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('state load returns 200', () => pm.response.to.have.status(200));",
+                  "pm.test('state load message is returned', () => pm.expect(pm.response.json().message).to.eql('World state loaded.'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"path\": \"{{snapshotPath}}\"\n}"
+            },
+            "url": "{{baseUrl}}/state/load"
+          }
+        },
+        {
+          "name": "Load Missing State - 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('missing state load returns 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerAccessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"path\": \"missing-{{runId}}.json\"\n}"
+            },
+            "url": "{{baseUrl}}/state/load"
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - Token Revocation",
+      "item": [
+        {
+          "name": "Login Employee Restored Password - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('employee restored password login returns 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('employeeAccessToken', json.access_token);",
+                  "pm.collectionVariables.set('employeeRefreshToken', json.refresh_token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "username",
+                  "value": "{{employeeUsername}}",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{employeePassword}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "Logout Employee - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('logout returns 204', () => pm.response.to.have.status(204));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employeeAccessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/logout"
+          }
+        },
+        {
+          "name": "Revoked Employee Token Cannot Access Me - 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('revoked token returns 401', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employeeAccessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/me"
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "runId",
+      "value": ""
+    },
+    {
+      "key": "managerAccessToken",
+      "value": ""
+    },
+    {
+      "key": "managerRefreshToken",
+      "value": ""
+    },
+    {
+      "key": "employeeUsername",
+      "value": ""
+    },
+    {
+      "key": "employeePassword",
+      "value": "FleetFlow1!"
+    },
+    {
+      "key": "employeeNewPassword",
+      "value": "FleetFlow2!"
+    },
+    {
+      "key": "employeeAccessToken",
+      "value": ""
+    },
+    {
+      "key": "employeeRefreshToken",
+      "value": ""
+    },
+    {
+      "key": "packageId",
+      "value": ""
+    },
+    {
+      "key": "deletePackageId",
+      "value": ""
+    },
+    {
+      "key": "routeId",
+      "value": ""
+    },
+    {
+      "key": "truckId",
+      "value": "1001"
+    },
+    {
+      "key": "snapshotPath",
+      "value": ""
+    }
+  ]
+}
