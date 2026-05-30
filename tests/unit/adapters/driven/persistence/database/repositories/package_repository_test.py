@@ -235,11 +235,17 @@ class PostgresPackageRepository_Should(unittest.TestCase):
 
     @patch(f"{MODULE}.execute_write")
     def test_update_state_writes_mutable_package_state(self, execute_write_mock: MagicMock) -> None:
-        package = DeliveryPackage(LocationCode("SYD"), LocationCode("MEL"), 12.5, self.customer, 11)
+        package = DeliveryPackage(
+            LocationCode("SYD"),
+            LocationCode("MEL"),
+            12.5,
+            self.customer,
+            11,
+            route_id=21,
+        )
         package.status = ItemStatus.IN_PROGRESS
         package.current_location = LocationCode("ADL")
         package.expected_arrival = datetime(2026, 5, 1, 12, 30)
-        package.route = SimpleNamespace(route_id=21)  # type: ignore[assignment]
 
         self.repo.update_state(package)
 

@@ -1,6 +1,5 @@
 import unittest
 from datetime import datetime
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from src.adapters.driven.persistence.database.queries import QUERIES
@@ -28,11 +27,10 @@ class PostgresPackageUnitOfWorkRepository_Should(unittest.TestCase):
     ) -> None:
         execute_write_tx_mock.return_value = 1
         expected_arrival = datetime(2026, 5, 2, 12, 30)
-        package = DeliveryPackage("SYD", "MEL", 12.5, self.customer, 11)
+        package = DeliveryPackage("SYD", "MEL", 12.5, self.customer, 11, route_id=21)
         package.status = ItemStatus.IN_PROGRESS
         package.current_location = "ADL"
         package.expected_arrival = expected_arrival
-        package.route = SimpleNamespace(route_id=21)  # type: ignore[assignment]
 
         self.repo.update_state(package)
 

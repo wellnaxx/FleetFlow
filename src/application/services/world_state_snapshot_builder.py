@@ -86,7 +86,7 @@ def _build_package_snapshots(packages: Iterable[DeliveryPackage]) -> tuple[Packa
             end=package.end_location,
             weight=package.weight,
             customer_id=package.customer.customer_id,
-            route_id=package.route.route_id if package.route is not None else None,
+            route_id=package.route_id,
         ),
     )
 

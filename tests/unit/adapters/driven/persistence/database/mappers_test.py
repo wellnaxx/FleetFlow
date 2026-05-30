@@ -289,6 +289,7 @@ class DatabaseMappers_Should(unittest.TestCase):
         self.assertEqual(package.current_location, "SYD")
         self.assertIsNone(package.expected_arrival)
         self.assertIsNone(package.route)
+        self.assertIsNone(package.route_id)
 
     def test_map_package_applies_nullable_route_state_fields(self) -> None:
         row = self._valid_package_row()
@@ -305,6 +306,7 @@ class DatabaseMappers_Should(unittest.TestCase):
         self.assertEqual(package.current_location, "SYD")
         self.assertIs(package.expected_arrival, expected_arrival)
         self.assertIsNone(package.route)
+        self.assertEqual(package.route_id, 99)
 
     def test_map_package_raises_key_error_for_missing_required_column(self) -> None:
         row = self._valid_package_row()

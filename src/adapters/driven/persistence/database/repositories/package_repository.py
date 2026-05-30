@@ -214,14 +214,13 @@ class PostgresPackageRepository:
         Raises:
             DatabaseError: If the update operation fails.
         """
-        route_id = package.route.route_id if package.route is not None else None
         execute_write(
             QUERIES.packages.update_state,
             (
                 package.status.value,
                 str(package.current_location),
                 package.expected_arrival,
-                route_id,
+                package.route_id,
                 package.package_id,
             ),
         )

@@ -60,6 +60,7 @@ class PackageGraphLoaderShould(unittest.TestCase):
         self.assertIs(graph.customer, graph.package.customer)
         self.assertIsNone(graph.route)
         self.assertIsNone(graph.package.route)
+        self.assertIsNone(graph.package.route_id)
         load_route_graph_tx_mock.assert_not_called()
 
     @patch(f"{MODULE}.transaction_cursor")
@@ -87,6 +88,7 @@ class PackageGraphLoaderShould(unittest.TestCase):
         self.assertIs(graph.package, package)
         self.assertIs(graph.customer, package.customer)
         self.assertIs(graph.route, route)
+        self.assertEqual(graph.package.route_id, 21)
         load_route_graph_tx_mock.assert_called_once_with(cursor, 21)
 
     @patch(f"{MODULE}.transaction_cursor")
@@ -117,6 +119,8 @@ class PackageGraphLoaderShould(unittest.TestCase):
         self.assertEqual([graph.package.package_id for graph in graphs], [11, 12])
         self.assertIs(graphs[0].package, package_1)
         self.assertIs(graphs[1].package, package_2)
+        self.assertEqual(graphs[0].package.route_id, 21)
+        self.assertEqual(graphs[1].package.route_id, 21)
         fetch_all_tx_mock.assert_called_once_with(cursor, QUERIES.packages.list_all_with_customers)
         load_route_graph_tx_mock.assert_called_once_with(cursor, 21)
 
@@ -137,6 +141,7 @@ class PackageGraphLoaderShould(unittest.TestCase):
 
         self.assertEqual([graph.package.package_id for graph in graphs], [12, 11])
         self.assertTrue(all(graph.route is None for graph in graphs))
+        self.assertTrue(all(graph.package.route_id is None for graph in graphs))
         fetch_all_tx_mock.assert_called_once_with(
             cursor,
             QUERIES.packages.list_unassigned,

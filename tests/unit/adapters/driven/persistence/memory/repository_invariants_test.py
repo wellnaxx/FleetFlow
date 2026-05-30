@@ -123,6 +123,32 @@ class InMemoryRepositoryInvariants_Should(unittest.TestCase):
         self.assertEqual([package.package_id for package in repo.list_all()], [1, 2])
         self.assertEqual([package.package_id for package in repo.list_unassigned()], [1])
 
+    def test_package_repository_treats_partial_route_id_as_assigned(self) -> None:
+        repo = InMemoryPackageRepository()
+        customer = Customer(customer_id=1, contact=ContactInfo(name="Alice"))
+        assigned = DeliveryPackage(
+            LocationCode("SYD"),
+            LocationCode("MEL"),
+            1.0,
+            customer,
+            2,
+            route_id=9,
+        )
+        unassigned = DeliveryPackage(
+            LocationCode("SYD"),
+            LocationCode("ADL"),
+            2.0,
+            customer,
+            1,
+        )
+
+        repo.add(assigned)
+        repo.add(unassigned)
+
+        self.assertEqual([package.package_id for package in repo.list_unassigned()], [1])
+        self.assertEqual(repo.count_unassigned(), 1)
+        self.assertEqual([package.package_id for package in repo.list_by_route(9)], [2])
+
     def test_package_repository_lists_pages_and_counts_packages(self) -> None:
         repo = InMemoryPackageRepository()
         customer = Customer(customer_id=1, contact=ContactInfo(name="Alice"))

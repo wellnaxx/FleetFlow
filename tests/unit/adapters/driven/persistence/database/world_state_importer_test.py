@@ -171,6 +171,33 @@ class PostgresWorldStateImporterTests(unittest.TestCase):
 
     @patch(f"{MODULE}.transaction_cursor")
     @patch(f"{MODULE}.execute_write_tx")
+    def test_import_world_persists_partial_package_route_id(
+        self,
+        execute_write_tx_mock: MagicMock,
+        transaction_cursor_mock: MagicMock,
+    ) -> None:
+        cursor = self._transaction_cursor(transaction_cursor_mock)
+        customer = Customer(ContactInfo("Alice Example"), customer_id=7)
+        route = DeliveryRoute("SYD", "MEL", route_id=21)
+        package = DeliveryPackage("SYD", "MEL", 12.5, customer, package_id=11, route_id=21)
+        world = ReconciledWorld(
+            customers={customer.customer_id: customer},
+            routes={route.route_id: route},
+            packages={package.package_id: package},
+            counters=CountersSnapshot(8, 12, 22),
+            truck_bindings=(),
+        )
+
+        PostgresWorldStateImporter().import_world(world)
+
+        execute_write_tx_mock.assert_any_call(
+            cursor,
+            QUERIES.packages.add_snapshot,
+            (11, "SYD", "MEL", 12.5, ItemStatus.TODO.value, "SYD", None, 7, 21),
+        )
+
+    @patch(f"{MODULE}.transaction_cursor")
+    @patch(f"{MODULE}.execute_write_tx")
     def test_import_world_propagates_database_errors(
         self,
         execute_write_tx_mock: MagicMock,

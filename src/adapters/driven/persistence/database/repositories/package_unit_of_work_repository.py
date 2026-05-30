@@ -37,7 +37,7 @@ class PostgresPackageUnitOfWorkRepository:
                 package.status.value,
                 str(package.current_location),
                 package.expected_arrival,
-                package.route.route_id if package.route is not None else None,
+                package.route_id,
                 package.package_id,
             ),
         )

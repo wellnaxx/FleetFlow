@@ -62,7 +62,7 @@ def _package_response(package: DeliveryPackage) -> PackageResponse:
             email=package.customer.email,
             phone_number=package.customer.phone_number,
         ),
-        route_id=package.route.route_id if package.route is not None else None,
+        route_id=package.route_id,
     )
 
 

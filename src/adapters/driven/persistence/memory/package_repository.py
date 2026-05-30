@@ -122,7 +122,7 @@ class InMemoryPackageRepository:
 
     def list_unassigned(self) -> list[DeliveryPackage]:
         """Return packages that are not assigned to a route."""
-        return [package for package in self.list_all() if package.route is None]
+        return [package for package in self.list_all() if package.route_id is None]
 
     def list_unassigned_page(self, limit: int, offset: int) -> list[DeliveryPackage]:
         """Return a page of unassigned packages ordered by id.
@@ -143,7 +143,7 @@ class InMemoryPackageRepository:
 
     def count_unassigned(self) -> int:
         """Return the total number of unassigned packages."""
-        return sum(package.route is None for package in self._packages.values())
+        return sum(package.route_id is None for package in self._packages.values())
 
     def list_by_route(self, route_id: int) -> list[DeliveryPackage]:
         """Return packages that are assigned to a specific route.
@@ -157,7 +157,7 @@ class InMemoryPackageRepository:
         return [
             package
             for package in self.list_all()
-            if package.route is not None and package.route.route_id == route_id
+            if package.route_id == route_id
         ]
 
     def update_state(self, package: DeliveryPackage) -> None:

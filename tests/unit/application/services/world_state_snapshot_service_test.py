@@ -361,6 +361,24 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
             ),
         )
 
+    def test_build_snapshot_preserves_partial_package_route_id(self) -> None:
+        customer = Customer(customer_id=1, contact=ContactInfo(name="Alice"))
+        package = DeliveryPackage(
+            package_id=3,
+            start_location=LocationCode("A"),
+            end_location=LocationCode("B"),
+            weight=3.5,
+            customer=customer,
+            route_id=5,
+        )
+        customer.add_package(package)
+        self.customer_repo.add(customer)
+        self.package_repo.add(package)
+
+        snapshot = self.service.build_snapshot()
+
+        self.assertEqual(snapshot.world.packages[0].route_id, 5)
+
     def test_build_snapshot_serializes_truck_runtime_state(self) -> None:
         truck = self.vehicle_manager.find_by_id(1001)
         assert truck is not None

@@ -61,6 +61,7 @@ class RouteGraphLoaderShould(unittest.TestCase):
 
         self.assertEqual(route.packages, [package])
         self.assertIs(package.route, route)
+        self.assertEqual(package.route_id, 21)
         self.assertIs(package.customer, customer)
         self.assertEqual(customer.delivery_packages, (package,))
         self.assertEqual(package.expected_arrival, expected_arrival)
@@ -188,6 +189,8 @@ class RouteGraphLoaderShould(unittest.TestCase):
         self.assertIsNone(route_22.truck)
         self.assertEqual([package.package_id for package in route_21.packages], [11])
         self.assertEqual([package.package_id for package in route_22.packages], [12])
+        self.assertEqual([package.route_id for package in route_21.packages], [21])
+        self.assertEqual([package.route_id for package in route_22.packages], [22])
 
         fetch_all_tx_mock.assert_has_calls(
             [

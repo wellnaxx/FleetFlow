@@ -46,6 +46,7 @@ def map_package(row: RowDict, customer: Customer) -> DeliveryPackage:
         weight=float(typed["weight"]),
         customer=customer,
         package_id=typed["package_id"],
+        route_id=typed["route_id"],
     )
     package.status = ItemStatus(typed["status"])
     package.current_location = (

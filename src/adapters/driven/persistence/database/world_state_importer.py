@@ -119,7 +119,7 @@ class PostgresWorldStateImporter:
                     str(package.current_location),
                     package.expected_arrival,
                     package.customer.customer_id,
-                    package.route.route_id if package.route is not None else None,
+                    package.route_id,
                 ),
             )
 
