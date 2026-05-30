@@ -38,11 +38,13 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
         *,
         end_location: str = "MEL",
         route: object | None = None,
+        route_id: int | None = None,
     ) -> MagicMock:
         package = MagicMock()
         package.package_id = package_id
         package.end_location = end_location
         package.route = route
+        package.route_id = route_id if route_id is not None else getattr(route, "route_id", None)
         return package
 
     def test_raises_when_route_not_found(self) -> None:
@@ -138,6 +140,28 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
             result.errors,
             [PackageAssignmentError(package_id=8, message="Package 8 is already on route 3.")],
         )
+        self.mock_packages.update_state.assert_not_called()
+
+    def test_rejects_partially_hydrated_assigned_package(self) -> None:
+        route = self._make_route(route_id=7, departure_time=None)
+        package = self._make_package(8, route=None, route_id=3)
+
+        self.mock_routes.get_by_id.return_value = route
+        self.mock_packages.get_by_id.return_value = package
+
+        result = self.use_case.execute(7, [8])
+
+        self.assertEqual(result.successes, [])
+        self.assertEqual(
+            result.errors,
+            [
+                PackageAssignmentError(
+                    package_id=8,
+                    message="Package 8 has route_id 3 but route is not hydrated.",
+                )
+            ],
+        )
+        route.assign_package.assert_not_called()
         self.mock_packages.update_state.assert_not_called()
 
     def test_returns_errors_when_all_assignments_fail_on_route_validation(self) -> None:

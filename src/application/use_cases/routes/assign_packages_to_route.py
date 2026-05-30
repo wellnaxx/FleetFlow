@@ -79,11 +79,15 @@ class AssignPackagesToRouteUseCase(AuthorizedUseCase[AssignPackagesToRouteResult
                 )
                 continue
 
-            if package.route is not None:
+            if package.route_id is not None:
+                if package.route is None:
+                    message = f"Package {package_id} has route_id {package.route_id} but route is not hydrated."
+                else:
+                    message = f"Package {package_id} is already on route {package.route_id}."
                 result.errors.append(
                     PackageAssignmentError(
                         package_id=package_id,
-                        message=f"Package {package_id} is already on route {package.route.route_id}.",
+                        message=message,
                     )
                 )
                 continue
