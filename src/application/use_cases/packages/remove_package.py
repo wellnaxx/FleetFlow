@@ -42,7 +42,11 @@ class RemovePackageUseCase(AuthorizedUseCase[DeliveryPackage]):
         if package is None:
             raise NotFoundError(f"Package with ID {package_id} not found.")
 
-        if package.route is not None:
+        if package.route_id is not None:
+            if package.route is None:
+                raise DomainConflictError(
+                    f"Package {package_id} is assigned to route {package.route_id}, but route is not hydrated."
+                )
             try:
                 package.route.detach_package(package)
             except EntityNotFoundError as exc:

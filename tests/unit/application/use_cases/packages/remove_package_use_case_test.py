@@ -26,6 +26,7 @@ class RemovePackageUseCase_Should(unittest.TestCase):
         package = MagicMock()
         package.package_id = 42
         package.route = None
+        package.route_id = None
         self.mock_packages.get_by_id.return_value = package
 
         result = self.use_case.execute(42)
@@ -40,6 +41,7 @@ class RemovePackageUseCase_Should(unittest.TestCase):
         package = MagicMock()
         package.package_id = 42
         package.route = route
+        package.route_id = 7
         self.mock_packages.get_by_id.return_value = package
 
         result = self.use_case.execute(42)
@@ -54,6 +56,7 @@ class RemovePackageUseCase_Should(unittest.TestCase):
         package = MagicMock()
         package.package_id = 42
         package.route = None
+        package.route_id = None
         package.customer.remove_package.side_effect = EntityNotFoundError("customer unlink failed")
         self.mock_packages.get_by_id.return_value = package
 
@@ -71,6 +74,7 @@ class RemovePackageUseCase_Should(unittest.TestCase):
         package = MagicMock()
         package.package_id = 42
         package.route = route
+        package.route_id = 7
         self.mock_packages.get_by_id.return_value = package
 
         with self.assertRaises(DomainConflictError) as ctx:
@@ -78,5 +82,19 @@ class RemovePackageUseCase_Should(unittest.TestCase):
 
         self.assertIn("Package is not assigned to this route", str(ctx.exception))
         route.detach_package.assert_called_once_with(package)
+        package.customer.remove_package.assert_not_called()
+        self.mock_packages.remove.assert_not_called()
+
+    def test_rejects_partially_hydrated_assigned_package(self) -> None:
+        package = MagicMock()
+        package.package_id = 42
+        package.route = None
+        package.route_id = 7
+        self.mock_packages.get_by_id.return_value = package
+
+        with self.assertRaises(DomainConflictError) as ctx:
+            self.use_case.execute(42)
+
+        self.assertIn("Package 42 is assigned to route 7, but route is not hydrated.", str(ctx.exception))
         package.customer.remove_package.assert_not_called()
         self.mock_packages.remove.assert_not_called()
