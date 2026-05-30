@@ -22,6 +22,7 @@ class DeliveryPackageStateSnapshot:
     """Captured mutable package state for restoring after a failed operation."""
 
     route: DeliveryRoute | None
+    route_id: int | None
     status: ItemStatus
     current_location: LocationCode | None
     expected_arrival: datetime | None
@@ -37,6 +38,7 @@ class DeliveryPackage:
         weight: float,
         customer: Customer,
         package_id: int,
+        route_id: int | None = None,
     ) -> None:
         """Create a package shipment.
 
@@ -46,10 +48,12 @@ class DeliveryPackage:
             weight: Package weight in kilograms.
             customer: Owning customer.
             package_id: Stable package identifier.
+            route_id: Identifier of the route to which the package is assigned.
+                This is used only for partial hydration.
 
         Raises:
             DomainValidationError: If locations are invalid, equal, or the weight is not
-                positive.
+                positive, or route_id is a boolean or negative.
         """
         start_location = LocationCode(start_location)
         end_location = LocationCode(end_location)
@@ -67,8 +71,10 @@ class DeliveryPackage:
         self._current_location: LocationCode | None = self.start_location
         self.weight: float = float(weight)
         self.customer: Customer = customer
-
-        self.route: DeliveryRoute | None = None
+        self._route: DeliveryRoute | None = None
+        if route_id is not None and (isinstance(route_id, bool) or route_id < 1):
+            raise DomainValidationError("Route ID must be a positive integer.")
+        self._route_id: int | None = route_id
         self.expected_arrival: datetime | None = None
         self.status: ItemStatus = ItemStatus.TODO
 
@@ -76,6 +82,21 @@ class DeliveryPackage:
     def package_id(self) -> int:
         """Stable package identifier."""
         return self._package_id
+
+    @property
+    def route(self) -> DeliveryRoute | None:
+        """Reference to the route, to which the package is assigned, if it is assigned."""
+        return self._route
+
+    @route.setter
+    def route(self, value: DeliveryRoute | None) -> None:
+        self._route = value
+        self._route_id = value.route_id if value is not None else None
+
+    @property
+    def route_id(self) -> int | None:
+        """The ID of the route, to which the package is assigned, if it is assigned."""
+        return self._route_id
 
     @property
     def current_location(self) -> LocationCode:
@@ -97,6 +118,7 @@ class DeliveryPackage:
         """
         return DeliveryPackageStateSnapshot(
             route=self.route,
+            route_id=self.route_id,
             status=self.status,
             current_location=self._current_location,
             expected_arrival=self.expected_arrival,
@@ -108,7 +130,8 @@ class DeliveryPackage:
         Args:
             snapshot: State captured by `snapshot_state`.
         """
-        self.route = snapshot.route
+        self._route = snapshot.route
+        self._route_id = snapshot.route_id
         self.status = snapshot.status
         self._current_location = snapshot.current_location
         self.expected_arrival = snapshot.expected_arrival
@@ -130,7 +153,7 @@ class DeliveryPackage:
         cemail = self.customer.contact.display_email()
         cphone = self.customer.contact.display_phone()
         contact_info = f"{cname} ({cemail}, {cphone})"
-        route_str = self.route.route_id if self.route else "Not assigned"
+        route_str = self.route_id if self.route_id else "Not assigned"
         if self.expected_arrival:
             arrival_str = self.expected_arrival.strftime("%Y-%m-%d %H:%M")
         else:

@@ -3,6 +3,7 @@ from datetime import datetime
 
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
+from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.enums.item_status import ItemStatus
 from src.domain.exceptions import DomainValidationError
 from src.domain.value_objects.contact_info import ContactInfo
@@ -29,6 +30,38 @@ class TestDeliveryPackage_Should(unittest.TestCase):
         self.assertIsInstance(p1.package_id, int)
         self.assertIsInstance(p2.package_id, int)
         self.assertEqual(p2.package_id, p1.package_id + 1)
+
+    def test_constructor_accepts_partial_route_hydration(self):
+        customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
+
+        package = DeliveryPackage(LocationCode("SYD"), LocationCode("BRI"), 500, customer, 1, route_id=21)
+
+        self.assertIsNone(package.route)
+        self.assertEqual(package.route_id, 21)
+
+    def test_constructor_rejects_invalid_route_id(self):
+        customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
+
+        for route_id in (0, -1, True, False):
+            with self.subTest(route_id=route_id), self.assertRaises(DomainValidationError):
+                DeliveryPackage(
+                    LocationCode("SYD"),
+                    LocationCode("BRI"),
+                    500,
+                    customer,
+                    1,
+                    route_id=route_id,  # type: ignore[reportArgumentType]
+                )
+
+    def test_route_assignment_overwrites_partial_route_id(self):
+        customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
+        package = DeliveryPackage(LocationCode("SYD"), LocationCode("BRI"), 500, customer, 1, route_id=21)
+        route = DeliveryRoute(LocationCode("SYD"), LocationCode("BRI"), route_id=22)
+
+        package.route = route
+
+        self.assertIs(package.route, route)
+        self.assertEqual(package.route_id, 22)
 
     def test_package_wrong_start_loc(self):
         customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
@@ -104,19 +137,43 @@ class TestDeliveryPackage_Should(unittest.TestCase):
     def test_snapshot_state_restores_mutable_assignment_state(self):
         customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
         package = DeliveryPackage(LocationCode("SYD"), LocationCode("BRI"), 500, customer, 1)
-        route = object()
+        route = DeliveryRoute(LocationCode("SYD"), LocationCode("BRI"), route_id=21)
         expected_arrival = datetime(2025, 1, 1, 12, 0)
-        package.route = route  # type: ignore[assignment]
+        package.route = route
+        self.assertEqual(package.route_id, route.route_id)
         package.status = ItemStatus.IN_PROGRESS
         package.current_location = LocationCode("MEL")
         package.expected_arrival = expected_arrival
         snapshot = package.snapshot_state()
 
         package.reset_assignment_state()
+        self.assertIsNone(package.route)
+        self.assertIsNone(package.route_id)
 
         package.restore_state(snapshot)
 
         self.assertIs(package.route, route)
+        self.assertEqual(package.route_id, route.route_id)
         self.assertEqual(package.status, ItemStatus.IN_PROGRESS)
         self.assertEqual(package.current_location, LocationCode("MEL"))
         self.assertEqual(package.expected_arrival, expected_arrival)
+
+    def test_snapshot_restore_preserves_partial_route_hydration(self):
+        customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
+        package = DeliveryPackage(LocationCode("SYD"), LocationCode("BRI"), 500, customer, 1, route_id=21)
+        snapshot = package.snapshot_state()
+        hydrated_route = DeliveryRoute(LocationCode("SYD"), LocationCode("BRI"), route_id=22)
+
+        package.route = hydrated_route
+        package.restore_state(snapshot)
+
+        self.assertIsNone(package.route)
+        self.assertEqual(package.route_id, 21)
+
+    def test_info_displays_partially_hydrated_route_id(self):
+        customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
+        package = DeliveryPackage(LocationCode("SYD"), LocationCode("BRI"), 500, customer, 1, route_id=21)
+
+        info = package.info()
+
+        self.assertIn("Assigned route: 21", info)
