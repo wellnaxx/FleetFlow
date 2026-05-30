@@ -206,7 +206,7 @@ JsonWorldStatePersistence.read()
   -> clear live world tables, insert customers/routes/packages, update fixed fleet trucks, reset id sequences
 ```
 
-When `PERSISTENCE_BACKEND=postgres`, package, route, truck, customer, and unit-of-work operations use the PostgreSQL adapter. Autosave and default startup JSON loading are disabled for this backend, but explicit `save` and `load` commands are available as snapshot export/import operations. PostgreSQL snapshot import/export is covered by unit tests and a gateway-level round-trip integration test with injected database boundaries; a live PostgreSQL test harness is still future infrastructure work.
+When `PERSISTENCE_BACKEND=postgres`, package, route, truck, customer, user, authentication, and unit-of-work operations use PostgreSQL adapters. Autosave and default startup JSON loading are disabled for this backend, but explicit `save` and `load` commands are available as snapshot export/import operations. PostgreSQL snapshot import/export is covered by unit tests and a gateway-level round-trip integration test with injected database boundaries; a live PostgreSQL test harness is still future infrastructure work.
 
 ## Authentication and Authorization
 
@@ -217,7 +217,7 @@ FleetFlow has two roles:
 
 Managers have full access. Employees can perform day-to-day logistics operations but do not have unrestricted administrative/state-management access.
 
-On first startup, if no `admin` user exists, FleetFlow creates the initial manager interactively. It prompts for a password and confirmation:
+On first startup, if no `admin` user exists in the active user repository, FleetFlow creates the initial manager interactively. In memory mode this checks the configured JSON user store. In PostgreSQL mode this checks the PostgreSQL users table. It prompts for a password and confirmation:
 
 ```text
 Create initial manager password:
@@ -227,6 +227,8 @@ Confirm initial manager password:
 There is no hardcoded default admin password in the current version.
 
 If the application is started non-interactively and no admin user exists, startup fails with a clear error telling you to run it interactively once.
+
+User repositories are selected by `PERSISTENCE_BACKEND`. Existing `users.json` users are not visible when `PERSISTENCE_BACKEND=postgres`; switching to PostgreSQL requires existing rows in the PostgreSQL users table or one interactive startup to bootstrap the initial `admin` user into PostgreSQL. Switching back to memory mode uses `users.json` again.
 
 HTTP authentication uses JWT access and refresh tokens. Tokens include the persisted user id, username, role, and token version. Password changes and HTTP logout increment the user's token version so existing access and refresh tokens are rejected. Refresh tokens are not stored server-side in this version, so refresh-token rotation is limited by token-version revocation.
 

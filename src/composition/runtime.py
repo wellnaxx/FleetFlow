@@ -1,9 +1,10 @@
 from functools import lru_cache
 
+from src.adapters.driven.persistence.database.repositories.user_repository import PostgresUserRepository
 from src.adapters.driven.persistence.json.config import get_json_config
 from src.adapters.driven.persistence.json.user_store import JSONUserStore
 from src.application.services.auth_service import AuthService
-from src.composition.config import load_app_config
+from src.composition.config import PersistenceBackend, get_app_config
 from src.composition.container import Container, build_container
 from src.ports.output.user_repository import UserRepositoryPort
 
@@ -13,9 +14,20 @@ def get_user_repository() -> UserRepositoryPort:
     """Get the application's user repository instance.
 
     Returns:
-        The user repository used by authentication and HTTP token validation.
+        The user repository for the configured persistence backend. Memory mode
+        uses the local JSON user store; Postgres mode uses the Postgres user
+        repository.
+
+    Raises:
+        ValueError: If the configured persistence backend is unsupported.
     """
-    return JSONUserStore(str(get_json_config().user_store_path))
+    config = get_app_config()
+    if config.persistence_backend is PersistenceBackend.MEMORY:
+        return JSONUserStore(str(get_json_config().user_store_path))
+    if config.persistence_backend is PersistenceBackend.POSTGRES:
+        return PostgresUserRepository()
+
+    raise ValueError(f"Unsupported persistence backend: {config.persistence_backend!r}")
 
 
 @lru_cache(maxsize=1)
@@ -35,4 +47,4 @@ def get_container() -> Container:
     Returns:
         The Container instance used by the application.
     """
-    return build_container(get_auth_service(), load_app_config())
+    return build_container(get_auth_service(), get_app_config())
