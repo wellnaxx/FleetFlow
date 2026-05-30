@@ -1,9 +1,7 @@
 """Domain exception types for validation and business-rule failures."""
 
-from src.application.exceptions.application_errors import ApplicationError
 
-
-class DomainError(ApplicationError):
+class DomainError(Exception):
     """Base class for expected domain/business-rule failures."""
 
 
