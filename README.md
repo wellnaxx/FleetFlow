@@ -271,13 +271,15 @@ Apply `src/adapters/driven/persistence/database/schema.sql` to the database befo
 HTTP JWT issuance requires a secret before login or refresh tokens can be created:
 
 ```text
-JWT_SECRET=<at least 32 characters>
+# Generate both with: openssl rand -hex 32
+JWT_ACCESS_SECRET=<random access-token secret, at least 32 characters>
+JWT_REFRESH_SECRET=<different random refresh-token secret, at least 32 characters>
 JWT_ALGORITHM=HS256
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES=15
 JWT_REFRESH_TOKEN_EXPIRE_DAYS=7
 ```
 
-Only `JWT_SECRET` is required. The other JWT settings use the defaults shown above when omitted.
+`JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` are required, must be different, and should be randomly generated rather than human-chosen phrases. The other JWT settings use the defaults shown above when omitted.
 
 ### Windows PowerShell
 

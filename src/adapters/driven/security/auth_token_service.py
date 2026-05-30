@@ -155,10 +155,11 @@ def create_token(data: TokenInput, token_type: TokenType = _ACCESS) -> str:
     """
     config = load_jwt_config()
     payload = _build_payload(data, token_type)
+    secret = _secret_for_token_type(config.access_secret, config.refresh_secret, token_type)
 
     return jwt.encode(
         asdict(payload),
-        config.secret,
+        secret,
         algorithm=config.algorithm,
     )
 
@@ -193,11 +194,12 @@ def decode_token(
 
     """
     config = load_jwt_config()
+    secret = _secret_for_token_type(config.access_secret, config.refresh_secret, expected_type)
 
     try:
         raw_payload = jwt.decode(
             token,
-            config.secret,
+            secret,
             algorithms=[config.algorithm],
         )
     except JWTError:
@@ -211,6 +213,13 @@ def decode_token(
         return None
 
     return payload
+
+
+def _secret_for_token_type(access_secret: str, refresh_secret: str, token_type: TokenType) -> str:
+    """Return the signing secret for a token type."""
+    if token_type == _ACCESS:
+        return access_secret
+    return refresh_secret
 
 
 def get_user_id_from_token(token: str) -> int | None:
