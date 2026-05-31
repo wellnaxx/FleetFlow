@@ -6,6 +6,12 @@ from src.adapters.driven.security.config import JWTConfig, load_jwt_config
 
 
 class JWTConfigShould(unittest.TestCase):
+    def setUp(self) -> None:
+        load_jwt_config.cache_clear()
+
+    def tearDown(self) -> None:
+        load_jwt_config.cache_clear()
+
     def test_loads_separate_access_and_refresh_secrets(self) -> None:
         env = {
             "JWT_ACCESS_SECRET": "a" * 32,

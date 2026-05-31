@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from functools import lru_cache
 
 from dotenv import load_dotenv
 
@@ -20,12 +21,12 @@ def _load_secret(name: str) -> str:
         raise RuntimeError(f"{name} is required. Generate it with a cryptographically random source.")
     if len(secret) < 32:
         raise RuntimeError(
-            f"{name} must be at least 32 characters long and randomly generated, "
-            "not a human-chosen phrase."
+            f"{name} must be at least 32 characters long and randomly generated, not a human-chosen phrase."
         )
     return secret
 
 
+@lru_cache(maxsize=1)
 def load_jwt_config() -> JWTConfig:
     load_dotenv()
 

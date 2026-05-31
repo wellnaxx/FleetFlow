@@ -1,3 +1,4 @@
+import os
 import unittest
 from datetime import UTC, datetime
 from types import SimpleNamespace
@@ -13,9 +14,13 @@ from src.adapters.driven.security.auth_token_service import (
     create_token,
     decode_token,
 )
+from src.adapters.driven.security.config import load_jwt_config
 
 
 class TokenPayloadShould(unittest.TestCase):
+    def tearDown(self) -> None:
+        load_jwt_config.cache_clear()
+
     def valid_payload(self) -> dict[str, object]:
         return {
             "sub": "42",
@@ -192,3 +197,32 @@ class TokenPayloadShould(unittest.TestCase):
         assert refresh_payload is not None
         self.assertEqual(access_payload.type, "access")
         self.assertEqual(refresh_payload.type, "refresh")
+
+    def test_jwt_config_is_cached_across_token_creation_and_decoding(self) -> None:
+        load_jwt_config.cache_clear()
+        env = {
+            "JWT_ACCESS_SECRET": "a" * 32,
+            "JWT_REFRESH_SECRET": "b" * 32,
+            "JWT_ALGORITHM": "HS256",
+            "JWT_ACCESS_TOKEN_EXPIRE_MINUTES": "15",
+            "JWT_REFRESH_TOKEN_EXPIRE_DAYS": "7",
+        }
+        token_data: TokenInput = {
+            "user_id": 42,
+            "username": "alice",
+            "role": "EMPLOYEE",
+            "token_version": 1,
+        }
+
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch("src.adapters.driven.security.config.load_dotenv") as load_dotenv_mock,
+        ):
+            access_token = create_access_token(token_data)
+            refresh_token = create_refresh_token(token_data)
+
+            self.assertIsNotNone(decode_token(access_token, expected_type="access"))
+            self.assertIsNotNone(decode_token(refresh_token, expected_type="refresh"))
+            self.assertIsNotNone(decode_token(access_token, expected_type="access"))
+
+        load_dotenv_mock.assert_called_once_with()
