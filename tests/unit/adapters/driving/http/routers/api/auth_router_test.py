@@ -1,4 +1,6 @@
 import unittest
+from collections.abc import Generator
+from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
 from fastapi import FastAPI
@@ -8,7 +10,10 @@ from src.adapters.driven.persistence.database.errors import DatabaseError
 from src.adapters.driven.security.auth_token_service import TokenPayload
 from src.adapters.driving.http.dependencies.auth import AuthenticatedPrincipal
 from src.adapters.driving.http.routers.api import auth_router as auth_router_module
-from src.adapters.driving.http.routers.api.auth_router import auth_router
+from src.adapters.driving.http.routers.api.auth_router import (
+    _token_response,  # pyright: ignore[reportPrivateUsage]
+    auth_router,
+)
 from src.application.exceptions.application_errors import AuthenticationError, ValidationError
 from src.application.models.user_record import UserRecord
 from src.application.services.authorization_service import AuthorizationService
@@ -59,6 +64,22 @@ class AuthRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json()["detail"], "Invalid username or password.")
+
+    def test_login_returns_bad_request_for_invalid_persisted_role_before_token_creation(self) -> None:
+        auth_service = MagicMock()
+        auth_service.authenticate.return_value = (self._record(role="OWNER"), object())
+        self.app.dependency_overrides[auth_router_module.get_auth_service] = lambda: auth_service
+
+        with self._patched_tokens() as token_mocks:
+            response = self.client.post(
+                "/auth/login",
+                data={"username": "alice", "password": "Secret123!"},
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["detail"], "Invalid persisted user role.")
+        token_mocks["create_access_token"].assert_not_called()
+        token_mocks["create_refresh_token"].assert_not_called()
 
     def test_register_returns_created_user(self) -> None:
         use_case = MagicMock()
@@ -233,6 +254,33 @@ class AuthRouterShould(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json()["detail"], "Token revoked.")
 
+    def test_refresh_rejects_invalid_persisted_role_without_issuing_tokens(self) -> None:
+        user_repo = MagicMock()
+        principal = self._principal(record=self._record(role="OWNER"))
+        self.app.dependency_overrides[auth_router_module.get_user_repository] = lambda: user_repo
+
+        with (
+            patch.object(auth_router_module, "principal_from_token", return_value=principal),
+            self._patched_tokens() as token_mocks,
+        ):
+            response = self.client.post("/auth/refresh", json={"refresh_token": "refresh-token"})
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["detail"], "Invalid or expired refresh token.")
+        token_mocks["create_access_token"].assert_not_called()
+        token_mocks["create_refresh_token"].assert_not_called()
+
+    def test_token_response_serializes_valid_role_enum_value(self) -> None:
+        record = self._record(role=Role.EMPLOYEE.value)
+
+        with self._patched_tokens() as token_mocks:
+            response = _token_response(record)  # pyright: ignore[reportPrivateUsage]
+
+        self.assertEqual(response.access_token, "access-token")
+        token_input = token_mocks["create_access_token"].call_args.args[0]
+        self.assertEqual(token_input["role"], Role.EMPLOYEE.value)
+        token_mocks["create_refresh_token"].assert_called_once_with(token_input)
+
     def test_logout_increments_token_version(self) -> None:
         principal = self._principal()
         user_repo = MagicMock()
@@ -279,15 +327,17 @@ class AuthRouterShould(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["username"], "alice")
 
-    def _patched_tokens(self):
-        return patch.multiple(
-            auth_router_module,
-            create_access_token=MagicMock(return_value="access-token"),
-            create_refresh_token=MagicMock(return_value="refresh-token"),
-        )
+    @contextmanager
+    def _patched_tokens(self) -> Generator[dict[str, MagicMock]]:
+        token_mocks = {
+            "create_access_token": MagicMock(return_value="access-token"),
+            "create_refresh_token": MagicMock(return_value="refresh-token"),
+        }
+        with patch.multiple(auth_router_module, **token_mocks):
+            yield token_mocks
 
-    def _principal(self) -> AuthenticatedPrincipal:
-        record = self._record()
+    def _principal(self, record: UserRecord | None = None) -> AuthenticatedPrincipal:
+        record = record or self._record()
         user = Manager(record.user_id, record.name, record.email, record.phone_number)
         return AuthenticatedPrincipal(
             record=record,

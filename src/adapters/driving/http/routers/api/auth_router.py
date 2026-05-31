@@ -37,6 +37,7 @@ from src.application.services.auth_service import AuthService
 from src.application.use_cases.auth.change_password import ChangePasswordUseCase
 from src.application.use_cases.auth.register_user import RegisterUserUseCase
 from src.composition.runtime import get_auth_service, get_user_repository
+from src.domain.enums.auth import Role
 from src.domain.exceptions import DomainValidationError
 from src.ports.output.user_repository import UserRepositoryPort
 
@@ -83,11 +84,19 @@ def _token_response(record: UserRecord) -> TokenResponse:
 
     Returns:
         A token response containing a new access token and refresh token.
+
+    Raises:
+        ValidationError: If the persisted role cannot be serialized safely.
     """
+    try:
+        role = Role(record.role)
+    except ValueError as exc:
+        raise ValidationError("Invalid persisted user role.") from exc
+
     token_input: TokenInput = {
         "user_id": record.user_id,
         "username": record.username,
-        "role": record.role,
+        "role": role.value,
         "token_version": record.token_version,
     }
     return TokenResponse(
@@ -182,6 +191,7 @@ def login(
     """
     try:
         record, _ = auth_service.authenticate(form_data.username, form_data.password)
+        return _token_response(record)
     except AuthenticationError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -196,8 +206,6 @@ def login(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
         ) from exc
-
-    return _token_response(record)
 
 
 @auth_router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
@@ -297,8 +305,14 @@ def refresh_token(
         HTTPException: Raised with:
             * 401 - Invalid, expired, revoked, or userless refresh token.
     """
-    principal = principal_from_token(data.refresh_token, user_repository, expected_type="refresh")
-    return _token_response(principal.record)
+    try:
+        principal = principal_from_token(data.refresh_token, user_repository, expected_type="refresh")
+        return _token_response(principal.record)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token.",
+        ) from exc
 
 
 @auth_router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
