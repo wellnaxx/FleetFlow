@@ -221,6 +221,7 @@ def list_in_progress_routes(
             * 403 - Insufficient permissions.
             * 500 - Database operation failure.
     """
+    # Domain route timing currently uses naive local datetimes.
     now = datetime.now()
     active_routes = use_case.execute(now=now)
     return [_route_in_progress_response(route, position) for route, position in active_routes]
@@ -320,6 +321,7 @@ def assign_truck_to_route(
             * 409 - Truck conflicts with route assignment rules.
             * 500 - Database operation failure.
     """
+    # Domain route timing currently uses naive local datetimes.
     now = datetime.now()
     result = use_case.execute(truck_id=request.truck_id, route_id=route_id, now=now)
     return AssignTruckToRouteResponse(route_id=result.route_id, truck_id=result.truck_id)
