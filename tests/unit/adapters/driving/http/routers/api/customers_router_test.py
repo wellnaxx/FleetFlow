@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from src.adapters.driving.http.exception_handlers import register_exception_handlers
 from src.adapters.driving.http.routers.api import customers_router as customers_router_module
 from src.adapters.driving.http.routers.api.customers_router import customers_router
 from src.application.exceptions.application_errors import ValidationError
@@ -16,6 +17,7 @@ class CustomersRouterShould(unittest.TestCase):
     def setUp(self) -> None:
         self.app = FastAPI()
         self.app.include_router(customers_router)
+        register_exception_handlers(self.app)
         self.client = TestClient(self.app)
 
     def tearDown(self) -> None:

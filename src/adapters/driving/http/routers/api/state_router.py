@@ -8,9 +8,7 @@ from src.adapters.driving.http.dependencies.use_cases import (
     get_save_world_state_use_case,
 )
 from src.adapters.driving.http.schemas.state import WorldStatePathRequest, WorldStatePathResponse
-from src.application.exceptions.application_errors import ValidationError
 from src.application.exceptions.world_state_errors import (
-    WorldStateCorruptionError,
     WorldStateFileNotFoundError,
     WorldStatePersistenceError,
     WorldStateRuntimeSwapError,
@@ -44,10 +42,6 @@ def save_world(
     try:
         path = use_case.execute(request.path)
         return WorldStatePathResponse(path=path, message="World state saved.")
-    except PermissionError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    except ValidationError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except (DatabaseError, WorldStatePersistenceError) as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -79,20 +73,11 @@ def load_world(
     try:
         path = use_case.execute(request.path)
         return WorldStatePathResponse(path=path, message="World state loaded.")
-    except PermissionError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except WorldStateFileNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="World state snapshot not found.",
         ) from exc
-    except WorldStateCorruptionError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="World state snapshot is malformed.",
-        ) from exc
-    except ValidationError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except (DatabaseError, WorldStatePersistenceError, WorldStateRuntimeSwapError) as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

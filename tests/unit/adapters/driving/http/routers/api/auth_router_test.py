@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from src.adapters.driven.persistence.database.errors import DatabaseError
 from src.adapters.driven.security.auth_token_service import TokenPayload
 from src.adapters.driving.http.dependencies.auth import AuthenticatedPrincipal
+from src.adapters.driving.http.exception_handlers import register_exception_handlers
 from src.adapters.driving.http.routers.api import auth_router as auth_router_module
 from src.adapters.driving.http.routers.api.auth_router import (
     _token_response,  # pyright: ignore[reportPrivateUsage]
@@ -25,6 +26,7 @@ class AuthRouterShould(unittest.TestCase):
     def setUp(self) -> None:
         self.app = FastAPI()
         self.app.include_router(auth_router)
+        register_exception_handlers(self.app)
         self.client = TestClient(self.app)
 
     def tearDown(self) -> None:

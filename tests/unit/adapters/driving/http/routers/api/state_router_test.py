@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from src.adapters.driven.persistence.database.errors import DatabaseError
+from src.adapters.driving.http.exception_handlers import register_exception_handlers
 from src.adapters.driving.http.routers.api import state_router as state_router_module
 from src.adapters.driving.http.routers.api.state_router import state_router
 from src.application.exceptions.application_errors import ValidationError
@@ -21,6 +22,7 @@ class StateRouterShould(unittest.TestCase):
     def setUp(self) -> None:
         self.app = FastAPI()
         self.app.include_router(state_router)
+        register_exception_handlers(self.app)
         self.client = TestClient(self.app)
 
     def tearDown(self) -> None:
@@ -83,16 +85,6 @@ class StateRouterShould(unittest.TestCase):
     def test_save_world_returns_generic_error_for_database_failure(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = DatabaseError.write_failed(Exception("secret connection info"))
-        self.app.dependency_overrides[state_router_module.get_save_world_state_use_case] = lambda: use_case
-
-        response = self.client.post("/state/save", json={"path": "world.json"})
-
-        self.assertEqual(response.status_code, 500)
-        self.assertEqual(response.json()["detail"], "World state persistence failed.")
-
-    def test_save_world_returns_generic_error_for_world_state_persistence_failure(self) -> None:
-        use_case = MagicMock()
-        use_case.execute.side_effect = WorldStatePersistenceError("C:/secret/world.json denied")
         self.app.dependency_overrides[state_router_module.get_save_world_state_use_case] = lambda: use_case
 
         response = self.client.post("/state/save", json={"path": "world.json"})

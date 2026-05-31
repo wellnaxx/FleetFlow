@@ -3,7 +3,6 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from src.adapters.driven.persistence.database.errors import DatabaseError
 from src.adapters.driving.http.dependencies.use_cases import (
     get_create_package_use_case,
     get_find_suitable_routes_for_package_use_case,
@@ -19,7 +18,7 @@ from src.adapters.driving.http.schemas.packages import (
     PackageResponse,
     PackageSuitableRouteResponse,
 )
-from src.application.exceptions.application_errors import ConflictError, NotFoundError, ValidationError
+from src.application.exceptions.application_errors import ConflictError
 from src.application.use_cases.packages.create_package import CreatePackageUseCase
 from src.application.use_cases.packages.remove_package import RemovePackageUseCase
 from src.application.use_cases.packages.view_all_packages import ViewAllPackagesUseCase
@@ -30,7 +29,7 @@ from src.application.use_cases.routes.find_suitable_routes_for_package import (
     FindSuitableRoutesForPackageUseCase,
 )
 from src.domain.entities.delivery_package import DeliveryPackage
-from src.domain.exceptions import DomainConflictError, DomainValidationError, EntityNotFoundError
+from src.domain.exceptions import DomainConflictError, EntityNotFoundError
 
 packages_router = APIRouter(prefix="/packages", tags=["packages"])
 
@@ -77,18 +76,9 @@ def _package_page_response(
     include_total: bool,
 ) -> PackagePageResponse:
     """Build one paginated package response from a package listing use case."""
-    try:
-        result: PageResult[DeliveryPackage] = use_case.execute(
-            PageQuery(limit=limit, offset=offset, include_total=include_total)
-        )
-    except PermissionError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
-    except DatabaseError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
-        ) from exc
-    except ValidationError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    result: PageResult[DeliveryPackage] = use_case.execute(
+        PageQuery(limit=limit, offset=offset, include_total=include_total)
+    )
 
     items = [mapper(package) for package in result.items]
     return PackagePageResponse(
@@ -130,14 +120,6 @@ def create_package(
             email=request.customer_email or "",
             phone=request.customer_phone_number or "",
         )
-    except PermissionError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    except DatabaseError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
-        ) from exc
-    except DomainValidationError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except (ConflictError, DomainConflictError, EntityNotFoundError) as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return _package_response(package)
@@ -217,17 +199,8 @@ def get_package(
             * 404 - Package not found.
             * 500 - Database operation failure.
     """
-    try:
-        package = use_case.execute(package_id=package_id)
-        return _package_response(package)
-    except PermissionError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    except NotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except DatabaseError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
-        ) from exc
+    package = use_case.execute(package_id=package_id)
+    return _package_response(package)
 
 
 @packages_router.get("/{package_id}/suitable-routes", status_code=status.HTTP_200_OK)
@@ -252,27 +225,18 @@ def find_suitable_routes_for_package(
             * 404 - Package not found.
             * 500 - Database operation failure.
     """
-    try:
-        results = use_case.execute(package_id=package_id)
-        return [
-            PackageSuitableRouteResponse(
-                route_id=result.route_id,
-                start_location=str(result.start_location),
-                end_location=str(result.end_location),
-                eta=result.eta,
-                capacity_left=result.capacity_left,
-                end_city=str(result.end_city),
-            )
-            for result in results
-        ]
-    except PermissionError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    except NotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except DatabaseError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
-        ) from exc
+    results = use_case.execute(package_id=package_id)
+    return [
+        PackageSuitableRouteResponse(
+            route_id=result.route_id,
+            start_location=str(result.start_location),
+            end_location=str(result.end_location),
+            eta=result.eta,
+            capacity_left=result.capacity_left,
+            end_city=str(result.end_city),
+        )
+        for result in results
+    ]
 
 
 @packages_router.delete("/{package_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -297,13 +261,5 @@ def delete_package(
     """
     try:
         use_case.execute(package_id=package_id)
-    except PermissionError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    except NotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except (DomainConflictError, EntityNotFoundError) as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    except DatabaseError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
-        ) from exc

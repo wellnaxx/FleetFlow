@@ -3,7 +3,6 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, status
 
-from src.adapters.driven.persistence.database.errors import DatabaseError
 from src.adapters.driven.security.auth_token_service import (
     TokenInput,
     create_access_token,
@@ -28,8 +27,6 @@ from src.adapters.driving.http.schemas.auth import (
 )
 from src.application.exceptions.application_errors import (
     AuthenticationError,
-    ConflictError,
-    NotFoundError,
     ValidationError,
 )
 from src.application.models.user_record import UserRecord
@@ -38,7 +35,6 @@ from src.application.use_cases.auth.change_password import ChangePasswordUseCase
 from src.application.use_cases.auth.register_user import RegisterUserUseCase
 from src.composition.runtime import get_auth_service, get_user_repository
 from src.domain.enums.auth import Role
-from src.domain.exceptions import DomainValidationError
 from src.ports.output.user_repository import UserRepositoryPort
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
@@ -146,25 +142,14 @@ def register(
             * 409 - Username already exists.
             * 500 - Database operation failure.
     """
-    try:
-        record = use_case.execute(
-            username=request.username,
-            role=request.role,
-            name=request.name,
-            email=request.email or "",
-            phone_number=request.phone_number or "",
-            password=request.password,
-        )
-    except PermissionError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    except (ValidationError, DomainValidationError) as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    except ConflictError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    except DatabaseError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
-        ) from exc
+    record = use_case.execute(
+        username=request.username,
+        role=request.role,
+        name=request.name,
+        email=request.email or "",
+        phone_number=request.phone_number or "",
+        password=request.password,
+    )
 
     return _current_user_response(record)
 
@@ -197,15 +182,6 @@ def login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password.",
         ) from exc
-    except ValidationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc),
-        ) from exc
-    except DatabaseError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
-        ) from exc
 
 
 @auth_router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
@@ -237,18 +213,8 @@ def change_password(
             new_password=request.new_password,
             old_password=request.current_password,
         )
-    except PermissionError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except AuthenticationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    except NotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except ValidationError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    except DatabaseError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
-        ) from exc
 
 
 @auth_router.post("/users/{username}/reset-password", status_code=status.HTTP_204_NO_CONTENT)
@@ -274,18 +240,7 @@ def reset_password(
             * 404 - Target user does not exist.
             * 500 - Database operation failure.
     """
-    try:
-        use_case.execute(username=username, new_password=request.new_password)
-    except PermissionError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    except NotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except ValidationError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    except DatabaseError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
-        ) from exc
+    use_case.execute(username=username, new_password=request.new_password)
 
 
 @auth_router.post("/refresh", status_code=status.HTTP_200_OK)
@@ -334,12 +289,7 @@ def logout(
             * 401 - Invalid, expired, revoked, or userless access token.
             * 500 - Database operation failure.
     """
-    try:
-        user_repository.increment_token_version_by_id(principal.record.user_id)
-    except DatabaseError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
-        ) from exc
+    user_repository.increment_token_version_by_id(principal.record.user_id)
 
 
 @auth_router.get("/me", status_code=status.HTTP_200_OK)

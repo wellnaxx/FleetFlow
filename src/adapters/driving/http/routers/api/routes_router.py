@@ -3,7 +3,6 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from src.adapters.driven.persistence.database.errors import DatabaseError
 from src.adapters.driving.http.dependencies.use_cases import (
     get_assign_packages_to_route_use_case,
     get_assign_truck_to_route_use_case,
@@ -29,7 +28,6 @@ from src.adapters.driving.http.schemas.routes import (
     RouteResponse,
 )
 from src.adapters.driving.http.schemas.trucks import TruckResponse
-from src.application.exceptions.application_errors import ConflictError, NotFoundError, ValidationError
 from src.application.results.assign_packages_to_route_result import AssignPackagesToRouteResult
 from src.application.use_cases.pagination import PageQuery
 from src.application.use_cases.routes.assign_packages_to_route import AssignPackagesToRouteUseCase
@@ -41,7 +39,6 @@ from src.application.use_cases.routes.view_all_routes import ViewAllRoutesUseCas
 from src.application.use_cases.routes.view_route import ViewRouteUseCase
 from src.application.use_cases.routes.view_routes_in_progress import ViewRoutesInProgressUseCase
 from src.domain.entities.delivery_route import DeliveryRoute, RoutePosition
-from src.domain.exceptions import DomainValidationError
 
 routes_router = APIRouter(prefix="/routes", tags=["routes"])
 
@@ -165,21 +162,11 @@ def create_route(
             * 403 - Insufficient permissions.
             * 500 - Database operation failure.
     """
-    try:
-        route = use_case.execute(
-            locations=request.locations,
-            departure_time=request.departure_time,
-        )
-        return _route_response(route)
-
-    except PermissionError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    except DatabaseError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
-        ) from exc
-    except DomainValidationError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    route = use_case.execute(
+        locations=request.locations,
+        departure_time=request.departure_time,
+    )
+    return _route_response(route)
 
 
 @routes_router.get("/", status_code=status.HTTP_200_OK)
@@ -206,24 +193,15 @@ def list_routes(
             * 403 - Insufficient permissions.
             * 500 - Database operation failure.
     """
-    try:
-        result = use_case.execute(PageQuery(limit=limit, offset=offset, include_total=include_total))
-        items = [_route_response(route) for route in result.items]
-        return RoutePageResponse(
-            items=items,
-            total=result.total,
-            count=result.count,
-            limit=result.limit or limit,
-            offset=result.offset,
-        )
-    except PermissionError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    except DatabaseError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
-        ) from exc
-    except ValidationError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    result = use_case.execute(PageQuery(limit=limit, offset=offset, include_total=include_total))
+    items = [_route_response(route) for route in result.items]
+    return RoutePageResponse(
+        items=items,
+        total=result.total,
+        count=result.count,
+        limit=result.limit or limit,
+        offset=result.offset,
+    )
 
 
 @routes_router.get("/in-progress", status_code=status.HTTP_200_OK)
@@ -243,16 +221,9 @@ def list_in_progress_routes(
             * 403 - Insufficient permissions.
             * 500 - Database operation failure.
     """
-    try:
-        now = datetime.now()
-        active_routes = use_case.execute(now=now)
-        return [_route_in_progress_response(route, position) for route, position in active_routes]
-    except PermissionError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    except DatabaseError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
-        ) from exc
+    now = datetime.now()
+    active_routes = use_case.execute(now=now)
+    return [_route_in_progress_response(route, position) for route, position in active_routes]
 
 
 @routes_router.get("/{route_id}", status_code=status.HTTP_200_OK)
@@ -274,19 +245,8 @@ def get_route(
             * 404 - Route not found.
             * 500 - Database operation failure.
     """
-    try:
-        route = use_case.execute(route_id=route_id)
-        return _route_response(route)
-    except PermissionError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    except DatabaseError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
-        ) from exc
-    except NotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-
-
+    route = use_case.execute(route_id=route_id)
+    return _route_response(route)
 
 @routes_router.delete("/{route_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_route(
@@ -307,16 +267,7 @@ def delete_route(
             * 404 - Route not found.
             * 500 - Database operation failure.
     """
-    try:
-        use_case.execute(route_id=route_id)
-    except PermissionError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    except DatabaseError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
-        ) from exc
-    except NotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    use_case.execute(route_id=route_id)
 
 
 @routes_router.patch("/{route_id}/packages", status_code=status.HTTP_200_OK)
@@ -341,17 +292,8 @@ def assign_packages_to_route(
             * 404 - Route not found.
             * 500 - Database operation failure.
     """
-    try:
-        result = use_case.execute(route_id=route_id, package_ids=request.package_ids)
-        return _assign_packages_response(result)
-    except PermissionError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    except DatabaseError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
-        ) from exc
-    except NotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    result = use_case.execute(route_id=route_id, package_ids=request.package_ids)
+    return _assign_packages_response(result)
 
 
 @routes_router.patch("/{route_id}/truck", status_code=status.HTTP_200_OK)
@@ -377,20 +319,9 @@ def assign_truck_to_route(
             * 409 - Truck conflicts with route assignment rules.
             * 500 - Database operation failure.
     """
-    try:
-        now = datetime.now()
-        result = use_case.execute(truck_id=request.truck_id, route_id=route_id, now=now)
-        return AssignTruckToRouteResponse(route_id=result.route_id, truck_id=result.truck_id)
-    except PermissionError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    except DatabaseError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
-        ) from exc
-    except NotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except ConflictError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    now = datetime.now()
+    result = use_case.execute(truck_id=request.truck_id, route_id=route_id, now=now)
+    return AssignTruckToRouteResponse(route_id=result.route_id, truck_id=result.truck_id)
 
 
 @routes_router.get("/{route_id}/suitable-trucks", status_code=status.HTTP_200_OK)
@@ -415,14 +346,5 @@ def find_suitable_trucks_for_route(
             * 404 - Route not found.
             * 500 - Database operation failure.
     """
-    try:
-        trucks = use_case.execute(route_id=route_id)
-        return [truck_response(truck) for truck in trucks]
-    except PermissionError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    except DatabaseError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
-        ) from exc
-    except NotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    trucks = use_case.execute(route_id=route_id)
+    return [truck_response(truck) for truck in trucks]

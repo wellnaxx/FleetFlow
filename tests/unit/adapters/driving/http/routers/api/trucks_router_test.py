@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from src.adapters.driven.persistence.database.errors import DatabaseError
+from src.adapters.driving.http.exception_handlers import register_exception_handlers
 from src.adapters.driving.http.routers.api import trucks_router as trucks_router_module
 from src.adapters.driving.http.routers.api.trucks_router import trucks_router
 from src.domain.entities.delivery_route import DeliveryRoute
@@ -17,6 +18,7 @@ class TrucksRouterShould(unittest.TestCase):
     def setUp(self) -> None:
         self.app = FastAPI()
         self.app.include_router(trucks_router)
+        register_exception_handlers(self.app)
         self.client = TestClient(self.app)
 
     def tearDown(self) -> None:
