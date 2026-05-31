@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from typing import Annotated
+from typing import Annotated, Protocol
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -65,7 +65,12 @@ def _package_response(package: DeliveryPackage) -> PackageResponse:
     )
 
 
-type PackagePageUseCase = ViewAllPackagesUseCase | ViewUnassignedPackagesUseCase
+class PackagePageUseCase(Protocol):
+    """Use case contract for package listing endpoints."""
+
+    def execute(self, query: PageQuery) -> PageResult[DeliveryPackage]:
+        """Return a package page for the given query."""
+        ...
 
 
 def _package_page_response(
