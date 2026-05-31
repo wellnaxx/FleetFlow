@@ -7,6 +7,7 @@ from src.adapters.driven.security.auth_token_service import TokenPayload
 from src.adapters.driving.http.dependencies import auth as auth_module
 from src.adapters.driving.http.dependencies.auth import (
     _runtime_user_from_record,  # pyright: ignore[reportPrivateUsage]
+    get_optional_user,
     principal_from_token,
 )
 from src.application.models.user_record import UserRecord
@@ -85,6 +86,39 @@ class HttpAuthDependencyShould(unittest.TestCase):
 
         self.assertEqual(ctx.exception.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(ctx.exception.detail, "Invalid or expired token.")
+
+    def test_get_optional_user_returns_none_when_no_token_is_supplied(self) -> None:
+        user_repo = MagicMock()
+
+        with patch.object(auth_module, "principal_from_token") as principal_from_token_mock:
+            principal = get_optional_user(None, user_repo)
+
+        self.assertIsNone(principal)
+        principal_from_token_mock.assert_not_called()
+
+    def test_get_optional_user_returns_principal_for_valid_supplied_token(self) -> None:
+        user_repo = MagicMock()
+        expected_principal = object()
+
+        with patch.object(
+            auth_module, "principal_from_token", return_value=expected_principal
+        ) as principal_from_token_mock:
+            principal = get_optional_user("access-token", user_repo)
+
+        self.assertIs(principal, expected_principal)
+        principal_from_token_mock.assert_called_once_with("access-token", user_repo)
+
+    def test_get_optional_user_reraises_unauthorized_for_invalid_supplied_token(self) -> None:
+        user_repo = MagicMock()
+        unauthorized = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token revoked.")
+
+        with (
+            patch.object(auth_module, "principal_from_token", side_effect=unauthorized),
+            self.assertRaises(HTTPException) as ctx,
+        ):
+            get_optional_user("revoked-token", user_repo)
+
+        self.assertIs(ctx.exception, unauthorized)
 
     def _record(self, *, role: str) -> UserRecord:
         return UserRecord(

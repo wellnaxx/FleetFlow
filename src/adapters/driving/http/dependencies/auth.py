@@ -25,7 +25,8 @@ class AuthenticatedPrincipal:
 
 
 def _runtime_user_from_record(record: UserRecord) -> User:
-    """Convert a UserRecord from the repository into a runtime User entity for authentication and authorization purposes.
+    """Convert a UserRecord from the repository into a runtime User entity
+    for authentication and authorization purposes.
 
     Args:
         record: The UserRecord retrieved from the user repository.
@@ -36,7 +37,7 @@ def _runtime_user_from_record(record: UserRecord) -> User:
     Raises:
         HTTPException: Raised with:
             * 401 - Invalid or unsupported user role.
-    """  # noqa: E501
+    """
     try:
         return create_runtime_user_from_record(record)
     except ValidationError as exc:
@@ -125,11 +126,14 @@ def get_optional_user(
         user_repo: The user repository to retrieve user information.
 
     Returns:
-        An AuthenticatedPrincipal representing the currently authenticated user, or None if no valid token is provided
-    """  # noqa: E501
+        An AuthenticatedPrincipal representing the currently authenticated user,
+            or None if no valid token is provided
+
+    Raises:
+        HTTPException: Raised with:
+            * 401 - Invalid, expired, revoked, mismatched, or userless token.
+    """
     if not token:
         return None
-    try:
-        return principal_from_token(token, user_repo)
-    except HTTPException:
-        return None
+
+    return principal_from_token(token, user_repo)
