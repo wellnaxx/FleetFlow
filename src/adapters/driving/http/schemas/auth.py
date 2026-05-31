@@ -3,18 +3,6 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from src.domain.enums.auth import Role
 
 
-class LoginRequest(BaseModel):
-    """Request body for user login."""
-
-    username: str = Field(min_length=1, description="Username of the user.")
-    password: str = Field(
-        min_length=8,
-        max_length=128,
-        repr=False,
-        description="Password of the user.",
-    )
-
-
 class RegisterUserRequest(BaseModel):
     """Request body for user registration."""
 

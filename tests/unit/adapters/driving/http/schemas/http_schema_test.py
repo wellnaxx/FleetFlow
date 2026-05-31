@@ -7,7 +7,6 @@ from pydantic import ValidationError
 from src.adapters.driven.persistence.json.config import JSONConfig, set_json_config
 from src.adapters.driving.http.schemas.auth import (
     ChangeOwnPasswordRequest,
-    LoginRequest,
     RefreshRequest,
     RegisterUserRequest,
     ResetUserPasswordRequest,
@@ -47,7 +46,6 @@ class HttpSchemasShould(unittest.TestCase):
         self.assertNotIn("ResetPass123!", repr(reset))
 
     def test_auth_token_and_password_fields_hide_sensitive_values_from_repr(self) -> None:
-        login = LoginRequest(username="alice", password="LoginPass123!")
         register = RegisterUserRequest.model_validate(
             {
                 "username": "alice",
@@ -63,7 +61,6 @@ class HttpSchemasShould(unittest.TestCase):
             token_type="bearer",
         )
 
-        self.assertNotIn("LoginPass123!", repr(login))
         self.assertNotIn("RegisterPass123!", repr(register))
         self.assertNotIn("refresh-token", repr(refresh))
         self.assertNotIn("access-token", repr(token_response))

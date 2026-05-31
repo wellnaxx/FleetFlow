@@ -222,28 +222,6 @@ def _secret_for_token_type(access_secret: str, refresh_secret: str, token_type: 
     return refresh_secret
 
 
-def get_user_id_from_token(token: str) -> int | None:
-    """
-    Extract user ID from a token (convenience function).
-
-    Args:
-        token: JWT token string
-
-    Returns:
-        int: User ID if token is valid
-        None: If token is invalid
-    """
-    payload = decode_token(token)
-
-    if not payload:
-        return None
-
-    try:
-        return int(payload.sub) if payload.sub else None
-    except (ValueError, TypeError):
-        return None
-
-
 def create_access_token(user_data: TokenInput) -> str:
     """
     Create an access token (short-lived).
