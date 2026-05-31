@@ -116,8 +116,8 @@ def _current_user_response(record: UserRecord) -> CurrentUserResponse:
         username=record.username,
         role=record.role,
         name=record.name,
-        email=record.email,
-        phone_number=record.phone_number,
+        email=record.email or None,
+        phone_number=record.phone_number or None,
     )
 
 

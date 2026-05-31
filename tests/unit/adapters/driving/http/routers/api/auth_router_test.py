@@ -320,14 +320,36 @@ class AuthRouterShould(unittest.TestCase):
         self.assertEqual(response.json()["detail"], "Database operation failed.")
         user_repo.increment_token_version_by_id.assert_called_once_with(1)
 
-    def test_me_returns_current_user(self) -> None:
-        principal = self._principal()
+    def test_me_returns_null_for_absent_contact_fields(self) -> None:
+        principal = self._principal(
+            self._record(
+                email="",
+                phone_number="",
+            )
+        )
         self.app.dependency_overrides[auth_router_module.get_current_user] = lambda: principal
 
         response = self.client.get("/auth/me")
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["username"], "alice")
+        self.assertIsNone(response.json()["email"])
+        self.assertIsNone(response.json()["phone_number"])
+
+    def test_me_returns_populated_contact_fields(self) -> None:
+        principal = self._principal(
+            self._record(
+                email="alice@example.com",
+                phone_number="0412345678",
+            )
+        )
+        self.app.dependency_overrides[auth_router_module.get_current_user] = lambda: principal
+
+        response = self.client.get("/auth/me")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["email"], "alice@example.com")
+        self.assertEqual(response.json()["phone_number"], "0412345678")
 
     @contextmanager
     def _patched_tokens(self) -> Generator[dict[str, MagicMock]]:
@@ -354,6 +376,8 @@ class AuthRouterShould(unittest.TestCase):
         user_id: int = 1,
         username: str = "alice",
         role: str = Role.MANAGER.value,
+        email: str = "alice@example.com",
+        phone_number: str = "0412345678",
         token_version: int = 1,
     ) -> UserRecord:
         return UserRecord(
@@ -361,8 +385,8 @@ class AuthRouterShould(unittest.TestCase):
             username=username,
             role=role,
             name=username.title(),
-            email=f"{username}@example.com",
-            phone_number="0412345678",
+            email=email,
+            phone_number=phone_number,
             password="hash",
             token_version=token_version,
         )
