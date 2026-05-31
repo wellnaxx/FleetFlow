@@ -25,9 +25,7 @@ class CreateRouteUseCase_Should(unittest.TestCase):
         self.mock_routes.create.assert_called_once_with(locations=locations, departure_time=departure)
 
     def test_raises_when_fewer_than_two_locations(self) -> None:
-        self.mock_routes.create.side_effect = DomainValidationError(
-            "A route must have at least two locations."
-        )
+        self.mock_routes.create.side_effect = DomainValidationError("A route must have at least two locations.")
 
         with self.assertRaises(DomainValidationError) as ctx:
             self.use_case.execute([LocationCode("SYD")], None)
@@ -46,10 +44,9 @@ class CreateRouteUseCase_Should(unittest.TestCase):
 
         self.assertIn("Invalid location code: BAD", str(ctx.exception))
         self.mock_routes.create.assert_called_once_with(
-        locations=[LocationCode("SYD"), LocationCode("BAD"), LocationCode("MEL")],
-        departure_time=None,
-    )
-
+            locations=[LocationCode("SYD"), LocationCode("BAD"), LocationCode("MEL")],
+            departure_time=None,
+        )
 
     def test_delegates_locations_to_repository_for_validation_and_creation(self) -> None:
         fake_route = MagicMock()

@@ -248,6 +248,7 @@ def get_route(
     route = use_case.execute(route_id=route_id)
     return _route_response(route)
 
+
 @routes_router.delete("/{route_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_route(
     route_id: int, use_case: Annotated[RemoveRouteUseCase, Depends(get_remove_route_use_case)]

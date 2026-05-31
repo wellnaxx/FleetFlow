@@ -24,9 +24,7 @@ class CreateRouteUseCase(AuthorizedUseCase[DeliveryRoute]):
         self._routes = routes
 
     @requires(Permission.ROUTE_CREATE)
-    def execute(
-        self, locations: Sequence[str], departure_time: datetime | None
-    ) -> DeliveryRoute:
+    def execute(self, locations: Sequence[str], departure_time: datetime | None) -> DeliveryRoute:
         """Create and persist a delivery route.
 
         Args:

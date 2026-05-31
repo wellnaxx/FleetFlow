@@ -154,11 +154,7 @@ class InMemoryPackageRepository:
         Returns:
             A list of matching packages.
         """
-        return [
-            package
-            for package in self.list_all()
-            if package.route_id == route_id
-        ]
+        return [package for package in self.list_all() if package.route_id == route_id]
 
     def update_state(self, package: DeliveryPackage) -> None:
         """Persist mutable package runtime state.
