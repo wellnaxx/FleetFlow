@@ -89,6 +89,7 @@ class AuthService:
             raise ValidationError(str(exc)) from exc
 
     def _set_password(self, username: str, new_password: str) -> None:
+        """Set a new password through the repository's atomic revocation boundary."""
         if len(new_password) < 8:
             raise ValidationError("Password must be at least 8 characters.")
         try:

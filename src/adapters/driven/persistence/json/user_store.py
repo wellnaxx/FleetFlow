@@ -289,7 +289,11 @@ class JSONUserStore:
         return rec
 
     def update_password(self, username: str, new_hash: PasswordHash) -> None:
-        """Replace the persisted password hash for an existing user.
+        """Replace the persisted password hash and increment token version once.
+
+        The password update and token-version bump are this store method's
+        responsibility. Callers must not perform an additional token-version
+        increment after calling it.
 
         Args:
             username: Username whose password should be updated.

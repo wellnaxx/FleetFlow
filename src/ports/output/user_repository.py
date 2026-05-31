@@ -45,7 +45,13 @@ class UserRepositoryPort(Protocol):
         ...
 
     def update_password(self, username: str, new_hash: PasswordHash) -> None:
-        """Replace a user's stored password hash.
+        """Atomically replace a user's stored password hash and revoke existing tokens.
+
+        Implementations must increment the user's token version in the same
+        persistence operation that stores the new password hash. Callers must
+        not additionally call `increment_token_version_by_id` or
+        `increment_token_version_by_username` after this method; doing so would
+        advance the version twice and invalidate newly issued tokens.
 
         Args:
             username: Username whose password should change.

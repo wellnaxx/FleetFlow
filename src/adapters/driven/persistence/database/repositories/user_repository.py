@@ -136,7 +136,11 @@ class PostgresUserRepository:
         )
 
     def update_password(self, username: str, new_hash: PasswordHash) -> None:
-        """Replace a user's persisted password hash.
+        """Atomically replace a user's persisted password hash and revoke tokens.
+
+        The SQL query increments token_version while updating password_hash.
+        Callers must not perform an additional token-version increment after
+        calling this method.
 
         Args:
             username: Username whose password should change.

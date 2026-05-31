@@ -150,6 +150,7 @@ class PostgresUserRepository_Should(unittest.TestCase):
             QUERIES.users.update_password,
             (self.password_hash.serialize(), "alice"),
         )
+        self.assertIn("token_version = token_version + 1", QUERIES.users.update_password)
 
     @patch(f"{MODULE}.execute_write")
     @patch(f"{MODULE}.fetch_one", return_value=None)

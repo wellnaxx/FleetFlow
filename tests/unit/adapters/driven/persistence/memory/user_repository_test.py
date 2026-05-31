@@ -86,6 +86,17 @@ class InMemoryUserRepository_Should(unittest.TestCase):
         self.assertEqual(self.repo.get_by_username("alice").password, "SER(new)")  # type: ignore[reportOptionalMemberAccess]
         self.assertEqual(self.repo.get_by_username("alice").token_version, 2)  # type: ignore[reportOptionalMemberAccess]
 
+    def test_update_password_increments_token_version_once_per_update(self) -> None:
+        self.repo.create("Alice", "EMPLOYEE", "Alice", "", "", _ph("old"))  # type: ignore[reportArgumentType]
+
+        self.repo.update_password("alice", _ph("new1"))  # type: ignore[reportArgumentType]
+        self.repo.update_password("alice", _ph("new2"))  # type: ignore[reportArgumentType]
+
+        user = self.repo.get_by_username("alice")
+        assert user is not None
+        self.assertEqual(user.password, "SER(new2)")
+        self.assertEqual(user.token_version, 3)
+
     def test_get_by_id_returns_matching_user_or_none(self) -> None:
         alice = self.repo.create("alice", "EMPLOYEE", "Alice", "", "", _ph("pw1"))  # type: ignore[reportArgumentType]
         self.repo.create("bob", "MANAGER", "Bob", "", "", _ph("pw2"))  # type: ignore[reportArgumentType]

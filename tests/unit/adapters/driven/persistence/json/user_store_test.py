@@ -638,6 +638,25 @@ class JSONUserStore_Create_Get_Update_Should(unittest.TestCase):
         "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
     )
     @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
+    def test_update_password_increments_token_version_once_per_update(
+        self, exists: MagicMock, resolve: MagicMock
+    ) -> None:
+        with patch.object(JSONUserStore, "_atomic_write", return_value="C:/fake/users.json"):
+            store = JSONUserStore()
+            store.create("Alice", "EMPLOYEE", "Alice", "", "", _ph("old"))  # type: ignore[reportArgumentType]
+
+            store.update_password("alice", _ph("new1"))  # type: ignore[reportArgumentType]
+            store.update_password("alice", _ph("new2"))  # type: ignore[reportArgumentType]
+
+            user = store.get_by_username("alice")
+            assert user is not None
+            self.assertEqual(user.password, "SER(new2)")
+            self.assertEqual(user.token_version, 3)
+
+    @patch(
+        "src.adapters.driven.persistence.json.user_store.resolve_data_path", return_value="C:/fake/users.json"
+    )
+    @patch("src.adapters.driven.persistence.json.user_store.os.path.exists", return_value=False)
     def test_get_by_id_returns_matching_user_or_none(self, exists: MagicMock, resolve: MagicMock) -> None:
         with patch.object(JSONUserStore, "_atomic_write", return_value="C:/fake/users.json"):
             store = JSONUserStore()

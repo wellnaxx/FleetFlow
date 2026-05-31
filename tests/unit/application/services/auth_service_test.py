@@ -214,6 +214,8 @@ class AuthService_Should(unittest.TestCase):
         svc.change_password("alice", "Old123456", "New123456")
 
         store.update_password.assert_called_once_with("alice", hashed)
+        store.increment_token_version_by_id.assert_not_called()
+        store.increment_token_version_by_username.assert_not_called()
 
     @patch("src.application.services.auth_service.verify_password")
     @patch("src.application.services.auth_service.PasswordHash.parse", return_value=object())
@@ -265,6 +267,8 @@ class AuthService_Should(unittest.TestCase):
         # Long enough -> ok
         svc.reset_password("u", "LongEnough8!")
         store.update_password.assert_called_once_with("u", hashed)
+        store.increment_token_version_by_id.assert_not_called()
+        store.increment_token_version_by_username.assert_not_called()
 
     @patch("src.application.services.auth_service.hash_password")
     def test_reset_password_enforces_password_strength_policy(self, hash_password: MagicMock) -> None:
@@ -285,6 +289,7 @@ class AuthService_Should(unittest.TestCase):
         hash_password.side_effect = [
             SimpleNamespace(serialize=lambda: "HASH1"),
             SimpleNamespace(serialize=lambda: "HASH2"),
+            SimpleNamespace(serialize=lambda: "HASH3"),
         ]
         svc = AuthService(user_store=InMemoryUserRepository())
 
@@ -298,6 +303,7 @@ class AuthService_Should(unittest.TestCase):
         )
 
         self.assertEqual(rec.password, "HASH1")
+        self.assertEqual(rec.token_version, 1)
 
         with (
             patch("src.application.services.auth_service.PasswordHash.parse", return_value=object()),
@@ -309,9 +315,19 @@ class AuthService_Should(unittest.TestCase):
             self.assertEqual(user1.name, "Alice")
 
             svc.change_password("alice", "Secret123!", "NewSecret123!")
+            changed_record = svc._store.get_by_username("alice")  # type: ignore[reportPrivateUsage]
+            assert changed_record is not None
+            self.assertEqual(changed_record.password, "HASH2")
+            self.assertEqual(changed_record.token_version, 2)
 
             user2 = svc.login("alice", "NewSecret123!")
             self.assertEqual(user2.name, "Alice")
+
+        svc.reset_password("alice", "ResetSecret123!")
+        reset_record = svc._store.get_by_username("alice")  # type: ignore[reportPrivateUsage]
+        assert reset_record is not None
+        self.assertEqual(reset_record.password, "HASH3")
+        self.assertEqual(reset_record.token_version, 3)
 
     def test_reset_password_unknown_user_raises(self) -> None:
         svc, store = self.make_service()

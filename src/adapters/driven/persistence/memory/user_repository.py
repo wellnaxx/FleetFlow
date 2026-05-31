@@ -101,7 +101,11 @@ class InMemoryUserRepository:
         return rec
 
     def update_password(self, username: str, new_hash: PasswordHash) -> None:
-        """Replace the stored password hash for a user.
+        """Replace the stored password hash and increment token version once.
+
+        The password update and token-version bump are this repository method's
+        responsibility. Callers must not perform an additional token-version
+        increment after calling it.
 
         Args:
             username: Username whose password should change.
