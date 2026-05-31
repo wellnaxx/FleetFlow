@@ -230,7 +230,7 @@ If the application is started non-interactively and no admin user exists, startu
 
 User repositories are selected by `PERSISTENCE_BACKEND`. Existing `users.json` users are not visible when `PERSISTENCE_BACKEND=postgres`; switching to PostgreSQL requires existing rows in the PostgreSQL users table or one interactive startup to bootstrap the initial `admin` user into PostgreSQL. Switching back to memory mode uses `users.json` again.
 
-HTTP authentication uses JWT access and refresh tokens. Tokens include the persisted user id, username, role, token version, and a `jti` claim. Password changes and HTTP logout increment the user's token version so existing access and refresh tokens are rejected. Refresh tokens are not stored server-side in this version, and `jti` values are reserved for future denylist or rotation support; `jti` does not provide revocation by itself.
+HTTP authentication uses JWT access and refresh tokens signed with separate secrets. Tokens include the persisted user id, username, role, token version, and a `jti` claim. Password changes and manager password resets update the password hash and increment the user's token version atomically, so existing access and refresh tokens are rejected. HTTP logout also increments the user's token version. Refresh tokens are not stored server-side in this version, and `jti` values are reserved for future denylist or rotation support; `jti` does not provide revocation by itself.
 
 Authentication failures are intentionally reported with safe messages. Invalid credentials return `401`, malformed persisted auth data returns `400`, duplicate usernames return `409`, and database failures return generic `500` responses without leaking adapter details.
 
@@ -271,7 +271,7 @@ Apply `src/adapters/driven/persistence/database/schema.sql` to the database befo
 HTTP JWT issuance requires a secret before login or refresh tokens can be created:
 
 ```text
-# Generate both with: openssl rand -hex 32
+# Generate each secret independently with: openssl rand -hex 32
 JWT_ACCESS_SECRET=<random access-token secret, at least 32 characters>
 JWT_REFRESH_SECRET=<different random refresh-token secret, at least 32 characters>
 JWT_ALGORITHM=HS256
@@ -446,7 +446,7 @@ The FastAPI adapter currently exposes:
 - `POST /api/state/save`
 - `POST /api/state/load`
 
-Login uses OAuth2-style form data:
+Login uses OAuth2-style form data with content type `application/x-www-form-urlencoded`; it does not accept a JSON login body:
 
 ```text
 username=<username>
