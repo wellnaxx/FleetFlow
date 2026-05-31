@@ -73,6 +73,24 @@ class RoutesRouterShould(unittest.TestCase):
         self.assertEqual(response.json()["items"][0]["route_id"], 22)
         use_case.execute.assert_called_once_with(PageQuery(limit=1, offset=2, include_total=True))
 
+    def test_list_routes_preserves_unpaginated_limit(self) -> None:
+        use_case = MagicMock()
+        use_case.execute.return_value = PageResult(
+            items=(self._route(route_id=23),),
+            total=None,
+            limit=None,
+            offset=0,
+        )
+        self.app.dependency_overrides[routes_router_module.get_view_all_routes_use_case] = lambda: use_case
+
+        response = self.client.get("/routes/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json()["limit"])
+        self.assertEqual(response.json()["count"], 1)
+        self.assertEqual(response.json()["items"][0]["route_id"], 23)
+        use_case.execute.assert_called_once_with(PageQuery(limit=50, offset=0, include_total=False))
+
     def test_list_routes_returns_forbidden_for_permission_error(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = PermissionError("Missing permission: ROUTE_VIEW_ALL")

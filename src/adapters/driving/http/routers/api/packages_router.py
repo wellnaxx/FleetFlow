@@ -85,7 +85,7 @@ def _package_page_response(
         items=items,
         total=result.total,
         count=result.count,
-        limit=result.limit or limit,
+        limit=result.limit,
         offset=result.offset,
     )
 

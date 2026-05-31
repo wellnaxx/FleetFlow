@@ -46,7 +46,7 @@ class PackagePageResponse(BaseModel):
     items: list[PackageResponse]
     total: NonNegativeInt | None = None
     count: NonNegativeInt
-    limit: PositiveInt
+    limit: PositiveInt | None = None
     offset: NonNegativeInt
 
 

@@ -16,5 +16,5 @@ class CustomerPageResponse(BaseModel):
     items: list[CustomerResponse]
     total: NonNegativeInt | None = None
     count: NonNegativeInt
-    limit: PositiveInt
+    limit: PositiveInt | None = None
     offset: NonNegativeInt

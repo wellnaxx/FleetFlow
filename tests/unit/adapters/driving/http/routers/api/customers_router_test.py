@@ -113,6 +113,25 @@ class CustomersRouterShould(unittest.TestCase):
         self.assertEqual(response.json()["offset"], 2)
         use_case.execute.assert_called_once_with(PageQuery(limit=1, offset=2, include_total=True))
 
+    def test_list_customers_preserves_unpaginated_limit(self) -> None:
+        use_case = MagicMock()
+        use_case.execute.return_value = PageResult(
+            items=(self._customer(customer_id=4, name="Dana Smith"),),
+            total=None,
+            limit=None,
+            offset=0,
+        )
+        self.app.dependency_overrides[customers_router_module.get_view_all_customers_use_case] = lambda: (
+            use_case
+        )
+
+        response = self.client.get("/customers/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json()["limit"])
+        self.assertEqual(response.json()["count"], 1)
+        use_case.execute.assert_called_once_with(PageQuery(limit=50, offset=0, include_total=False))
+
     def test_list_customers_returns_empty_list(self) -> None:
         use_case = MagicMock()
         use_case.execute.return_value = PageResult(items=(), total=None, limit=50, offset=0)
