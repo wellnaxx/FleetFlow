@@ -126,7 +126,9 @@ def create_token(data: TokenInput, token_type: TokenType = _ACCESS) -> str:
     - sub (subject): User ID who the token is for
     - iat (issued at): When the token was created
     - exp (expiration): When the token expires
-    - jti (JWT ID): Unique identifier for this token
+    - jti (JWT ID): Unique identifier reserved for future denylist/rotation support.
+      FleetFlow does not currently persist or check jti values, so jti does not
+      provide revocation by itself.
 
     Custom Claims:
     - type: "access" or "refresh" to prevent token confusion
@@ -245,9 +247,9 @@ def create_refresh_token(user_data: TokenInput) -> str:
     They have much longer expiration (typically 7-30 days).
 
     Security Note:
-    - Store refresh token hash in database for revocation
-    - Implement token rotation on refresh
-    - Add revocation mechanism
+    - Current revocation is token-version based.
+    - The jti claim is reserved for future refresh-token rotation or denylist support.
+    - jti values are not currently stored server-side and do not provide revocation by themselves.
 
     Args:
         user_data: Dict with user_id, username, role, token_version

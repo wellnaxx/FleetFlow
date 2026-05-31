@@ -230,7 +230,7 @@ If the application is started non-interactively and no admin user exists, startu
 
 User repositories are selected by `PERSISTENCE_BACKEND`. Existing `users.json` users are not visible when `PERSISTENCE_BACKEND=postgres`; switching to PostgreSQL requires existing rows in the PostgreSQL users table or one interactive startup to bootstrap the initial `admin` user into PostgreSQL. Switching back to memory mode uses `users.json` again.
 
-HTTP authentication uses JWT access and refresh tokens. Tokens include the persisted user id, username, role, and token version. Password changes and HTTP logout increment the user's token version so existing access and refresh tokens are rejected. Refresh tokens are not stored server-side in this version, so refresh-token rotation is limited by token-version revocation.
+HTTP authentication uses JWT access and refresh tokens. Tokens include the persisted user id, username, role, token version, and a `jti` claim. Password changes and HTTP logout increment the user's token version so existing access and refresh tokens are rejected. Refresh tokens are not stored server-side in this version, and `jti` values are reserved for future denylist or rotation support; `jti` does not provide revocation by itself.
 
 Authentication failures are intentionally reported with safe messages. Invalid credentials return `401`, malformed persisted auth data returns `400`, duplicate usernames return `409`, and database failures return generic `500` responses without leaking adapter details.
 
