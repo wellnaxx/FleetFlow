@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from src.adapters.driven.persistence.database.errors import DatabaseError
 from src.adapters.driven.security.auth_token_service import TokenPayload
 from src.adapters.driving.http.dependencies.auth import AuthenticatedPrincipal
 from src.adapters.driving.http.routers.api import auth_router as auth_router_module
@@ -254,6 +255,19 @@ class AuthRouterShould(unittest.TestCase):
         response = self.client.post("/auth/logout")
 
         self.assertEqual(response.status_code, 204)
+        user_repo.increment_token_version_by_id.assert_called_once_with(1)
+
+    def test_logout_returns_generic_error_for_database_failure(self) -> None:
+        principal = self._principal()
+        user_repo = MagicMock()
+        user_repo.increment_token_version_by_id.side_effect = DatabaseError.write_failed(Exception("boom"))
+        self.app.dependency_overrides[auth_router_module.get_current_user] = lambda: principal
+        self.app.dependency_overrides[auth_router_module.get_user_repository] = lambda: user_repo
+
+        response = self.client.post("/auth/logout")
+
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.json()["detail"], "Database operation failed.")
         user_repo.increment_token_version_by_id.assert_called_once_with(1)
 
     def test_me_returns_current_user(self) -> None:

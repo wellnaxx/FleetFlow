@@ -318,8 +318,14 @@ def logout(
     Raises:
         HTTPException: Raised with:
             * 401 - Invalid, expired, revoked, or userless access token.
+            * 500 - Database operation failure.
     """
-    user_repository.increment_token_version_by_id(principal.record.user_id)
+    try:
+        user_repository.increment_token_version_by_id(principal.record.user_id)
+    except DatabaseError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database operation failed."
+        ) from exc
 
 
 @auth_router.get("/me", status_code=status.HTTP_200_OK)
