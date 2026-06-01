@@ -41,7 +41,7 @@ def load_logging_config() -> LoggingConfig:
     Returns:
         LoggingConfig populated from LOG_LEVEL and LOG_FILE environment variables.
     """
-    load_dotenv()
+    load_dotenv(dotenv_path=Path.cwd() / ".env")
 
     raw_level = get_env_var("LOG_LEVEL", "INFO").strip().upper()
     try:
