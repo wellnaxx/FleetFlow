@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from enum import StrEnum
 
 from dotenv import load_dotenv
 
 from src.shared.env_vars import get_env_var
+
+logger = logging.getLogger(__name__)
 
 
 class PersistenceBackend(StrEnum):
@@ -33,9 +36,11 @@ def load_app_config() -> AppConfig:
     """Load application configuration from environment variables."""
     load_dotenv()
 
-    return AppConfig(
+    config = AppConfig(
         persistence_backend=PersistenceBackend(get_env_var("PERSISTENCE_BACKEND", "memory")),
     )
+    logger.debug("Loaded application config with persistence backend %s.", config.persistence_backend.value)
+    return config
 
 
 def get_app_config() -> AppConfig:

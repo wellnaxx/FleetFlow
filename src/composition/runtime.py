@@ -1,3 +1,4 @@
+import logging
 from functools import lru_cache
 
 from src.adapters.driven.persistence.database.repositories.user_repository import PostgresUserRepository
@@ -7,6 +8,8 @@ from src.application.services.auth_service import AuthService
 from src.composition.config import PersistenceBackend, get_app_config
 from src.composition.container import Container, build_container
 from src.ports.output.user_repository import UserRepositoryPort
+
+logger = logging.getLogger(__name__)
 
 
 @lru_cache(maxsize=1)
@@ -23,10 +26,13 @@ def get_user_repository() -> UserRepositoryPort:
     """
     config = get_app_config()
     if config.persistence_backend is PersistenceBackend.MEMORY:
+        logger.info("Using JSON user repository for memory backend.")
         return JSONUserStore(str(get_json_config().user_store_path))
     if config.persistence_backend is PersistenceBackend.POSTGRES:
+        logger.info("Using PostgreSQL user repository.")
         return PostgresUserRepository()
 
+    logger.critical("Unsupported persistence backend configured: %r.", config.persistence_backend)
     raise ValueError(f"Unsupported persistence backend: {config.persistence_backend!r}")
 
 
@@ -37,6 +43,7 @@ def get_auth_service() -> AuthService:
     Returns:
         The AuthService instance used by the application.
     """
+    logger.debug("Creating shared AuthService instance.")
     return AuthService(get_user_repository())
 
 
@@ -47,4 +54,5 @@ def get_container() -> Container:
     Returns:
         The Container instance used by the application.
     """
+    logger.info("Building shared application container.")
     return build_container(get_auth_service(), get_app_config())

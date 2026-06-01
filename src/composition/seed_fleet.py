@@ -1,9 +1,13 @@
 """Fleet seeding helpers used by composition roots."""
 
+import logging
+
 from src.domain.entities.truck import Truck
 from src.domain.enums.truck_model import TruckModel
 from src.domain.services.map import Map
 from src.ports.output.truck_repository import TruckRepositoryPort
+
+logger = logging.getLogger(__name__)
 
 
 def build_default_fleet() -> list[Truck]:
@@ -56,8 +60,13 @@ def seed_fleet_if_empty(repo: TruckRepositoryPort) -> None:
     Returns:
         None.
     """
-    if repo.list_fleet():
+    existing_fleet = repo.list_fleet()
+    if existing_fleet:
+        logger.info("Fleet already contains %d trucks; skipping default fleet seed.", len(existing_fleet))
         return
 
-    for truck in build_default_fleet():
+    default_fleet = build_default_fleet()
+    logger.info("Seeding default fleet with %d trucks.", len(default_fleet))
+    for truck in default_fleet:
         repo.add(truck)
+    logger.info("Default fleet seed completed.")

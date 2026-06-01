@@ -1,5 +1,6 @@
 """Application composition root for CLI runtime dependencies."""
 
+import logging
 from datetime import datetime
 
 from src.adapters.driven.persistence.database.repositories.customer_repository import PostgresCustomerRepository
@@ -69,6 +70,8 @@ from src.composition.config import AppConfig, PersistenceBackend, get_app_config
 from src.composition.seed_fleet import seed_fleet_if_empty
 from src.domain.services.vehicle_manager import VehicleManager
 
+logger = logging.getLogger(__name__)
+
 
 class Container:
     """Wire repositories, services, and use cases for the CLI application."""
@@ -90,6 +93,7 @@ class Container:
                 the environment.
         """
         config = config or get_app_config()
+        logger.info("Wiring application container for %s backend.", config.persistence_backend.value)
 
         if config.persistence_backend is PersistenceBackend.MEMORY:
             self._wire_memory()
@@ -98,6 +102,7 @@ class Container:
             self._wire_postgres()
             self.autosave_enabled = False
         else:
+            logger.critical("Unsupported persistence backend configured: %r.", config.persistence_backend)
             raise ValueError(f"Unsupported persistence backend: {config.persistence_backend!r}")
 
         seed_fleet_if_empty(self.truck_repo)
@@ -117,9 +122,15 @@ class Container:
         self._wire_world_state(config)
         self._wire_services(auth)
         self._wire_use_cases()
+        logger.info(
+            "Application container wired with autosave=%s and default_world_state_path=%r.",
+            self.autosave_enabled,
+            self.default_world_state_path,
+        )
 
     def _wire_memory(self) -> None:
         """Wire in-memory persistence implementations."""
+        logger.info("Wiring in-memory persistence adapters.")
         self.package_repo = InMemoryPackageRepository()
         self.customer_repo = InMemoryCustomerRepository()
         self.route_repo = InMemoryRouteRepository()
@@ -132,6 +143,7 @@ class Container:
 
     def _wire_postgres(self) -> None:
         """Wire PostgreSQL persistence implementations."""
+        logger.info("Wiring PostgreSQL persistence adapters.")
         self.package_repo = PostgresPackageRepository()
         self.customer_repo = PostgresCustomerRepository()
         self.route_repo = PostgresRouteRepository()
@@ -143,6 +155,7 @@ class Container:
         self.world_state_persistence = JsonWorldStatePersistence()
 
         if config.persistence_backend is PersistenceBackend.MEMORY:
+            logger.info("Wiring in-memory world-state gateway.")
             customer_repo = self.customer_repo
             package_repo = self.package_repo
             route_repo = self.route_repo
@@ -174,6 +187,7 @@ class Container:
             )
             return
 
+        logger.info("Wiring PostgreSQL world-state import/export gateway.")
         self.world_state_gateway = PostgresWorldStateGateway(
             snapshot_builder=self.builder,
             snapshot_preparer=self.preparer,
@@ -184,6 +198,7 @@ class Container:
 
     def _wire_services(self, auth: AuthService) -> None:
         """Wire services common to all persistence backends."""
+        logger.debug("Wiring application services.")
         self.customer_service = CustomerService(self.customer_repo)
         self.auth = auth
         self.authz = AuthorizationService(auth.current_user)
@@ -192,6 +207,7 @@ class Container:
 
     def _wire_use_cases(self) -> None:
         """Wire use cases common to all persistence backends."""
+        logger.debug("Wiring application use cases.")
         self.auth_cases = AuthUseCases(
             login=LoginUseCase(self.auth),
             logout=LogoutUseCase(self.auth),
