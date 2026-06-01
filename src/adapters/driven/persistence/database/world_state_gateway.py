@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Callable
 
 from src.adapters.driven.persistence.database.graph_loaders.world_graph_loader import (
@@ -11,6 +12,8 @@ from src.application.exceptions.world_state_errors import WorldStateCorruptionEr
 from src.application.services.world_state_schema import SCHEMA_VERSION, SUPPORTED_SCHEMA_VERSIONS
 from src.application.services.world_state_snapshot_builder import WorldStateSnapshotBuilder
 from src.application.services.world_state_snapshot_preparer import WorldStateSnapshotPreparer
+
+logger = logging.getLogger(__name__)
 
 
 class PostgresWorldStateGateway:
@@ -45,9 +48,10 @@ class PostgresWorldStateGateway:
         Returns:
             Current world-state snapshot.
         """
+        logger.info("Building PostgreSQL world-state snapshot.")
         graph = self._graph_loader()
         counters = self._counter_loader()
-        return self._snapshot_builder.build_world_state_snapshot(
+        snapshot = self._snapshot_builder.build_world_state_snapshot(
             customers=graph.customers.values(),
             packages=graph.packages.values(),
             routes=graph.routes.values(),
@@ -55,6 +59,14 @@ class PostgresWorldStateGateway:
             counters=counters,
             schema_version=SCHEMA_VERSION,
         )
+        logger.info(
+            "Built PostgreSQL world-state snapshot with %d customers, %d packages, %d routes, and %d trucks.",
+            len(graph.customers),
+            len(graph.packages),
+            len(graph.routes),
+            len(graph.trucks),
+        )
+        return snapshot
 
     def apply_snapshot(self, snapshot: WorldStateSnapshot) -> None:
         """Apply a snapshot to the database, replacing existing state.
@@ -66,9 +78,11 @@ class PostgresWorldStateGateway:
             WorldStateCorruptionError: If the snapshot is invalid or cannot be applied.
             DatabaseError: If there is an error during database operations.
         """
+        logger.info("Applying world-state snapshot to PostgreSQL backend.")
         try:
             reconciled_world = self._snapshot_preparer.prepare(snapshot, SUPPORTED_SCHEMA_VERSIONS)
         except (KeyError, TypeError, ValueError) as exc:
             raise WorldStateCorruptionError(f"Invalid world state snapshot: {exc}") from exc
 
         self._importer.import_world(reconciled_world)
+        logger.info("PostgreSQL world-state snapshot import completed.")

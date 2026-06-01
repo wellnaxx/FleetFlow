@@ -1,5 +1,7 @@
 """Use case for saving runtime world state to persistence."""
 
+import logging
+
 from src.application.exceptions.application_errors import ValidationError
 from src.application.exceptions.world_state_errors import WorldStatePersistenceError
 from src.application.services.authorization_service import AuthorizationService, requires
@@ -7,6 +9,8 @@ from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.enums.auth import Permission
 from src.ports.output.world_state_gateway import WorldStateGatewayPort
 from src.ports.output.world_state_persistence import WorldStatePersistencePort
+
+logger = logging.getLogger(__name__)
 
 
 class SaveWorldStateUseCase(AuthorizedUseCase[str]):
@@ -47,10 +51,21 @@ class SaveWorldStateUseCase(AuthorizedUseCase[str]):
         if not path.strip():
             raise ValidationError("World state snapshot path is required.")
 
+        logger.info("Saving world-state snapshot to %r.", path)
         snapshot = self._world_state_gateway.build_snapshot()
+        logger.debug(
+            "Built world-state snapshot with %d customers, %d packages, %d routes, and %d trucks.",
+            len(snapshot.world.customers),
+            len(snapshot.world.packages),
+            len(snapshot.world.routes),
+            len(snapshot.world.trucks),
+        )
         try:
-            return self._persistence.write(path, snapshot)
+            written_path = self._persistence.write(path, snapshot)
         except ValueError as exc:
             raise ValidationError(str(exc)) from exc
         except OSError as exc:
             raise WorldStatePersistenceError("Could not write world state snapshot.") from exc
+
+        logger.info("World-state snapshot saved to %r.", written_path)
+        return written_path

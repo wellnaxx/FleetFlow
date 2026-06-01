@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Iterable
 
 from psycopg import Cursor
@@ -15,6 +16,8 @@ from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.entities.delivery_route import DeliveryRoute
 
+logger = logging.getLogger(__name__)
+
 
 class PostgresWorldStateImporter:
     def import_world(self, reconciled_world: ReconciledWorld) -> None:
@@ -26,6 +29,14 @@ class PostgresWorldStateImporter:
         Raises:
             DatabaseError: If there is an error during database operations.
         """
+        logger.info(
+            "Importing reconciled world into PostgreSQL with %d customers, %d packages, "
+            "%d routes, and %d truck bindings.",
+            len(reconciled_world.customers),
+            len(reconciled_world.packages),
+            len(reconciled_world.routes),
+            len(reconciled_world.truck_bindings),
+        )
         with transaction_cursor() as cursor:
             self._clear_world(cursor)
             self._insert_customers(cursor, reconciled_world.customers.values())
@@ -33,6 +44,7 @@ class PostgresWorldStateImporter:
             self._insert_packages(cursor, reconciled_world.packages.values())
             self._update_trucks(cursor, reconciled_world.truck_bindings)
             self._reset_sequences(cursor, reconciled_world.counters)
+        logger.info("PostgreSQL world import committed.")
 
     def _clear_world(self, cursor: Cursor[Row]) -> None:
         """Clear the existing world state from the database.

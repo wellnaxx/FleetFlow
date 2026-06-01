@@ -1,6 +1,7 @@
 """JSON persistence adapter for world-state snapshots."""
 
 import json
+import logging
 import os
 import tempfile
 from dataclasses import asdict
@@ -25,6 +26,8 @@ from src.domain.enums.truck_status import TruckStatus
 from src.domain.value_objects.location_code import LocationCode
 from src.ports.output.world_state_persistence import WorldStatePersistencePort
 
+logger = logging.getLogger(__name__)
+
 
 class JsonWorldStatePersistence(WorldStatePersistencePort):
     """Persist world-state snapshots as JSON files."""
@@ -43,6 +46,7 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
             OSError: If the target file cannot be written.
         """
         abs_path = resolve_data_path(path)
+        logger.debug("Writing world-state JSON snapshot to %r.", abs_path)
         os.makedirs(os.path.dirname(abs_path) or ".", exist_ok=True)
         raw_snapshot = self._raw_from_snapshot(snapshot)
 
@@ -62,6 +66,7 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
             except OSError:
                 pass
 
+        logger.info("World-state JSON snapshot written to %r.", abs_path)
         return abs_path
 
     def read(self, path: str) -> tuple[str, WorldStateSnapshot]:
@@ -79,6 +84,7 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
             WorldStatePersistenceError: If the file cannot be read.
         """
         abs_path = resolve_data_path(path)
+        logger.debug("Reading world-state JSON snapshot from %r.", abs_path)
         if not os.path.exists(abs_path):
             raise WorldStateFileNotFoundError(f"State file not found: {abs_path}")
 
@@ -95,6 +101,7 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
         except (KeyError, TypeError, ValueError) as exc:
             raise WorldStateCorruptionError(f"Malformed world state JSON: {abs_path}") from exc
 
+        logger.info("World-state JSON snapshot read from %r.", abs_path)
         return abs_path, snapshot
 
     def _raw_from_snapshot(self, snapshot: WorldStateSnapshot) -> dict[str, Any]:

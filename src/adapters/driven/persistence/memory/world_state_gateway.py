@@ -1,5 +1,6 @@
 """In-memory world-state snapshot gateway and runtime swap adapter."""
 
+import logging
 from collections.abc import Mapping, Sequence
 
 from src.adapters.driven.persistence.memory.customer_repository import InMemoryCustomerRepository
@@ -16,6 +17,8 @@ from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.services.vehicle_manager import VehicleManager
 from src.ports.output.world_state_gateway import WorldStateGatewayPort
 from src.ports.output.world_state_runtime_port import WorldStateRuntimePort
+
+logger = logging.getLogger(__name__)
 
 
 class InMemoryWorldStateRuntime(WorldStateRuntimePort):
@@ -74,6 +77,14 @@ class InMemoryWorldStateRuntime(WorldStateRuntimePort):
         previous_trucks = self._snapshot_trucks()
 
         try:
+            logger.info(
+                "Replacing in-memory world state with %d customers, %d packages, "
+                "%d routes, and %d truck bindings.",
+                len(customers_by_id),
+                len(packages_by_id),
+                len(routes_by_id),
+                len(truck_bindings),
+            )
             self._customer_repo.replace_customers(
                 customers_by_id=customers_by_id,
                 next_id=counters.next_customer_id,
@@ -88,6 +99,7 @@ class InMemoryWorldStateRuntime(WorldStateRuntimePort):
             )
             self._vehicle_manager.replace_truck_bindings(bindings=truck_bindings)
         except Exception as exc:
+            logger.exception("Failed to replace in-memory world state; rolling back.")
             self._customer_repo.replace_customers(
                 customers_by_id=previous_customers,
                 next_id=previous_counters.next_customer_id,
@@ -102,6 +114,7 @@ class InMemoryWorldStateRuntime(WorldStateRuntimePort):
             )
             self._restore_trucks(previous_trucks)
             raise WorldStateRuntimeSwapError("Failed to replace runtime world state.") from exc
+        logger.info("In-memory world-state replacement completed.")
 
     def _snapshot_trucks(self) -> list[TruckRuntimeSnapshot]:
         return [
@@ -144,6 +157,7 @@ class InMemoryWorldStateGateway(WorldStateGatewayPort):
         Returns:
             Current world-state snapshot.
         """
+        logger.debug("Building in-memory world-state snapshot.")
         return self._snapshot_service.build_snapshot()
 
     def apply_snapshot(self, snapshot: WorldStateSnapshot) -> None:
@@ -152,4 +166,5 @@ class InMemoryWorldStateGateway(WorldStateGatewayPort):
         Args:
             snapshot: Validated or loadable world-state snapshot.
         """
+        logger.debug("Applying world-state snapshot to in-memory runtime.")
         self._snapshot_service.apply_snapshot(snapshot)

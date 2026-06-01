@@ -1,5 +1,7 @@
 """Use case for loading persisted world state into runtime."""
 
+import logging
+
 from src.application.exceptions.application_errors import ValidationError
 from src.application.exceptions.world_state_errors import WorldStatePersistenceError
 from src.application.services.authorization_service import AuthorizationService, requires
@@ -7,6 +9,8 @@ from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.enums.auth import Permission
 from src.ports.output.world_state_gateway import WorldStateGatewayPort
 from src.ports.output.world_state_persistence import WorldStatePersistencePort
+
+logger = logging.getLogger(__name__)
 
 
 class LoadWorldStateUseCase(AuthorizedUseCase[str]):
@@ -49,6 +53,7 @@ class LoadWorldStateUseCase(AuthorizedUseCase[str]):
         if not path.strip():
             raise ValidationError("World state snapshot path is required.")
 
+        logger.info("Loading world-state snapshot from %r.", path)
         try:
             abs_path, snapshot = self._persistence.read(path)
         except ValueError as exc:
@@ -56,5 +61,13 @@ class LoadWorldStateUseCase(AuthorizedUseCase[str]):
         except OSError as exc:
             raise WorldStatePersistenceError("Could not read world state snapshot.") from exc
 
+        logger.debug(
+            "Read world-state snapshot with %d customers, %d packages, %d routes, and %d trucks.",
+            len(snapshot.world.customers),
+            len(snapshot.world.packages),
+            len(snapshot.world.routes),
+            len(snapshot.world.trucks),
+        )
         self._world_state_gateway.apply_snapshot(snapshot)
+        logger.info("World-state snapshot loaded from %r.", abs_path)
         return abs_path

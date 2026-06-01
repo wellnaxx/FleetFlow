@@ -1,10 +1,13 @@
 """Use case for advancing runtime world state."""
 
+import logging
 from datetime import datetime
 
 from src.application.results.heartbeat_summary_result import HeartbeatSummary
 from src.application.services.heartbeat_service import HeartbeatService
 from src.application.use_cases.base.base_use_case import BaseUseCase
+
+logger = logging.getLogger(__name__)
 
 
 class AdvanceWorldStateUseCase(BaseUseCase[HeartbeatSummary]):
@@ -28,4 +31,15 @@ class AdvanceWorldStateUseCase(BaseUseCase[HeartbeatSummary]):
             A summary of the changes applied during the heartbeat, including
             whether any state was mutated at all.
         """
-        return self._heartbeat_service.advance(now=now)
+        summary = self._heartbeat_service.advance(now=now)
+        if summary.state_changed:
+            logger.info(
+                "Advanced world state: routes=%d, packages=%d, trucks_moved=%d, trucks_released=%d.",
+                summary.routes_updated,
+                summary.packages_updated,
+                summary.trucks_moved,
+                summary.trucks_released,
+            )
+        else:
+            logger.debug("Advanced world state with no state changes.")
+        return summary
