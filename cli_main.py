@@ -4,6 +4,7 @@ import os
 import sys
 from datetime import datetime
 
+from src.adapters.driven.logging.config import configure_logging
 from src.adapters.driving.cli.command_factory import CommandFactory
 from src.adapters.driving.cli.engine import Engine
 from src.application.exceptions.world_state_errors import WorldStateCorruptionError, WorldStateFileNotFoundError
@@ -96,6 +97,7 @@ def _load_default_world_state(container: Container) -> None:
 
 
 def main() -> None:
+    configure_logging()
     container = get_container()
     auth = container.auth
     store = get_user_repository()
