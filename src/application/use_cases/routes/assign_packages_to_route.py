@@ -1,5 +1,6 @@
 """Use case for assigning one or more packages to a route."""
 
+import logging
 from collections.abc import Callable
 from datetime import datetime
 
@@ -17,6 +18,8 @@ from src.domain.enums.auth import Permission
 from src.domain.exceptions import DomainConflictError, DomainValidationError
 from src.ports.output.package_repository import PackageRepositoryPort
 from src.ports.output.route_repository import RouteRepositoryPort
+
+logger = logging.getLogger(__name__)
 
 
 class AssignPackagesToRouteUseCase(AuthorizedUseCase[AssignPackagesToRouteResult]):
@@ -61,6 +64,7 @@ class AssignPackagesToRouteUseCase(AuthorizedUseCase[AssignPackagesToRouteResult
         """
         route = self._routes.get_by_id(route_id)
         if route is None:
+            logger.warning("Package assignment requested for missing route %d.", route_id)
             raise NotFoundError(f"Route with ID {route_id} not found.")
 
         result = AssignPackagesToRouteResult(successes=[], errors=[])
@@ -74,6 +78,11 @@ class AssignPackagesToRouteUseCase(AuthorizedUseCase[AssignPackagesToRouteResult
 
             package = self._packages.get_by_id(package_id)
             if package is None:
+                logger.warning(
+                    "Package assignment skipped missing package %d for route %d.",
+                    package_id,
+                    route_id,
+                )
                 result.errors.append(
                     PackageAssignmentError(package_id=package_id, message=f"Package {package_id} not found.")
                 )
@@ -84,6 +93,7 @@ class AssignPackagesToRouteUseCase(AuthorizedUseCase[AssignPackagesToRouteResult
                     message = f"Package {package_id} has route_id {package.route_id} but route is not hydrated."
                 else:
                     message = f"Package {package_id} is already on route {package.route_id}."
+                logger.warning("Package assignment rejected for package %d: %s", package_id, message)
                 result.errors.append(
                     PackageAssignmentError(
                         package_id=package_id,
@@ -103,8 +113,15 @@ class AssignPackagesToRouteUseCase(AuthorizedUseCase[AssignPackagesToRouteResult
                     )
                 )
             except DomainConflictError as exc:
+                logger.warning("Package assignment rejected for package %d: %s", package_id, exc)
                 result.errors.append(PackageAssignmentError(package_id=package_id, message=str(exc)))
 
+        logger.info(
+            "Package assignment to route %d completed with %d success(es) and %d error(s).",
+            route_id,
+            len(result.successes),
+            len(result.errors),
+        )
         return result
 
     def _format_eta(self, route: DeliveryRoute, package: DeliveryPackage) -> str:

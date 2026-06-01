@@ -1,5 +1,6 @@
 """Use case for creating a delivery route."""
 
+import logging
 from collections.abc import Sequence
 from datetime import datetime
 
@@ -8,6 +9,8 @@ from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.enums.auth import Permission
 from src.ports.output.route_repository import RouteRepositoryPort
+
+logger = logging.getLogger(__name__)
 
 
 class CreateRouteUseCase(AuthorizedUseCase[DeliveryRoute]):
@@ -40,4 +43,12 @@ class CreateRouteUseCase(AuthorizedUseCase[DeliveryRoute]):
             DomainValidationError: If the route has too few stops or contains invalid locations.
         """
 
-        return self._routes.create(locations=locations, departure_time=departure_time)
+        route = self._routes.create(locations=locations, departure_time=departure_time)
+        logger.info(
+            "Created route %d from %s to %s with %d stops.",
+            route.route_id,
+            route.start_location,
+            route.end_location,
+            len(route.locations),
+        )
+        return route

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from src.application.exceptions.application_errors import NotFoundError
@@ -9,6 +10,8 @@ from src.application.services.authorization_service import AuthorizationService,
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.enums.auth import Permission
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from src.domain.entities.delivery_package import DeliveryPackage
@@ -54,11 +57,14 @@ class RemoveRouteUseCase(AuthorizedUseCase[DeliveryRoute]):
         """
         route = self._routes.get_by_id(route_id)
         if not route:
+            logger.warning("Route removal requested for missing route %d.", route_id)
             raise NotFoundError(f"Route with ID {route_id} not found")
 
         route_snapshot = route.snapshot_state()
         package_snapshots = [(package, package.snapshot_state()) for package in route.packages]
         truck = route.truck
+        package_count = len(route.packages)
+        truck_id = truck.vehicle_id if truck is not None else None
         truck_snapshot = truck.snapshot_state() if truck is not None else None
         detached_packages: list[DeliveryPackage] = []
         try:
@@ -84,4 +90,10 @@ class RemoveRouteUseCase(AuthorizedUseCase[DeliveryRoute]):
             if truck is not None and truck_snapshot is not None:
                 truck.restore_state(truck_snapshot)
             raise
+        logger.info(
+            "Removed route %d and detached %d package(s); released truck_id=%s.",
+            route_id,
+            package_count,
+            truck_id,
+        )
         return route

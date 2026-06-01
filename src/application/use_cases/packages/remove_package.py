@@ -1,5 +1,7 @@
 """Use case for removing a package from runtime state."""
 
+import logging
+
 from src.application.exceptions.application_errors import NotFoundError
 from src.application.services.authorization_service import AuthorizationService, requires_all
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
@@ -7,6 +9,8 @@ from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.enums.auth import Permission
 from src.domain.exceptions import DomainConflictError, EntityNotFoundError
 from src.ports.output.package_repository import PackageRepositoryPort
+
+logger = logging.getLogger(__name__)
 
 
 class RemovePackageUseCase(AuthorizedUseCase[DeliveryPackage]):
@@ -40,10 +44,16 @@ class RemovePackageUseCase(AuthorizedUseCase[DeliveryPackage]):
         """
         package = self._packages.get_by_id(package_id)
         if package is None:
+            logger.warning("Package removal requested for missing package %d.", package_id)
             raise NotFoundError(f"Package with ID {package_id} not found.")
 
         if package.route_id is not None:
             if package.route is None:
+                logger.warning(
+                    "Package %d cannot be removed cleanly because route %d is not hydrated.",
+                    package_id,
+                    package.route_id,
+                )
                 raise DomainConflictError(
                     f"Package {package_id} is assigned to route {package.route_id}, but route is not hydrated."
                 )
@@ -54,4 +64,5 @@ class RemovePackageUseCase(AuthorizedUseCase[DeliveryPackage]):
 
         package.customer.remove_package(package)
         self._packages.remove(package_id)
+        logger.info("Removed package %d.", package_id)
         return package

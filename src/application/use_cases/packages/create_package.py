@@ -1,5 +1,7 @@
 """Use case for creating a delivery package."""
 
+import logging
+
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.application.services.customer_service import CustomerService
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
@@ -7,6 +9,8 @@ from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.enums.auth import Permission
 from src.domain.value_objects.location_code import LocationCode
 from src.ports.output.package_repository import PackageRepositoryPort
+
+logger = logging.getLogger(__name__)
 
 
 class CreatePackageUseCase(AuthorizedUseCase[DeliveryPackage]):
@@ -67,4 +71,11 @@ class CreatePackageUseCase(AuthorizedUseCase[DeliveryPackage]):
             customer=customer,
         )
         customer.add_package(package)
+        logger.info(
+            "Created package %d from %s to %s for customer %d.",
+            package.package_id,
+            package.start_location,
+            package.end_location,
+            customer.customer_id,
+        )
         return package
