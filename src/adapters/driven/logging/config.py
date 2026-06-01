@@ -6,6 +6,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from src.shared.env_vars import get_env_var
 
 _FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
@@ -39,6 +41,8 @@ def load_logging_config() -> LoggingConfig:
     Returns:
         LoggingConfig populated from LOG_LEVEL and LOG_FILE environment variables.
     """
+    load_dotenv()
+
     raw_level = get_env_var("LOG_LEVEL", "INFO").strip().upper()
     try:
         level = _LOG_LEVELS[raw_level]
