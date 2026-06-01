@@ -1,10 +1,14 @@
 """Use case for registering a new user."""
 
+import logging
+
 from src.application.models.user_record import UserRecord
 from src.application.services.auth_service import AuthService
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.enums.auth import Permission, Role
+
+logger = logging.getLogger(__name__)
 
 
 class RegisterUserUseCase(AuthorizedUseCase[UserRecord]):
@@ -48,7 +52,7 @@ class RegisterUserUseCase(AuthorizedUseCase[UserRecord]):
             ValidationError: If command input fails validation.
             ConflictError: If the username already exists.
         """
-        return self._auth.register_user(
+        record = self._auth.register_user(
             username=username,
             role=role,
             name=name,
@@ -56,3 +60,5 @@ class RegisterUserUseCase(AuthorizedUseCase[UserRecord]):
             phone_number=phone_number,
             password=password,
         )
+        logger.info("Registered user %r with role %s.", record.username, record.role)
+        return record

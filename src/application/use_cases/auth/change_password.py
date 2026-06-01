@@ -1,9 +1,13 @@
 """Use case for changing an authenticated user's password."""
 
+import logging
+
 from src.application.services.auth_service import AuthService
 from src.application.services.authorization_service import AuthorizationService
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.enums.auth import Permission
+
+logger = logging.getLogger(__name__)
 
 
 class ChangePasswordUseCase(AuthorizedUseCase[None]):
@@ -40,6 +44,7 @@ class ChangePasswordUseCase(AuthorizedUseCase[None]):
             if not self.authz.has(Permission.ADMIN_USER):
                 raise PermissionError("Missing permission: ADMIN_USER")
             self._auth.reset_password(username, new_password)
+            logger.info("Password reset completed for user %r.", username.strip().lower())
             return
 
         if self.authz.current_user is None:
@@ -51,6 +56,7 @@ class ChangePasswordUseCase(AuthorizedUseCase[None]):
             raise PermissionError("Cannot change another user's password.")
 
         self._auth.change_password(username, old_password, new_password)
+        logger.info("Password changed for user %r.", username.strip().lower())
 
     @property
     def current_session_username(self) -> str | None:
@@ -79,6 +85,7 @@ class ChangePasswordUseCase(AuthorizedUseCase[None]):
             raise PermissionError("Authenticated user has no username.")
 
         self._auth.change_password(username.strip().lower(), old_password, new_password)
+        logger.info("Password changed for current user %r.", username.strip().lower())
 
     def _current_username(self) -> str | None:
         """Return the authenticated username from auth session state."""

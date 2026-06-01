@@ -1,8 +1,12 @@
 """Use case for authenticating a user."""
 
+import logging
+
 from src.application.services.auth_service import AuthService
 from src.application.use_cases.base.base_use_case import BaseUseCase
 from src.domain.entities.users.user import User
+
+logger = logging.getLogger(__name__)
 
 
 class LoginUseCase(BaseUseCase[User]):
@@ -30,4 +34,6 @@ class LoginUseCase(BaseUseCase[User]):
             AuthenticationError: If the credentials are invalid.
             ValidationError: If persisted user data is invalid.
         """
-        return self._auth.login(username, password)
+        user = self._auth.login(username, password)
+        logger.info("User %r authenticated.", username.strip().lower())
+        return user
