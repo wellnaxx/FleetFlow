@@ -1,3 +1,6 @@
+import logging
+from types import TracebackType
+
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
@@ -21,6 +24,13 @@ from src.domain.exceptions import (
     EntityNotFoundError,
 )
 
+logger = logging.getLogger(__name__)
+
+
+def _exc_info(exc: Exception) -> tuple[type[Exception], Exception, TracebackType | None]:
+    """Return explicit exception info for logging outside an except block."""
+    return (type(exc), exc, exc.__traceback__)
+
 
 def register_exception_handlers(app: FastAPI) -> None:
     """Register global HTTP exception handlers on a FastAPI app."""
@@ -38,13 +48,20 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(WorldStateFileNotFoundError, world_state_file_not_found_error_handler)
     app.add_exception_handler(WorldStatePersistenceError, world_state_persistence_error_handler)
     app.add_exception_handler(WorldStateRuntimeSwapError, world_state_runtime_swap_error_handler)
+    logger.debug("Registered global HTTP exception handlers.")
 
 
 async def permission_error_handler(_request: Request, exc: Exception) -> JSONResponse:
     return JSONResponse(status_code=status.HTTP_403_FORBIDDEN, content={"detail": str(exc)})
 
 
-async def database_error_handler(_request: Request, _exc: Exception) -> JSONResponse:
+async def database_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.error(
+        "Database error while handling %s %s.",
+        request.method,
+        request.url.path,
+        exc_info=_exc_info(exc),
+    )
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"detail": "Database operation failed."},
@@ -67,7 +84,13 @@ async def validation_error_handler(_request: Request, exc: Exception) -> JSONRes
     return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"detail": str(exc)})
 
 
-async def world_state_corruption_error_handler(_request: Request, _exc: Exception) -> JSONResponse:
+async def world_state_corruption_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.warning(
+        "Malformed world-state snapshot rejected while handling %s %s.",
+        request.method,
+        request.url.path,
+        exc_info=_exc_info(exc),
+    )
     return JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST, content={"detail": "World state snapshot is malformed."}
     )
@@ -80,13 +103,25 @@ async def world_state_file_not_found_error_handler(_request: Request, _exc: Exce
     )
 
 
-async def world_state_persistence_error_handler(_request: Request, _exc: Exception) -> JSONResponse:
+async def world_state_persistence_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.error(
+        "World-state persistence error while handling %s %s.",
+        request.method,
+        request.url.path,
+        exc_info=_exc_info(exc),
+    )
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"detail": "World state persistence failed."}
     )
 
 
-async def world_state_runtime_swap_error_handler(_request: Request, _exc: Exception) -> JSONResponse:
+async def world_state_runtime_swap_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.error(
+        "World-state runtime swap error while handling %s %s.",
+        request.method,
+        request.url.path,
+        exc_info=_exc_info(exc),
+    )
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"detail": "World state persistence failed."},
