@@ -21,17 +21,25 @@
                   "pm.collectionVariables.set('employeePassword', 'FleetFlow1!');",
                   "pm.collectionVariables.set('employeeNewPassword', 'FleetFlow2!');",
                   "pm.collectionVariables.set('managerUsername', `manager_${runId}`);",
+                  "const routeYear = 2100 + (Number(runId.slice(-4)) % 50);",
+                  "pm.collectionVariables.set('routeDepartureTime', `${routeYear}-01-01T08:00:00`);",
                   "const phoneBase = Number(runId.slice(-8));",
                   "const phone = (offset) => `04${String((phoneBase + offset) % 100000000).padStart(8, '0')}`;",
-                  "pm.collectionVariables.set('packagePhone', phone(0));",
-                  "pm.collectionVariables.set('deletePackagePhone', phone(1));",
-                  "pm.collectionVariables.set('invalidLocationPackagePhone', phone(2));",
-                  "pm.collectionVariables.set('invalidEmailPackagePhone', phone(3));",
-                  "pm.collectionVariables.set('invalidWeightPackagePhone', phone(4));",
+                  "pm.collectionVariables.set('employeePhone', phone(0));",
+                  "pm.collectionVariables.set('duplicateEmployeePhone', phone(1));",
+                  "pm.collectionVariables.set('invalidEmailUserPhone', phone(2));",
+                  "pm.collectionVariables.set('blockedUserPhone', phone(3));",
+                  "pm.collectionVariables.set('packagePhone', phone(4));",
+                  "pm.collectionVariables.set('deletePackagePhone', phone(5));",
+                  "pm.collectionVariables.set('invalidLocationPackagePhone', phone(6));",
+                  "pm.collectionVariables.set('invalidEmailPackagePhone', phone(7));",
+                  "pm.collectionVariables.set('invalidWeightPackagePhone', phone(8));",
                   "pm.collectionVariables.set('packageId', '');",
                   "pm.collectionVariables.set('deletePackageId', '');",
                   "pm.collectionVariables.set('routeId', '');",
-                  "pm.collectionVariables.set('truckId', '1001');",
+                  "pm.collectionVariables.set('truckId', '');",
+                  "pm.collectionVariables.set('routeStartLocation', 'SYD');",
+                  "pm.collectionVariables.set('routeEndLocation', 'MEL');",
                   "pm.collectionVariables.set('snapshotPath', `postman-${runId}.json`);"
                 ],
                 "type": "text/javascript"
@@ -294,7 +302,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"username\": \"{{employeeUsername}}\",\n  \"role\": \"EMPLOYEE\",\n  \"name\": \"Postman Employee\",\n  \"email\": \"{{employeeUsername}}@example.com\",\n  \"phone_number\": \"0412345678\",\n  \"password\": \"{{employeePassword}}\"\n}"
+              "raw": "{\n  \"username\": \"{{employeeUsername}}\",\n  \"role\": \"EMPLOYEE\",\n  \"name\": \"Postman Employee\",\n  \"email\": \"{{employeeUsername}}@example.com\",\n  \"phone_number\": \"{{employeePhone}}\",\n  \"password\": \"{{employeePassword}}\"\n}"
             },
             "url": "{{baseUrl}}/auth/register"
           }
@@ -326,7 +334,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"username\": \"{{employeeUsername}}\",\n  \"role\": \"EMPLOYEE\",\n  \"name\": \"Postman Employee Duplicate\",\n  \"email\": \"duplicate_{{runId}}@example.com\",\n  \"phone_number\": \"0412345679\",\n  \"password\": \"{{employeePassword}}\"\n}"
+              "raw": "{\n  \"username\": \"{{employeeUsername}}\",\n  \"role\": \"EMPLOYEE\",\n  \"name\": \"Postman Employee Duplicate\",\n  \"email\": \"duplicate_{{runId}}@example.com\",\n  \"phone_number\": \"{{duplicateEmployeePhone}}\",\n  \"password\": \"{{employeePassword}}\"\n}"
             },
             "url": "{{baseUrl}}/auth/register"
           }
@@ -358,7 +366,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"username\": \"invalid_email_{{runId}}\",\n  \"role\": \"EMPLOYEE\",\n  \"name\": \"Invalid Email\",\n  \"email\": \"not-an-email\",\n  \"phone_number\": \"0412345680\",\n  \"password\": \"{{employeePassword}}\"\n}"
+              "raw": "{\n  \"username\": \"invalid_email_{{runId}}\",\n  \"role\": \"EMPLOYEE\",\n  \"name\": \"Invalid Email\",\n  \"email\": \"not-an-email\",\n  \"phone_number\": \"{{invalidEmailUserPhone}}\",\n  \"password\": \"{{employeePassword}}\"\n}"
             },
             "url": "{{baseUrl}}/auth/register"
           }
@@ -432,7 +440,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"username\": \"blocked_{{runId}}\",\n  \"role\": \"EMPLOYEE\",\n  \"name\": \"Blocked User\",\n  \"email\": \"blocked_{{runId}}@example.com\",\n  \"phone_number\": \"0412345681\",\n  \"password\": \"{{employeePassword}}\"\n}"
+              "raw": "{\n  \"username\": \"blocked_{{runId}}\",\n  \"role\": \"EMPLOYEE\",\n  \"name\": \"Blocked User\",\n  \"email\": \"blocked_{{runId}}@example.com\",\n  \"phone_number\": \"{{blockedUserPhone}}\",\n  \"password\": \"{{employeePassword}}\"\n}"
             },
             "url": "{{baseUrl}}/auth/register"
           }
@@ -756,8 +764,16 @@
                   "pm.test('list trucks returns 200', () => pm.response.to.have.status(200));",
                   "const trucks = pm.response.json();",
                   "pm.test('trucks response is non-empty array', () => pm.expect(trucks).to.be.an('array').and.not.empty);",
-                  "const sydTruck = trucks.find(t => t.current_location === 'SYD' && t.status === 'Free');",
-                  "if (sydTruck) { pm.collectionVariables.set('truckId', String(sydTruck.vehicle_id)); }"
+                  "const freeTruck = trucks.find(t => t.status === 'Free' && t.current_location);",
+                  "pm.test('at least one free truck has a known location', () => pm.expect(freeTruck).to.exist);",
+                  "if (freeTruck) {",
+                  "  const locations = ['SYD', 'MEL', 'ADL', 'ASP', 'BRI', 'DAR', 'PER'];",
+                  "  const start = freeTruck.current_location;",
+                  "  const end = locations.find(location => location !== start) || 'MEL';",
+                  "  pm.collectionVariables.set('truckId', String(freeTruck.vehicle_id));",
+                  "  pm.collectionVariables.set('routeStartLocation', start);",
+                  "  pm.collectionVariables.set('routeEndLocation', end);",
+                  "}"
                 ],
                 "type": "text/javascript"
               }
@@ -827,7 +843,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"start_location\": \"SYD\",\n  \"end_location\": \"MEL\",\n  \"weight\": 12.5,\n  \"customer_name\": \"Pkg {{runId}}\",\n  \"customer_email\": \"customer_{{runId}}@example.com\",\n  \"customer_phone_number\": \"{{packagePhone}}\"\n}"
+              "raw": "{\n  \"start_location\": \"{{routeStartLocation}}\",\n  \"end_location\": \"{{routeEndLocation}}\",\n  \"weight\": 12.5,\n  \"customer_name\": \"Pkg {{runId}}\",\n  \"customer_email\": \"customer_{{runId}}@example.com\",\n  \"customer_phone_number\": \"{{packagePhone}}\"\n}"
             },
             "url": "{{baseUrl}}/packages"
           }
@@ -860,7 +876,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"start_location\": \"SYD\",\n  \"end_location\": \"MEL\",\n  \"weight\": 2.5,\n  \"customer_name\": \"Del {{runId}}\",\n  \"customer_email\": \"delete_customer_{{runId}}@example.com\",\n  \"customer_phone_number\": \"{{deletePackagePhone}}\"\n}"
+              "raw": "{\n  \"start_location\": \"{{routeStartLocation}}\",\n  \"end_location\": \"{{routeEndLocation}}\",\n  \"weight\": 2.5,\n  \"customer_name\": \"Del {{runId}}\",\n  \"customer_email\": \"delete_customer_{{runId}}@example.com\",\n  \"customer_phone_number\": \"{{deletePackagePhone}}\"\n}"
             },
             "url": "{{baseUrl}}/packages"
           }
@@ -892,7 +908,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"start_location\": \"\",\n  \"end_location\": \"MEL\",\n  \"weight\": 12.5,\n  \"customer_name\": \"Bad {{runId}}\",\n  \"customer_email\": \"invalid_pkg_{{runId}}@example.com\",\n  \"customer_phone_number\": \"{{invalidLocationPackagePhone}}\"\n}"
+              "raw": "{\n  \"start_location\": \"\",\n  \"end_location\": \"{{routeEndLocation}}\",\n  \"weight\": 12.5,\n  \"customer_name\": \"Bad {{runId}}\",\n  \"customer_email\": \"invalid_pkg_{{runId}}@example.com\",\n  \"customer_phone_number\": \"{{invalidLocationPackagePhone}}\"\n}"
             },
             "url": "{{baseUrl}}/packages"
           }
@@ -924,7 +940,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"start_location\": \"SYD\",\n  \"end_location\": \"MEL\",\n  \"weight\": 12.5,\n  \"customer_name\": \"Bad Email {{runId}}\",\n  \"customer_email\": \"bad-email\",\n  \"customer_phone_number\": \"{{invalidEmailPackagePhone}}\"\n}"
+              "raw": "{\n  \"start_location\": \"{{routeStartLocation}}\",\n  \"end_location\": \"{{routeEndLocation}}\",\n  \"weight\": 12.5,\n  \"customer_name\": \"Bad Email {{runId}}\",\n  \"customer_email\": \"bad-email\",\n  \"customer_phone_number\": \"{{invalidEmailPackagePhone}}\"\n}"
             },
             "url": "{{baseUrl}}/packages"
           }
@@ -956,7 +972,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"start_location\": \"SYD\",\n  \"end_location\": \"MEL\",\n  \"weight\": 0,\n  \"customer_name\": \"Bad Weight {{runId}}\",\n  \"customer_phone_number\": \"{{invalidWeightPackagePhone}}\"\n}"
+              "raw": "{\n  \"start_location\": \"{{routeStartLocation}}\",\n  \"end_location\": \"{{routeEndLocation}}\",\n  \"weight\": 0,\n  \"customer_name\": \"Bad Weight {{runId}}\",\n  \"customer_phone_number\": \"{{invalidWeightPackagePhone}}\"\n}"
             },
             "url": "{{baseUrl}}/packages"
           }
@@ -1147,7 +1163,7 @@
                   "pm.test('create route returns 201', () => pm.response.to.have.status(201));",
                   "const json = pm.response.json();",
                   "pm.collectionVariables.set('routeId', String(json.route_id));",
-                  "pm.test('route contains SYD and MEL', () => pm.expect(json.locations).to.include.members(['SYD', 'MEL']));"
+                  "pm.test('route contains selected start and end', () => pm.expect(json.locations).to.include.members([pm.collectionVariables.get('routeStartLocation'), pm.collectionVariables.get('routeEndLocation')]));"
                 ],
                 "type": "text/javascript"
               }
@@ -1167,7 +1183,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"locations\": [\"SYD\", \"MEL\"],\n  \"departure_time\": \"2030-01-01T08:00:00\"\n}"
+              "raw": "{\n  \"locations\": [\"{{routeStartLocation}}\", \"{{routeEndLocation}}\"],\n  \"departure_time\": \"{{routeDepartureTime}}\"\n}"
             },
             "url": "{{baseUrl}}/routes/"
           }
@@ -1518,7 +1534,7 @@
                 "exec": [
                   "pm.test('find suitable trucks returns 200', () => pm.response.to.have.status(200));",
                   "const trucks = pm.response.json();",
-                  "pm.test('suitable trucks response is an array', () => pm.expect(trucks).to.be.an('array'));",
+                  "pm.test('suitable trucks response is a non-empty array', () => pm.expect(trucks).to.be.an('array').and.not.empty);",
                   "if (trucks.length > 0) { pm.collectionVariables.set('truckId', String(trucks[0].vehicle_id)); }"
                 ],
                 "type": "text/javascript"
@@ -2017,7 +2033,15 @@
     },
     {
       "key": "truckId",
-      "value": "1001"
+      "value": ""
+    },
+    {
+      "key": "routeStartLocation",
+      "value": "SYD"
+    },
+    {
+      "key": "routeEndLocation",
+      "value": "MEL"
     },
     {
       "key": "snapshotPath",
