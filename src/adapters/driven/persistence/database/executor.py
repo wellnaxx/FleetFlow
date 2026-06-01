@@ -73,6 +73,11 @@ def _cursor_to_dict(cursor: Cursor[Row], row: Row | None) -> RowDict | None:
     return dict(zip(columns, row, strict=True))
 
 
+def _log_statement(kind: str, sql: SQLQuery, params: SQLParams) -> None:
+    """Log database statement metadata without leaking parameter values."""
+    logger.debug("%s statement with %d param(s): %s", kind, len(params), sql)
+
+
 @contextmanager
 def _db_operation(label: str) -> Generator[None]:
     """Wrap a database operation with consistent exception handling."""
@@ -94,10 +99,13 @@ def transaction_cursor() -> Generator[Cursor[Row]]:
     try:
         with get_connection() as conn, conn.cursor() as cursor:
             try:
+                logger.debug("Starting PostgreSQL transaction.")
                 yield cursor
                 conn.commit()
+                logger.debug("Committed PostgreSQL transaction.")
             except Exception:
                 conn.rollback()
+                logger.debug("Rolled back PostgreSQL transaction.")
                 raise
     except DatabaseError:
         raise
@@ -108,14 +116,14 @@ def transaction_cursor() -> Generator[Cursor[Row]]:
 
 def fetch_all_tx(cursor: Cursor[Row], sql: SQLQuery, params: SQLParams = ()) -> list[RowDict]:
     """Execute a SELECT inside an open transaction and return all rows as dicts."""
-    logger.debug("SELECT tx: %s | params=%s", sql, params)
+    _log_statement("SELECT tx", sql, params)
     cursor.execute(_as_query(sql), params)
     return _cursor_to_dicts(cursor)
 
 
 def fetch_one_tx(cursor: Cursor[Row], sql: SQLQuery, params: SQLParams = ()) -> RowDict | None:
     """Execute a SELECT inside an open transaction and return one row as a dict."""
-    logger.debug("SELECT one tx: %s | params=%s", sql, params)
+    _log_statement("SELECT one tx", sql, params)
     cursor.execute(_as_query(sql), params)
     return _cursor_to_dict(cursor, cursor.fetchone())
 
@@ -125,21 +133,21 @@ def execute_insert_tx(cursor: Cursor[Row], sql: SQLQuery, params: SQLParams = ()
 
     The SQL must include a RETURNING clause with the id as the first column.
     """
-    logger.debug("INSERT tx: %s | params=%s", sql, params)
+    _log_statement("INSERT tx", sql, params)
     cursor.execute(_as_query(sql), params)
     return _extract_inserted_id(cursor.fetchone())
 
 
 def execute_write_tx(cursor: Cursor[Row], sql: SQLQuery, params: SQLParams = ()) -> int:
     """Execute an UPDATE or DELETE inside an open transaction and return affected row count."""
-    logger.debug("WRITE tx: %s | params=%s", sql, params)
+    _log_statement("WRITE tx", sql, params)
     cursor.execute(_as_query(sql), params)
     return int(cursor.rowcount)
 
 
 def fetch_all(sql: SQLQuery, params: SQLParams = ()) -> list[RowDict]:
     """Execute a SELECT and return all rows as dicts."""
-    logger.debug("SELECT %s | params=%s", sql, params)
+    _log_statement("SELECT", sql, params)
     with _db_operation("read"), get_connection() as conn, conn.cursor() as cursor:
         cursor.execute(_as_query(sql), params)
         return _cursor_to_dicts(cursor)
@@ -147,7 +155,7 @@ def fetch_all(sql: SQLQuery, params: SQLParams = ()) -> list[RowDict]:
 
 def fetch_one(sql: SQLQuery, params: SQLParams = ()) -> RowDict | None:
     """Execute a SELECT and return the first row as a dict, or None."""
-    logger.debug("SELECT (one) %s | params=%s", sql, params)
+    _log_statement("SELECT one", sql, params)
     with _db_operation("read"), get_connection() as conn, conn.cursor() as cursor:
         cursor.execute(_as_query(sql), params)
         return _cursor_to_dict(cursor, cursor.fetchone())
@@ -158,7 +166,7 @@ def execute_insert(sql: SQLQuery, params: SQLParams = ()) -> int:
 
     The SQL must include a RETURNING clause that yields the new id as the first column.
     """
-    logger.debug("INSERT %s | params=%s", sql, params)
+    _log_statement("INSERT", sql, params)
     with _db_operation("insert"), get_connection() as conn, conn.cursor() as cursor:
         cursor.execute(_as_query(sql), params)
         new_id = _extract_inserted_id(cursor.fetchone())
@@ -168,7 +176,7 @@ def execute_insert(sql: SQLQuery, params: SQLParams = ()) -> int:
 
 def execute_write(sql: SQLQuery, params: SQLParams = ()) -> int:
     """Execute an UPDATE or DELETE and return affected row count."""
-    logger.debug("WRITE %s | params=%s", sql, params)
+    _log_statement("WRITE", sql, params)
     with _db_operation("write"), get_connection() as conn, conn.cursor() as cursor:
         cursor.execute(_as_query(sql), params)
         affected = cursor.rowcount
@@ -178,7 +186,7 @@ def execute_write(sql: SQLQuery, params: SQLParams = ()) -> int:
 
 def execute_returning_one(sql: SQLQuery, params: SQLParams = ()) -> RowDict | None:
     """Execute a write query with RETURNING and return the first row as a dict, or None."""
-    logger.debug("WRITE RETURNING (one) %s | params=%s", sql, params)
+    _log_statement("WRITE returning one", sql, params)
     with _db_operation("write"), get_connection() as conn, conn.cursor() as cursor:
         cursor.execute(_as_query(sql), params)
         row = _cursor_to_dict(cursor, cursor.fetchone())

@@ -1,12 +1,23 @@
+import logging
+
 import psycopg
 from psycopg import Connection
 
 from src.adapters.driven.persistence.database.config import get_postgres_config
 
+logger = logging.getLogger(__name__)
+
 
 def get_connection() -> Connection:
     config = get_postgres_config()
 
+    logger.debug(
+        "Opening PostgreSQL connection to database %r on %s:%d as user %r.",
+        config.name,
+        config.host,
+        config.port,
+        config.user,
+    )
     return psycopg.connect(
         dbname=config.name,
         user=config.user,

@@ -1,10 +1,13 @@
 """PostgreSQL configuration loaded from environment variables."""
 
+import logging
 from dataclasses import dataclass
 
 from dotenv import load_dotenv
 
 from src.shared.env_vars import get_env_var
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -33,13 +36,21 @@ def load_postgres_config() -> PostgresConfig:
     """Load PostgreSQL configuration from environment variables."""
     load_dotenv()
 
-    return PostgresConfig(
+    config = PostgresConfig(
         host=get_env_var("DB_HOST", "localhost"),
         name=get_env_var("DB_NAME"),
         user=get_env_var("DB_USER"),
         password=get_env_var("DB_PASSWORD"),
         port=_read_port(),
     )
+    logger.debug(
+        "Loaded PostgreSQL config for database %r on %s:%d as user %r.",
+        config.name,
+        config.host,
+        config.port,
+        config.user,
+    )
+    return config
 
 
 def get_postgres_config() -> PostgresConfig:
