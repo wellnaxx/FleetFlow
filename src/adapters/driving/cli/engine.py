@@ -316,17 +316,23 @@ class Engine:
         try:
             cmd = self._factory.create(line)
             heartbeat_changed = False
+            command_name = type(cmd).__name__
+            logger.info("Executing CLI command %s.", command_name)
 
             if not cmd.skips_heartbeat:
                 heartbeat_summary = self._advance_world_state.execute()
                 heartbeat_changed = self._heartbeat_changed(heartbeat_summary)
+                if heartbeat_changed:
+                    logger.info("Pre-command heartbeat changed world state before %s.", command_name)
 
             out = cmd.execute()
             if cmd.mutates_session:
+                logger.debug("Rebinding CLI authorization state after %s.", command_name)
                 self._rebind_app()
 
             if self._autosave_enabled and (heartbeat_changed or (cmd.mutates_state and cmd.autosaves_state)):
                 try:
+                    logger.info("Autosaving world state after %s.", command_name)
                     self._save_world_state.execute(self._autosave_path)
                 except Exception as se:
                     logger.exception("Autosave failed after executing %r", line)
@@ -334,13 +340,16 @@ class Engine:
 
             if out:
                 print(out)
+            logger.info("CLI command %s completed.", command_name)
 
         except ValueError as e:
             msg = e.args[0] if e.args else str(e)
+            logger.debug("CLI command rejected: %s", msg)
             print(f"Error: {msg}")
 
         except PermissionError as e:
             msg = e.args[0] if e.args else str(e)
+            logger.warning("CLI command denied: %s", msg)
             print(f"Permission Error: {msg}")
 
         except KeyboardInterrupt:
