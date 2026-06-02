@@ -47,7 +47,7 @@ class WorldGraphLoaderShould(unittest.TestCase):
         self.assertIs(route.truck, truck)
         self.assertIs(truck.route, route)
 
-        self.assertEqual(route.packages, [package])
+        self.assertEqual(route.packages, (package,))
         self.assertIs(package.route, route)
 
         self.assertEqual(package.status, ItemStatus.IN_PROGRESS)
@@ -88,7 +88,7 @@ class WorldGraphLoaderShould(unittest.TestCase):
         self.assertIsNone(graph.routes[21].truck)
         self.assertIsNone(graph.trucks[1001].route)
 
-        self.assertEqual(graph.routes[21].packages, [])
+        self.assertEqual(graph.routes[21].packages, ())
         self.assertIsNone(graph.packages[11].route)
 
         self.assertIs(graph.packages[11].customer, graph.customers[7])

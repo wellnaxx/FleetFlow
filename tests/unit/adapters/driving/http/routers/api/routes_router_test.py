@@ -16,7 +16,7 @@ from src.application.results.assign_packages_to_route_result import (
 )
 from src.application.use_cases.pagination import PageQuery, PageResult
 from src.application.use_cases.routes.assign_truck_to_route import AssignTruckToRouteResult
-from src.domain.entities.delivery_route import DeliveryRoute
+from src.domain.entities.delivery_route import DeliveryRoute, RoutePositionKind
 from src.domain.entities.truck import Truck
 from src.domain.enums.truck_status import TruckStatus
 from src.domain.exceptions import DomainValidationError
@@ -164,7 +164,9 @@ class RoutesRouterShould(unittest.TestCase):
     def test_list_in_progress_routes_returns_position_responses(self) -> None:
         use_case = MagicMock()
         route = self._route(route_id=41)
-        position = routes_router_module.RoutePosition(kind="AT_STOP", stop_city=LocationCode("SYD"))
+        position = routes_router_module.RoutePosition(
+            kind=RoutePositionKind.AT_STOP, stop_city=LocationCode("SYD")
+        )
         use_case.execute.return_value = [(route, position)]
         self.app.dependency_overrides[routes_router_module.get_view_routes_in_progress_use_case] = lambda: (
             use_case

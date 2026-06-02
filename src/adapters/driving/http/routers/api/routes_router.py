@@ -38,7 +38,7 @@ from src.application.use_cases.routes.remove_route import RemoveRouteUseCase
 from src.application.use_cases.routes.view_all_routes import ViewAllRoutesUseCase
 from src.application.use_cases.routes.view_route import ViewRouteUseCase
 from src.application.use_cases.routes.view_routes_in_progress import ViewRoutesInProgressUseCase
-from src.domain.entities.delivery_route import DeliveryRoute, RoutePosition
+from src.domain.entities.delivery_route import DeliveryRoute, RoutePosition, RoutePositionKind
 
 routes_router = APIRouter(prefix="/routes", tags=["routes"])
 
@@ -82,9 +82,9 @@ def _route_in_progress_response(route: DeliveryRoute, position: RoutePosition) -
         return RouteInProgressResponse(
             route=_route_response(route),
             position_kind=_route_position_kind(position),
-            current_location=str(position.stop_city) if position.kind == "AT_STOP" else None,
-            in_transit_from=str(position.from_city) if position.kind == "IN_TRANSIT" else None,
-            in_transit_to=str(position.to_city) if position.kind == "IN_TRANSIT" else None,
+            current_location=str(position.stop_city) if position.kind == RoutePositionKind.AT_STOP else None,
+            in_transit_from=str(position.from_city) if position.kind == RoutePositionKind.IN_TRANSIT else None,
+            in_transit_to=str(position.to_city) if position.kind == RoutePositionKind.IN_TRANSIT else None,
         )
     except RuntimeError as exc:
         raise HTTPException(
@@ -105,9 +105,9 @@ def _route_position_kind(position: RoutePosition) -> RouteInProgressPositionKind
     Raises:
         RuntimeError: If the position is not an active in-progress position.
     """
-    if position.kind == "AT_STOP":
+    if position.kind == RoutePositionKind.AT_STOP:
         return "AT_STOP"
-    if position.kind == "IN_TRANSIT":
+    if position.kind == RoutePositionKind.IN_TRANSIT:
         return "IN_TRANSIT"
     raise RuntimeError(f"Unsupported in-progress route position kind: {position.kind}")
 

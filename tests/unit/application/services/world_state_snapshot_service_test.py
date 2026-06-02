@@ -598,7 +598,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
         self.assertEqual(tuple(customer.delivery_packages), (package,))
         self.assertIs(package.customer, customer)
         self.assertIs(package.route, route)
-        self.assertEqual(route.packages, [package])
+        self.assertEqual(route.packages, (package,))
 
     def test_apply_snapshot_restores_truck_assignment_state(self) -> None:
         departure_time = datetime(2099, 1, 1, 10, 0, 0)
@@ -1002,7 +1002,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
         self.assertEqual(self.route_repo.peek_next_id(), 2)
 
         self.assertIs(existing_package.route, existing_route)
-        self.assertEqual(existing_route.packages, [existing_package])
+        self.assertEqual(existing_route.packages, (existing_package,))
         self.assertIs(truck.route, existing_route)
         self.assertEqual(truck.status, TruckStatus.ON_THE_WAY)
 

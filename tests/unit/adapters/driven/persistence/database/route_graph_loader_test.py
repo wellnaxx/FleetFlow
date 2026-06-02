@@ -59,7 +59,7 @@ class RouteGraphLoaderShould(unittest.TestCase):
         assert truck is not None
         self.assertIs(truck.route, route)
 
-        self.assertEqual(route.packages, [package])
+        self.assertEqual(route.packages, (package,))
         self.assertIs(package.route, route)
         self.assertEqual(package.route_id, 21)
         self.assertIs(package.customer, customer)

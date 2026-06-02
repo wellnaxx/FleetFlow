@@ -153,7 +153,7 @@ class RemoveRouteUseCase_Should(unittest.TestCase):
             self.use_case.execute(42)
 
         self.assertIs(ctx.exception, error)
-        self.assertEqual(route.packages, [package])
+        self.assertEqual(route.packages, (package,))
         self.assertIs(package.route, route)
         self.assertIs(route.truck, truck)
         self.assertIs(truck.route, route)

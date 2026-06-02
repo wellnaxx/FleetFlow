@@ -66,7 +66,7 @@ class GraphLoaderSharedHelpersShould(unittest.TestCase):
 
         self.assertIs(package.route, route)
         self.assertEqual(package.route_id, 21)
-        self.assertEqual(route.packages, [package])
+        self.assertEqual(route.packages, (package,))
 
     def _package_row(self, package_id: int, *, customer_id: int, route_id: int | None) -> dict[str, object]:
         return {

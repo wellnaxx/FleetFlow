@@ -46,7 +46,7 @@ class RuntimePackageRemovalIntegrationTests(unittest.TestCase):
         self.assertIs(removed, package)
         self.assertIsNone(package_repo.get_by_id(package.package_id))
 
-        self.assertEqual(route.packages, [])
+        self.assertEqual(route.packages, ())
         self.assertIsNone(package.route)
         self.assertIsNone(package.expected_arrival)
         self.assertEqual(package.status, ItemStatus.TODO)

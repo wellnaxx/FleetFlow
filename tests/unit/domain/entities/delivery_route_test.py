@@ -448,7 +448,7 @@ class DeliveryRoute_Should(unittest.TestCase):
         self.assertEqual(route.departure_time, base)
         self.assertEqual(route.status, RouteStatus.SCHEDULED)
         self.assertIs(route.truck, truck)
-        self.assertEqual(route.packages, [package])
+        self.assertEqual(route.packages, (package,))
         self.assertEqual(route.arrival_time_at(LocationCode("AAA")), base)
 
     def test_info_contains_key_lines(self, *_: object) -> None:

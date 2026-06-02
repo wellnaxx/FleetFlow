@@ -4,7 +4,7 @@ from datetime import datetime
 
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
-from src.domain.entities.delivery_route import DeliveryRoute, RoutePosition
+from src.domain.entities.delivery_route import DeliveryRoute, RoutePosition, RoutePositionKind
 from src.domain.enums.auth import Permission
 from src.ports.output.route_repository import RouteRepositoryPort
 
@@ -40,7 +40,7 @@ class ViewRoutesInProgressUseCase(AuthorizedUseCase[list[tuple[DeliveryRoute, Ro
 
         for route in self._routes.list_all():
             pos = route.current_position(now)
-            if pos.kind in {"AT_STOP", "IN_TRANSIT"}:
+            if pos.kind in {RoutePositionKind.AT_STOP, RoutePositionKind.IN_TRANSIT}:
                 active.append((route, pos))
 
         return active

@@ -6,7 +6,7 @@ from datetime import datetime
 from src.application.results.heartbeat_summary_result import HeartbeatSummary
 from src.application.results.truck_reconciliation_summary_result import TruckReconciliationSummary
 from src.domain.entities.delivery_package import DeliveryPackage
-from src.domain.entities.delivery_route import DeliveryRoute, RoutePosition
+from src.domain.entities.delivery_route import DeliveryRoute, RoutePosition, RoutePositionKind
 from src.domain.entities.truck import Truck
 from src.domain.enums.item_status import ItemStatus
 from src.domain.enums.route_status import RouteStatus
@@ -78,14 +78,14 @@ class WorldStateReconciliationService:
         trucks_moved: list[Truck] = []
         trucks_released: list[Truck] = []
 
-        if position.kind == "UNSCHEDULED":
+        if position.kind == RoutePositionKind.UNSCHEDULED:
             self._set_truck_unscheduled(truck)
 
-        elif position.kind == "BEFORE_START":
+        elif position.kind == RoutePositionKind.BEFORE_START:
             if self._set_truck_before_start(truck, route):
                 trucks_moved.append(truck)
 
-        elif position.kind == "AT_STOP":
+        elif position.kind == RoutePositionKind.AT_STOP:
             moved, released = self._set_truck_at_stop(
                 truck=truck,
                 route=route,
@@ -97,11 +97,11 @@ class WorldStateReconciliationService:
             if released:
                 trucks_released.append(truck)
 
-        elif position.kind == "IN_TRANSIT":
+        elif position.kind == RoutePositionKind.IN_TRANSIT:
             if self._set_truck_in_transit(truck, route, position):
                 trucks_moved.append(truck)
 
-        elif position.kind == "AFTER_END":
+        elif position.kind == RoutePositionKind.AFTER_END:
             before_location = truck.current_location
             before_in_transit_to = truck.in_transit_to
 
