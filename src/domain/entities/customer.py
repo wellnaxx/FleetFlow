@@ -59,7 +59,7 @@ class Customer:
             EntityNotFoundError: If the package is not in the old customer's active collection.
         """
         if package.customer.customer_id == self.customer_id:
-            if any(p.package_id == package.package_id for p in self._delivery_packages):
+            if package in self._delivery_packages:
                 raise DomainConflictError(
                     f"Package with id {package.package_id} is already assigned to this customer."
                 )
@@ -78,7 +78,7 @@ class Customer:
         Args:
             package: Package to link to this customer.
         """
-        if any(p.package_id == package.package_id for p in self._delivery_packages):
+        if package in self._delivery_packages:
             return
 
         package.customer = self
@@ -97,8 +97,7 @@ class Customer:
         Raises:
             EntityNotFoundError: If the package is not in this customer's active collection.
         """
-        for i, p in enumerate(self._delivery_packages):
-            if p.package_id == package.package_id:
-                self._delivery_packages.pop(i)
-                return
-        raise EntityNotFoundError(f"Package with id {package.package_id} does not exist.")
+        try:
+            self._delivery_packages.remove(package)
+        except ValueError:
+            raise EntityNotFoundError(f"Package with id {package.package_id} does not exist.") from None
