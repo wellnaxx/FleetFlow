@@ -55,28 +55,38 @@ class DeliveryPackage:
             DomainValidationError: If locations are invalid, equal, or the weight is not
                 positive, or route_id is a boolean or negative.
         """
-        start_location = LocationCode(start_location)
-        end_location = LocationCode(end_location)
-        if not Map.is_valid_location(start_location):
-            raise DomainValidationError(f"Invalid start location: {start_location}")
-        if not Map.is_valid_location(end_location):
-            raise DomainValidationError(f"Invalid end location: {end_location}")
-        if start_location == end_location:
+        self.start_location = LocationCode(start_location)
+        self.end_location = LocationCode(end_location)
+        self._package_id = package_id
+        self._validate_locations()
+        self._validate_weight(float(weight))
+        self._current_location = self.start_location
+        self.weight = weight
+        self.customer = customer
+        self._route = None
+        self._route_id = self._validate_route_id(route_id)
+        self.expected_arrival = None
+        self.status = ItemStatus.TODO
+
+    def _validate_locations(self) -> None:
+        """Validate start and end locations."""
+        if not Map.is_valid_location(self.start_location):
+            raise DomainValidationError(f"Invalid start location: {self.start_location}")
+        if not Map.is_valid_location(self.end_location):
+            raise DomainValidationError(f"Invalid end location: {self.end_location}")
+        if self.start_location == self.end_location:
             raise DomainValidationError("Start and end locations must be different.")
-        if float(weight) <= 0:
+
+    def _validate_weight(self, weight: float) -> None:
+        """Validate the weight of the package."""
+        if weight <= 0:
             raise DomainValidationError("Weight must be positive.")
-        self._package_id: int = package_id
-        self.start_location: LocationCode = start_location
-        self.end_location: LocationCode = end_location
-        self._current_location: LocationCode | None = self.start_location
-        self.weight: float = float(weight)
-        self.customer: Customer = customer
-        self._route: DeliveryRoute | None = None
+
+    def _validate_route_id(self, route_id: int | None) -> int | None:
+        """Validate the route ID."""
         if route_id is not None and (isinstance(route_id, bool) or route_id < 1):
             raise DomainValidationError("Route ID must be a positive integer.")
-        self._route_id: int | None = route_id
-        self.expected_arrival: datetime | None = None
-        self.status: ItemStatus = ItemStatus.TODO
+        return route_id
 
     @property
     def package_id(self) -> int:
@@ -101,10 +111,7 @@ class DeliveryPackage:
     @property
     def current_location(self) -> LocationCode:
         """Current package location."""
-        location = self._current_location
-        if location is None:
-            return self.start_location
-        return location
+        return self._current_location or self.start_location
 
     @current_location.setter
     def current_location(self, value: str | LocationCode | None) -> None:
@@ -149,15 +156,14 @@ class DeliveryPackage:
         Returns:
             Multi-line package summary for CLI display.
         """
-        cname = self.customer.name
-        cemail = self.customer.contact.display_email()
-        cphone = self.customer.contact.display_phone()
-        contact_info = f"{cname} ({cemail}, {cphone})"
+        contact_info = (
+            f"{self.customer.name} ({self.customer.contact.display_email()}, "
+            f"{self.customer.contact.display_phone()})"
+        )
         route_str = self.route_id if self.route_id else "Not assigned"
-        if self.expected_arrival:
-            arrival_str = self.expected_arrival.strftime("%Y-%m-%d %H:%M")
-        else:
-            arrival_str = "Not assigned"
+        arrival_str = (
+            self.expected_arrival.strftime("%Y-%m-%d %H:%M") if self.expected_arrival else "Not assigned"
+        )
         return (
             f"Package {self.package_id}: "
             f"{self.start_location} -> {self.end_location}, {self.weight:.1f}kg\n"
