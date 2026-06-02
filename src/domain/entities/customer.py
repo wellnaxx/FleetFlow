@@ -12,14 +12,19 @@ if TYPE_CHECKING:
     from src.domain.entities.delivery_package import DeliveryPackage
 
 
+def _empty_delivery_packages() -> list[DeliveryPackage]:
+    """Return a typed empty package collection for dataclass initialization."""
+    return []
+
+
 @dataclass
 class Customer:
     """Customer contact record with an active package collection."""
 
     contact: ContactInfo
     customer_id: int
-    _delivery_packages: list[DeliveryPackage] = field(  # pyright: ignore[reportUnknownVariableType]
-        default_factory=list,
+    _delivery_packages: list[DeliveryPackage] = field(
+        default_factory=_empty_delivery_packages,
         repr=False,
     )
 
