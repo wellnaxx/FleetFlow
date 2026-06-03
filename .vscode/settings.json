@@ -12,5 +12,6 @@
     "python.testing.unittestEnabled": true,
     "python.testing.cwd": "${workspaceFolder}",
     "python.envFile": "${workspaceFolder}/.env",
-    "python-envs.defaultEnvManager": "ms-python.python:venv"
+    "python-envs.defaultEnvManager": "ms-python.python:venv",
+    "css.lint.unknownAtRules": "ignore"
 }
