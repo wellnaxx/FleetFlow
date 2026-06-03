@@ -95,7 +95,7 @@ class DeliveryPackage:
 
     @property
     def route(self) -> DeliveryRoute | None:
-        """Reference to the route, to which the package is assigned, if it is assigned."""
+        """Reference to the route, to which the package is assigned, if assigned."""
         return self._route
 
     @route.setter
@@ -105,7 +105,7 @@ class DeliveryPackage:
 
     @property
     def route_id(self) -> int | None:
-        """The ID of the route, to which the package is assigned, if it is assigned."""
+        """The ID of the route, to which the package is assigned, if assigned."""
         return self._route_id
 
     @property
