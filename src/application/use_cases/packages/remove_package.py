@@ -42,27 +42,52 @@ class RemovePackageUseCase(AuthorizedUseCase[DeliveryPackage]):
             DomainConflictError: If route-package assignment state is inconsistent.
             EntityNotFoundError: If customer-package ownership state is inconsistent.
         """
+        package = self._get_package(package_id)
+        self._detach_from_route(package)
+        self._remove_from_customer(package)
+        self._packages.remove(package_id)
+        logger.info("Removed package %d.", package_id)
+        return package
+
+    def _get_package(self, package_id: int) -> DeliveryPackage:
         package = self._packages.get_by_id(package_id)
         if package is None:
             logger.warning("Package removal requested for missing package %d.", package_id)
             raise NotFoundError(f"Package with ID {package_id} not found.")
-
-        if package.route_id is not None:
-            if package.route is None:
-                logger.warning(
-                    "Package %d cannot be removed cleanly because route %d is not hydrated.",
-                    package_id,
-                    package.route_id,
-                )
-                raise DomainConflictError(
-                    f"Package {package_id} is assigned to route {package.route_id}, but route is not hydrated."
-                )
-            try:
-                package.route.detach_package(package)
-            except EntityNotFoundError as exc:
-                raise DomainConflictError(str(exc)) from exc
-
-        package.customer.remove_package(package)
-        self._packages.remove(package_id)
-        logger.info("Removed package %d.", package_id)
         return package
+
+    def _detach_from_route(self, package: DeliveryPackage) -> None:
+        if package.route_id is None:
+            return
+
+        if package.route is None:
+            logger.warning(
+                "Package %d cannot be removed cleanly because route %d is not hydrated.",
+                package.package_id,
+                package.route_id,
+            )
+            raise DomainConflictError(
+                f"Package {package.package_id} is assigned to route {package.route_id}, "
+                "but route is not hydrated."
+            )
+
+        try:
+            package.route.detach_package(package)
+        except EntityNotFoundError as exc:
+            raise DomainConflictError(str(exc)) from exc
+
+    def _remove_from_customer(self, package: DeliveryPackage) -> None:
+        customer = getattr(package, "customer", None)
+        if customer is None:
+            logger.warning(
+                "Package %d cannot be removed cleanly because customer is not hydrated.",
+                package.package_id,
+            )
+            raise DomainConflictError(
+                f"Package {package.package_id} has no hydrated customer."
+            )
+
+        try:
+            customer.remove_package(package)
+        except EntityNotFoundError as exc:
+            raise DomainConflictError(str(exc)) from exc

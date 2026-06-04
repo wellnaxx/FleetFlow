@@ -62,56 +62,22 @@ class AssignPackagesToRouteUseCase(AuthorizedUseCase[AssignPackagesToRouteResult
             DatabaseError: If the package assignment persistence fails.
             NotFoundError: If the target route does not exist.
         """
-        route = self._routes.get_by_id(route_id)
-        if route is None:
-            logger.warning("Package assignment requested for missing route %d.", route_id)
-            raise NotFoundError(f"Route with ID {route_id} not found.")
-
+        route = self._get_route(route_id)
         result = AssignPackagesToRouteResult(successes=[], errors=[])
-        seen_package_ids: set[int] = set()
         now = self._clock()
 
-        for package_id in package_ids:
-            if package_id in seen_package_ids:
-                continue
-            seen_package_ids.add(package_id)
-
+        for package_id in self._unique_package_ids(package_ids):
             package = self._packages.get_by_id(package_id)
             if package is None:
-                logger.warning(
-                    "Package assignment skipped missing package %d for route %d.",
-                    package_id,
-                    route_id,
-                )
-                result.errors.append(
-                    PackageAssignmentError(package_id=package_id, message=f"Package {package_id} not found.")
-                )
+                result.errors.append(self._missing_package_error(package_id, route_id))
                 continue
 
-            if package.route_id is not None:
-                if package.route is None:
-                    message = f"Package {package_id} has route_id {package.route_id} but route is not hydrated."
-                else:
-                    message = f"Package {package_id} is already on route {package.route_id}."
-                logger.warning("Package assignment rejected for package %d: %s", package_id, message)
-                result.errors.append(
-                    PackageAssignmentError(
-                        package_id=package_id,
-                        message=message,
-                    )
-                )
+            if assignment_error := self._assigned_package_error(package):
+                result.errors.append(assignment_error)
                 continue
 
             try:
-                route.assign_package(package, now=now)
-                self._packages.update_state(package)
-                result.successes.append(
-                    PackageAssignmentSuccess(
-                        package_id=package.package_id,
-                        route_id=route.route_id,
-                        eta_text=self._format_eta(route, package),
-                    )
-                )
+                result.successes.append(self._assign_package(route=route, package=package, now=now))
             except DomainConflictError as exc:
                 logger.warning("Package assignment rejected for package %d: %s", package_id, exc)
                 result.errors.append(PackageAssignmentError(package_id=package_id, message=str(exc)))
@@ -123,6 +89,60 @@ class AssignPackagesToRouteUseCase(AuthorizedUseCase[AssignPackagesToRouteResult
             len(result.errors),
         )
         return result
+
+    def _get_route(self, route_id: int) -> DeliveryRoute:
+        route = self._routes.get_by_id(route_id)
+        if route is None:
+            logger.warning("Package assignment requested for missing route %d.", route_id)
+            raise NotFoundError(f"Route with ID {route_id} not found.")
+        return route
+
+    def _unique_package_ids(self, package_ids: list[int]) -> list[int]:
+        seen_package_ids: set[int] = set()
+        unique_package_ids: list[int] = []
+
+        for package_id in package_ids:
+            if package_id in seen_package_ids:
+                continue
+            seen_package_ids.add(package_id)
+            unique_package_ids.append(package_id)
+        return unique_package_ids
+
+    def _missing_package_error(self, package_id: int, route_id: int) -> PackageAssignmentError:
+        logger.warning(
+            "Package assignment skipped missing package %d for route %d.",
+            package_id,
+            route_id,
+        )
+        return PackageAssignmentError(package_id=package_id, message=f"Package {package_id} not found.")
+
+    def _assigned_package_error(self, package: DeliveryPackage) -> PackageAssignmentError | None:
+        if package.route_id is None:
+            return None
+
+        if package.route is None:
+            message = (
+                f"Package {package.package_id} has route_id {package.route_id} but route is not hydrated."
+            )
+        else:
+            message = f"Package {package.package_id} is already on route {package.route_id}."
+
+        logger.warning("Package assignment rejected for package %d: %s", package.package_id, message)
+        return PackageAssignmentError(package_id=package.package_id, message=message)
+
+    def _assign_package(
+        self,
+        route: DeliveryRoute,
+        package: DeliveryPackage,
+        now: datetime,
+    ) -> PackageAssignmentSuccess:
+        route.assign_package(package, now=now)
+        self._packages.update_state(package)
+        return PackageAssignmentSuccess(
+            package_id=package.package_id,
+            route_id=route.route_id,
+            eta_text=self._format_eta(route, package),
+        )
 
     def _format_eta(self, route: DeliveryRoute, package: DeliveryPackage) -> str:
         if route.departure_time is None:

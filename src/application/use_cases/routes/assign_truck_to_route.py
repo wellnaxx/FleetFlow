@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from src.domain.entities.delivery_route import DeliveryRoute
+    from src.domain.entities.truck import Truck
     from src.domain.value_objects.location_code import LocationCode
     from src.ports.output.route_repository import RouteRepositoryPort
     from src.ports.output.unit_of_work import UnitOfWorkPort
@@ -90,58 +91,85 @@ class AssignTruckToRouteUseCase(AuthorizedUseCase[AssignTruckToRouteResult]):
             ConflictError: If the selected route already has a truck assigned
                 or the selected truck is not suitable for the route.
         """
+        route = self._get_route(route_id)
+        truck = self._get_truck(truck_id, route_id)
+
+        self._ensure_route_has_no_truck(route)
+        self._ensure_truck_is_suitable(truck=truck, route=route, now=now)
+        self._assign_and_persist(route=route, truck=truck, now=now)
+
+        logger.info("Assigned truck %d to route %d.", truck.vehicle_id, route.route_id)
+        return AssignTruckToRouteResult(route_id=route.route_id, truck_id=truck.vehicle_id)
+
+    def _get_route(self, route_id: int) -> DeliveryRoute:
         route = self._routes.get_by_id(route_id)
         if route is None:
             logger.warning("Truck assignment requested for missing route %d.", route_id)
             raise NotFoundError(f"Route with ID {route_id} not found")
+        return route
 
+    def _get_truck(self, truck_id: int, route_id: int) -> Truck:
         truck = self._vehicle_manager.find_by_id(truck_id)
-        if not truck:
+        if truck is None:
             logger.warning("Truck assignment requested with missing truck %d for route %d.", truck_id, route_id)
             raise NotFoundError(f"Truck with ID {truck_id} not found")
+        return truck
 
+    def _ensure_route_has_no_truck(self, route: DeliveryRoute) -> None:
         current_truck = route.truck
-        if current_truck is not None:
-            logger.warning(
-                "Truck assignment rejected because route %d already has truck %d.",
-                route_id,
-                current_truck.vehicle_id,
-            )
-            raise ConflictError(f"Route {route_id} already has truck {current_truck.vehicle_id} assigned")
+        if current_truck is None:
+            return
 
-        effective_route: DeliveryRoute | _RouteSuitabilityProbe = route
+        logger.warning(
+            "Truck assignment rejected because route %d already has truck %d.",
+            route.route_id,
+            current_truck.vehicle_id,
+        )
+        raise ConflictError(f"Route {route.route_id} already has truck {current_truck.vehicle_id} assigned")
+
+    def _route_for_suitability(
+        self, route: DeliveryRoute, now: datetime
+    ) -> DeliveryRoute | _RouteSuitabilityProbe:
         if route.departure_time is None:
-            effective_route = _RouteSuitabilityProbe(
+            return _RouteSuitabilityProbe(
                 total_distance_km=route.total_distance_km,
                 start_location=route.start_location,
                 departure_time=now,
                 assigned_weight=route.maximum_segment_load(),
             )
+        return route
 
+    def _ensure_truck_is_suitable(self, truck: Truck, route: DeliveryRoute, now: datetime) -> None:
+        effective_route = self._route_for_suitability(route, now)
         ok, reason = self._vehicle_manager.is_suitable_for_route(truck, effective_route)
-        if not ok:
-            logger.warning("Truck %d rejected for route %d: %s.", truck_id, route_id, reason)
-            raise ConflictError(
-                f"Truck {truck_id} is not suitable for route {route_id}: {reason}. "
-                f"Query suitable trucks for this route to see available options."
-            )
+        if ok:
+            return
 
+        logger.warning("Truck %d rejected for route %d: %s.", truck.vehicle_id, route.route_id, reason)
+        raise ConflictError(
+            f"Truck {truck.vehicle_id} is not suitable for route {route.route_id}: {reason}. "
+            f"Query suitable trucks for this route to see available options."
+        )
+
+    def _assign_and_persist(self, route: DeliveryRoute, truck: Truck, now: datetime) -> None:
         route_snapshot = route.snapshot_state()
         truck_snapshot = truck.snapshot_state()
         try:
-            if route.departure_time is None:
-                route.schedule(now)
-            route.truck = truck
-            truck.assign(route)
-
-            with self._unit_of_work as uow:
-                uow.routes.update_state(route)
-                uow.trucks.update_state(truck)
-                uow.commit()
+            self._assign_in_memory(route=route, truck=truck, now=now)
+            self._persist_assignment(route=route, truck=truck)
         except Exception:
             route.restore_state(route_snapshot)
             truck.restore_state(truck_snapshot)
             raise
 
-        logger.info("Assigned truck %d to route %d.", truck.vehicle_id, route.route_id)
-        return AssignTruckToRouteResult(route_id=route.route_id, truck_id=truck.vehicle_id)
+    def _assign_in_memory(self, route: DeliveryRoute, truck: Truck, now: datetime) -> None:
+        if route.departure_time is None:
+            route.schedule(now)
+        route.truck = truck
+        truck.assign(route)
+
+    def _persist_assignment(self, route: DeliveryRoute, truck: Truck) -> None:
+        with self._unit_of_work as uow:
+            uow.routes.update_state(route)
+            uow.trucks.update_state(truck)
+            uow.commit()

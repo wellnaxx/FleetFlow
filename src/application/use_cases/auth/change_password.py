@@ -2,6 +2,7 @@
 
 import logging
 
+from src.application.exceptions.application_errors import ValidationError
 from src.application.services.auth_service import AuthService
 from src.application.services.authorization_service import AuthorizationService
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
@@ -11,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class ChangePasswordUseCase(AuthorizedUseCase[None]):
-    """Change or reset a user's password through the auth service."""
+    """Coordinate authenticated password changes and admin password resets."""
 
     def __init__(self, auth: AuthService, authz: AuthorizationService) -> None:
         """Initialize the use case.
@@ -38,30 +39,21 @@ class ChangePasswordUseCase(AuthorizedUseCase[None]):
             ValidationError: If password validation fails.
             PermissionError: If the caller is not authorized to perform the action.
         """
+        target_username = self._normalize_username(username)
+
         if old_password is None:
-            if self.authz.current_user is None:
-                raise PermissionError("Unauthenticated")
-            if not self.authz.has(Permission.ADMIN_USER):
-                raise PermissionError("Missing permission: ADMIN_USER")
-            self._auth.reset_password(username, new_password)
-            logger.info("Password reset completed for user %r.", username.strip().lower())
+            self._require_admin()
+            self._auth.reset_password(target_username, new_password)
+            self._log_password_updated("Password reset completed", target_username)
             return
 
-        if self.authz.current_user is None:
-            raise PermissionError("Unauthenticated")
+        self._require_authenticated()
 
-        current_username = self._current_username()
-        is_self_change = current_username is not None and username.strip().lower() == current_username
-        if not is_self_change and not self.authz.has(Permission.ADMIN_USER):
+        if not self._is_current_user(target_username) and not self.authz.has(Permission.ADMIN_USER):
             raise PermissionError("Cannot change another user's password.")
 
-        self._auth.change_password(username, old_password, new_password)
-        logger.info("Password changed for user %r.", username.strip().lower())
-
-    @property
-    def current_session_username(self) -> str | None:
-        """Return the username recorded by a session-oriented auth service."""
-        return self._current_username()
+        self._auth.change_password(target_username, old_password, new_password)
+        self._log_password_updated("Password changed", target_username)
 
     def execute_current_user(self, username: str | None, new_password: str, old_password: str) -> None:
         """Change the currently authenticated user's password.
@@ -78,14 +70,22 @@ class ChangePasswordUseCase(AuthorizedUseCase[None]):
             NotFoundError: If the user is missing.
             ValidationError: If password validation fails.
         """
-        if self.authz.current_user is None:
-            raise PermissionError("Unauthenticated")
+        self._require_authenticated()
 
-        if not isinstance(username, str) or not username.strip():
+        if username is None:
             raise PermissionError("Authenticated user has no username.")
 
-        self._auth.change_password(username.strip().lower(), old_password, new_password)
-        logger.info("Password changed for current user %r.", username.strip().lower())
+        current_username = self._normalize_username(username)
+        if not self._is_current_user(current_username):
+            raise PermissionError("Username does not match authenticated user.")
+
+        self._auth.change_password(current_username, old_password, new_password)
+        self._log_password_updated("Password changed for current user", current_username)
+
+    @property
+    def current_session_username(self) -> str | None:
+        """Return the username recorded by a session-oriented auth service."""
+        return self._current_username()
 
     def _current_username(self) -> str | None:
         """Return the authenticated username from auth session state."""
@@ -93,7 +93,28 @@ class ChangePasswordUseCase(AuthorizedUseCase[None]):
             return None
 
         last_username = self._auth.last_username
-        if isinstance(last_username, str) and last_username.strip():
-            return last_username.strip().lower()
+        return (
+            last_username.strip().lower() if isinstance(last_username, str) and last_username.strip() else None
+        )
 
-        return None
+    def _require_authenticated(self) -> None:
+        if self.authz.current_user is None:
+            raise PermissionError("Unauthenticated")
+
+    def _require_admin(self) -> None:
+        self._require_authenticated()
+        if not self.authz.has(Permission.ADMIN_USER):
+            raise PermissionError("Missing permission: ADMIN_USER")
+
+    def _normalize_username(self, username: str) -> str:
+        normalized = username.strip().lower()
+        if not normalized:
+            raise ValidationError("Username must be a non-empty string.")
+        return normalized
+
+    def _is_current_user(self, username: str) -> bool:
+        current_username = self._current_username()
+        return current_username is not None and username == current_username
+
+    def _log_password_updated(self, message: str, username: str) -> None:
+        logger.info("%s for user %r.", message, username)

@@ -35,6 +35,27 @@ class LoadWorldStateUseCaseTests(unittest.TestCase):
         gateway.apply_snapshot.assert_called_once_with(snapshot)
         self.assertEqual(result, "/abs/state.json")
 
+    def test_execute_strips_path_before_reading_snapshot(self) -> None:
+        snapshot = WorldStateSnapshot(
+            schema_version=1,
+            world=WorldSnapshotData(
+                counters=CountersSnapshot(1, 1, 1),
+                customers=(),
+                packages=(),
+                routes=(),
+            ),
+        )
+        gateway = MagicMock()
+        persistence = MagicMock()
+        persistence.read.return_value = ("/abs/state.json", snapshot)
+        use_case = LoadWorldStateUseCase(gateway, persistence, manager_authz())
+
+        result = use_case.execute("  state.json  ")
+
+        persistence.read.assert_called_once_with("state.json")
+        gateway.apply_snapshot.assert_called_once_with(snapshot)
+        self.assertEqual(result, "/abs/state.json")
+
     def test_execute_raises_when_apply_fails(self) -> None:
         snapshot = WorldStateSnapshot(
             schema_version=1,

@@ -6,6 +6,7 @@ from src.application.exceptions.application_errors import ValidationError
 from src.application.exceptions.world_state_errors import WorldStatePersistenceError
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
+from src.application.use_cases.state.path_validation import validate_world_state_path
 from src.domain.enums.auth import Permission
 from src.ports.output.world_state_gateway import WorldStateGatewayPort
 from src.ports.output.world_state_persistence import WorldStatePersistencePort
@@ -48,10 +49,9 @@ class SaveWorldStateUseCase(AuthorizedUseCase[str]):
             ValidationError: If the requested path is invalid.
             WorldStatePersistenceError: If the snapshot cannot be written.
         """
-        if not path.strip():
-            raise ValidationError("World state snapshot path is required.")
+        stripped_path = validate_world_state_path(path)
 
-        logger.info("Saving world-state snapshot to %r.", path)
+        logger.info("Saving world-state snapshot to %r.", stripped_path)
         snapshot = self._world_state_gateway.build_snapshot()
         logger.debug(
             "Built world-state snapshot with %d customers, %d packages, %d routes, and %d trucks.",
@@ -61,7 +61,7 @@ class SaveWorldStateUseCase(AuthorizedUseCase[str]):
             len(snapshot.world.trucks),
         )
         try:
-            written_path = self._persistence.write(path, snapshot)
+            written_path = self._persistence.write(stripped_path, snapshot)
         except ValueError as exc:
             raise ValidationError(str(exc)) from exc
         except OSError as exc:

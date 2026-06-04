@@ -36,6 +36,27 @@ class SaveWorldStateUseCaseTests(unittest.TestCase):
         persistence.write.assert_called_once_with("state.json", snapshot)
         self.assertEqual(result, "/abs/state.json")
 
+    def test_execute_strips_path_before_writing_snapshot(self) -> None:
+        snapshot = WorldStateSnapshot(
+            schema_version=2,
+            world=WorldSnapshotData(
+                counters=CountersSnapshot(1, 1, 1),
+                customers=(),
+                packages=(),
+                routes=(),
+            ),
+        )
+        gateway = MagicMock()
+        gateway.build_snapshot.return_value = snapshot
+        persistence = MagicMock()
+        persistence.write.return_value = "/abs/state.json"
+        use_case = SaveWorldStateUseCase(gateway, persistence, manager_authz())
+
+        result = use_case.execute("  state.json  ")
+
+        persistence.write.assert_called_once_with("state.json", snapshot)
+        self.assertEqual(result, "/abs/state.json")
+
     def test_execute_rejects_blank_path_before_building_snapshot(self) -> None:
         gateway = MagicMock()
         persistence = MagicMock()

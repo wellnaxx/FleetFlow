@@ -60,11 +60,25 @@ class RemovePackageUseCase_Should(unittest.TestCase):
         package.customer.remove_package.side_effect = EntityNotFoundError("customer unlink failed")
         self.mock_packages.get_by_id.return_value = package
 
-        with self.assertRaises(EntityNotFoundError) as ctx:
+        with self.assertRaises(DomainConflictError) as ctx:
             self.use_case.execute(42)
 
         self.assertIn("customer unlink failed", str(ctx.exception))
         package.customer.remove_package.assert_called_once_with(package)
+        self.mock_packages.remove.assert_not_called()
+
+    def test_rejects_package_with_unhydrated_customer(self) -> None:
+        package = MagicMock()
+        package.package_id = 42
+        package.route = None
+        package.route_id = None
+        package.customer = None
+        self.mock_packages.get_by_id.return_value = package
+
+        with self.assertRaises(DomainConflictError) as ctx:
+            self.use_case.execute(42)
+
+        self.assertIn("Package 42 has no hydrated customer.", str(ctx.exception))
         self.mock_packages.remove.assert_not_called()
 
     def test_propagates_detach_error(self) -> None:

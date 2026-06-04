@@ -5,8 +5,7 @@ from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.application.use_cases.pagination import (
     PageQuery,
     PageResult,
-    validate_page,
-    validate_unpaginated_offset,
+    execute_page_query,
 )
 from src.domain.entities.customer import Customer
 from src.domain.enums.auth import Permission
@@ -39,25 +38,11 @@ class ViewAllCustomersUseCase(AuthorizedUseCase[PageResult[Customer]]):
         Raises:
             ValidationError: If pagination arguments are invalid.
         """
-        if query.limit is None:
-            validate_unpaginated_offset(query.offset)
-            return PageResult(
-                items=tuple(self._customers.list_all()),
-                total=None,
-                limit=None,
-                offset=query.offset,
-            )
-
-        validate_page(query.limit, query.offset)
-        if query.include_total:
-            customers, total = self._customers.list_page_with_total(limit=query.limit, offset=query.offset)
-        else:
-            customers = self._customers.list_page(limit=query.limit, offset=query.offset)
-            total = None
-
-        return PageResult(
-            items=tuple(customers),
-            total=total,
-            limit=query.limit,
-            offset=query.offset,
+        return execute_page_query(
+            query=query,
+            list_all=self._customers.list_all,
+            list_page=lambda limit, offset: self._customers.list_page(limit=limit, offset=offset),
+            list_page_with_total=lambda limit, offset: self._customers.list_page_with_total(
+                limit=limit, offset=offset
+            ),
         )
