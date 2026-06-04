@@ -3,6 +3,7 @@
 import getpass
 
 from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
+from src.adapters.driving.cli.commands.validation_helpers import validate_passwords
 from src.application.use_cases.auth.change_password import ChangePasswordUseCase
 
 
@@ -32,16 +33,14 @@ class AuthChangePassword(BaseCommand[ChangePasswordUseCase]):
         if target:
             new_pw = getpass.getpass(f"New password for '{target}': ")
             confirm = getpass.getpass("Confirm new password: ")
-            if new_pw != confirm:
-                raise ValueError("Passwords do not match.")
+            validate_passwords(new_pw, confirm)
             self._use_case.execute(target, new_pw)
             return f"Password reset for '{target}'."
 
         old_pw = getpass.getpass("Old password: ")
         new_pw = getpass.getpass("New password: ")
         confirm = getpass.getpass("Confirm new password: ")
-        if new_pw != confirm:
-            raise ValueError("Passwords do not match.")
+        validate_passwords(new_pw, confirm)
 
         self._use_case.execute_current_user(
             self._use_case.current_session_username,

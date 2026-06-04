@@ -3,6 +3,7 @@
 import getpass
 
 from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
+from src.adapters.driving.cli.commands.validation_helpers import validate_passwords
 from src.application.use_cases.auth.register_user import RegisterUserUseCase
 from src.domain.enums.auth import Role
 
@@ -43,11 +44,9 @@ class AuthRegisterUser(BaseCommand[RegisterUserUseCase]):
         else:
             raise ValueError("Role must be 'employee' or 'manager'.")
 
-        # Prompt for password (with confirmation)
         password = getpass.getpass("Temporary password: ")
         confirm = getpass.getpass("Confirm password: ")
-        if password != confirm:
-            raise ValueError("Passwords do not match.")
+        validate_passwords(password, confirm)
 
         rec = self._use_case.execute(
             username=username,

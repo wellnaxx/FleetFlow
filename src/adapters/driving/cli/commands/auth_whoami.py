@@ -16,7 +16,7 @@ class AuthWhoAmI(BaseCommand[WhoAmIUseCase]):
         Returns:
             CLI output for the current session.
         """
-        u = self._use_case.execute()
-        if not u:
+        user = self._use_case.execute()
+        if not user:
             return "Not logged in."
-        return f"{u.name} [{u.role.value}]"
+        return "Not logged in." if not user else f"{user.name} [{user.role.value}]"

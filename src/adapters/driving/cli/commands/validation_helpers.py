@@ -112,3 +112,8 @@ def parse_departure_from_tail(tokens: list[str]) -> tuple[list[str], datetime | 
             continue
 
     return tokens, None
+
+def validate_passwords(new_pw: str, confirm: str) -> None:
+    """Validate that the new password and confirmation match."""
+    if new_pw != confirm:
+        raise ValueError("Passwords do not match.")

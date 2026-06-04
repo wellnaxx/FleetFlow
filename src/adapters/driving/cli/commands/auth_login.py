@@ -1,4 +1,5 @@
 """CLI command for logging in."""
+import getpass
 
 from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
 from src.application.use_cases.auth.login import LoginUseCase
@@ -20,7 +21,6 @@ class AuthLogin(BaseCommand[LoginUseCase]):
         Raises:
             ValueError: If credentials are invalid.
         """
-        import getpass
 
         username = self._params[0] if self._params else input("Username: ").strip()
         password = getpass.getpass("Password: ")
