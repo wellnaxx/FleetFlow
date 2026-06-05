@@ -17,7 +17,7 @@ def _empty_delivery_packages() -> list[DeliveryPackage]:
     return []
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class Customer:
     """Customer contact record with an active package collection."""
 

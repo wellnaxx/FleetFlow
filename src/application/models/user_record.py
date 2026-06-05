@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class UserRecord:
     """Serializable auth user record used by persistence adapters."""
 

@@ -7,7 +7,7 @@ from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.entities.truck import Truck
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class HeartbeatSummary:
     """Summary of entities mutated during heartbeat reconciliation.
 

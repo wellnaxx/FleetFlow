@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from src.domain.entities.truck import Truck
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class HydratedWorldGraph:
     """Fully connected domain graph loaded from Postgres.
 

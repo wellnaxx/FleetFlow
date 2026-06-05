@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from src.application.dto.candidate_truck_dto import CandidateTruckLink
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class LinkedTruckState:
     """Candidate truck links restored from a world-state snapshot.
 

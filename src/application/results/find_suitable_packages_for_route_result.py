@@ -6,7 +6,7 @@ from datetime import datetime
 from src.domain.value_objects.location_code import LocationCode
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class SuitableRouteForPackage:
     """Route option that can carry a package."""
 

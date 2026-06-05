@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from src.ports.output.unit_of_work import UnitOfWorkPort
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class _RouteRemovalSnapshot:
     route: RouteStateSnapshot
     packages: tuple[tuple[DeliveryPackage, DeliveryPackageStateSnapshot], ...]

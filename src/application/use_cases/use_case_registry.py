@@ -30,7 +30,7 @@ from src.application.use_cases.state.save_world import SaveWorldStateUseCase
 from src.application.use_cases.trucks.view_all_trucks import ViewAllTrucksUseCase
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class AuthUseCases:
     """Authentication and account-management use cases."""
 
@@ -41,14 +41,14 @@ class AuthUseCases:
     change_password: ChangePasswordUseCase
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class CustomerUseCases:
     """Customer-facing use cases."""
 
     view_all: ViewAllCustomersUseCase
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class PackageUseCases:
     """Package-facing use cases."""
 
@@ -59,7 +59,7 @@ class PackageUseCases:
     view_unassigned: ViewUnassignedPackagesUseCase
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class RouteUseCases:
     """Route-facing use cases."""
 
@@ -74,14 +74,14 @@ class RouteUseCases:
     find_suitable_routes: FindSuitableRoutesForPackageUseCase
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class TruckUseCases:
     """Truck-facing use cases."""
 
     view_all: ViewAllTrucksUseCase
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class StateUseCases:
     """World-state use cases."""
 

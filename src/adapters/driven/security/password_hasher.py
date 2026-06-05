@@ -14,7 +14,7 @@ SALT_BYTES = 16
 MIN_PASSWORD_LENGTH = 8
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class PasswordHash:
     """Serialized PBKDF2 password hash components."""
 

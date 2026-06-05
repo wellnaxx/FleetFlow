@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from src.shared.env_vars import get_env_var
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class JWTConfig:
     access_secret: str
     refresh_secret: str

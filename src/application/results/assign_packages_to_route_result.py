@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class PackageAssignmentSuccess:
     """Successful package assignment details."""
 
@@ -12,7 +12,7 @@ class PackageAssignmentSuccess:
     eta_text: str
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class PackageAssignmentError:
     """Package assignment failure details."""
 
@@ -20,7 +20,7 @@ class PackageAssignmentError:
     message: str
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class AssignPackagesToRouteResult:
     """Batch assignment result split into successes and errors."""
 

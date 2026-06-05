@@ -21,7 +21,7 @@ from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.enums.item_status import ItemStatus
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class HydratedPackageGraph:
     """Connected domain graph for one package aggregate.
 

@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from src.ports.output.vehicle_manager import VehicleManagerPort
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class _RouteSuitabilityProbe:
     total_distance_km: int
     start_location: LocationCode
@@ -40,7 +40,7 @@ class _RouteSuitabilityProbe:
         return self.assigned_weight
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class AssignTruckToRouteResult:
     """Result returned after a truck is assigned to a route."""
 

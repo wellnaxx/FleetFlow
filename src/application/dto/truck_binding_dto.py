@@ -9,7 +9,7 @@ from src.domain.enums.truck_status import TruckStatus
 from src.domain.value_objects.location_code import LocationCode
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class TruckBinding:
     """Prepared runtime state for one real truck."""
 

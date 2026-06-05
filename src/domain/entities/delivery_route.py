@@ -28,7 +28,7 @@ class RoutePositionKind(StrEnum):
     AFTER_END = "AFTER_END"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class RoutePosition:
     """Current operational position of a scheduled route."""
 
@@ -39,7 +39,7 @@ class RoutePosition:
     next_eta: datetime | None = None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class RouteSegment:
     """Travel segment between two adjacent route stops."""
 
@@ -49,7 +49,7 @@ class RouteSegment:
     duration: timedelta
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class RouteStateSnapshot:
     """Captured mutable state for restoring a route after a failed operation."""
 

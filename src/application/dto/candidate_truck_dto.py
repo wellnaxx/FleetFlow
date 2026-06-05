@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from src.domain.entities.truck import Truck
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class CandidateTruckLink:
     """Pair a live fleet truck with its candidate state during snapshot apply."""
 

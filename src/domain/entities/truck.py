@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from src.domain.entities.delivery_route import DeliveryRoute
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class TruckStateSnapshot:
     """Captured mutable truck state for restoring after a failed operation."""
 

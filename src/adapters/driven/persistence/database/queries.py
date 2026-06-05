@@ -12,7 +12,7 @@ from functools import cached_property
 from src.adapters.driven.persistence.database.loader import load_sql
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class CustomerQueries:
     add: str
     add_snapshot: str
@@ -27,7 +27,7 @@ class CustomerQueries:
     remove: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class RouteQueries:
     add: str
     add_snapshot: str
@@ -41,7 +41,7 @@ class RouteQueries:
     update_state: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class PackageQueries:
     add: str
     add_snapshot: str
@@ -63,7 +63,7 @@ class PackageQueries:
     update_state: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class TruckQueries:
     add: str
     get_by_id: str
@@ -76,7 +76,7 @@ class TruckQueries:
     update_state: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class UserQueries:
     add: str
     get_by_username: str
@@ -88,7 +88,7 @@ class UserQueries:
     increment_token_version_by_id: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class WorldStateQueries:
     clear_world: str
     get_snapshot_counters: str

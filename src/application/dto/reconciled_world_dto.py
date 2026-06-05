@@ -11,7 +11,7 @@ from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.entities.delivery_route import DeliveryRoute
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ReconciledWorld:
     """Fully rebuilt world graph plus prepared truck bindings.
 

@@ -6,7 +6,7 @@ from src.domain.enums.truck_status import TruckStatus
 from src.domain.value_objects.location_code import LocationCode
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class CountersSnapshot:
     """Repository id counters captured in a world snapshot."""
 
@@ -15,7 +15,7 @@ class CountersSnapshot:
     next_route_id: int
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class CustomerSnapshot:
     """Persisted customer state."""
 
@@ -25,7 +25,7 @@ class CustomerSnapshot:
     phone: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class PackageSnapshot:
     """Persisted package state and optional route assignment."""
 
@@ -37,7 +37,7 @@ class PackageSnapshot:
     route_id: int | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class RouteSnapshot:
     """Persisted route state and package/truck references."""
 
@@ -48,7 +48,7 @@ class RouteSnapshot:
     package_ids: tuple[int, ...]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class TruckSnapshot:
     """Persisted truck runtime state."""
 
@@ -61,7 +61,7 @@ class TruckSnapshot:
     in_transit_to: LocationCode | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class WorldSnapshotData:
     """Canonical world payload inside a persisted snapshot."""
 
@@ -72,7 +72,7 @@ class WorldSnapshotData:
     trucks: tuple[TruckSnapshot, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class WorldStateSnapshot:
     """Versioned world-state save payload."""
 

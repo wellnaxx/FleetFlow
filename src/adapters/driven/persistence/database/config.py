@@ -10,7 +10,7 @@ from src.shared.env_vars import get_env_var
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class PostgresConfig:
     """Connection settings for the PostgreSQL adapter.
 

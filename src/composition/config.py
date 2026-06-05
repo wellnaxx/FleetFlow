@@ -18,7 +18,7 @@ class PersistenceBackend(StrEnum):
     POSTGRES = "postgres"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class AppConfig:
     """Application configuration settings.
 

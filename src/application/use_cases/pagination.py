@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from src.application.exceptions.application_errors import ValidationError
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class PageQuery:
     """Pagination request for list-style use cases."""
 
@@ -15,7 +15,7 @@ class PageQuery:
     include_total: bool = False
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class PageResult[T]:
     """Paginated application result for list-style use cases."""
 

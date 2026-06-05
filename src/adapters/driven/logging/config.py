@@ -22,7 +22,7 @@ _LOG_LEVELS = {
 }
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class LoggingConfig:
     """Logging configuration loaded from the environment.
 

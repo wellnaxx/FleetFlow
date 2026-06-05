@@ -50,7 +50,7 @@ if TYPE_CHECKING:
     from src.domain.entities.truck import Truck
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class HydratedRouteGraph:
     """Connected domain graph for one route aggregate.
 

@@ -9,7 +9,7 @@ from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.entities.delivery_route import DeliveryRoute
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class RebuiltWorld:
     """Detached domain graph rebuilt from a world-state snapshot.
 
