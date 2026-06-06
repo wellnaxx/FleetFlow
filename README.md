@@ -22,13 +22,16 @@ FleetFlow currently supports:
 - User authentication with manager and employee roles.
 - JWT access/refresh tokens for HTTP authentication, with token-version revocation.
 - Typed domain, application, and repository errors for expected validation, not-found, conflict, authentication, and persistence failures.
+- Global FastAPI exception handlers that map expected application/domain failures to stable, sanitized HTTP responses.
 - Role-based authorization around CLI commands and application use cases.
 - Password hashing with PBKDF2-HMAC and strict persisted password-hash validation.
+- Configurable application logging to stdout and optional rotating log files, including HTTP request duration/status logging.
 - Environment-selected in-memory or PostgreSQL logistics persistence backend.
 - Manual save/load plus autosave after mutating commands when autosave is enabled.
 - Versioned JSON world-state snapshots containing customers, packages, routes, repository counters, and truck runtime state.
 - PostgreSQL world-state export/import through the same JSON snapshot format.
 - Startup recovery for default saved state: missing state is ignored, corrupt state is quarantined, and unexpected runtime errors still fail loudly.
+- A Postman/Newman collection covering authentication, authorization, logistics workflows, state import/export, validation, and token revocation.
 - A large automated test suite covering domain behavior, application services, use cases, CLI commands, HTTP routers/dependencies, JSON and database persistence, runtime swaps, snapshot import/export, and startup behavior.
 
 ## Architecture Overview
@@ -42,10 +45,11 @@ FleetFlow/
 |-- src/
 |   |-- adapters/
 |   |   |-- driven/
+|   |   |   |-- logging/          # stdout/file logging configuration
 |   |   |   |-- persistence/database/ # PostgreSQL repositories, SQL, graph loaders, unit of work, snapshot gateway/importer
 |   |   |   |-- persistence/json/ # JSON world-state and user persistence
 |   |   |   |-- persistence/memory/# in-memory repositories and runtime state gateway
-|   |   |   `-- security/         # password hashing
+|   |   |   `-- security/         # password hashing and JWT token services/configuration
 |   |   `-- driving/
 |   |       |-- cli/              # engine, menus, command factory, CLI commands
 |   |       `-- http/             # FastAPI app, routers, schemas, request dependencies
@@ -68,6 +72,7 @@ FleetFlow/
 |   |   `-- output/               # repository, persistence, runtime, and vehicle ports
 |   `-- shared/                   # environment-variable helpers
 |-- tests/
+|-- postman/                      # API collection, local environment, and runner notes
 |-- cli_main.py                  # CLI entrypoint
 |-- api_main.py                  # local API server entrypoint
 `-- pyproject.toml
@@ -132,14 +137,15 @@ FleetFlow enforces the main logistics invariants in the domain and application l
 - Carrying capacity is checked by maximum segment load rather than total assigned package weight.
 - Heartbeat/reconciliation updates route statuses, truck positions, truck releases, package statuses, package current locations, and expected arrivals.
 
-Expected domain failures use typed exceptions. Validation problems, missing domain entities, and conflict/business-rule failures are translated by application use cases and HTTP routers into stable CLI/API-facing messages instead of relying on raw `ValueError` text.
+Expected domain failures use typed exceptions. Validation problems, missing domain entities, and conflict/business-rule failures are translated by application use cases and global HTTP exception handlers into stable CLI/API-facing messages instead of relying on raw `ValueError` text.
 
 ## World-State Persistence
 
-FleetFlow stores local JSON files in the working directory by default:
+FleetFlow stores local JSON files under the repository's `data/` directory by default:
 
-- `users.json`: persisted user records and password hashes.
-- `state.json`: default world-state save/load target.
+- `data/users.json`: persisted user records and password hashes.
+- `data/state.json`: default world-state save/load target.
+- `data/exports/`: default HTTP snapshot export/import boundary.
 
 These paths can be overridden with:
 
@@ -148,6 +154,8 @@ JSON_USER_STORE_PATH=<path>
 JSON_STATE_PATH=<path>
 JSON_EXPORT_DIR=<path>
 ```
+
+Bare filenames such as `state.json` and `users.json` resolve under `data/`. Relative paths containing directory separators resolve from the project root, and absolute paths remain absolute.
 
 World-state saves are versioned snapshots. The current canonical schema version is `2` and includes:
 
@@ -241,7 +249,7 @@ Application use cases use typed error boundaries for expected failures:
 - `ConflictError` and `DomainConflictError` for operations that conflict with current state.
 - `AuthenticationError` for failed authentication.
 
-HTTP routers map those errors to stable status codes and safe response details.
+Global HTTP exception handlers map those errors to stable status codes and safe response details.
 
 ## Running the App
 
@@ -254,6 +262,18 @@ Install the project runtime dependencies before running the CLI or API:
 ```bash
 python -m pip install -e .
 ```
+
+Create local configuration from the checked-in example:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+```bash
+cp .env.example .env
+```
+
+Update `.env` with the selected persistence backend, database credentials, JWT secrets, and optional logging settings. The local `.env` file is ignored by Git.
 
 The default backend is in-memory plus JSON world-state persistence. To select PostgreSQL, set the required environment variables before starting the app:
 
@@ -280,6 +300,19 @@ JWT_REFRESH_TOKEN_EXPIRE_DAYS=7
 ```
 
 `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` are required, must be different, and should be randomly generated rather than human-chosen phrases. The other JWT settings use the defaults shown above when omitted.
+
+### Logging
+
+Both `cli_main.py` and `api_main.py` configure standard Python logging at startup. Logs are always written to stdout. Set `LOG_FILE` to also write rotating log files:
+
+```text
+LOG_LEVEL=INFO
+LOG_FILE=logs/fleetflow.log
+```
+
+Supported levels are `CRITICAL`, `ERROR`, `WARNING`, `INFO`, `DEBUG`, and `NOTSET`. File logs rotate at 10 MiB with five retained backups. Omit `LOG_FILE` to log only to stdout.
+
+Logging covers startup/composition, selected mutating use cases, CLI command execution, persistence operations, global HTTP failures, and HTTP request method/path/status/duration. Passwords, JWTs, and database query parameters are not intentionally logged.
 
 ### Windows PowerShell
 
@@ -341,6 +374,8 @@ The API is mounted under `/api`. Interactive OpenAPI docs are available at:
 ```text
 http://127.0.0.1:8000/docs
 ```
+
+Every HTTP request is logged with its method, path, response status, and duration. Expected application/domain failures are handled centrally; persistence failures return generic details rather than exposing adapter or database errors.
 
 ## CLI Surface
 
@@ -487,7 +522,7 @@ GET /api/packages/unassigned?limit=50&offset=0&include_total=true
 
 Route listing also supports the same `limit`, `offset`, and `include_total` query parameters.
 
-List-style use cases for customers, packages, unassigned packages, and all routes share the same `PageQuery` / `PageResult` pagination model. `include_total` defaults to `false` so normal list requests do not run a count query. When omitted, the response contains `"total": null`. When requested, customer, package, and route page totals are loaded with the page from one repository operation.
+List-style use cases for customers, packages, unassigned packages, and all routes share the same `PageQuery` / `PageResult` pagination model and `execute_page_query` orchestration helper. `include_total` defaults to `false` so normal list requests do not run a count query. When omitted, the response contains `"total": null`. When requested, customer, package, and route page totals are loaded with the page from one repository operation.
 
 Routes in progress intentionally remain unpaginated because the result is bounded by active truck assignments and includes computed route-position data:
 
@@ -539,6 +574,28 @@ Windows PowerShell uses the same commands:
 python -m pytest -q
 python -m unittest discover -v -s ./tests -t . -p "*_test.py"
 ```
+
+### Postman / Newman
+
+The `postman/` directory contains:
+
+- `FleetFlow API.postman_collection.json`
+- `FleetFlow local.postman_environment.json`
+- setup and execution notes in `postman/README.md`
+
+Start the API, configure `adminPassword` in the Postman environment, and run the collection in order so generated tokens and resource identifiers are retained. With Newman available through `npx`, run:
+
+```powershell
+npx newman run "postman/FleetFlow API.postman_collection.json" `
+  -e "postman/FleetFlow local.postman_environment.json"
+```
+
+```bash
+npx newman run "postman/FleetFlow API.postman_collection.json" \
+  -e "postman/FleetFlow local.postman_environment.json"
+```
+
+The collection covers authentication, authorization, token revocation, customers, packages, routes, trucks, world-state import/export, and validation/error paths. Controlled database-failure paths remain unit-test responsibilities.
 
 ## Tooling
 
