@@ -1,1 +1,60 @@
 """Application events describing world-state persistence workflows."""
+
+from dataclasses import dataclass
+
+from src.application.enums.world_state_corruption_reasons import WorldStateCorruptionReason
+from src.application.enums.world_state_failure_reasons import WorldStateFailureReason
+from src.application.events.base import ApplicationEvent
+from src.application.value_objects.world_state_entity_counts import WorldStateEntityCounts
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class WorldStateExported(ApplicationEvent):
+    """Event recorded when the world state is exported to a file."""
+
+    snapshot_path: str
+    schema_version: int
+    entity_counts: WorldStateEntityCounts
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class WorldStateExportFailed(ApplicationEvent):
+    """Event recorded when a world state export operation fails."""
+
+    snapshot_path: str
+    schema_version: int | None
+    reason: WorldStateFailureReason
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class WorldStateImported(ApplicationEvent):
+    """Event recorded when the world state is imported from a file."""
+
+    snapshot_path: str
+    schema_version: int
+    entity_counts: WorldStateEntityCounts
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class WorldStateImportFailed(ApplicationEvent):
+    """Event recorded when a world state import operation fails."""
+
+    snapshot_path: str
+    schema_version: int | None
+    reason: WorldStateFailureReason
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class WorldStateCorruptionDetected(ApplicationEvent):
+    """Event recorded when corruption is detected in the world state."""
+
+    snapshot_path: str
+    reason: WorldStateCorruptionReason
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class WorldStateSnapshotQuarantined(ApplicationEvent):
+    """Event recorded when a corrupt snapshot is moved to quarantine."""
+    original_path: str
+    quarantined_path: str
+    reason: WorldStateCorruptionReason
