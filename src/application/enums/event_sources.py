@@ -1,8 +1,10 @@
+"""Execution origins for event-producing workflows."""
+
 from enum import StrEnum
 
 
 class EventSource(StrEnum):
-    """Sources of events in the application."""
+    """Execution origins that initiate event-producing workflows."""
 
     HTTP = "HTTP"
     CLI = "CLI"
