@@ -66,7 +66,26 @@ class Customer(EventRecorderMixin):
         return tuple(self._delivery_packages)
 
     @classmethod
-    def create(cls, contact: ContactInfo, customer_id: int, occurred_at: datetime | None = None) -> Customer:
+    def create(
+        cls,
+        contact: ContactInfo,
+        customer_id: int,
+        occurred_at: datetime | None = None,
+    ) -> Customer:
+        """Create a customer and record its creation event.
+
+        Unlike direct construction, this factory records a `CustomerCreated`
+        domain event. Persistence mappers should use the constructor when
+        rehydrating existing customers.
+
+        Args:
+            contact: Validated customer contact information.
+            customer_id: Unique positive customer identifier.
+            occurred_at: Business time of creation. Defaults to the current time.
+
+        Returns:
+            Newly created customer with one pending `CustomerCreated` event.
+        """
         customer = cls(contact=contact, customer_id=customer_id)
         customer._record_event(
             CustomerCreated(occurred_at=occurred_at or datetime.now(), customer_id=customer_id)
