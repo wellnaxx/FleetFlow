@@ -28,7 +28,7 @@ class PostgresCustomerRepository:
         """
         customer_id = execute_insert(QUERIES.customers.add, (contact.name, contact.email, contact.phone_number))
 
-        return Customer(customer_id=customer_id, contact=contact)
+        return Customer.create(customer_id=customer_id, contact=contact)
 
     def remove(self, customer_id: int) -> None:
         """Remove a customer by id.

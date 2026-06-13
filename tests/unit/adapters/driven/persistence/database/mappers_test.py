@@ -93,6 +93,7 @@ class DatabaseMappers_Should(unittest.TestCase):
         self.assertEqual(customer.name, "Alice")
         self.assertEqual(customer.email, "alice@example.com")
         self.assertEqual(customer.phone_number, "0412345678")
+        self.assertEqual(customer.pending_events, ())
 
     def test_map_customer_raises_key_error_for_missing_required_column(self) -> None:
         row: RowDict = {

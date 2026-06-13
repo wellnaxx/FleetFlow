@@ -4,6 +4,7 @@ from src.adapters.driven.persistence.memory.customer_repository import InMemoryC
 from src.application.exceptions.application_errors import ConflictError
 from src.application.services.customer_service import CustomerService
 from src.domain.entities.customer import Customer
+from src.domain.events.customer_events import CustomerCreated
 from src.domain.value_objects.contact_info import ContactInfo
 
 
@@ -83,6 +84,8 @@ class CustomerServiceLayerTests(unittest.TestCase):
         self.assertIs(self.repo.get_by_id(1), created)
         self.assertIs(self.repo.get_by_email("alice@example.com"), created)
         self.assertIs(self.repo.get_by_phone("0412345678"), created)
+        self.assertEqual(len(created.pending_events), 1)
+        self.assertIsInstance(created.pending_events[0], CustomerCreated)
 
 
 if __name__ == "__main__":

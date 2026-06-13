@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import TYPE_CHECKING
 
+from src.domain.entities.mixins.event_mixin import EventRecorderMixin
+from src.domain.events.customer_events import CustomerCreated
 from src.domain.exceptions import DomainConflictError, EntityNotFoundError
-from src.domain.value_objects.contact_info import ContactInfo  # noqa: TC001
 
 if TYPE_CHECKING:
     from src.domain.entities.delivery_package import DeliveryPackage
+    from src.domain.events.base import DomainEvent
+    from src.domain.value_objects.contact_info import ContactInfo
 
 
 def _empty_delivery_packages() -> list[DeliveryPackage]:
@@ -17,15 +21,28 @@ def _empty_delivery_packages() -> list[DeliveryPackage]:
     return []
 
 
+def _empty_pending_events() -> list[DomainEvent]:
+    """Return a typed empty pending events collection for dataclass initialization."""
+    return []
+
+
 @dataclass(frozen=True, slots=True)
-class Customer:
+class Customer(EventRecorderMixin):
     """Customer contact record with an active package collection."""
 
     contact: ContactInfo
     customer_id: int
+
     _delivery_packages: list[DeliveryPackage] = field(
         default_factory=_empty_delivery_packages,
         repr=False,
+    )
+
+    _pending_events: list[DomainEvent] = field(
+        default_factory=_empty_pending_events,
+        init=False,
+        repr=False,
+        compare=False,
     )
 
     @property
@@ -47,6 +64,14 @@ class Customer:
     def delivery_packages(self) -> tuple[DeliveryPackage, ...]:
         """Active packages currently linked to this customer."""
         return tuple(self._delivery_packages)
+
+    @classmethod
+    def create(cls, contact: ContactInfo, customer_id: int, occurred_at: datetime | None = None) -> Customer:
+        customer = cls(contact=contact, customer_id=customer_id)
+        customer._record_event(
+            CustomerCreated(occurred_at=occurred_at or datetime.now(), customer_id=customer_id)
+        )
+        return customer
 
     def add_package(self, package: DeliveryPackage) -> None:
         """Link a package to this customer, moving it from any previous customer.

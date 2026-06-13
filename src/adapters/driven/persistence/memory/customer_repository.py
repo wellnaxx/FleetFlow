@@ -40,7 +40,7 @@ class InMemoryCustomerRepository:
         Returns:
             Stored customer with its allocated id.
         """
-        customer = Customer(customer_id=self._next_id, contact=contact)
+        customer = Customer.create(contact=contact, customer_id=self._next_id)
         self.add(customer)
         return customer
 

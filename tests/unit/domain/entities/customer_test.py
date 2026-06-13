@@ -1,6 +1,8 @@
 import unittest
+from datetime import datetime
 
 from src.domain.entities.customer import Customer
+from src.domain.events.customer_events import CustomerCreated
 from src.domain.exceptions import DomainConflictError, EntityNotFoundError
 from src.domain.value_objects.contact_info import ContactInfo
 
@@ -25,6 +27,27 @@ class Customer_Should(unittest.TestCase):
         self.assertEqual(c.name, "Bob")
         self.assertEqual(c.email, "bob@ex.com")
         self.assertEqual(c.phone_number, "0411222333")
+
+    def test_create_records_exactly_one_customer_created_event(self) -> None:
+        occurred_at = datetime(2026, 6, 13, 10, 30)
+
+        customer = Customer.create(
+            contact=self.make_contact(),
+            customer_id=17,
+            occurred_at=occurred_at,
+        )
+
+        self.assertEqual(len(customer.pending_events), 1)
+        event = customer.pending_events[0]
+        if not isinstance(event, CustomerCreated):
+            self.fail(f"Expected CustomerCreated, got {type(event).__name__}.")
+        self.assertEqual(event.customer_id, 17)
+        self.assertEqual(event.occurred_at, occurred_at)
+
+    def test_direct_construction_does_not_record_creation_event(self) -> None:
+        customer = Customer(contact=self.make_contact(), customer_id=17)
+
+        self.assertEqual(customer.pending_events, ())
 
     def test_delivery_packages_is_tuple_and_readonly_view(self) -> None:
         c = Customer(self.make_contact("Carlos"), 2)
