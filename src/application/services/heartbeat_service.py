@@ -46,7 +46,9 @@ class HeartbeatService:
 
         route_snapshots = [(route, route.snapshot_state()) for route in routes]
         package_snapshots = [
-            (package, package.snapshot_state()) for route in routes for package in route.packages
+            (package, package.snapshot_state(), package.event_checkpoint())
+            for route in routes
+            for package in route.packages
         ]
         truck_snapshots = [
             (route.truck, route.truck.snapshot_state()) for route in routes if route.truck is not None
@@ -79,8 +81,9 @@ class HeartbeatService:
             for route, snapshot in route_snapshots:
                 route.restore_state(snapshot)
 
-            for package, snapshot in package_snapshots:
+            for package, snapshot, event_checkpoint in package_snapshots:
                 package.restore_state(snapshot)
+                package.restore_event_checkpoint(event_checkpoint)
 
             for truck, snapshot in truck_snapshots:
                 truck.restore_state(snapshot)

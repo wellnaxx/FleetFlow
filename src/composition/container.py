@@ -224,7 +224,7 @@ class Container:
             create=CreatePackageUseCase(self.customer_service, self.package_repo, self.authz),
             view=ViewPackageUseCase(self.package_repo, self.authz),
             view_all=ViewAllPackagesUseCase(self.package_repo, self.authz),
-            remove=RemovePackageUseCase(self.package_repo, self.authz),
+            remove=RemovePackageUseCase(self.package_repo, self.unit_of_work, self.authz),
             view_unassigned=ViewUnassignedPackagesUseCase(self.package_repo, self.authz),
         )
 

@@ -12,6 +12,7 @@ from src.domain.enums.item_status import ItemStatus
 from src.domain.enums.route_status import RouteStatus
 from src.domain.enums.truck_model import TruckModel
 from src.domain.enums.truck_status import TruckStatus
+from src.domain.events.package_events import PackageDelivered, PackagePickedUp
 from src.domain.value_objects.contact_info import ContactInfo
 from src.domain.value_objects.location_code import LocationCode
 
@@ -97,6 +98,94 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
         self.assertEqual(package.current_location, LocationCode("B"))
         self.assertEqual(package.expected_arrival, datetime(2025, 1, 1, 12, 0, 0))
         self.assertTrue(summary.state_changed)
+
+    def test_reconcile_routes_records_late_pickup_and_delivery_at_scheduled_times(self) -> None:
+        customer = self.make_customer()
+        package = DeliveryPackage(
+            package_id=1,
+            start_location=LocationCode("A"),
+            end_location=LocationCode("C"),
+            weight=5.0,
+            customer=customer,
+        )
+        route = DeliveryRoute(
+            LocationCode("A"),
+            LocationCode("B"),
+            LocationCode("C"),
+            departure_time=datetime(2025, 1, 1, 10, 0),
+            route_id=1,
+        )
+        route.restore_package_link(package)
+        pickup_time = datetime(2025, 1, 1, 10, 0)
+        delivery_time = datetime(2025, 1, 1, 12, 0)
+
+        def arrival_time_at(city: str) -> datetime:
+            return {
+                LocationCode("A"): pickup_time,
+                LocationCode("B"): datetime(2025, 1, 1, 11, 0),
+                LocationCode("C"): delivery_time,
+            }[LocationCode(city)]
+
+        with patch.object(route, "arrival_time_at", side_effect=arrival_time_at):
+            first_summary = self.reconciler.reconcile_routes(
+                routes=[route],
+                now=datetime(2025, 1, 1, 13, 0),
+                update_trucks=False,
+            )
+            second_summary = self.reconciler.reconcile_routes(
+                routes=[route],
+                now=datetime(2025, 1, 1, 13, 0),
+                update_trucks=False,
+            )
+
+        self.assertEqual(first_summary.packages_updated, 1)
+        self.assertEqual(second_summary.packages_updated, 0)
+        self.assertEqual(package.status, ItemStatus.DONE)
+        self.assertEqual(len(package.pending_events), 2)
+        pickup_event, delivery_event = package.pending_events
+        self.assertIsInstance(pickup_event, PackagePickedUp)
+        self.assertIsInstance(delivery_event, PackageDelivered)
+        self.assertEqual(pickup_event.occurred_at, pickup_time)
+        self.assertEqual(delivery_event.occurred_at, delivery_time)
+
+    def test_reconcile_routes_repairs_done_package_during_active_window_without_event(self) -> None:
+        customer = self.make_customer()
+        package = DeliveryPackage(
+            package_id=1,
+            start_location=LocationCode("A"),
+            end_location=LocationCode("C"),
+            weight=5.0,
+            customer=customer,
+        )
+        package.status = ItemStatus.DONE
+        package.current_location = LocationCode("C")
+        route = DeliveryRoute(
+            LocationCode("A"),
+            LocationCode("B"),
+            LocationCode("C"),
+            departure_time=datetime(2025, 1, 1, 10, 0),
+            route_id=1,
+        )
+        route.restore_package_link(package)
+
+        def arrival_time_at(city: str) -> datetime:
+            return {
+                LocationCode("A"): datetime(2025, 1, 1, 10, 0),
+                LocationCode("B"): datetime(2025, 1, 1, 11, 0),
+                LocationCode("C"): datetime(2025, 1, 1, 12, 0),
+            }[LocationCode(city)]
+
+        with patch.object(route, "arrival_time_at", side_effect=arrival_time_at):
+            summary = self.reconciler.reconcile_routes(
+                routes=[route],
+                now=datetime(2025, 1, 1, 11, 30),
+                update_trucks=False,
+            )
+
+        self.assertEqual(summary.packages_updated, 1)
+        self.assertEqual(package.status, ItemStatus.IN_PROGRESS)
+        self.assertEqual(package.current_location, LocationCode("B"))
+        self.assertEqual(package.pending_events, ())
 
     def test_reconcile_routes_does_not_count_unchanged_package(self) -> None:
         customer = self.make_customer()

@@ -3,18 +3,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import TYPE_CHECKING
 
+from src.domain.entities.mixins.event_mixin import EventRecorderMixin
 from src.domain.enums.item_status import ItemStatus
-from src.domain.exceptions import DomainValidationError
+from src.domain.events.package_events import PackageCreated, PackageDelivered, PackagePickedUp
+from src.domain.exceptions import BusinessRuleViolationError, DomainValidationError
 from src.domain.services.map import Map
 from src.domain.value_objects.location_code import LocationCode, location_code_or_none
 
 if TYPE_CHECKING:
-    from datetime import datetime
-
     from src.domain.entities.customer import Customer
     from src.domain.entities.delivery_route import DeliveryRoute
+    from src.domain.events.base import DomainEvent
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,7 +30,7 @@ class DeliveryPackageStateSnapshot:
     expected_arrival: datetime | None
 
 
-class DeliveryPackage:
+class DeliveryPackage(EventRecorderMixin):
     """Package shipment tracked from pickup to delivery."""
 
     def __init__(
@@ -67,6 +69,8 @@ class DeliveryPackage:
         self._route_id = self._validate_route_id(route_id)
         self.expected_arrival = None
         self.status = ItemStatus.TODO
+
+        self._pending_events: list[DomainEvent] = []
 
     def _validate_locations(self) -> None:
         """Validate start and end locations."""
@@ -116,6 +120,120 @@ class DeliveryPackage:
     @current_location.setter
     def current_location(self, value: str | LocationCode | None) -> None:
         self._current_location = location_code_or_none(value)
+
+    @classmethod
+    def create(
+        cls,
+        start_location: str | LocationCode,
+        end_location: str | LocationCode,
+        weight: float,
+        customer: Customer,
+        package_id: int,
+        occurred_at: datetime | None = None,
+    ) -> DeliveryPackage:
+        """Create a delivery package and record its creation event.
+
+        Unlike direct construction, this factory records a `PackageCreated`
+        domain event. Persistence mappers should use the constructor when
+        rehydrating existing packages.
+
+        Args:
+            start_location: Raw or typed pickup location code.
+            end_location: Raw or typed delivery location code.
+            weight: Package weight in kilograms.
+            customer: Owning customer.
+            package_id: Stable package identifier.
+            occurred_at: Business time of creation. Defaults to the current time.
+
+        Returns:
+            Newly created package with one pending `PackageCreated` event.
+
+        Raises:
+            DomainValidationError: If locations are invalid, equal, or the weight is not positive.
+        """
+        package = cls(
+            start_location=start_location,
+            end_location=end_location,
+            weight=weight,
+            customer=customer,
+            package_id=package_id,
+        )
+
+        package._record_event(
+            PackageCreated(
+                package_id=package_id,
+                customer_id=customer.customer_id,
+                start_location=package.start_location,
+                end_location=package.end_location,
+                weight=weight,
+                occurred_at=occurred_at or datetime.now(),
+            )
+        )
+
+        return package
+
+    def mark_picked_up(self, *, occurred_at: datetime) -> None:
+        """Move an assigned package into transit and record its pickup.
+
+        Args:
+            occurred_at: Business time of the pickup event.
+
+        Raises:
+            BusinessRuleViolationError: If the package is unassigned or is not
+                waiting for pickup.
+        """
+        route_id = self._require_route_id()
+
+        if self.status is not ItemStatus.TODO:
+            raise BusinessRuleViolationError(
+                f"Cannot mark package {self.package_id} as picked up because its status is {self.status.value}."
+            )
+
+        self.status = ItemStatus.IN_PROGRESS
+        self.current_location = self.start_location
+
+        self._record_event(
+            PackagePickedUp(
+                package_id=self.package_id,
+                route_id=route_id,
+                pickup_location=self.start_location,
+                occurred_at=occurred_at,
+            )
+        )
+
+    def mark_delivered(self, *, occurred_at: datetime) -> None:
+        """Complete an in-transit package and record its delivery.
+
+        Args:
+            occurred_at: Business time of the delivery event.
+
+        Raises:
+            BusinessRuleViolationError: If the package is unassigned or is not
+                currently in transit.
+        """
+        route_id = self._require_route_id()
+
+        if self.status is not ItemStatus.IN_PROGRESS:
+            raise BusinessRuleViolationError(
+                f"Cannot mark package {self.package_id} as delivered because its status is {self.status.value}."
+            )
+
+        self.status = ItemStatus.DONE
+        self.current_location = self.end_location
+        self._record_event(
+            PackageDelivered(
+                package_id=self.package_id,
+                route_id=route_id,
+                delivery_location=self.end_location,
+                occurred_at=occurred_at,
+            )
+        )
+
+    def _require_route_id(self) -> int:
+        route_id = self.route_id
+        if route_id is None:
+            raise BusinessRuleViolationError(f"Package {self.package_id} is not assigned to a route.")
+        return route_id
 
     def snapshot_state(self) -> DeliveryPackageStateSnapshot:
         """Capture mutable package state.

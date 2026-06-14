@@ -48,7 +48,7 @@ class InMemoryPackageRepository:
         Returns:
             Stored package with its allocated id.
         """
-        package = DeliveryPackage(
+        package = DeliveryPackage.create(
             start_location=start_location,
             end_location=end_location,
             weight=weight,

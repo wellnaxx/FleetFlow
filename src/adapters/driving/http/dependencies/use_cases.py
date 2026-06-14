@@ -177,12 +177,12 @@ def get_remove_package_use_case(
         container: Application dependency container.
 
     Returns:
-        Package-removal use case bound to the package repository.
+        Package-removal use case bound to the package repository and unit of work.
 
     Raises:
         HTTPException: Raised by `get_current_user` when authentication fails.
     """
-    return RemovePackageUseCase(container.package_repo, authz=principal.authz)
+    return RemovePackageUseCase(container.package_repo, container.unit_of_work, authz=principal.authz)
 
 
 def get_create_route_use_case(

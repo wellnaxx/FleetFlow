@@ -50,6 +50,17 @@ class UnitOfWorkPackageRepositoryPort(Protocol):
         """
         ...
 
+    def remove(self, package_id: int) -> None:
+        """Remove a package by id.
+
+        Args:
+            package_id: Package id to remove.
+
+        Returns:
+            None.
+        """
+        ...
+
 
 class UnitOfWorkTruckRepositoryPort(Protocol):
     """Truck persistence operations available inside a unit of work."""

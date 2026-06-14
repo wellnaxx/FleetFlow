@@ -46,7 +46,7 @@ class PostgresPackageRepository:
             (str(start_location), str(end_location), weight, customer.customer_id),
         )
 
-        return DeliveryPackage(
+        return DeliveryPackage.create(
             start_location=start_location,
             end_location=end_location,
             weight=weight,

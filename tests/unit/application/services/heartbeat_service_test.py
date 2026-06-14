@@ -82,7 +82,8 @@ class _FakePackage:
         self.end_location = end
         self.current_location = start
         self.expected_arrival = None
-        self.status: ItemStatus | None = None
+        self.status = ItemStatus.TODO
+        self._pending_events: list[tuple[str, datetime]] = []
 
     def snapshot_state(self) -> _FakePackageSnapshot:
         return _FakePackageSnapshot(
@@ -95,6 +96,26 @@ class _FakePackage:
         self.current_location = snapshot.current_location
         self.expected_arrival = snapshot.expected_arrival
         self.status = snapshot.status
+
+    def mark_picked_up(self, *, occurred_at: datetime) -> None:
+        self.status = ItemStatus.IN_PROGRESS
+        self.current_location = self.start_location
+        self._pending_events.append(("picked_up", occurred_at))
+
+    def mark_delivered(self, *, occurred_at: datetime) -> None:
+        self.status = ItemStatus.DONE
+        self.current_location = self.end_location
+        self._pending_events.append(("delivered", occurred_at))
+
+    @property
+    def pending_events(self) -> tuple[tuple[str, datetime], ...]:
+        return tuple(self._pending_events)
+
+    def event_checkpoint(self) -> int:
+        return len(self._pending_events)
+
+    def restore_event_checkpoint(self, checkpoint: int) -> None:
+        del self._pending_events[checkpoint:]
 
 
 class _FakeRouteSnapshot(NamedTuple):
@@ -369,3 +390,28 @@ class HeartbeatServiceTests(unittest.TestCase):
         unit_of_work.routes.update_state.assert_called_once_with(route)
         unit_of_work.packages.update_state.assert_called_once_with(package)
         unit_of_work.commit.assert_not_called()
+
+    def test_advance_restores_package_event_checkpoint_when_persistence_fails(self) -> None:
+        base = datetime(2025, 1, 1, 8, 0)
+        package = _FakePackage("S3", "E3")
+        package._pending_events.append(("created", base - timedelta(hours=1))) # pyright: ignore[reportPrivateUsage]
+        route = _FakeRoute(
+            locations=["S3", "E3"],
+            departure_time=base,
+            eta_final=base + timedelta(hours=1),
+            packages=[package],
+        )
+        route_repo = MagicMock()
+        route_repo.list_all.return_value = [route]
+        unit_of_work = _unit_of_work_mock()
+        unit_of_work.packages.update_state.side_effect = RuntimeError("write failed")
+        service = HeartbeatService(route_repo, WorldStateReconciliationService(), unit_of_work)
+
+        with self.assertRaisesRegex(RuntimeError, "write failed"):
+            service.advance(now=base)
+
+        self.assertEqual(package.status, ItemStatus.TODO)
+        self.assertEqual(
+            package.pending_events,
+            (("created", base - timedelta(hours=1)),),
+        )

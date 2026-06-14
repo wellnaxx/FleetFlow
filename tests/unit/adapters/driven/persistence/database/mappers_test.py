@@ -291,6 +291,7 @@ class DatabaseMappers_Should(unittest.TestCase):
         self.assertIsNone(package.expected_arrival)
         self.assertIsNone(package.route)
         self.assertIsNone(package.route_id)
+        self.assertEqual(package.pending_events, ())
 
     def test_map_package_applies_nullable_route_state_fields(self) -> None:
         row = self._valid_package_row()

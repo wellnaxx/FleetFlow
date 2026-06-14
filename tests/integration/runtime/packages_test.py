@@ -1,7 +1,8 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from src.adapters.driven.persistence.memory.package_repository import InMemoryPackageRepository
+from src.adapters.driven.persistence.memory.unit_of_work import InMemoryUnitOfWork
 from src.application.use_cases.packages.remove_package import RemovePackageUseCase
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
@@ -29,7 +30,7 @@ class RuntimePackageRemovalIntegrationTests(unittest.TestCase):
             patch("src.domain.entities.delivery_route.Map.get_distance", return_value=100),
         ):
             route = DeliveryRoute(LocationCode("A"), LocationCode("B"), route_id=1)
-            package = DeliveryPackage(
+            package = DeliveryPackage.create(
                 package_id=1,
                 start_location=LocationCode("A"),
                 end_location=LocationCode("B"),
@@ -41,7 +42,12 @@ class RuntimePackageRemovalIntegrationTests(unittest.TestCase):
             route.assign_package(package)
             package_repo.add(package)
 
-        removed = RemovePackageUseCase(package_repo, manager_authz()).execute(package.package_id)
+        unit_of_work = InMemoryUnitOfWork(routes=MagicMock(), packages=package_repo, trucks=MagicMock())
+        removed = RemovePackageUseCase(
+            package_repo,
+            unit_of_work,
+            manager_authz(),
+        ).execute(package.package_id)
 
         self.assertIs(removed, package)
         self.assertIsNone(package_repo.get_by_id(package.package_id))

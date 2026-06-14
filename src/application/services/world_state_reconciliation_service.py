@@ -182,7 +182,7 @@ class WorldStateReconciliationService:
 
     def _update_packages_for_route(self, route: DeliveryRoute, now: datetime) -> list[DeliveryPackage]:
         changed_packages: list[DeliveryPackage] = []
-        stop_times: dict[str, datetime] = {}
+        stop_times: dict[LocationCode, datetime] = {}
 
         if route.departure_time is not None:
             for city in route.locations:
@@ -198,11 +198,7 @@ class WorldStateReconciliationService:
             end = package.end_location
 
             if route.departure_time is None:
-                package_changed = self._set_package_state(
-                    package,
-                    status=ItemStatus.TODO,
-                    current_location=start,
-                )
+                package_changed = self._restore_package_before_pickup(package)
                 if package.expected_arrival is not None:
                     package.expected_arrival = None
                     package_changed = True
@@ -212,11 +208,7 @@ class WorldStateReconciliationService:
                 continue
 
             if start not in pos_index or end not in pos_index or pos_index[start] > pos_index[end]:
-                package_changed = self._set_package_state(
-                    package,
-                    status=ItemStatus.TODO,
-                    current_location=start,
-                )
+                package_changed = self._restore_package_before_pickup(package)
                 if package.expected_arrival is not None:
                     package.expected_arrival = None
                     package_changed = True
@@ -229,32 +221,26 @@ class WorldStateReconciliationService:
             end_time = stop_times.get(end)
 
             if start_time and now < start_time:
-                package_changed = self._set_package_state(
-                    package,
-                    status=ItemStatus.TODO,
-                    current_location=start,
-                )
+                package_changed = self._restore_package_before_pickup(package)
+
             elif end_time and now >= end_time:
-                package_changed = self._set_package_state(
+                package_changed = self._complete_package_lifecycle(
                     package,
-                    status=ItemStatus.DONE,
-                    current_location=end,
+                    pickup_time=start_time,
+                    delivery_time=end_time,
                 )
             else:
-                last_city = start
-                if start_time:
-                    for index in range(pos_index[start], pos_index[end] + 1):
-                        city = route.locations[index]
-                        city_time = stop_times.get(city)
-                        if city_time and now >= city_time:
-                            last_city = city
-                        else:
-                            break
-
-                package_changed = self._set_package_state(
+                package_changed = self._advance_package_in_progress(
                     package,
-                    status=ItemStatus.IN_PROGRESS,
-                    current_location=last_city,
+                    pickup_time=start_time,
+                    current_location=self._last_reached_city(
+                        route,
+                        start=start,
+                        end=end,
+                        stop_times=stop_times,
+                        position_by_city=pos_index,
+                        now=now,
+                    ),
                 )
 
             with contextlib.suppress(ValueError):
@@ -267,6 +253,81 @@ class WorldStateReconciliationService:
                 changed_packages.append(package)
 
         return changed_packages
+
+    def _complete_package_lifecycle(
+        self, package: DeliveryPackage, *, pickup_time: datetime | None, delivery_time: datetime
+    ) -> bool:
+        changed = False
+
+        if package.status is ItemStatus.TODO:
+            if pickup_time is None:
+                # Missing schedule data prevents reconstructing the pickup event.
+                # Repair the observed final state without inventing a timestamp.
+                return self._set_package_state(
+                    package,
+                    status=ItemStatus.DONE,
+                    current_location=package.end_location,
+                )
+
+            package.mark_picked_up(occurred_at=pickup_time)
+            changed = True
+
+        if package.status is ItemStatus.IN_PROGRESS:
+            package.mark_delivered(occurred_at=delivery_time)
+            changed = True
+
+        if package.current_location != package.end_location:
+            package.current_location = package.end_location
+            changed = True
+
+        return changed
+
+    def _advance_package_in_progress(
+        self,
+        package: DeliveryPackage,
+        *,
+        pickup_time: datetime | None,
+        current_location: LocationCode,
+    ) -> bool:
+        changed = False
+
+        if package.status is ItemStatus.TODO and pickup_time is not None:
+            package.mark_picked_up(occurred_at=pickup_time)
+            changed = True
+        elif package.status is not ItemStatus.IN_PROGRESS:
+            # Reconciliation may repair stale/imported state backwards without
+            # representing a new business lifecycle transition.
+            package.status = ItemStatus.IN_PROGRESS
+            changed = True
+
+        if package.current_location != current_location:
+            package.current_location = current_location
+            changed = True
+
+        return changed
+
+    def _last_reached_city(
+        self,
+        route: DeliveryRoute,
+        *,
+        start: LocationCode,
+        end: LocationCode,
+        stop_times: dict[LocationCode, datetime],
+        position_by_city: dict[LocationCode, int],
+        now: datetime,
+    ) -> LocationCode:
+        last_city = start
+
+        for index in range(position_by_city[start], position_by_city[end] + 1):
+            city = route.locations[index]
+            city_time = stop_times.get(city)
+
+            if city_time is None or now < city_time:
+                break
+
+            last_city = city
+
+        return last_city
 
     @staticmethod
     def _set_package_state(
@@ -283,6 +344,20 @@ class WorldStateReconciliationService:
 
         if package.current_location != current_location:
             package.current_location = current_location
+            changed = True
+
+        return changed
+
+    @staticmethod
+    def _restore_package_before_pickup(package: DeliveryPackage) -> bool:
+        changed = False
+
+        if package.status is not ItemStatus.TODO:
+            package.status = ItemStatus.TODO
+            changed = True
+
+        if package.current_location != package.start_location:
+            package.current_location = package.start_location
             changed = True
 
         return changed

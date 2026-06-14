@@ -52,3 +52,30 @@ class PostgresPackageUnitOfWorkRepository_Should(unittest.TestCase):
             self.repo.update_state(package)
 
         self.assertIn("Expected to update one package row for id 11, affected 0", str(ctx.exception))
+
+    @patch(f"{MODULE}.execute_write_tx")
+    def test_remove_deletes_package_with_shared_cursor(
+        self,
+        execute_write_tx_mock: MagicMock,
+    ) -> None:
+        execute_write_tx_mock.return_value = 1
+
+        self.repo.remove(11)
+
+        execute_write_tx_mock.assert_called_once_with(
+            self.cursor,
+            QUERIES.packages.remove,
+            (11,),
+        )
+
+    @patch(f"{MODULE}.execute_write_tx")
+    def test_remove_raises_when_package_row_is_missing(
+        self,
+        execute_write_tx_mock: MagicMock,
+    ) -> None:
+        execute_write_tx_mock.return_value = 0
+
+        with self.assertRaises(ValueError) as ctx:
+            self.repo.remove(11)
+
+        self.assertIn("Expected to remove one package row for id 11, affected 0", str(ctx.exception))

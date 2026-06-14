@@ -45,3 +45,20 @@ class PostgresPackageUnitOfWorkRepository:
             raise ValueError(
                 f"Expected to update one package row for id {package.package_id}, affected {affected}."
             )
+
+    def remove(self, package_id: int) -> None:
+        """Remove a package by id inside the active transaction.
+
+        Args:
+            package_id: Package id to remove.
+
+        Returns:
+            None.
+
+        Raises:
+            DatabaseError: If the delete operation fails.
+            ValueError: If the package row no longer exists.
+        """
+        affected = execute_write_tx(self._cursor, QUERIES.packages.remove, (package_id,))
+        if affected != 1:
+            raise ValueError(f"Expected to remove one package row for id {package_id}, affected {affected}.")

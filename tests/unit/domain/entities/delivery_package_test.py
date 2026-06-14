@@ -5,12 +5,74 @@ from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.enums.item_status import ItemStatus
-from src.domain.exceptions import DomainValidationError
+from src.domain.events.package_events import PackageCreated, PackageDelivered, PackagePickedUp
+from src.domain.exceptions import BusinessRuleViolationError, DomainValidationError
 from src.domain.value_objects.contact_info import ContactInfo
 from src.domain.value_objects.location_code import LocationCode
 
 
 class TestDeliveryPackage_Should(unittest.TestCase):
+    def test_create_records_exactly_one_package_created_event(self):
+        customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
+        occurred_at = datetime(2026, 6, 14, 9, 0)
+
+        package = DeliveryPackage.create(
+            LocationCode("SYD"),
+            LocationCode("BRI"),
+            500,
+            customer,
+            1,
+            occurred_at=occurred_at,
+        )
+
+        self.assertEqual(len(package.pending_events), 1)
+        event = package.pending_events[0]
+        if not isinstance(event, PackageCreated):
+            self.fail(f"Expected PackageCreated, got {type(event).__name__}.")
+        self.assertEqual(event.package_id, 1)
+        self.assertEqual(event.customer_id, customer.customer_id)
+        self.assertEqual(event.occurred_at, occurred_at)
+
+    def test_direct_construction_does_not_record_creation_event(self):
+        customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
+
+        package = DeliveryPackage(LocationCode("SYD"), LocationCode("BRI"), 500, customer, 1)
+
+        self.assertEqual(package.pending_events, ())
+
+    def test_package_lifecycle_records_pickup_and_delivery_events(self):
+        customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
+        package = DeliveryPackage(LocationCode("SYD"), LocationCode("BRI"), 500, customer, 1)
+        route = DeliveryRoute(LocationCode("SYD"), LocationCode("BRI"), route_id=21)
+        pickup_time = datetime(2026, 6, 14, 9, 0)
+        delivery_time = datetime(2026, 6, 14, 12, 0)
+        package.route = route
+
+        package.mark_picked_up(occurred_at=pickup_time)
+        package.mark_delivered(occurred_at=delivery_time)
+
+        self.assertEqual(package.status, ItemStatus.DONE)
+        self.assertEqual(package.current_location, package.end_location)
+        self.assertEqual(len(package.pending_events), 2)
+        pickup_event, delivery_event = package.pending_events
+        self.assertIsInstance(pickup_event, PackagePickedUp)
+        self.assertIsInstance(delivery_event, PackageDelivered)
+        self.assertEqual(pickup_event.occurred_at, pickup_time)
+        self.assertEqual(delivery_event.occurred_at, delivery_time)
+
+    def test_package_lifecycle_rejects_duplicate_transitions(self):
+        customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
+        package = DeliveryPackage(LocationCode("SYD"), LocationCode("BRI"), 500, customer, 1)
+        package.route = DeliveryRoute(LocationCode("SYD"), LocationCode("BRI"), route_id=21)
+        occurred_at = datetime(2026, 6, 14, 9, 0)
+
+        package.mark_picked_up(occurred_at=occurred_at)
+
+        with self.assertRaises(BusinessRuleViolationError):
+            package.mark_picked_up(occurred_at=occurred_at)
+
+        self.assertEqual(len(package.pending_events), 1)
+
     def test_package_init_and_id_increments(self):
         customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
 

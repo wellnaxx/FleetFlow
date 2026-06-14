@@ -1,14 +1,17 @@
 """Use case for removing a package from runtime state."""
 
 import logging
+from datetime import datetime
 
 from src.application.exceptions.application_errors import NotFoundError
 from src.application.services.authorization_service import AuthorizationService, requires_all
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.enums.auth import Permission
+from src.domain.events.package_events import PackageRemoved
 from src.domain.exceptions import DomainConflictError, EntityNotFoundError
 from src.ports.output.package_repository import PackageRepositoryPort
+from src.ports.output.unit_of_work import UnitOfWorkPort
 
 logger = logging.getLogger(__name__)
 
@@ -16,15 +19,19 @@ logger = logging.getLogger(__name__)
 class RemovePackageUseCase(AuthorizedUseCase[DeliveryPackage]):
     """Remove a package from the repository and any assigned route."""
 
-    def __init__(self, packages: PackageRepositoryPort, authz: AuthorizationService) -> None:
+    def __init__(
+        self, packages: PackageRepositoryPort, unit_of_work: UnitOfWorkPort, authz: AuthorizationService
+    ) -> None:
         """Initialize the use case.
 
         Args:
             packages: Repository used to fetch and remove packages.
+            unit_of_work: Transaction boundary used to persist package removal.
             authz: Service used for authorization checks.
         """
         super().__init__(authz)
         self._packages = packages
+        self._unit_of_work = unit_of_work
 
     @requires_all(Permission.PACKAGE_REMOVE, Permission.PACKAGE_VIEW)
     def execute(self, package_id: int) -> DeliveryPackage:
@@ -38,14 +45,43 @@ class RemovePackageUseCase(AuthorizedUseCase[DeliveryPackage]):
 
         Raises:
             PermissionError: If the caller lacks required package permissions.
+            Exception: If the package removal persistence fails.
             NotFoundError: If the package does not exist.
             DomainConflictError: If route-package assignment state is inconsistent.
             EntityNotFoundError: If customer-package ownership state is inconsistent.
         """
         package = self._get_package(package_id)
-        self._detach_from_route(package)
-        self._remove_from_customer(package)
-        self._packages.remove(package_id)
+
+        package_snapshot = package.snapshot_state()
+        event_checkpoint = package.event_checkpoint()
+        route = package.route
+        customer = package.customer
+
+        try:
+            self._detach_from_route(package)
+            self._remove_from_customer(package)
+
+            with self._unit_of_work as uow:
+                uow.packages.remove(package_id)
+                uow.commit()
+        except Exception:
+            logger.exception("Package removal did not complete successfully. Restoring package.")
+            package.restore_state(package_snapshot)
+            package.restore_event_checkpoint(event_checkpoint)
+
+            if route is not None:
+                route.restore_package_link(package)
+
+            customer.restore_package_link(package)
+            raise
+
+        removed_event = PackageRemoved(  # noqa: F841 # pyright: ignore[reportUnusedVariable]
+            package_id=package.package_id,
+            customer_id=package.customer.customer_id,
+            route_id=package_snapshot.route_id,
+            occurred_at=datetime.now(),
+        )  # This will be used once outbox/publisher is implemented!
+
         logger.info("Removed package %d.", package_id)
         return package
 
@@ -77,17 +113,7 @@ class RemovePackageUseCase(AuthorizedUseCase[DeliveryPackage]):
             raise DomainConflictError(str(exc)) from exc
 
     def _remove_from_customer(self, package: DeliveryPackage) -> None:
-        customer = getattr(package, "customer", None)
-        if customer is None:
-            logger.warning(
-                "Package %d cannot be removed cleanly because customer is not hydrated.",
-                package.package_id,
-            )
-            raise DomainConflictError(
-                f"Package {package.package_id} has no hydrated customer."
-            )
-
         try:
-            customer.remove_package(package)
+            package.customer.remove_package(package)
         except EntityNotFoundError as exc:
             raise DomainConflictError(str(exc)) from exc
