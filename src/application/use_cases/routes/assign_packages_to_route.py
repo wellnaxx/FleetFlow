@@ -4,6 +4,7 @@ import logging
 from collections.abc import Callable
 from datetime import datetime
 
+from src.adapters.driven.persistence.database.errors import DatabaseError
 from src.application.exceptions.application_errors import NotFoundError
 from src.application.results.assign_packages_to_route_result import (
     AssignPackagesToRouteResult,
@@ -136,8 +137,19 @@ class AssignPackagesToRouteUseCase(AuthorizedUseCase[AssignPackagesToRouteResult
         package: DeliveryPackage,
         now: datetime,
     ) -> PackageAssignmentSuccess:
-        route.assign_package(package, now=now)
-        self._packages.update_state(package)
+        route_snapshot = route.snapshot_state()
+        package_snapshot = package.snapshot_state()
+        route_event_checkpoint = route.event_checkpoint()
+
+        try:
+            route.assign_package(package, now=now, occurred_at=now)
+            self._packages.update_state(package)
+        except DatabaseError:
+            route.restore_state(route_snapshot)
+            route.restore_event_checkpoint(route_event_checkpoint)
+            package.restore_state(package_snapshot)
+            raise
+
         return PackageAssignmentSuccess(
             package_id=package.package_id,
             route_id=route.route_id,

@@ -154,19 +154,20 @@ class AssignTruckToRouteUseCase(AuthorizedUseCase[AssignTruckToRouteResult]):
     def _assign_and_persist(self, route: DeliveryRoute, truck: Truck, now: datetime) -> None:
         route_snapshot = route.snapshot_state()
         truck_snapshot = truck.snapshot_state()
+        route_event_checkpoint = route.event_checkpoint()
         try:
             self._assign_in_memory(route=route, truck=truck, now=now)
             self._persist_assignment(route=route, truck=truck)
         except Exception:
             route.restore_state(route_snapshot)
+            route.restore_event_checkpoint(route_event_checkpoint)
             truck.restore_state(truck_snapshot)
             raise
 
     def _assign_in_memory(self, route: DeliveryRoute, truck: Truck, now: datetime) -> None:
         if route.departure_time is None:
-            route.schedule(now)
-        route.truck = truck
-        truck.assign(route)
+            route.schedule(now, occurred_at=now)
+        route.assign_truck(truck, occurred_at=now)
 
     def _persist_assignment(self, route: DeliveryRoute, truck: Truck) -> None:
         with self._unit_of_work as uow:

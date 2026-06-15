@@ -28,6 +28,9 @@ class _FakeTruck:
         self.in_transit_to: LocationCode | None = None
         self.route: Any = None
 
+    def is_free(self) -> bool:
+        return self.route is None
+
     def assign(self, route: Any) -> bool:
         self.route = route
         self.current_location = LocationCode(route.start_location)

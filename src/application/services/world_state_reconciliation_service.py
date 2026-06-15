@@ -10,6 +10,7 @@ from src.domain.entities.delivery_route import DeliveryRoute, RoutePosition, Rou
 from src.domain.entities.truck import Truck
 from src.domain.enums.item_status import ItemStatus
 from src.domain.enums.route_status import RouteStatus
+from src.domain.enums.truck_release_reasons import TruckReleaseReason
 from src.domain.value_objects.location_code import LocationCode
 
 
@@ -43,7 +44,7 @@ class WorldStateReconciliationService:
         for route in routes:
             new_status = self._compute_route_status(route, current_time)
             if route.status != new_status:
-                route.status = new_status
+                self._apply_route_status(route, new_status)
                 routes_updated.append(route)
 
             if update_trucks:
@@ -105,7 +106,11 @@ class WorldStateReconciliationService:
             before_location = truck.current_location
             before_in_transit_to = truck.in_transit_to
 
-            if route.release_truck(now=now, force=False):
+            completion_time = self._validate_route_eta_final(route)
+
+            if route.release_truck(
+                now=now, force=False, reason=TruckReleaseReason.ROUTE_COMPLETED, occurred_at=completion_time
+            ):
                 trucks_released.append(truck)
                 if truck.current_location != before_location or truck.in_transit_to != before_in_transit_to:
                     trucks_moved.append(truck)
@@ -113,6 +118,12 @@ class WorldStateReconciliationService:
         return TruckReconciliationSummary(
             trucks_moved=tuple(trucks_moved), trucks_released=tuple(trucks_released)
         )
+
+    def _validate_route_eta_final(self, route: DeliveryRoute) -> datetime:
+        completion_time = route.eta_final
+        if completion_time is None:
+            raise RuntimeError("Completed route has no completion time.")
+        return completion_time
 
     def _compute_route_status(self, route: DeliveryRoute, now: datetime) -> RouteStatus:
         if route.departure_time is None:
@@ -128,6 +139,25 @@ class WorldStateReconciliationService:
             return RouteStatus.COMPLETED
 
         return RouteStatus.IN_PROGRESS
+
+    def _apply_route_status(self, route: DeliveryRoute, new_status: RouteStatus) -> None:
+        if new_status is RouteStatus.IN_PROGRESS:
+            departure_time = route.departure_time
+            if departure_time is None:
+                raise RuntimeError("Started route has no departure time.")
+
+            route.mark_started(occurred_at=departure_time)
+            return
+
+        if new_status is RouteStatus.COMPLETED:
+            completion_time = route.eta_final
+            if completion_time is None:
+                raise RuntimeError("Completed route has no completion time.")
+
+            route.mark_completed(occurred_at=completion_time)
+            return
+
+        route.status = new_status
 
     def _set_truck_unscheduled(self, truck: Truck) -> None:
         truck.in_transit_to = None
@@ -156,11 +186,16 @@ class WorldStateReconciliationService:
 
         if (
             position.stop_city == route.end_location
-            and route.eta_final
+            and route.eta_final is not None
             and now >= route.eta_final
-            and route.release_truck(now=now, force=False)
         ):
-            released = True
+            completion_time = self._validate_route_eta_final(route)
+            released = route.release_truck(
+                now=now,
+                force=False,
+                reason=TruckReleaseReason.ROUTE_COMPLETED,
+                occurred_at=completion_time,
+            )
 
         return moved, released
 

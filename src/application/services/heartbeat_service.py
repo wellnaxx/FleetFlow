@@ -44,7 +44,9 @@ class HeartbeatService:
         """
         routes = self._routes.list_all()
 
-        route_snapshots = [(route, route.snapshot_state()) for route in routes]
+        route_snapshots = [
+            (route, route.snapshot_state(), route.event_checkpoint()) for route in routes
+        ]
         package_snapshots = [
             (package, package.snapshot_state(), package.event_checkpoint())
             for route in routes
@@ -78,8 +80,9 @@ class HeartbeatService:
 
         except Exception:
             logger.exception("Heartbeat reconciliation failed; restoring in-memory state")
-            for route, snapshot in route_snapshots:
+            for route, snapshot, event_checkpoint in route_snapshots:
                 route.restore_state(snapshot)
+                route.restore_event_checkpoint(event_checkpoint)
 
             for package, snapshot, event_checkpoint in package_snapshots:
                 package.restore_state(snapshot)

@@ -223,7 +223,7 @@ class InMemoryWorldStateGatewayTests(unittest.TestCase):
             departure_time=datetime(2099, 1, 1, 10, 0, 0),
             route_id=1,
         )
-        existing_route.assign_package(existing_package)
+        existing_route.assign_package(existing_package, occurred_at=datetime(2025, 1, 1, 8, 0))
         route_repo.add(existing_route)
 
         truck = vehicle_manager.find_by_id(1001)

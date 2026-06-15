@@ -141,6 +141,7 @@ class _FakeRoute:
         self.truck: _FakeTruck | None = None
         self.packages = packages or []
         self.status: RouteStatus | None = None
+        self._pending_events: list[tuple[str, datetime]] = []
 
     def snapshot_state(self) -> _FakeRouteSnapshot:
         return _FakeRouteSnapshot(
@@ -181,7 +182,29 @@ class _FakeRoute:
             raise ValueError("unscheduled")
         return self.departure_time + timedelta(hours=self.locations.index(city))
 
-    def release_truck(self, *, now: datetime | None = None, force: bool = False) -> bool:
+    def mark_started(self, *, occurred_at: datetime) -> None:
+        self.status = RouteStatus.IN_PROGRESS
+        self._pending_events.append(("started", occurred_at))
+
+    def mark_completed(self, *, occurred_at: datetime) -> None:
+        self.status = RouteStatus.COMPLETED
+        self._pending_events.append(("completed", occurred_at))
+
+    def event_checkpoint(self) -> int:
+        return len(self._pending_events)
+
+    def restore_event_checkpoint(self, checkpoint: int) -> None:
+        del self._pending_events[checkpoint:]
+
+    def release_truck(
+        self,
+        *,
+        now: datetime | None = None,
+        force: bool = False,
+        reason: object,
+        occurred_at: datetime,
+    ) -> bool:
+        del reason, occurred_at
         if self.truck is None:
             return False
 

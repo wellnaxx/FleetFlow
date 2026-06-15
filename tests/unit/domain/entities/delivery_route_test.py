@@ -3,8 +3,23 @@ from datetime import datetime, timedelta
 from unittest.mock import patch
 
 from src.domain.entities.delivery_route import DeliveryRoute
+from src.domain.entities.truck import Truck
 from src.domain.enums.item_status import ItemStatus
+from src.domain.enums.package_detachment_reasons import PackageDetachmentReason
 from src.domain.enums.route_status import RouteStatus
+from src.domain.enums.truck_model import TruckModel
+from src.domain.enums.truck_release_reasons import TruckReleaseReason
+from src.domain.events.route_events import (
+    PackageAssignedToRoute,
+    PackageDetachedFromRoute,
+    RouteCompleted,
+    RouteCreated,
+    RouteRemoved,
+    RouteScheduled,
+    RouteStarted,
+    TruckAssignedToRoute,
+    TruckReleasedFromRoute,
+)
 from src.domain.exceptions import DomainConflictError, DomainValidationError, EntityNotFoundError
 from src.domain.value_objects.location_code import LocationCode
 
@@ -20,6 +35,8 @@ DIST = {
     ("BBB", "CCC"): 200,
     ("CCC", "DDD"): 300,
 }
+
+EVENT_TIME = datetime(2025, 1, 1, 7, 0)
 
 
 def get_dist(a: str, b: str) -> int:
@@ -109,11 +126,31 @@ class DeliveryRoute_Should(unittest.TestCase):
 
         self.assertIn("duplicate", str(ctx.exception).lower())
 
+    def test_create_records_route_created_event(self, *_: object) -> None:
+        departure_time = datetime(2025, 1, 2, 8, 0)
+
+        route = DeliveryRoute.create(
+            LocationCode("AAA"),
+            LocationCode("BBB"),
+            departure_time=departure_time,
+            route_id=7,
+            occurred_at=EVENT_TIME,
+        )
+
+        self.assertEqual(len(route.pending_events), 1)
+        event = route.pending_events[0]
+        self.assertIsInstance(event, RouteCreated)
+        assert isinstance(event, RouteCreated)
+        self.assertEqual(event.route_id, 7)
+        self.assertEqual(event.locations, (LocationCode("AAA"), LocationCode("BBB")))
+        self.assertEqual(event.departure_time, departure_time)
+        self.assertEqual(event.occurred_at, EVENT_TIME)
+
     def test_schedule_builds_segments_and_stop_times_eta_final(self, *_: object) -> None:
         base = datetime(2025, 1, 1, 8, 0, 0)
         route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), LocationCode("CCC"), route_id=1)
 
-        route.schedule(base)
+        route.schedule(base, occurred_at=EVENT_TIME)
 
         dur_ab = timedelta(hours=100 / DeliveryRoute.SPEED_KMPH)
         dur_bc = timedelta(hours=200 / DeliveryRoute.SPEED_KMPH)
@@ -122,6 +159,82 @@ class DeliveryRoute_Should(unittest.TestCase):
         self.assertEqual(route.arrival_time_at(LocationCode("BBB")), base + dur_ab)
         self.assertEqual(route.arrival_time_at(LocationCode("CCC")), base + dur_ab + dur_bc)
         self.assertEqual(route.eta_final, base + dur_ab + dur_bc)
+        self.assertEqual(len(route.pending_events), 1)
+        event = route.pending_events[0]
+        self.assertIsInstance(event, RouteScheduled)
+        assert isinstance(event, RouteScheduled)
+        self.assertEqual(event.route_id, 1)
+        self.assertEqual(event.departure_time, base)
+        self.assertEqual(event.expected_completion_time, route.eta_final)
+        self.assertEqual(event.occurred_at, EVENT_TIME)
+
+    def test_mark_started_updates_status_and_records_event(self, *_: object) -> None:
+        departure_time = datetime(2025, 1, 1, 8, 0)
+        route = DeliveryRoute(
+            LocationCode("AAA"),
+            LocationCode("BBB"),
+            departure_time=departure_time,
+            route_id=1,
+        )
+
+        route.mark_started(occurred_at=departure_time)
+
+        self.assertEqual(route.status, RouteStatus.IN_PROGRESS)
+        self.assertEqual(len(route.pending_events), 1)
+        event = route.pending_events[0]
+        self.assertIsInstance(event, RouteStarted)
+        assert isinstance(event, RouteStarted)
+        self.assertEqual(event.route_id, 1)
+        self.assertEqual(event.occurred_at, departure_time)
+
+    def test_mark_started_rejects_invalid_transition_without_event(self, *_: object) -> None:
+        route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), route_id=1)
+
+        with self.assertRaises(DomainConflictError):
+            route.mark_started(occurred_at=EVENT_TIME)
+
+        self.assertEqual(route.status, RouteStatus.PLANNED)
+        self.assertEqual(route.pending_events, ())
+
+    def test_mark_completed_updates_status_and_records_event(self, *_: object) -> None:
+        departure_time = datetime(2025, 1, 1, 8, 0)
+        route = DeliveryRoute(
+            LocationCode("AAA"),
+            LocationCode("BBB"),
+            departure_time=departure_time,
+            route_id=1,
+        )
+        completion_time = route.eta_final
+        assert completion_time is not None
+
+        route.mark_completed(occurred_at=completion_time)
+
+        self.assertEqual(route.status, RouteStatus.COMPLETED)
+        self.assertEqual(len(route.pending_events), 1)
+        event = route.pending_events[0]
+        self.assertIsInstance(event, RouteCompleted)
+        assert isinstance(event, RouteCompleted)
+        self.assertEqual(event.route_id, 1)
+        self.assertEqual(event.occurred_at, completion_time)
+
+    def test_mark_completed_rejects_duplicate_transition_without_new_event(self, *_: object) -> None:
+        departure_time = datetime(2025, 1, 1, 8, 0)
+        route = DeliveryRoute(
+            LocationCode("AAA"),
+            LocationCode("BBB"),
+            departure_time=departure_time,
+            route_id=1,
+        )
+        completion_time = route.eta_final
+        assert completion_time is not None
+        route.mark_completed(occurred_at=completion_time)
+        checkpoint = route.event_checkpoint()
+
+        with self.assertRaises(DomainConflictError):
+            route.mark_completed(occurred_at=completion_time)
+
+        self.assertEqual(route.status, RouteStatus.COMPLETED)
+        self.assertEqual(route.event_checkpoint(), checkpoint)
 
     def test_total_distance_km_uses_map_sum_and_cached_segments(self, *_: object) -> None:
         route = DeliveryRoute(
@@ -134,7 +247,7 @@ class DeliveryRoute_Should(unittest.TestCase):
 
         self.assertEqual(route.total_distance_km, 100 + 200 + 300)
 
-        route.schedule(datetime(2025, 1, 1, 9, 0))
+        route.schedule(datetime(2025, 1, 1, 9, 0), occurred_at=EVENT_TIME)
         self.assertEqual(route.total_distance_km, 100 + 200 + 300)
 
     def test_arrival_time_at_validations(self, *_: object) -> None:
@@ -143,7 +256,7 @@ class DeliveryRoute_Should(unittest.TestCase):
         with self.assertRaises(DomainConflictError):
             route.arrival_time_at(LocationCode("AAA"))
 
-        route.schedule(datetime(2025, 1, 1, 9, 0))
+        route.schedule(datetime(2025, 1, 1, 9, 0), occurred_at=EVENT_TIME)
 
         with self.assertRaises(DomainValidationError):
             route.arrival_time_at(LocationCode("DDD"))
@@ -151,7 +264,7 @@ class DeliveryRoute_Should(unittest.TestCase):
     def test_current_position_all_cases(self, *_: object) -> None:
         base = datetime(2025, 1, 1, 8, 0)
         route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), LocationCode("CCC"), route_id=1)
-        route.schedule(base)
+        route.schedule(base, occurred_at=EVENT_TIME)
 
         self.assertEqual(route.status, RouteStatus.SCHEDULED)
 
@@ -212,7 +325,7 @@ class DeliveryRoute_Should(unittest.TestCase):
             LocationCode("DDD"),
             route_id=1,
         )
-        route.schedule(base)
+        route.schedule(base, occurred_at=EVENT_TIME)
 
         route.truck = _Truck(
             vehicle_id=10,
@@ -261,8 +374,14 @@ class DeliveryRoute_Should(unittest.TestCase):
             current_location=LocationCode("AAA"),
         )  # type: ignore[reportAttributeAccessIssue]
 
-        route.assign_package(_Pkg(1, "AAA", "BBB", 40))  # type: ignore[reportArgumentType]
-        route.assign_package(_Pkg(2, "BBB", "CCC", 40))  # type: ignore[reportArgumentType]
+        route.assign_package(
+            _Pkg(1, "AAA", "BBB", 40),  # type: ignore[reportArgumentType]
+            occurred_at=EVENT_TIME,
+        )
+        route.assign_package(
+            _Pkg(2, "BBB", "CCC", 40),  # type: ignore[reportArgumentType]
+            occurred_at=EVENT_TIME,
+        )
 
         self.assertEqual(route.total_assigned_weight(), 80)
         self.assertEqual(route.maximum_segment_load(), 40)
@@ -283,7 +402,10 @@ class DeliveryRoute_Should(unittest.TestCase):
             current_location=LocationCode("AAA"),
         )  # type: ignore[reportAttributeAccessIssue]
 
-        route.assign_package(_Pkg(1, "AAA", "CCC", 30))  # type: ignore[reportArgumentType]
+        route.assign_package(
+            _Pkg(1, "AAA", "CCC", 30),  # type: ignore[reportArgumentType]
+            occurred_at=EVENT_TIME,
+        )
 
         error = route.can_accept_package(_Pkg(2, "BBB", "DDD", 30))  # type: ignore[reportArgumentType]
 
@@ -293,7 +415,7 @@ class DeliveryRoute_Should(unittest.TestCase):
     def test_can_accept_package_allows_before_pickup_and_blocks_after_pickup(self, *_: object) -> None:
         base = datetime(2025, 1, 1, 8, 0)
         route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), LocationCode("CCC"), route_id=1)
-        route.schedule(base)
+        route.schedule(base, occurred_at=EVENT_TIME)
 
         start_package = _Pkg(1, "AAA", "CCC", 5)
         mid_package = _Pkg(2, "BBB", "CCC", 5)
@@ -324,26 +446,63 @@ class DeliveryRoute_Should(unittest.TestCase):
     def test_assign_package_sets_links_and_expected_arrival_when_scheduled(self, *_: object) -> None:
         base = datetime(2025, 1, 1, 6, 0)
         route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), LocationCode("CCC"), route_id=1)
-        route.schedule(base)
+        route.schedule(base, occurred_at=EVENT_TIME)
         package = _Pkg(1, "AAA", "CCC", 5)
 
-        route.assign_package(package)  # type: ignore[reportArgumentType]
+        route.assign_package(package, occurred_at=EVENT_TIME)  # type: ignore[reportArgumentType]
 
         self.assertIs(package.route, route)
         self.assertIn(package, route.packages)
         self.assertIsInstance(package.expected_arrival, datetime)
 
-        route.assign_package(package)  # type: ignore[reportArgumentType]
+        route.assign_package(package, occurred_at=EVENT_TIME)  # type: ignore[reportArgumentType]
         self.assertEqual(len(route.packages), 1)
 
     def test_assign_package_unscheduled_sets_no_eta(self, *_: object) -> None:
         route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), route_id=1)
         package = _Pkg(1, "AAA", "BBB", 1)
 
-        route.assign_package(package)  # type: ignore[reportArgumentType]
+        route.assign_package(package, occurred_at=EVENT_TIME)  # type: ignore[reportArgumentType]
 
         self.assertIs(package.route, route)
         self.assertIsNone(package.expected_arrival)
+
+    def test_assign_package_records_assignment_event(self, *_: object) -> None:
+        departure_time = datetime(2025, 1, 1, 8, 0)
+        occurred_at = datetime(2025, 1, 1, 7, 30)
+        route = DeliveryRoute(
+            LocationCode("AAA"),
+            LocationCode("BBB"),
+            LocationCode("CCC"),
+            departure_time=departure_time,
+            route_id=7,
+        )
+        package = _Pkg(11, "AAA", "CCC", 5)
+
+        route.assign_package(
+            package,  # type: ignore[reportArgumentType]
+            now=departure_time - timedelta(minutes=1),
+            occurred_at=occurred_at,
+        )
+
+        self.assertEqual(len(route.pending_events), 1)
+        event = route.pending_events[0]
+        self.assertIsInstance(event, PackageAssignedToRoute)
+        assert isinstance(event, PackageAssignedToRoute)
+        self.assertEqual(event.route_id, 7)
+        self.assertEqual(event.package_id, 11)
+        self.assertEqual(event.expected_arrival, route.arrival_time_at(LocationCode("CCC")))
+        self.assertEqual(event.occurred_at, occurred_at)
+
+    def test_rejected_package_assignment_records_no_event(self, *_: object) -> None:
+        route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), route_id=7)
+        package = _Pkg(11, "AAA", "CCC", 5)
+
+        with self.assertRaises(DomainConflictError):
+            route.assign_package(package, occurred_at=EVENT_TIME)  # type: ignore[reportArgumentType]
+
+        self.assertEqual(route.pending_events, ())
+        self.assertIsNone(package.route)
 
     def test_detach_package_removes_package_and_clears_assignment_state(self, *_: object) -> None:
         route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), LocationCode("CCC"), route_id=1)
@@ -351,30 +510,47 @@ class DeliveryRoute_Should(unittest.TestCase):
         package.status = ItemStatus.IN_PROGRESS
         package.current_location = LocationCode("BBB")
 
-        route.schedule(datetime(2025, 1, 1, 6, 0))
-        route.assign_package(package)  # type: ignore[reportArgumentType]
+        route.schedule(datetime(2025, 1, 1, 6, 0), occurred_at=EVENT_TIME)
+        route.assign_package(package, occurred_at=EVENT_TIME)  # type: ignore[reportArgumentType]
+        route.clear_events()
 
         self.assertIs(package.route, route)
         self.assertIn(package, route.packages)
         self.assertIsNotNone(package.expected_arrival)
 
-        route.detach_package(package)  # type: ignore[reportArgumentType]
+        route.detach_package(
+            package,  # type: ignore[reportArgumentType]
+            reason=PackageDetachmentReason.PACKAGE_REMOVED,
+            occurred_at=EVENT_TIME,
+        )
 
         self.assertIsNone(package.route)
         self.assertIsNone(package.expected_arrival)
         self.assertEqual(package.status, ItemStatus.TODO)
         self.assertEqual(package.current_location, package.start_location)
         self.assertNotIn(package, route.packages)
+        self.assertEqual(len(route.pending_events), 1)
+        event = route.pending_events[0]
+        self.assertIsInstance(event, PackageDetachedFromRoute)
+        assert isinstance(event, PackageDetachedFromRoute)
+        self.assertEqual(event.route_id, 1)
+        self.assertEqual(event.package_id, 1)
+        self.assertEqual(event.reason, PackageDetachmentReason.PACKAGE_REMOVED)
+        self.assertEqual(event.occurred_at, EVENT_TIME)
 
     def test_detach_package_only_removes_target(self, *_: object) -> None:
         route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), LocationCode("CCC"), route_id=1)
         package_1 = _Pkg(1, "AAA", "BBB", 5)
         package_2 = _Pkg(2, "AAA", "CCC", 7)
 
-        route.assign_package(package_1)  # type: ignore[reportArgumentType]
-        route.assign_package(package_2)  # type: ignore[reportArgumentType]
+        route.assign_package(package_1, occurred_at=EVENT_TIME)  # type: ignore[reportArgumentType]
+        route.assign_package(package_2, occurred_at=EVENT_TIME)  # type: ignore[reportArgumentType]
 
-        route.detach_package(package_1)  # type: ignore[reportArgumentType]
+        route.detach_package(
+            package_1,  # type: ignore[reportArgumentType]
+            reason=PackageDetachmentReason.PACKAGE_REMOVED,
+            occurred_at=EVENT_TIME,
+        )
 
         self.assertIsNone(package_1.route)
         self.assertNotIn(package_1, route.packages)
@@ -388,7 +564,11 @@ class DeliveryRoute_Should(unittest.TestCase):
         package = _Pkg(1, "AAA", "CCC", 5)
 
         with self.assertRaises(EntityNotFoundError) as ctx:
-            route.detach_package(package)  # type: ignore[reportArgumentType]
+            route.detach_package(
+                package,  # type: ignore[reportArgumentType]
+                reason=PackageDetachmentReason.PACKAGE_REMOVED,
+                occurred_at=EVENT_TIME,
+            )
 
         self.assertIn("1", str(ctx.exception))
         self.assertNotIn(package, route.packages)
@@ -399,10 +579,14 @@ class DeliveryRoute_Should(unittest.TestCase):
         route_2 = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), LocationCode("CCC"), route_id=2)
         package = _Pkg(1, "AAA", "CCC", 5)
 
-        route_2.assign_package(package)  # type: ignore[reportArgumentType]
+        route_2.assign_package(package, occurred_at=EVENT_TIME)  # type: ignore[reportArgumentType]
 
         with self.assertRaises(EntityNotFoundError) as ctx:
-            route_1.detach_package(package)  # type: ignore[reportArgumentType]
+            route_1.detach_package(
+                package,  # type: ignore[reportArgumentType]
+                reason=PackageDetachmentReason.PACKAGE_REMOVED,
+                occurred_at=EVENT_TIME,
+            )
 
         self.assertIn("1", str(ctx.exception))
         self.assertIs(package.route, route_2)
@@ -411,37 +595,177 @@ class DeliveryRoute_Should(unittest.TestCase):
 
     def test_release_truck_releases_and_clears_route_truck(self, *_: object) -> None:
         route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), route_id=1)
-        truck = _Truck(route=route)
-        route.truck = truck  # type: ignore[reportAttributeAccessIssue]
+        truck = Truck(1, TruckModel.SCANIA, 42000, 8000)
+        route.assign_truck(truck, occurred_at=EVENT_TIME)
+        route.clear_events()
 
-        released = route.release_truck(force=True)
+        released = route.release_truck(
+            force=True,
+            reason=TruckReleaseReason.ROUTE_REMOVED,
+            occurred_at=EVENT_TIME,
+        )
 
         self.assertTrue(released)
-        self.assertTrue(truck.released_force)
         self.assertIsNone(truck.route)
         self.assertIsNone(route.truck)
+        self.assertEqual(len(route.pending_events), 1)
+        event = route.pending_events[0]
+        self.assertIsInstance(event, TruckReleasedFromRoute)
+        assert isinstance(event, TruckReleasedFromRoute)
+        self.assertEqual(event.route_id, 1)
+        self.assertEqual(event.truck_id, 1)
+        self.assertEqual(event.release_location, LocationCode("BBB"))
+        self.assertEqual(event.reason, TruckReleaseReason.ROUTE_REMOVED)
+        self.assertEqual(event.occurred_at, EVENT_TIME)
 
     def test_release_truck_without_truck_is_noop(self, *_: object) -> None:
         route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), route_id=1)
 
-        released = route.release_truck(force=True)
+        released = route.release_truck(
+            force=True,
+            reason=TruckReleaseReason.ROUTE_REMOVED,
+            occurred_at=EVENT_TIME,
+        )
 
         self.assertFalse(released)
         self.assertIsNone(route.truck)
+        self.assertEqual(route.pending_events, ())
+
+    def test_release_truck_returns_false_when_truck_reports_no_release(self, *_: object) -> None:
+        route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), route_id=1)
+        truck = Truck(1, TruckModel.SCANIA, 42000, 8000)
+        route.assign_truck(truck, occurred_at=EVENT_TIME)
+        route.clear_events()
+
+        def fail_release(*, now: datetime | None = None, force: bool = False) -> bool:
+            del now, force
+            truck.route = None
+            return False
+
+        with patch.object(truck, "release", side_effect=fail_release):
+            released = route.release_truck(
+                force=True,
+                reason=TruckReleaseReason.ROUTE_REMOVED,
+                occurred_at=EVENT_TIME,
+            )
+
+        self.assertFalse(released)
+        self.assertIs(route.truck, truck)
+        self.assertEqual(route.pending_events, ())
+
+    def test_release_truck_restores_truck_when_released_location_is_missing(self, *_: object) -> None:
+        route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), route_id=1)
+        truck = Truck(1, TruckModel.SCANIA, 42000, 8000)
+        route.assign_truck(truck, occurred_at=EVENT_TIME)
+        route.clear_events()
+
+        def release_without_location(*, now: datetime | None = None, force: bool = False) -> bool:
+            del now, force
+            truck.route = None
+            truck.current_location = None
+            return True
+
+        with (
+            patch.object(truck, "release", side_effect=release_without_location),
+            self.assertRaises(RuntimeError),
+        ):
+            route.release_truck(
+                force=True,
+                reason=TruckReleaseReason.ROUTE_REMOVED,
+                occurred_at=EVENT_TIME,
+            )
+
+        self.assertIs(route.truck, truck)
+        self.assertIs(truck.route, route)
+        self.assertEqual(route.pending_events, ())
+
+    def test_assign_truck_records_assignment_event(self, *_: object) -> None:
+        route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), route_id=1)
+        truck = Truck(10, TruckModel.SCANIA, 42000, 8000)
+
+        route.assign_truck(truck, occurred_at=EVENT_TIME)
+
+        self.assertIs(route.truck, truck)
+        self.assertIs(truck.route, route)
+        self.assertEqual(len(route.pending_events), 1)
+        event = route.pending_events[0]
+        self.assertIsInstance(event, TruckAssignedToRoute)
+        assert isinstance(event, TruckAssignedToRoute)
+        self.assertEqual(event.route_id, 1)
+        self.assertEqual(event.truck_id, 10)
+        self.assertEqual(event.occurred_at, EVENT_TIME)
+
+    def test_assign_truck_rejects_truck_assigned_to_another_route(self, *_: object) -> None:
+        route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), route_id=1)
+        other_route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), route_id=2)
+        truck = Truck(10, TruckModel.SCANIA, 42000, 8000)
+        other_route.assign_truck(truck, occurred_at=EVENT_TIME)
+
+        with self.assertRaises(DomainConflictError):
+            route.assign_truck(truck, occurred_at=EVENT_TIME)
+
+        self.assertIsNone(route.truck)
+        self.assertIs(truck.route, other_route)
+        self.assertEqual(route.pending_events, ())
+
+    def test_release_truck_before_completion_records_no_event(self, *_: object) -> None:
+        departure_time = datetime(2025, 1, 1, 8, 0)
+        route = DeliveryRoute(
+            LocationCode("AAA"),
+            LocationCode("BBB"),
+            departure_time=departure_time,
+            route_id=1,
+        )
+        truck = Truck(10, TruckModel.SCANIA, 42000, 8000)
+        route.assign_truck(truck, occurred_at=EVENT_TIME)
+        route.clear_events()
+
+        released = route.release_truck(
+            now=departure_time,
+            force=False,
+            reason=TruckReleaseReason.ROUTE_COMPLETED,
+            occurred_at=route.eta_final or departure_time,
+        )
+
+        self.assertFalse(released)
+        self.assertIs(route.truck, truck)
+        self.assertIs(truck.route, route)
+        self.assertEqual(route.pending_events, ())
+
+    def test_record_removal_records_route_snapshot_identifiers(self, *_: object) -> None:
+        route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), route_id=7)
+
+        route.record_removal(
+            detached_package_ids=(11, 12),
+            released_truck_id=10,
+            occurred_at=EVENT_TIME,
+        )
+
+        self.assertEqual(len(route.pending_events), 1)
+        event = route.pending_events[0]
+        self.assertIsInstance(event, RouteRemoved)
+        assert isinstance(event, RouteRemoved)
+        self.assertEqual(event.route_id, 7)
+        self.assertEqual(event.detached_package_ids, (11, 12))
+        self.assertEqual(event.released_truck_id, 10)
+        self.assertEqual(event.occurred_at, EVENT_TIME)
 
     def test_snapshot_state_restores_route_schedule_truck_and_packages(self, *_: object) -> None:
         base = datetime(2025, 1, 1, 8, 0)
         route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), LocationCode("CCC"), route_id=1)
         package = _Pkg(1, "AAA", "CCC", 5)
         truck = _Truck(route=route)
-        route.schedule(base)
-        route.assign_package(package)  # type: ignore[reportArgumentType]
+        route.schedule(base, occurred_at=EVENT_TIME)
+        route.assign_package(package, occurred_at=EVENT_TIME)  # type: ignore[reportArgumentType]
         route.truck = truck  # type: ignore[reportAttributeAccessIssue]
         snapshot = route.snapshot_state()
 
-        route.detach_package(package)  # type: ignore[reportArgumentType]
+        route.detach_package(
+            package,  # type: ignore[reportArgumentType]
+            reason=PackageDetachmentReason.PACKAGE_REMOVED,
+            occurred_at=EVENT_TIME,
+        )
         route.truck = None
-        route.schedule(base + timedelta(days=1))
 
         route.restore_state(snapshot)
 
@@ -454,7 +778,7 @@ class DeliveryRoute_Should(unittest.TestCase):
     def test_info_contains_key_lines(self, *_: object) -> None:
         base = datetime(2025, 1, 1, 8, 0)
         route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), LocationCode("CCC"), route_id=1)
-        route.schedule(base)
+        route.schedule(base, occurred_at=EVENT_TIME)
 
         info = route.info()
 

@@ -8,7 +8,19 @@ from enum import StrEnum
 from itertools import pairwise
 from typing import TYPE_CHECKING
 
+from src.domain.entities.mixins.event_mixin import EventRecorderMixin
 from src.domain.enums.route_status import RouteStatus
+from src.domain.events.route_events import (
+    PackageAssignedToRoute,
+    PackageDetachedFromRoute,
+    RouteCompleted,
+    RouteCreated,
+    RouteRemoved,
+    RouteScheduled,
+    RouteStarted,
+    TruckAssignedToRoute,
+    TruckReleasedFromRoute,
+)
 from src.domain.exceptions import DomainConflictError, DomainValidationError, EntityNotFoundError
 from src.domain.services.map import Map
 from src.domain.value_objects.location_code import LocationCode
@@ -16,6 +28,9 @@ from src.domain.value_objects.location_code import LocationCode
 if TYPE_CHECKING:
     from src.domain.entities.delivery_package import DeliveryPackage
     from src.domain.entities.truck import Truck
+    from src.domain.enums.package_detachment_reasons import PackageDetachmentReason
+    from src.domain.enums.truck_release_reasons import TruckReleaseReason
+    from src.domain.events.base import DomainEvent
 
 
 class RoutePositionKind(StrEnum):
@@ -59,7 +74,7 @@ class RouteStateSnapshot:
     packages: tuple[DeliveryPackage, ...]
 
 
-class DeliveryRoute:
+class DeliveryRoute(EventRecorderMixin):
     """Route aggregate for packages and an optional assigned truck."""
 
     SPEED_KMPH: int = 87
@@ -95,6 +110,8 @@ class DeliveryRoute:
 
         if self._departure_time is not None:
             self._build_schedule()
+
+        self._pending_events: list[DomainEvent] = []
 
     def _normalize_locations(self, locations: tuple[str | LocationCode, ...]) -> list[LocationCode]:
         """Normalize and validate route locations."""
@@ -136,6 +153,112 @@ class DeliveryRoute:
     def packages(self) -> tuple[DeliveryPackage, ...]:
         """Assigned packages as an immutable snapshot of the internal collection."""
         return tuple(self._packages)
+
+    @classmethod
+    def create(
+        cls,
+        *locations: str | LocationCode,
+        departure_time: datetime | None = None,
+        route_id: int,
+        occurred_at: datetime | None = None,
+    ) -> DeliveryRoute:
+        """Create a delivery route and record its creation event.
+
+        Unlike direct construction, this factory records a `RouteCreated`
+        domain event. Persistence mappers should use the constructor when
+        rehydrating existing routes.
+
+        Args:
+            *locations: Ordered raw or typed location codes from origin to destination.
+            departure_time: Optional scheduled departure time.
+            route_id: Stable route identifier.
+            occurred_at: Business time of creation. Defaults to the current time.
+
+        Returns:
+            Newly created route with one pending `RouteCreated` event.
+
+        Raises:
+            DomainValidationError: If fewer than two locations are supplied, any location is
+                unknown, or a location is repeated.
+        """
+        route = cls(*locations, departure_time=departure_time, route_id=route_id)
+
+        route._record_event(
+            RouteCreated(
+                route_id=route.route_id,
+                locations=tuple(route.locations),
+                departure_time=route.departure_time,
+                occurred_at=occurred_at or datetime.now(),
+            )
+        )
+
+        return route
+
+    def mark_started(self, *, occurred_at: datetime) -> None:
+        """Move a scheduled route into progress and record the transition.
+
+        Args:
+            occurred_at: Business time at which the route started.
+
+        Raises:
+            DomainConflictError: If the route is not currently scheduled.
+        """
+        if self.status is not RouteStatus.SCHEDULED:
+            raise DomainConflictError(
+                f"Route {self.route_id} cannot start from status {self.status.value}."
+            )
+
+        self.status = RouteStatus.IN_PROGRESS
+        self._record_event(
+            RouteStarted(
+                route_id=self.route_id,
+                occurred_at=occurred_at,
+            )
+        )
+
+    def mark_completed(self, *, occurred_at: datetime) -> None:
+        """Complete a scheduled or in-progress route and record the transition.
+
+        Reconciliation may observe completion without first observing the
+        in-progress state, so completion from `SCHEDULED` is valid.
+
+        Args:
+            occurred_at: Business time at which the route completed.
+
+        Raises:
+            DomainConflictError: If the route is neither scheduled nor in progress.
+        """
+        if self.status not in (RouteStatus.SCHEDULED, RouteStatus.IN_PROGRESS):
+            raise DomainConflictError(
+                f"Route {self.route_id} cannot complete from status {self.status.value}."
+            )
+
+        self.status = RouteStatus.COMPLETED
+        self._record_event(
+            RouteCompleted(
+                route_id=self.route_id,
+                occurred_at=occurred_at,
+            )
+        )
+
+    def record_removal(
+        self, *, detached_package_ids: tuple[int, ...], released_truck_id: int | None, occurred_at: datetime
+    ) -> None:
+        """Record that this route was removed from the system.
+
+        Args:
+            detached_package_ids: Identifiers of packages detached during removal.
+            released_truck_id: Identifier of the released truck, if one was assigned.
+            occurred_at: Business time at which removal occurred.
+        """
+        self._record_event(
+            RouteRemoved(
+                route_id=self.route_id,
+                detached_package_ids=detached_package_ids,
+                released_truck_id=released_truck_id,
+                occurred_at=occurred_at,
+            )
+        )
 
     def snapshot_state(self) -> RouteStateSnapshot:
         """Capture mutable route state.
@@ -179,15 +302,36 @@ class DeliveryRoute:
         """Expected arrival time at the final stop, if scheduled."""
         return self._stop_times.get(self.end_location)
 
-    def schedule(self, departure_time: datetime) -> None:
-        """Schedule the route and rebuild stop timing information.
+    def schedule(self, departure_time: datetime, *, occurred_at: datetime) -> None:
+        """Schedule the route, rebuild stop timing information, and record a `RouteScheduled` event.
 
         Args:
             departure_time: Departure time for the first route location.
+            occurred_at: Business time at which the route is scheduled successfully.
+
+        Raises:
+            DomainConflictError: If route is already scheduled.
+            RuntimeError: If a scheduled route has no expected completion time.
         """
+        if self.departure_time is not None:
+            raise DomainConflictError(f"Route {self.route_id} is already scheduled.")
+
         self._departure_time = departure_time
         self._build_schedule()
         self.status = RouteStatus.SCHEDULED
+
+        expected_completion_time = self.eta_final
+        if expected_completion_time is None:
+            raise RuntimeError("Scheduled route has no expected completion time.")
+
+        self._record_event(
+            RouteScheduled(
+                route_id=self.route_id,
+                departure_time=departure_time,
+                expected_completion_time=expected_completion_time,
+                occurred_at=occurred_at,
+            )
+        )
 
     def _build_schedule(self) -> None:
         if self._departure_time is None:
@@ -348,12 +492,15 @@ class DeliveryRoute:
 
         return None
 
-    def assign_package(self, package: DeliveryPackage, now: datetime | None = None) -> None:
+    def assign_package(
+        self, package: DeliveryPackage, now: datetime | None = None, *, occurred_at: datetime
+    ) -> None:
         """Assign a package after validating route compatibility.
 
         Args:
             package: Package to assign.
             now: Clock value used for live pickup-pass validation.
+            occurred_at: Business time at which the assignment succeeded.
 
         Raises:
             DomainConflictError: If the package is incompatible with the route.
@@ -368,11 +515,24 @@ class DeliveryRoute:
         package.route = self
         self._update_expected_arrival(package)
 
-    def detach_package(self, package: DeliveryPackage) -> None:
+        self._record_event(
+            PackageAssignedToRoute(
+                route_id=self.route_id,
+                package_id=package.package_id,
+                expected_arrival=package.expected_arrival,
+                occurred_at=occurred_at,
+            )
+        )
+
+    def detach_package(
+        self, package: DeliveryPackage, *, reason: PackageDetachmentReason, occurred_at: datetime
+    ) -> None:
         """Detach a package and clear its route-derived assignment state.
 
         Args:
             package: Package to detach from this route.
+            reason: Business reason for removing the package assignment.
+            occurred_at: Business time at which the package was detached.
 
         Raises:
             EntityNotFoundError: If the package is not assigned to this route.
@@ -382,28 +542,98 @@ class DeliveryRoute:
                 self._packages.pop(i)
                 if package.route is self:
                     package.reset_assignment_state()
+
+                self._record_event(
+                    PackageDetachedFromRoute(
+                        route_id=self.route_id,
+                        package_id=existing.package_id,
+                        reason=reason,
+                        occurred_at=occurred_at,
+                    )
+                )
                 return
         raise EntityNotFoundError(
             f"Package with id {package.package_id} is not assigned to route {self.route_id}."
         )
 
-    def release_truck(self, *, now: datetime | None = None, force: bool = False) -> bool:
-        """Release the assigned truck if its route is complete or forced.
+    def assign_truck(self, truck: Truck, *, occurred_at: datetime) -> None:
+        """Assign a truck to this route and record its assignment event.
+
+        Args:
+            truck: Free truck to assign. The truck's state is updated to reflect the assignment.
+            occurred_at: Business time of the assignment, used for event timestamping.
+
+        Raises:
+            DomainConflictError: If a truck is already assigned to this route.
+        """
+        if self.truck is not None:
+            raise DomainConflictError(
+                f"Route {self.route_id} already has truck {self.truck.vehicle_id} assigned."
+            )
+
+        if not truck.is_free() or truck.route is not None:
+            raise DomainConflictError(f"Truck {truck.vehicle_id} is already assigned to a route.")
+
+        truck.assign(self)
+
+        self.truck = truck
+        self._record_event(
+            TruckAssignedToRoute(
+                route_id=self.route_id,
+                truck_id=truck.vehicle_id,
+                occurred_at=occurred_at,
+            )
+        )
+
+    def release_truck(
+        self,
+        *,
+        now: datetime | None = None,
+        force: bool = False,
+        reason: TruckReleaseReason,
+        occurred_at: datetime,
+    ) -> bool:
+        """Release the assigned truck if its route is complete or forced and record its release event.
 
         Args:
             now: Clock value used to decide whether the final ETA has passed.
             force: Release immediately even if the final ETA has not passed.
+            reason: Business reason for releasing the truck.
+            occurred_at: Business time at which the release occurred.
 
         Returns:
             True when a truck was released, false otherwise.
+
+        Raises:
+            RuntimeError: If released truck has no current location.
         """
-        if self.truck is None:
+        truck = self.truck
+        if truck is None:
             return False
 
-        released = self.truck.release(now=now, force=force)
-        if released or self.truck.route is None:
-            self.truck = None
-        return released
+        truck_id = truck.vehicle_id
+        truck_snapshot = truck.snapshot_state()
+        released = truck.release(now=now, force=force)
+        if not released:
+            return False
+
+        release_location = truck.current_location
+        if release_location is None:
+            truck.restore_state(truck_snapshot)
+            raise RuntimeError("Released truck has no current location.")
+
+        self.truck = None
+        self._record_event(
+            TruckReleasedFromRoute(
+                route_id=self.route_id,
+                truck_id=truck_id,
+                release_location=release_location,
+                reason=reason,
+                occurred_at=occurred_at,
+            )
+        )
+
+        return True
 
     def total_assigned_weight(self) -> float:
         """Total weight of currently assigned packages."""

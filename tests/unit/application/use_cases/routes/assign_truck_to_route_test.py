@@ -73,15 +73,21 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         route.total_assigned_weight = MagicMock(return_value=0.0)
         route.maximum_segment_load = MagicMock(return_value=0.0)
 
-        def _set_departure(when: datetime) -> None:
+        def _set_departure(when: datetime, *, occurred_at: datetime) -> None:
+            self.assertEqual(occurred_at, fixed_now)
             route.departure_time = when
 
         route.schedule = MagicMock(side_effect=_set_departure)
         route.snapshot_state = MagicMock(return_value=object())
         route.restore_state = MagicMock()
+        route.event_checkpoint = MagicMock(return_value=0)
+        route.restore_event_checkpoint = MagicMock()
 
         truck = MagicMock()
         truck.vehicle_id = 11
+        route.assign_truck = MagicMock(
+            side_effect=lambda assigned_truck, *, occurred_at: setattr(route, "truck", assigned_truck)
+        )
 
         self.mock_routes.get_by_id.return_value = route
         self.mock_vehicles.find_by_id.return_value = truck
@@ -91,9 +97,9 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
 
         self.assertEqual(result, AssignTruckToRouteResult(route_id=22, truck_id=11))
         self.assertEqual(self.mock_vehicles.is_suitable_for_route.call_args.args[1].departure_time, fixed_now)
-        route.schedule.assert_called_once_with(fixed_now)
+        route.schedule.assert_called_once_with(fixed_now, occurred_at=fixed_now)
+        route.assign_truck.assert_called_once_with(truck, occurred_at=fixed_now)
         self.assertIs(route.truck, truck)
-        truck.assign.assert_called_once_with(route)
         self.mock_routes.update_state.assert_not_called()
         self.mock_uow_routes.update_state.assert_called_once_with(route)
         self.mock_uow_trucks.update_state.assert_called_once_with(truck)
@@ -113,9 +119,14 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         route.schedule = MagicMock()
         route.snapshot_state = MagicMock(return_value=object())
         route.restore_state = MagicMock()
+        route.event_checkpoint = MagicMock(return_value=0)
+        route.restore_event_checkpoint = MagicMock()
 
         truck = MagicMock()
         truck.vehicle_id = 11
+        route.assign_truck = MagicMock(
+            side_effect=lambda assigned_truck, *, occurred_at: setattr(route, "truck", assigned_truck)
+        )
 
         self.mock_routes.get_by_id.return_value = route
         self.mock_vehicles.find_by_id.return_value = truck
@@ -126,8 +137,8 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         self.assertEqual(result, AssignTruckToRouteResult(route_id=22, truck_id=11))
         route.schedule.assert_not_called()
         self.mock_vehicles.is_suitable_for_route.assert_called_once_with(truck, route)
+        route.assign_truck.assert_called_once_with(truck, occurred_at=fixed_now)
         self.assertIs(route.truck, truck)
-        truck.assign.assert_called_once_with(route)
         self.mock_routes.update_state.assert_not_called()
         self.mock_uow_routes.update_state.assert_called_once_with(route)
         self.mock_uow_trucks.update_state.assert_called_once_with(truck)
@@ -184,9 +195,14 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         route.schedule = MagicMock()
         route.snapshot_state = MagicMock(return_value=object())
         route.restore_state = MagicMock()
+        route.event_checkpoint = MagicMock(return_value=0)
+        route.restore_event_checkpoint = MagicMock()
 
         truck = MagicMock()
         truck.vehicle_id = 11
+        route.assign_truck = MagicMock(
+            side_effect=lambda assigned_truck, *, occurred_at: setattr(route, "truck", assigned_truck)
+        )
 
         self.mock_routes.get_by_id.return_value = route
         self.mock_vehicles.find_by_id.return_value = truck
@@ -195,8 +211,8 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         result = self.use_case.execute(11, 22, now=fixed_now)
 
         self.assertEqual(result, AssignTruckToRouteResult(route_id=22, truck_id=11))
+        route.assign_truck.assert_called_once_with(truck, occurred_at=fixed_now)
         self.assertIs(route.truck, truck)
-        truck.assign.assert_called_once_with(route)
         self.mock_routes.update_state.assert_not_called()
         self.mock_uow_routes.update_state.assert_called_once_with(route)
         self.mock_uow_trucks.update_state.assert_called_once_with(truck)
@@ -224,6 +240,7 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         self.assertEqual(truck.status, TruckStatus.FREE)
         self.assertIsNone(truck.busy_from)
         self.assertIsNone(truck.busy_until)
+        self.assertEqual(route.pending_events, ())
 
     def test_raises_when_route_already_has_a_truck(self) -> None:
         route = SimpleNamespace(

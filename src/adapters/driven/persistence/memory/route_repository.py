@@ -44,7 +44,7 @@ class InMemoryRouteRepository:
         Returns:
             Stored route with its allocated id.
         """
-        route = DeliveryRoute(*locations, departure_time=departure_time, route_id=self._next_id)
+        route = DeliveryRoute.create(*locations, departure_time=departure_time, route_id=self._next_id)
         self.add(route)
         return route
 

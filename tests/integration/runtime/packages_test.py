@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 from src.adapters.driven.persistence.memory.package_repository import InMemoryPackageRepository
@@ -39,7 +40,7 @@ class RuntimePackageRemovalIntegrationTests(unittest.TestCase):
             )
 
             customer.add_package(package)
-            route.assign_package(package)
+            route.assign_package(package, occurred_at=datetime(2025, 1, 1, 8, 0))
             package_repo.add(package)
 
         unit_of_work = InMemoryUnitOfWork(routes=MagicMock(), packages=package_repo, trucks=MagicMock())

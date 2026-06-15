@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from src.application.exceptions.application_errors import NotFoundError
@@ -11,10 +12,14 @@ from src.application.services.authorization_service import AuthorizationService,
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.enums.auth import Permission
+from src.domain.enums.package_detachment_reasons import PackageDetachmentReason
+from src.domain.enums.truck_release_reasons import TruckReleaseReason
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from src.domain.entities.delivery_package import DeliveryPackage, DeliveryPackageStateSnapshot
     from src.domain.entities.delivery_route import RouteStateSnapshot
     from src.domain.entities.truck import Truck, TruckStateSnapshot
@@ -25,6 +30,7 @@ if TYPE_CHECKING:
 @dataclass(frozen=True, slots=True)
 class _RouteRemovalSnapshot:
     route: RouteStateSnapshot
+    route_event_checkpoint: int
     packages: tuple[tuple[DeliveryPackage, DeliveryPackageStateSnapshot], ...]
     truck: Truck | None
     truck_state: TruckStateSnapshot | None
@@ -38,6 +44,7 @@ class RemoveRouteUseCase(AuthorizedUseCase[DeliveryRoute]):
         routes: RouteRepositoryPort,
         unit_of_work: UnitOfWorkPort,
         authz: AuthorizationService,
+        clock: Callable[[], datetime] = datetime.now,
     ) -> None:
         """Initialize the use case.
 
@@ -46,10 +53,12 @@ class RemoveRouteUseCase(AuthorizedUseCase[DeliveryRoute]):
             unit_of_work: Transaction boundary used to persist package and truck
                 state together with route removal.
             authz: Service used for authorization checks.
+            clock: Clock provider for route-removal events.
         """
         super().__init__(authz)
         self._routes = routes
         self._unit_of_work = unit_of_work
+        self._clock = clock
 
     @requires_all(Permission.ROUTE_REMOVE, Permission.ROUTE_VIEW)
     def execute(self, route_id: int) -> DeliveryRoute:
@@ -71,9 +80,15 @@ class RemoveRouteUseCase(AuthorizedUseCase[DeliveryRoute]):
         package_count = len(route.packages)
         truck = route.truck
         truck_id = truck.vehicle_id if truck is not None else None
+        occurred_at = self._clock()
 
         try:
-            detached_packages = self._detach_route_state(route)
+            detached_packages = self._detach_route_state(route, occurred_at=occurred_at)
+            route.record_removal(
+                detached_package_ids=tuple(package.package_id for package, _ in snapshot.packages),
+                released_truck_id=truck_id,
+                occurred_at=occurred_at,
+            )
             self._persist_removal(
                 route_id=route_id,
                 detached_packages=detached_packages,
@@ -102,18 +117,28 @@ class RemoveRouteUseCase(AuthorizedUseCase[DeliveryRoute]):
         truck = route.truck
         return _RouteRemovalSnapshot(
             route=route.snapshot_state(),
+            route_event_checkpoint=route.event_checkpoint(),
             packages=tuple((package, package.snapshot_state()) for package in route.packages),
             truck=truck,
             truck_state=truck.snapshot_state() if truck is not None else None,
         )
 
-    def _detach_route_state(self, route: DeliveryRoute) -> list[DeliveryPackage]:
+    def _detach_route_state(
+        self,
+        route: DeliveryRoute,
+        *,
+        occurred_at: datetime,
+    ) -> list[DeliveryPackage]:
         detached_packages: list[DeliveryPackage] = []
         for package in list(route.packages):
-            route.detach_package(package)
+            route.detach_package(
+                package,
+                reason=PackageDetachmentReason.ROUTE_REMOVED,
+                occurred_at=occurred_at,
+            )
             detached_packages.append(package)
 
-        route.release_truck(force=True)
+        route.release_truck(force=True, reason=TruckReleaseReason.ROUTE_REMOVED, occurred_at=occurred_at)
         return detached_packages
 
     def _persist_removal(
@@ -134,6 +159,7 @@ class RemoveRouteUseCase(AuthorizedUseCase[DeliveryRoute]):
 
     def _restore_removal_state(self, route: DeliveryRoute, snapshot: _RouteRemovalSnapshot) -> None:
         route.restore_state(snapshot.route)
+        route.restore_event_checkpoint(snapshot.route_event_checkpoint)
         for package, package_snapshot in snapshot.packages:
             package.restore_state(package_snapshot)
         if snapshot.truck is not None and snapshot.truck_state is not None:

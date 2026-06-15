@@ -224,7 +224,7 @@ class Container:
             create=CreatePackageUseCase(self.customer_service, self.package_repo, self.authz),
             view=ViewPackageUseCase(self.package_repo, self.authz),
             view_all=ViewAllPackagesUseCase(self.package_repo, self.authz),
-            remove=RemovePackageUseCase(self.package_repo, self.unit_of_work, self.authz),
+            remove=RemovePackageUseCase(self.package_repo, self.unit_of_work, self.authz, clock=datetime.now),
             view_unassigned=ViewUnassignedPackagesUseCase(self.package_repo, self.authz),
         )
 
@@ -233,7 +233,7 @@ class Container:
             view=ViewRouteUseCase(self.route_repo, self.authz),
             view_all=ViewAllRoutesUseCase(self.route_repo, self.authz),
             view_in_progress=ViewRoutesInProgressUseCase(self.route_repo, self.authz),
-            remove=RemoveRouteUseCase(self.route_repo, self.unit_of_work, self.authz),
+            remove=RemoveRouteUseCase(self.route_repo, self.unit_of_work, self.authz, clock=datetime.now),
             assign_packages=AssignPackagesToRouteUseCase(
                 self.route_repo, self.package_repo, self.authz, clock=datetime.now
             ),

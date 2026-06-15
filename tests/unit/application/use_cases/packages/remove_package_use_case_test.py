@@ -1,8 +1,10 @@
 import unittest
+from datetime import datetime
 from unittest.mock import MagicMock
 
 from src.application.exceptions.application_errors import NotFoundError
 from src.application.use_cases.packages.remove_package import RemovePackageUseCase
+from src.domain.enums.package_detachment_reasons import PackageDetachmentReason
 from src.domain.exceptions import DomainConflictError, EntityNotFoundError
 from tests.unit.application.use_cases.authz_helpers import manager_authz
 
@@ -13,10 +15,12 @@ class RemovePackageUseCase_Should(unittest.TestCase):
         self.unit_of_work = MagicMock()
         self.unit_of_work.__enter__.return_value = self.unit_of_work
         self.unit_of_work.__exit__.return_value = False
+        self.now = datetime(2025, 10, 1, 9, 0)
         self.use_case = RemovePackageUseCase(
             self.mock_packages,
             self.unit_of_work,
             manager_authz(),
+            clock=lambda: self.now,
         )
 
     def test_raises_when_package_not_found(self) -> None:
@@ -57,7 +61,11 @@ class RemovePackageUseCase_Should(unittest.TestCase):
 
         self.assertIs(result, package)
         self.mock_packages.get_by_id.assert_called_once_with(42)
-        route.detach_package.assert_called_once_with(package)
+        route.detach_package.assert_called_once_with(
+            package,
+            reason=PackageDetachmentReason.PACKAGE_REMOVED,
+            occurred_at=self.now,
+        )
         package.customer.remove_package.assert_called_once_with(package)
         self.unit_of_work.packages.remove.assert_called_once_with(42)
         self.unit_of_work.commit.assert_called_once_with()
@@ -91,7 +99,11 @@ class RemovePackageUseCase_Should(unittest.TestCase):
             self.use_case.execute(42)
 
         self.assertIn("Package is not assigned to this route", str(ctx.exception))
-        route.detach_package.assert_called_once_with(package)
+        route.detach_package.assert_called_once_with(
+            package,
+            reason=PackageDetachmentReason.PACKAGE_REMOVED,
+            occurred_at=self.now,
+        )
         package.customer.remove_package.assert_not_called()
         self.unit_of_work.packages.remove.assert_not_called()
 

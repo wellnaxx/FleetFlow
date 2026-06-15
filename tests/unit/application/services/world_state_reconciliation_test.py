@@ -429,6 +429,38 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
         self.assertEqual(truck.status, TruckStatus.FREE)
         self.assertEqual(truck.current_location, LocationCode("B"))
 
+    def test_reconcile_routes_at_stop_without_final_eta_does_not_attempt_release(self) -> None:
+        route = DeliveryRoute(
+            LocationCode("A"),
+            LocationCode("B"),
+            route_id=1,
+        )
+        truck = Truck(
+            vehicle_id=1001,
+            name=TruckModel.SCANIA,
+            capacity=42000,
+            max_range=8000,
+        )
+        truck.assign(route)
+        route.truck = truck
+
+        with patch.object(route, "current_position") as current_position_mock:
+            current_position_mock.return_value = SimpleNamespace(
+                kind="AT_STOP",
+                stop_city=LocationCode("B"),
+            )
+
+            summary = self.reconciler.reconcile_routes(
+                routes=[route],
+                now=datetime(2025, 1, 1, 11, 0, 0),
+                update_trucks=True,
+            )
+
+        self.assertEqual(summary.trucks_released, 0)
+        self.assertIs(route.truck, truck)
+        self.assertIs(truck.route, route)
+        self.assertEqual(truck.current_location, LocationCode("B"))
+
     def test_reconcile_routes_at_stop_counts_clearing_stale_in_transit_as_movement(self) -> None:
         route = DeliveryRoute(
             LocationCode("A"),

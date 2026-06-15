@@ -3,6 +3,7 @@ from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from src.adapters.driven.persistence.database.errors import DatabaseError
 from src.application.exceptions.application_errors import NotFoundError
 from src.application.results.assign_packages_to_route_result import (
     AssignPackagesToRouteResult,
@@ -10,7 +11,11 @@ from src.application.results.assign_packages_to_route_result import (
     PackageAssignmentSuccess,
 )
 from src.application.use_cases.routes.assign_packages_to_route import AssignPackagesToRouteUseCase
+from src.domain.entities.customer import Customer
+from src.domain.entities.delivery_package import DeliveryPackage
+from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.exceptions import DomainConflictError, DomainValidationError
+from src.domain.value_objects.contact_info import ContactInfo
 from tests.unit.application.use_cases.authz_helpers import manager_authz
 
 
@@ -78,7 +83,7 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
                 errors=[],
             ),
         )
-        route.assign_package.assert_called_once_with(package, now=self.now)
+        route.assign_package.assert_called_once_with(package, now=self.now, occurred_at=self.now)
         self.mock_packages.update_state.assert_called_once_with(package)
 
     def test_returns_success_for_scheduled_route_with_eta(self) -> None:
@@ -92,7 +97,7 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
         result = self.use_case.execute(7, [8])
 
         self.assertEqual(result.successes[0].eta_text, "2025-10-01 18:00")
-        route.assign_package.assert_called_once_with(package, now=self.now)
+        route.assign_package.assert_called_once_with(package, now=self.now, occurred_at=self.now)
         self.mock_packages.update_state.assert_called_once_with(package)
         route.arrival_time_at.assert_called_once_with("MEL")
 
@@ -108,7 +113,7 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
         self.assertEqual(len(result.successes), 1)
         self.assertEqual(len(result.errors), 0)
         self.mock_packages.get_by_id.assert_called_once_with(8)
-        route.assign_package.assert_called_once_with(package, now=self.now)
+        route.assign_package.assert_called_once_with(package, now=self.now, occurred_at=self.now)
         self.mock_packages.update_state.assert_called_once_with(package)
 
     def test_returns_errors_when_all_packages_missing(self) -> None:
@@ -222,3 +227,23 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
         result = self.use_case.execute(7, [8])
 
         self.assertEqual(result.successes[0].eta_text, "N/A")
+
+    def test_restores_assignment_and_events_when_persistence_fails(self) -> None:
+        customer = Customer(customer_id=1, contact=ContactInfo(name="Alice"))
+        route = DeliveryRoute("SYD", "MEL", route_id=7)
+        package = DeliveryPackage("SYD", "MEL", 5, customer, package_id=8)
+        error = DatabaseError.write_failed(RuntimeError("update failed"))
+
+        self.mock_routes.get_by_id.return_value = route
+        self.mock_packages.get_by_id.return_value = package
+        self.mock_packages.update_state.side_effect = error
+
+        with self.assertRaises(DatabaseError) as ctx:
+            self.use_case.execute(7, [8])
+
+        self.assertIs(ctx.exception, error)
+        self.assertEqual(route.packages, ())
+        self.assertEqual(route.pending_events, ())
+        self.assertIsNone(package.route)
+        self.assertIsNone(package.route_id)
+        self.assertIsNone(package.expected_arrival)

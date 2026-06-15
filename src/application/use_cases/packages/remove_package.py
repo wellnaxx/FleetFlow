@@ -1,6 +1,7 @@
 """Use case for removing a package from runtime state."""
 
 import logging
+from collections.abc import Callable
 from datetime import datetime
 
 from src.application.exceptions.application_errors import NotFoundError
@@ -8,6 +9,7 @@ from src.application.services.authorization_service import AuthorizationService,
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.enums.auth import Permission
+from src.domain.enums.package_detachment_reasons import PackageDetachmentReason
 from src.domain.events.package_events import PackageRemoved
 from src.domain.exceptions import DomainConflictError, EntityNotFoundError
 from src.ports.output.package_repository import PackageRepositoryPort
@@ -20,7 +22,11 @@ class RemovePackageUseCase(AuthorizedUseCase[DeliveryPackage]):
     """Remove a package from the repository and any assigned route."""
 
     def __init__(
-        self, packages: PackageRepositoryPort, unit_of_work: UnitOfWorkPort, authz: AuthorizationService
+        self,
+        packages: PackageRepositoryPort,
+        unit_of_work: UnitOfWorkPort,
+        authz: AuthorizationService,
+        clock: Callable[[], datetime] = datetime.now,
     ) -> None:
         """Initialize the use case.
 
@@ -28,10 +34,12 @@ class RemovePackageUseCase(AuthorizedUseCase[DeliveryPackage]):
             packages: Repository used to fetch and remove packages.
             unit_of_work: Transaction boundary used to persist package removal.
             authz: Service used for authorization checks.
+            clock: Clock provider for package-removal events.
         """
         super().__init__(authz)
         self._packages = packages
         self._unit_of_work = unit_of_work
+        self._clock = clock
 
     @requires_all(Permission.PACKAGE_REMOVE, Permission.PACKAGE_VIEW)
     def execute(self, package_id: int) -> DeliveryPackage:
@@ -56,9 +64,10 @@ class RemovePackageUseCase(AuthorizedUseCase[DeliveryPackage]):
         event_checkpoint = package.event_checkpoint()
         route = package.route
         customer = package.customer
+        occurred_at = self._clock()
 
         try:
-            self._detach_from_route(package)
+            self._detach_from_route(package, occurred_at=occurred_at)
             self._remove_from_customer(package)
 
             with self._unit_of_work as uow:
@@ -79,7 +88,7 @@ class RemovePackageUseCase(AuthorizedUseCase[DeliveryPackage]):
             package_id=package.package_id,
             customer_id=package.customer.customer_id,
             route_id=package_snapshot.route_id,
-            occurred_at=datetime.now(),
+            occurred_at=occurred_at,
         )  # This will be used once outbox/publisher is implemented!
 
         logger.info("Removed package %d.", package_id)
@@ -92,7 +101,7 @@ class RemovePackageUseCase(AuthorizedUseCase[DeliveryPackage]):
             raise NotFoundError(f"Package with ID {package_id} not found.")
         return package
 
-    def _detach_from_route(self, package: DeliveryPackage) -> None:
+    def _detach_from_route(self, package: DeliveryPackage, *, occurred_at: datetime) -> None:
         if package.route_id is None:
             return
 
@@ -108,7 +117,11 @@ class RemovePackageUseCase(AuthorizedUseCase[DeliveryPackage]):
             )
 
         try:
-            package.route.detach_package(package)
+            package.route.detach_package(
+                package,
+                reason=PackageDetachmentReason.PACKAGE_REMOVED,
+                occurred_at=occurred_at,
+            )
         except EntityNotFoundError as exc:
             raise DomainConflictError(str(exc)) from exc
 

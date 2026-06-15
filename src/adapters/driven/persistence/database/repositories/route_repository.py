@@ -45,7 +45,9 @@ class PostgresRouteRepository:
             for stop_order, location in enumerate(validated_route.locations):
                 execute_write_tx(cursor, QUERIES.routes.add_stop, (route_id, stop_order, str(location)))
 
-        return DeliveryRoute(*validated_route.locations, departure_time=departure_time, route_id=route_id)
+        return DeliveryRoute.create(
+            *validated_route.locations, departure_time=departure_time, route_id=route_id
+        )
 
     def remove(self, route_id: int) -> None:
         """Remove a route by id.
