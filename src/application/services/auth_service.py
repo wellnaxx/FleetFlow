@@ -7,6 +7,15 @@ from src.application.exceptions.application_errors import (
     NotFoundError,
     ValidationError,
 )
+from src.application.exceptions.password_errors import (
+    CurrentPasswordIncorrectError,
+    InvalidPersistedPasswordHashError,
+    PasswordChangeCriteriaNotMetError,
+    PasswordChangeUserNotFoundError,
+    PasswordResetCriteriaNotMetError,
+    PasswordResetUserNotFoundError,
+    PasswordUnchangedError,
+)
 from src.application.models.user_record import UserRecord
 from src.application.services.runtime_user_factory import create_runtime_user_from_record
 from src.domain.entities.users.user import User
@@ -157,7 +166,7 @@ class AuthService:
         self._current_user = None
         self.last_username = None
 
-    def change_password(self, username: str, old_password: str, new_password: str) -> None:
+    def change_password(self, username: str, old_password: str, new_password: str) -> UserRecord:
         """Change a password after verifying the old password.
 
         Args:
@@ -165,36 +174,73 @@ class AuthService:
             old_password: Existing password used for verification.
             new_password: Replacement plain-text password.
 
+        Returns:
+            The target user record.
+
         Raises:
-            NotFoundError: If the user does not exist.
-            AuthenticationError: If the old password is wrong.
-            ValidationError: If the new password is invalid or unchanged.
+            PasswordChangeUserNotFoundError: If the user does not exist.
+            InvalidPersistedPasswordHashError: If the stored password hash is invalid.
+            CurrentPasswordIncorrectError: If the old password is wrong.
+            PasswordUnchangedError: If the new password matches the old password.
+            PasswordChangeCriteriaNotMetError: If the new password fails validation.
         """
+
         rec = self._store.get_by_username(username)
         if not rec:
-            raise NotFoundError("User not found.")
+            raise PasswordChangeUserNotFoundError(user_id=None, username=username)
+
         try:
             password_hash = PasswordHash.parse(rec.password)
         except (TypeError, ValueError) as exc:
-            raise ValidationError("Invalid persisted password hash.") from exc
-        if not verify_password(old_password, password_hash):
-            raise AuthenticationError("Old password incorrect.")
-        if verify_password(new_password, password_hash):
-            raise ValidationError("New password must be different from the old one.")
-        self._set_password(username, new_password)
+            raise InvalidPersistedPasswordHashError(user_id=rec.user_id, username=rec.username) from exc
 
-    def reset_password(self, username: str, new_password: str) -> None:
+        if not verify_password(old_password, password_hash):
+            raise CurrentPasswordIncorrectError(user_id=rec.user_id, username=rec.username)
+
+        if verify_password(new_password, password_hash):
+            raise PasswordUnchangedError(user_id=rec.user_id, username=rec.username)
+
+        try:
+            self._set_password(username, new_password)
+        except ValidationError as exc:
+            raise PasswordChangeCriteriaNotMetError(
+                message=str(exc),
+                user_id=rec.user_id,
+                username=rec.username,
+            ) from exc
+        except NotFoundError:
+            raise PasswordChangeUserNotFoundError(user_id=rec.user_id, username=rec.username) from None
+
+        return rec
+
+    def reset_password(self, username: str, new_password: str) -> UserRecord:
         """Reset a password without verifying the old password.
 
         Args:
             username: Username whose password should change.
             new_password: Replacement plain-text password.
 
+        Returns:
+            The target user record.
+
         Raises:
-            NotFoundError: If the user does not exist.
-            ValidationError: If the password is invalid.
+            PasswordResetUserNotFoundError: If the user does not exist.
+            PasswordResetCriteriaNotMetError: If the new password fails validation.
         """
+
         rec = self._store.get_by_username(username)
         if not rec:
-            raise NotFoundError("User not found.")
-        self._set_password(username, new_password)
+            raise PasswordResetUserNotFoundError(user_id=None, username=username)
+
+        try:
+            self._set_password(username, new_password)
+        except ValidationError as exc:
+            raise PasswordResetCriteriaNotMetError(
+                message=str(exc),
+                user_id=rec.user_id,
+                username=rec.username,
+            ) from exc
+        except NotFoundError:
+            raise PasswordResetUserNotFoundError(user_id=rec.user_id, username=rec.username) from None
+
+        return rec

@@ -16,6 +16,27 @@ from src.domain.enums.auth import Role
 VALID_PASSWORD_HASH = "pbkdf2_sha256$200000$U0FMVFNBTFRTQUxUU0FMVA==$SEFTSEhBU0hIQVNI"
 
 
+def _user_record(
+    *,
+    user_id: int = 1,
+    username: str = "u",
+    password: str = "OLD",
+    role: str = "EMPLOYEE",
+    name: str = "User",
+    email: str = "",
+    phone_number: str = "",
+) -> UserRecord:
+    return UserRecord(
+        user_id=user_id,
+        username=username,
+        role=role,
+        name=name,
+        email=email,
+        phone_number=phone_number,
+        password=password,
+    )
+
+
 class AuthService_Should(unittest.TestCase):
     def make_service(self) -> tuple[AuthService, MagicMock]:
         store = MagicMock()
@@ -203,7 +224,7 @@ class AuthService_Should(unittest.TestCase):
         self, _parse: MagicMock, verify_password: MagicMock, hash_password: MagicMock
     ) -> None:
         svc, store = self.make_service()
-        rec = SimpleNamespace(username="alice", password="OLDHASH")
+        rec = _user_record(user_id=10, username="alice", password="OLDHASH")
         store.get_by_username.return_value = rec
 
         # old matches, new does NOT match old
@@ -231,7 +252,7 @@ class AuthService_Should(unittest.TestCase):
     @patch("src.application.services.auth_service.PasswordHash.parse", return_value=object())
     def test_change_password_old_incorrect_raises(self, _parse: MagicMock, verify_password: MagicMock) -> None:
         svc, store = self.make_service()
-        store.get_by_username.return_value = SimpleNamespace(password="HASH")
+        store.get_by_username.return_value = _user_record(password="HASH")
         verify_password.side_effect = [False]  # old password fails
         with self.assertRaises(AuthenticationError) as ctx:
             svc.change_password("u", "bad", "New123456")
@@ -243,7 +264,7 @@ class AuthService_Should(unittest.TestCase):
         self, _parse: MagicMock, verify_password: MagicMock
     ) -> None:
         svc, store = self.make_service()
-        store.get_by_username.return_value = SimpleNamespace(password="HASH")
+        store.get_by_username.return_value = _user_record(password="HASH")
         # old ok, new matches old
         verify_password.side_effect = [True, True]
         with self.assertRaises(ValidationError) as ctx:
@@ -253,7 +274,7 @@ class AuthService_Should(unittest.TestCase):
     @patch("src.application.services.auth_service.hash_password")
     def test_reset_password_enforces_min_length_and_saves(self, hash_password: MagicMock) -> None:
         svc, store = self.make_service()
-        rec = SimpleNamespace(username="u", password="OLD")
+        rec = _user_record(username="u", password="OLD")
         store.get_by_username.return_value = rec
         hashed = SimpleNamespace(serialize=lambda: "NEWHASH")
         hash_password.return_value = hashed
@@ -273,7 +294,7 @@ class AuthService_Should(unittest.TestCase):
     @patch("src.application.services.auth_service.hash_password")
     def test_reset_password_enforces_password_strength_policy(self, hash_password: MagicMock) -> None:
         svc, store = self.make_service()
-        store.get_by_username.return_value = SimpleNamespace(username="u", password="OLD")
+        store.get_by_username.return_value = _user_record(username="u", password="OLD")
         hash_password.side_effect = ValueError("at least one special character")
 
         with self.assertRaises(ValidationError) as ctx:
