@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from src.domain.entities.mixins.event_mixin import EventRecorderMixin
+from src.domain.entities.mixins.event_mixin import DomainEventRecorderMixin
 from src.domain.events.customer_events import CustomerCreated
 from src.domain.exceptions import DomainConflictError, EntityNotFoundError
 
@@ -27,7 +27,7 @@ def _empty_pending_events() -> list[DomainEvent]:
 
 
 @dataclass(frozen=True, slots=True)
-class Customer(EventRecorderMixin):
+class Customer(DomainEventRecorderMixin):
     """Customer contact record with an active package collection."""
 
     contact: ContactInfo

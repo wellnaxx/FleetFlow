@@ -8,7 +8,7 @@ from enum import StrEnum
 from itertools import pairwise
 from typing import TYPE_CHECKING
 
-from src.domain.entities.mixins.event_mixin import EventRecorderMixin
+from src.domain.entities.mixins.event_mixin import DomainEventRecorderMixin
 from src.domain.enums.route_status import RouteStatus
 from src.domain.events.route_events import (
     PackageAssignedToRoute,
@@ -74,7 +74,7 @@ class RouteStateSnapshot:
     packages: tuple[DeliveryPackage, ...]
 
 
-class DeliveryRoute(EventRecorderMixin):
+class DeliveryRoute(DomainEventRecorderMixin):
     """Route aggregate for packages and an optional assigned truck."""
 
     SPEED_KMPH: int = 87
@@ -204,9 +204,7 @@ class DeliveryRoute(EventRecorderMixin):
             DomainConflictError: If the route is not currently scheduled.
         """
         if self.status is not RouteStatus.SCHEDULED:
-            raise DomainConflictError(
-                f"Route {self.route_id} cannot start from status {self.status.value}."
-            )
+            raise DomainConflictError(f"Route {self.route_id} cannot start from status {self.status.value}.")
 
         self.status = RouteStatus.IN_PROGRESS
         self._record_event(
@@ -229,9 +227,7 @@ class DeliveryRoute(EventRecorderMixin):
             DomainConflictError: If the route is neither scheduled nor in progress.
         """
         if self.status not in (RouteStatus.SCHEDULED, RouteStatus.IN_PROGRESS):
-            raise DomainConflictError(
-                f"Route {self.route_id} cannot complete from status {self.status.value}."
-            )
+            raise DomainConflictError(f"Route {self.route_id} cannot complete from status {self.status.value}.")
 
         self.status = RouteStatus.COMPLETED
         self._record_event(

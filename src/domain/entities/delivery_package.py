@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from src.domain.entities.mixins.event_mixin import EventRecorderMixin
+from src.domain.entities.mixins.event_mixin import DomainEventRecorderMixin
 from src.domain.enums.item_status import ItemStatus
 from src.domain.events.package_events import PackageCreated, PackageDelivered, PackagePickedUp, PackageRemoved
 from src.domain.exceptions import BusinessRuleViolationError, DomainValidationError
@@ -30,7 +30,7 @@ class DeliveryPackageStateSnapshot:
     expected_arrival: datetime | None
 
 
-class DeliveryPackage(EventRecorderMixin):
+class DeliveryPackage(DomainEventRecorderMixin):
     """Package shipment tracked from pickup to delivery."""
 
     def __init__(
