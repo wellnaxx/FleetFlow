@@ -10,7 +10,6 @@ from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.enums.auth import Permission
 from src.domain.enums.package_detachment_reasons import PackageDetachmentReason
-from src.domain.events.package_events import PackageRemoved
 from src.domain.exceptions import DomainConflictError, EntityNotFoundError
 from src.ports.output.package_repository import PackageRepositoryPort
 from src.ports.output.unit_of_work import UnitOfWorkPort
@@ -69,6 +68,7 @@ class RemovePackageUseCase(AuthorizedUseCase[DeliveryPackage]):
         try:
             self._detach_from_route(package, occurred_at=occurred_at)
             self._remove_from_customer(package)
+            package.record_removal(route_id=package_snapshot.route_id, occurred_at=occurred_at)
 
             with self._unit_of_work as uow:
                 uow.packages.remove(package_id)
@@ -83,13 +83,6 @@ class RemovePackageUseCase(AuthorizedUseCase[DeliveryPackage]):
 
             customer.restore_package_link(package)
             raise
-
-        removed_event = PackageRemoved(  # noqa: F841 # pyright: ignore[reportUnusedVariable]
-            package_id=package.package_id,
-            customer_id=package.customer.customer_id,
-            route_id=package_snapshot.route_id,
-            occurred_at=occurred_at,
-        )  # This will be used once outbox/publisher is implemented!
 
         logger.info("Removed package %d.", package_id)
         return package

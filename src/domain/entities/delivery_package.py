@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from src.domain.entities.mixins.event_mixin import EventRecorderMixin
 from src.domain.enums.item_status import ItemStatus
-from src.domain.events.package_events import PackageCreated, PackageDelivered, PackagePickedUp
+from src.domain.events.package_events import PackageCreated, PackageDelivered, PackagePickedUp, PackageRemoved
 from src.domain.exceptions import BusinessRuleViolationError, DomainValidationError
 from src.domain.services.map import Map
 from src.domain.value_objects.location_code import LocationCode, location_code_or_none
@@ -225,6 +225,22 @@ class DeliveryPackage(EventRecorderMixin):
                 package_id=self.package_id,
                 route_id=route_id,
                 delivery_location=self.end_location,
+                occurred_at=occurred_at,
+            )
+        )
+
+    def record_removal(self, *, route_id: int | None, occurred_at: datetime) -> None:
+        """Record that this package was removed from the system.
+
+        Args:
+            route_id: Identifier of the route the package was linked to before removal, if any.
+            occurred_at: Business time at which removal occurred.
+        """
+        self._record_event(
+            PackageRemoved(
+                package_id=self.package_id,
+                customer_id=self.customer.customer_id,
+                route_id=route_id,
                 occurred_at=occurred_at,
             )
         )
