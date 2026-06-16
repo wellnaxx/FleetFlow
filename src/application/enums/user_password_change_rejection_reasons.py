@@ -4,6 +4,9 @@ from enum import StrEnum
 class UserPasswordChangeRejectionReason(StrEnum):
     """Business reasons for rejecting a user's password change attempt."""
 
+    INVALID_USERNAME = "INVALID_USERNAME"
+    USER_NOT_FOUND = "USER_NOT_FOUND"
+    INVALID_PASSWORD_HASH = "INVALID_PASSWORD_HASH"
     CURRENT_PASSWORD_INCORRECT = "CURRENT_PASSWORD_INCORRECT"
     PASSWORD_CRITERIA_NOT_MET = "PASSWORD_CRITERIA_NOT_MET"
     SAME_AS_CURRENT_PASSWORD = "SAME_AS_CURRENT_PASSWORD"
