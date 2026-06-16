@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from src.application.enums.world_state_corruption_reasons import WorldStateCorruptionReason
 from src.application.enums.world_state_failure_reasons import WorldStateFailureReason
+from src.application.enums.world_state_startup_skip_reasons import WorldStateStartupSkipReason
 from src.application.events.base import ApplicationEvent
 from src.application.value_objects.world_state_entity_counts import WorldStateEntityCounts
 
@@ -55,6 +56,51 @@ class WorldStateCorruptionDetected(ApplicationEvent):
 @dataclass(frozen=True, slots=True, kw_only=True)
 class WorldStateSnapshotQuarantined(ApplicationEvent):
     """Event recorded when a corrupt snapshot is moved to quarantine."""
+
     original_path: str
     quarantined_path: str
     reason: WorldStateCorruptionReason
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class WorldStateRuntimeSwapped(ApplicationEvent):
+    """Event recorded when the in-memory runtime state is atomically replaced."""
+
+    snapshot_path: str
+    schema_version: int
+    entity_counts: WorldStateEntityCounts
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class WorldStateStartupRestored(ApplicationEvent):
+    """Event recorded when world state is automatically restored at startup."""
+
+    snapshot_path: str
+    schema_version: int
+    entity_counts: WorldStateEntityCounts
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class WorldStateStartupRestoreSkipped(ApplicationEvent):
+    """Event recorded when startup world state restore is skipped."""
+
+    reason: WorldStateStartupSkipReason
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class WorldStateStartupRestoreFailed(ApplicationEvent):
+    """Event recorded when startup world state restore fails."""
+
+    snapshot_path: str
+    schema_version: int | None
+    reason: WorldStateFailureReason
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class WorldStateAdvanced(ApplicationEvent):
+    """Event recorded when the heartbeat advances world state."""
+
+    routes_updated: int
+    packages_updated: int
+    trucks_moved: int
+    trucks_released: int
