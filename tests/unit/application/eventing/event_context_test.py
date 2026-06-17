@@ -7,6 +7,7 @@ from datetime import datetime
 from uuid import UUID, uuid4
 
 from src.application.enums.event_sources import EventSource
+from src.application.enums.user_login_rejection_reasons import UserLoginRejectionReason
 from src.application.eventing.context import EventContext
 from src.application.eventing.current_context import (
     bind_event_context,
@@ -20,7 +21,9 @@ from src.application.events.auth_events import UserLoginRejected
 
 def _event(username: str = "alice") -> UserLoginRejected:
     return UserLoginRejected(
+        user_id=None,
         username=username,
+        reason=UserLoginRejectionReason.USER_NOT_FOUND,
         occurred_at=datetime(2026, 6, 11, 10, 0),
     )
 

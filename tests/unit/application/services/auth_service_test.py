@@ -145,8 +145,9 @@ class AuthService_Should(unittest.TestCase):
         )
         store.get_by_username.return_value = rec
 
-        user = svc.login("boss", "CorrectHorse")
+        record, user = svc.login("boss", "CorrectHorse")
 
+        self.assertIs(record, rec)
         self.assertIsInstance(user, Manager)
         self.assertEqual(user.user_id, 101)
         self.assertEqual(user.name, "Bea")
@@ -170,8 +171,9 @@ class AuthService_Should(unittest.TestCase):
         )
         store.get_by_username.return_value = rec
 
-        user = svc.login("alice", "ok")
+        record, user = svc.login("alice", "ok")
 
+        self.assertIs(record, rec)
         self.assertIsInstance(user, Employee)
         self.assertEqual(user.user_id, 202)
         self.assertEqual(user.name, "Alice")
@@ -332,7 +334,7 @@ class AuthService_Should(unittest.TestCase):
                 "src.application.services.auth_service.verify_password", side_effect=[True, True, False, True]
             ),
         ):
-            user1 = svc.login("ALICE", "Secret123!")
+            _, user1 = svc.login("ALICE", "Secret123!")
             self.assertEqual(user1.name, "Alice")
 
             svc.change_password("alice", "Secret123!", "NewSecret123!")
@@ -341,7 +343,7 @@ class AuthService_Should(unittest.TestCase):
             self.assertEqual(changed_record.password, "HASH2")
             self.assertEqual(changed_record.token_version, 2)
 
-            user2 = svc.login("alice", "NewSecret123!")
+            _, user2 = svc.login("alice", "NewSecret123!")
             self.assertEqual(user2.name, "Alice")
 
         svc.reset_password("alice", "ResetSecret123!")
@@ -372,8 +374,9 @@ class AuthService_Should(unittest.TestCase):
             password=VALID_PASSWORD_HASH,
         )
 
-        user = auth.login("alice", "pw")
+        record, user = auth.login("alice", "pw")
 
+        self.assertIs(record, store.get_by_username.return_value)
         self.assertIsInstance(user, Manager)
         self.assertEqual(user.user_id, 42)
         self.assertEqual(user.name, "Alice")
@@ -395,8 +398,9 @@ class AuthService_Should(unittest.TestCase):
             password=VALID_PASSWORD_HASH,
         )
 
-        user = auth.login("bob", "pw")
+        record, user = auth.login("bob", "pw")
 
+        self.assertIs(record, store.get_by_username.return_value)
         self.assertIsInstance(user, Employee)
         self.assertEqual(user.user_id, 17)
         self.assertEqual(user.name, "Bob")

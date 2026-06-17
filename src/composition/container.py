@@ -210,7 +210,7 @@ class Container:
         """Wire use cases common to all persistence backends."""
         logger.debug("Wiring application use cases.")
         self.auth_cases = AuthUseCases(
-            login=LoginUseCase(self.auth),
+            login=LoginUseCase(self.auth, self._clock),
             logout=LogoutUseCase(self.auth),
             who_am_i=WhoAmIUseCase(self.auth),
             register_user=RegisterUserUseCase(self.auth, self.authz),

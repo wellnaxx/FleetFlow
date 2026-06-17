@@ -1,5 +1,6 @@
-"""Typed password-management errors carrying audit rejection reasons."""
+"""Typed authentication and password-management errors carrying audit rejection reasons."""
 
+from src.application.enums.user_login_rejection_reasons import UserLoginRejectionReason
 from src.application.enums.user_password_change_rejection_reasons import UserPasswordChangeRejectionReason
 from src.application.enums.user_password_reset_rejection_reasons import UserPasswordResetRejectionReason
 from src.application.exceptions.application_errors import (
@@ -22,6 +23,14 @@ class PasswordResetRejectedMixin:
     """Common metadata exposed by password-reset rejection errors."""
 
     reason: UserPasswordResetRejectionReason
+    user_id: int | None
+    username: str | None
+
+
+class LoginRejectedMixin:
+    """Common metadata exposed by login rejection errors."""
+
+    reason: UserLoginRejectionReason
     user_id: int | None
     username: str | None
 
@@ -122,5 +131,45 @@ class CannotResetOwnPasswordError(ConflictError, PasswordResetRejectedMixin):
     def __init__(self, user_id: int, username: str) -> None:
         super().__init__("You cannot reset your own password.")
         self.reason = UserPasswordResetRejectionReason.CANNOT_RESET_OWN_PASSWORD
+        self.user_id = user_id
+        self.username = username
+
+
+class LoginUserNotFoundError(AuthenticationError, LoginRejectedMixin):
+    """Raised when login targets a username that does not exist."""
+
+    def __init__(self, user_id: int | None, username: str) -> None:
+        super().__init__("Invalid username or password.")
+        self.reason = UserLoginRejectionReason.USER_NOT_FOUND
+        self.user_id = user_id
+        self.username = username
+
+
+class LoginInvalidPersistedPasswordHashError(ValidationError, LoginRejectedMixin):
+    """Raised when login finds a stored password hash that cannot be parsed."""
+
+    def __init__(self, user_id: int, username: str) -> None:
+        super().__init__("Invalid persisted password hash.")
+        self.reason = UserLoginRejectionReason.INVALID_PASSWORD_HASH
+        self.user_id = user_id
+        self.username = username
+
+
+class LoginWrongPasswordError(AuthenticationError, LoginRejectedMixin):
+    """Raised when login receives a password that does not match."""
+
+    def __init__(self, user_id: int, username: str) -> None:
+        super().__init__("Invalid username or password.")
+        self.reason = UserLoginRejectionReason.INVALID_PASSWORD
+        self.user_id = user_id
+        self.username = username
+
+
+class LoginInvalidUserRuntimeError(ValidationError, LoginRejectedMixin):
+    """Raised when login cannot hydrate persisted user data into a runtime user."""
+
+    def __init__(self, message: str, *, user_id: int, username: str) -> None:
+        super().__init__(message)
+        self.reason = UserLoginRejectionReason.INVALID_RUNTIME_USER
         self.user_id = user_id
         self.username = username

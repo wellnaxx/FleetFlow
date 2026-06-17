@@ -2,7 +2,6 @@
 
 from src.adapters.driven.security.password_hasher import PasswordHash, hash_password, verify_password
 from src.application.exceptions.application_errors import (
-    AuthenticationError,
     ConflictError,
     NotFoundError,
     ValidationError,
@@ -10,6 +9,10 @@ from src.application.exceptions.application_errors import (
 from src.application.exceptions.password_errors import (
     CurrentPasswordIncorrectError,
     InvalidPersistedPasswordHashError,
+    LoginInvalidPersistedPasswordHashError,
+    LoginInvalidUserRuntimeError,
+    LoginUserNotFoundError,
+    LoginWrongPasswordError,
     PasswordChangeCriteriaNotMetError,
     PasswordChangeUserNotFoundError,
     PasswordResetCriteriaNotMetError,
@@ -110,7 +113,7 @@ class AuthService:
         except ValueError as exc:
             raise NotFoundError("User not found.") from exc
 
-    def login(self, username: str, password: str) -> User:
+    def login(self, username: str, password: str) -> tuple[UserRecord, User]:
         """Authenticate a user and hydrate the runtime user entity.
 
         Args:
@@ -118,16 +121,19 @@ class AuthService:
             password: Plain-text password supplied by the user.
 
         Returns:
-            The authenticated runtime user entity.
+            The authenticated runtime user entity along with its record.
 
         Raises:
-            AuthenticationError: If the username is unknown or the password is invalid.
+            LoginUserNotFoundError: If the username is unknown.
+            LoginInvalidPersistedPasswordHashError: If the stored password hash is invalid.
+            LoginWrongPasswordError: If the password is invalid.
+            LoginInvalidUserRuntimeError: If persisted user data cannot hydrate a runtime user.
         """
         rec, user = self.authenticate(username, password)
 
         self._current_user = user
         self.last_username = rec.username
-        return user
+        return rec, user
 
     def authenticate(self, username: str, password: str) -> tuple[UserRecord, User]:
         """Verify credentials and return the persisted record plus runtime user without mutating session.
@@ -140,25 +146,27 @@ class AuthService:
             A tuple containing the persisted user record and the hydrated runtime user entity.
 
         Raises:
-            AuthenticationError: If the username is unknown or the password is invalid.
-            ValidationError: If persisted user data is invalid.
+            LoginUserNotFoundError: If the username is unknown.
+            LoginInvalidPersistedPasswordHashError: If the stored password hash is invalid.
+            LoginWrongPasswordError: If the password is invalid.
+            LoginInvalidUserRuntimeError: If persisted user data cannot hydrate a runtime user.
         """
         rec = self._store.get_by_username(username)
 
         if not rec:
-            raise AuthenticationError("Invalid username or password.")
+            raise LoginUserNotFoundError(user_id=None, username=username)
 
         try:
             ok = verify_password(password, PasswordHash.parse(rec.password))
         except (TypeError, ValueError) as exc:
-            raise ValidationError("Invalid persisted password hash.") from exc
+            raise LoginInvalidPersistedPasswordHashError(user_id=rec.user_id, username=rec.username) from exc
         if not ok:
-            raise AuthenticationError("Invalid username or password.")
+            raise LoginWrongPasswordError(user_id=rec.user_id, username=rec.username)
 
         try:
             user = create_runtime_user_from_record(rec)
         except ValueError as exc:
-            raise ValidationError(str(exc)) from exc
+            raise LoginInvalidUserRuntimeError(str(exc), user_id=rec.user_id, username=rec.username) from exc
         return rec, user
 
     def logout(self) -> None:

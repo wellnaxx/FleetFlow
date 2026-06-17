@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 from src.application.enums.token_revocation_reasons import TokenRevocationReason
+from src.application.enums.user_login_rejection_reasons import UserLoginRejectionReason
 from src.application.enums.user_password_change_rejection_reasons import UserPasswordChangeRejectionReason
 from src.application.enums.user_password_reset_rejection_reasons import UserPasswordResetRejectionReason
 from src.application.enums.user_registration_rejection_reasons import UserRegistrationRejectionReason
@@ -74,7 +75,9 @@ class UserAuthenticated(ApplicationEvent):
 class UserLoginRejected(ApplicationEvent):
     """Event recorded when password authentication is rejected."""
 
-    username: str
+    user_id: int | None
+    username: str | None
+    reason: UserLoginRejectionReason
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
