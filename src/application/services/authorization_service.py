@@ -4,6 +4,8 @@ from collections.abc import Callable
 from functools import wraps
 from typing import Concatenate, Protocol
 
+from src.application.events.auth_events import AuthorizationDenied
+from src.application.use_cases.base.event_mixin import ApplicationEventRecorderMixin
 from src.domain.entities.users.user import User
 from src.domain.enums.auth import ROLE_PERMISSIONS, Permission
 
@@ -51,13 +53,15 @@ type CommandDecorator[T: HasAuthorization, **P, R] = Callable[
 
 
 def requires[T: HasAuthorization, **P, R](permission: Permission) -> CommandDecorator[T, P, R]:
-    """Build a decorator that requires one permission.
+    """Build a decorator that requires one permission and records authorization denials.
 
     Args:
         permission: Permission required before the wrapped command can run.
 
     Returns:
-        Decorator that raises PermissionError when authorization fails.
+        Decorator that raises PermissionError when authorization fails. If the
+        decorated object records application events, the wrapper records an
+        AuthorizationDenied event before raising.
     """
 
     def deco(fn: CommandMethod[T, P, R]) -> CommandMethod[T, P, R]:
@@ -74,9 +78,11 @@ def requires[T: HasAuthorization, **P, R](permission: Permission) -> CommandDeco
         def wrapper(self: T, *args: P.args, **kwargs: P.kwargs) -> R:
             """Authorize and invoke the wrapped command method."""
             if self.authz.current_user is None:
+                _record_authorization_denied(self, (permission,))
                 raise PermissionError("Unauthenticated")
 
             if not self.authz.has(permission):
+                _record_authorization_denied(self, (permission,))
                 raise PermissionError(f"Missing permission: {permission.name}")
             return fn(self, *args, **kwargs)
 
@@ -86,13 +92,15 @@ def requires[T: HasAuthorization, **P, R](permission: Permission) -> CommandDeco
 
 
 def requires_all[T: HasAuthorization, **P, R](*permissions: Permission) -> CommandDecorator[T, P, R]:
-    """Build a decorator that requires all permissions.
+    """Build a decorator that requires all permissions and records authorization denials.
 
     Args:
         permissions: Permissions required before the wrapped command can run.
 
     Returns:
-        Decorator that raises PermissionError when authorization fails.
+        Decorator that raises PermissionError when authorization fails. If the
+        decorated object records application events, the wrapper records an
+        AuthorizationDenied event with the missing permissions before raising.
     """
 
     def deco(fn: CommandMethod[T, P, R]) -> CommandMethod[T, P, R]:
@@ -109,11 +117,13 @@ def requires_all[T: HasAuthorization, **P, R](*permissions: Permission) -> Comma
         def wrapper(self: T, *args: P.args, **kwargs: P.kwargs) -> R:
             """Authorize and invoke the wrapped command method."""
             if self.authz.current_user is None:
+                _record_authorization_denied(self, permissions)
                 raise PermissionError("Unauthenticated")
 
             missing = [p for p in permissions if not self.authz.has(p)]
 
             if missing:
+                _record_authorization_denied(self, tuple(missing))
                 names = ", ".join(p.name for p in missing)
                 raise PermissionError(f"Missing permissions: {names}")
 
@@ -122,3 +132,24 @@ def requires_all[T: HasAuthorization, **P, R](*permissions: Permission) -> Comma
         return wrapper
 
     return deco
+
+
+def _record_authorization_denied(
+    target: object,
+    required_permissions: tuple[Permission, ...],
+) -> None:
+    """Record an authorization denial on event-aware use cases."""
+    if not isinstance(target, ApplicationEventRecorderMixin):
+        return
+
+    authz = getattr(target, "authz", None)
+    current_user = authz.current_user if authz is not None else None
+
+    target.record_event(
+        AuthorizationDenied(
+            user_id=current_user.user_id if current_user is not None else None,
+            username=None,
+            required_permissions=required_permissions,
+            occurred_at=target.event_occurred_at(),
+        )
+    )

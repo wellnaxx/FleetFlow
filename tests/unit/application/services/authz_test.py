@@ -1,8 +1,11 @@
 import unittest
+from datetime import datetime
 from typing import Any
 from unittest.mock import patch
 
+from src.application.events.auth_events import AuthorizationDenied
 from src.application.services.authorization_service import AuthorizationService, requires, requires_all
+from src.application.use_cases.base.event_mixin import ApplicationEventRecorderMixin
 from src.domain.entities.users.user import User
 from src.domain.enums.auth import Permission, Role
 from src.domain.value_objects.contact_info import ContactInfo
@@ -84,6 +87,61 @@ class Authz_Should(unittest.TestCase):
             WithAuthz().action()
         self.assertIn("Missing permission: PACKAGE_CREATE", str(ctx2.exception))
 
+    def test_requires_records_denied_event_for_unauthenticated_event_recorder(self) -> None:
+        occurred_at = datetime(2025, 1, 1, 12, 0)
+
+        class Target(ApplicationEventRecorderMixin):
+            def __init__(self) -> None:
+                self.authz = AuthorizationService(None)
+                self._clock = lambda: occurred_at
+                self._pending_events = []
+
+            @requires(Permission.PACKAGE_CREATE)
+            def action(self) -> str:
+                return "x"
+
+        target = Target()
+
+        with self.assertRaises(PermissionError):
+            target.action()
+
+        event = target.pending_events[0]
+        self.assertIsInstance(event, AuthorizationDenied)
+        assert isinstance(event, AuthorizationDenied)
+        self.assertIsNone(event.user_id)
+        self.assertIsNone(event.username)
+        self.assertEqual(event.required_permissions, (Permission.PACKAGE_CREATE,))
+        self.assertEqual(event.occurred_at, occurred_at)
+
+    def test_requires_records_denied_event_for_missing_permission(self) -> None:
+        occurred_at = datetime(2025, 1, 1, 12, 0)
+
+        class Target(ApplicationEventRecorderMixin):
+            def __init__(self) -> None:
+                self.authz = AuthorizationService(_user(Role.MANAGER))
+                self._clock = lambda: occurred_at
+                self._pending_events = []
+
+            @requires(Permission.PACKAGE_CREATE)
+            def action(self) -> str:
+                return "x"
+
+        target = Target()
+
+        with (
+            patch("src.application.services.authorization_service.ROLE_PERMISSIONS", MANAGER_NO_PERMISSIONS),
+            self.assertRaises(PermissionError),
+        ):
+            target.action()
+
+        event = target.pending_events[0]
+        self.assertIsInstance(event, AuthorizationDenied)
+        assert isinstance(event, AuthorizationDenied)
+        self.assertEqual(event.user_id, 1)
+        self.assertIsNone(event.username)
+        self.assertEqual(event.required_permissions, (Permission.PACKAGE_CREATE,))
+        self.assertEqual(event.occurred_at, occurred_at)
+
     def test_requires_all_allows_when_all_present(self) -> None:
         needed = {Permission.PACKAGE_CREATE, Permission.ROUTE_REMOVE}
 
@@ -130,3 +188,64 @@ class Authz_Should(unittest.TestCase):
         ):
             MissingOne().go()
         self.assertIn("Missing permissions: ROUTE_REMOVE", str(ctx2.exception))
+
+    def test_requires_all_records_only_missing_permissions(self) -> None:
+        occurred_at = datetime(2025, 1, 1, 12, 0)
+
+        class Target(ApplicationEventRecorderMixin):
+            def __init__(self) -> None:
+                self.authz = AuthorizationService(_user(Role.MANAGER))
+                self._clock = lambda: occurred_at
+                self._pending_events = []
+
+            @requires_all(Permission.PACKAGE_CREATE, Permission.ROUTE_REMOVE)
+            def go(self) -> int:
+                return 1
+
+        target = Target()
+
+        with (
+            patch(
+                "src.application.services.authorization_service.ROLE_PERMISSIONS",
+                MANAGER_CAN_CREATE_PACKAGES,
+            ),
+            self.assertRaises(PermissionError),
+        ):
+            target.go()
+
+        event = target.pending_events[0]
+        self.assertIsInstance(event, AuthorizationDenied)
+        assert isinstance(event, AuthorizationDenied)
+        self.assertEqual(event.user_id, 1)
+        self.assertIsNone(event.username)
+        self.assertEqual(event.required_permissions, (Permission.ROUTE_REMOVE,))
+        self.assertEqual(event.occurred_at, occurred_at)
+
+    def test_requires_all_records_all_required_permissions_when_unauthenticated(self) -> None:
+        occurred_at = datetime(2025, 1, 1, 12, 0)
+
+        class Target(ApplicationEventRecorderMixin):
+            def __init__(self) -> None:
+                self.authz = AuthorizationService(None)
+                self._clock = lambda: occurred_at
+                self._pending_events = []
+
+            @requires_all(Permission.PACKAGE_CREATE, Permission.ROUTE_REMOVE)
+            def go(self) -> int:
+                return 1
+
+        target = Target()
+
+        with self.assertRaises(PermissionError):
+            target.go()
+
+        event = target.pending_events[0]
+        self.assertIsInstance(event, AuthorizationDenied)
+        assert isinstance(event, AuthorizationDenied)
+        self.assertIsNone(event.user_id)
+        self.assertIsNone(event.username)
+        self.assertEqual(
+            event.required_permissions,
+            (Permission.PACKAGE_CREATE, Permission.ROUTE_REMOVE),
+        )
+        self.assertEqual(event.occurred_at, occurred_at)
