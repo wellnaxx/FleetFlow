@@ -24,7 +24,7 @@ class UserRegistered(ApplicationEvent):
 class UserRegistrationRejected(ApplicationEvent):
     """Event recorded when a user registration attempt is rejected."""
 
-    username: str
+    username: str | None
     reason: UserRegistrationRejectionReason
 
 

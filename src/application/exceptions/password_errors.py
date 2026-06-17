@@ -3,6 +3,7 @@
 from src.application.enums.user_login_rejection_reasons import UserLoginRejectionReason
 from src.application.enums.user_password_change_rejection_reasons import UserPasswordChangeRejectionReason
 from src.application.enums.user_password_reset_rejection_reasons import UserPasswordResetRejectionReason
+from src.application.enums.user_registration_rejection_reasons import UserRegistrationRejectionReason
 from src.application.exceptions.application_errors import (
     AuthenticationError,
     ConflictError,
@@ -32,6 +33,13 @@ class LoginRejectedMixin:
 
     reason: UserLoginRejectionReason
     user_id: int | None
+    username: str | None
+
+
+class RegistrationRejectedMixin:
+    """Common metadata exposed by registration rejection errors."""
+
+    reason: UserRegistrationRejectionReason
     username: str | None
 
 
@@ -172,4 +180,31 @@ class LoginInvalidUserRuntimeError(ValidationError, LoginRejectedMixin):
         super().__init__(message)
         self.reason = UserLoginRejectionReason.INVALID_RUNTIME_USER
         self.user_id = user_id
+        self.username = username
+
+
+class RegistrationInvalidUsernameError(ValidationError, RegistrationRejectedMixin):
+    """Raised when registration receives an invalid username."""
+
+    def __init__(self, message: str = "Username is required.", *, username: str | None = None) -> None:
+        super().__init__(message)
+        self.reason = UserRegistrationRejectionReason.INVALID_USERNAME
+        self.username = username
+
+
+class RegistrationUsernameAlreadyExistsError(ConflictError, RegistrationRejectedMixin):
+    """Raised when registration targets an existing username."""
+
+    def __init__(self, username: str) -> None:
+        super().__init__("Username already exists.")
+        self.reason = UserRegistrationRejectionReason.USERNAME_ALREADY_EXISTS
+        self.username = username
+
+
+class RegistrationPasswordCriteriaNotMetError(ValidationError, RegistrationRejectedMixin):
+    """Raised when a registration password fails the password policy."""
+
+    def __init__(self, message: str, *, username: str) -> None:
+        super().__init__(message)
+        self.reason = UserRegistrationRejectionReason.PASSWORD_CRITERIA_NOT_MET
         self.username = username

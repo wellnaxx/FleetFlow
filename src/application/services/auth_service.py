@@ -2,7 +2,6 @@
 
 from src.adapters.driven.security.password_hasher import PasswordHash, hash_password, verify_password
 from src.application.exceptions.application_errors import (
-    ConflictError,
     NotFoundError,
     ValidationError,
 )
@@ -18,6 +17,9 @@ from src.application.exceptions.password_errors import (
     PasswordResetCriteriaNotMetError,
     PasswordResetUserNotFoundError,
     PasswordUnchangedError,
+    RegistrationInvalidUsernameError,
+    RegistrationPasswordCriteriaNotMetError,
+    RegistrationUsernameAlreadyExistsError,
 )
 from src.application.models.user_record import UserRecord
 from src.application.services.runtime_user_factory import create_runtime_user_from_record
@@ -71,16 +73,15 @@ class AuthService:
             The persisted user record.
 
         Raises:
-            ValidationError: If command input fails validation.
-            ConflictError: If the username already exists.
+            RegistrationInvalidUsernameError: If the username or repository input is invalid.
+            RegistrationUsernameAlreadyExistsError: If the username already exists.
+            RegistrationPasswordCriteriaNotMetError: If the password fails validation.
         """
         clean_username = username.strip().lower()
         if not clean_username:
-            raise ValidationError("Username is required.")
-        if len(password) < 8:
-            raise ValidationError("Password must be at least 8 characters.")
+            raise RegistrationInvalidUsernameError()
         if self._store.get_by_username(clean_username) is not None:
-            raise ConflictError("Username already exists.")
+            raise RegistrationUsernameAlreadyExistsError(username=clean_username)
 
         ci = ContactInfo(name=name, email=email or "", phone_number=phone_number or "")
         clean_name = ci.name
@@ -89,7 +90,7 @@ class AuthService:
         try:
             ph = hash_password(password)
         except ValueError as exc:
-            raise ValidationError(str(exc)) from exc
+            raise RegistrationPasswordCriteriaNotMetError(str(exc), username=clean_username) from exc
         role_value = role.value
         try:
             return self._store.create(
@@ -101,9 +102,9 @@ class AuthService:
                 password_hash=ph,
             )
         except DuplicateKeyError as exc:
-            raise ConflictError("Username already exists.") from exc
+            raise RegistrationUsernameAlreadyExistsError(username=clean_username) from exc
         except ValueError as exc:
-            raise ValidationError(str(exc)) from exc
+            raise RegistrationInvalidUsernameError(str(exc), username=clean_username) from exc
 
     def _set_password(self, username: str, new_password: str) -> None:
         """Set a new password through the repository's atomic revocation boundary."""
