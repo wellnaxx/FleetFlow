@@ -46,6 +46,11 @@ class AuthService:
         """Return the currently authenticated user, if any."""
         return self._current_user
 
+    @property
+    def user_repository(self) -> UserRepositoryPort:
+        """Return the repository used for persisted user operations."""
+        return self._store
+
     def register_user(
         self, username: str, role: Role, name: str, email: str, phone_number: str, password: str
     ) -> UserRecord:

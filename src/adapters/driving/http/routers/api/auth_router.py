@@ -15,6 +15,7 @@ from src.adapters.driving.http.dependencies.auth import (
 )
 from src.adapters.driving.http.dependencies.use_cases import (
     get_change_password_use_case,
+    get_logout_use_case,
     get_register_user_use_case,
 )
 from src.adapters.driving.http.schemas.auth import (
@@ -32,6 +33,7 @@ from src.application.exceptions.application_errors import (
 from src.application.models.user_record import UserRecord
 from src.application.services.auth_service import AuthService
 from src.application.use_cases.auth.change_password import ChangePasswordUseCase
+from src.application.use_cases.auth.logout import LogoutUseCase
 from src.application.use_cases.auth.register_user import RegisterUserUseCase
 from src.composition.runtime import get_auth_service, get_user_repository
 from src.domain.enums.auth import Role
@@ -273,13 +275,13 @@ def refresh_token(
 @auth_router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 def logout(
     principal: Annotated[AuthenticatedPrincipal, Depends(get_current_user)],
-    user_repository: Annotated[UserRepositoryPort, Depends(get_user_repository)],
+    use_case: Annotated[LogoutUseCase, Depends(get_logout_use_case)],
 ) -> None:
     """Invalidate all sessions for the current user.
 
     Args:
         principal: Currently authenticated user, injected by FastAPI.
-        user_repository: Repository used to increment token version, injected by FastAPI.
+        use_case: Use case for logging out, injected by FastAPI.
 
     Returns:
         None
@@ -289,7 +291,7 @@ def logout(
             * 401 - Invalid, expired, revoked, or userless access token.
             * 500 - Database operation failure.
     """
-    user_repository.increment_token_version_by_id(principal.record.user_id)
+    use_case.execute(user_id=principal.record.user_id, username=principal.record.username)
 
 
 @auth_router.get("/me", status_code=status.HTTP_200_OK)

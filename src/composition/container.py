@@ -119,7 +119,7 @@ class Container:
             linker=self.linker,
         )
 
-        self._clock = datetime.now
+        self.clock = datetime.now
         self._wire_world_state(config)
         self._wire_services(auth)
         self._wire_use_cases()
@@ -210,8 +210,8 @@ class Container:
         """Wire use cases common to all persistence backends."""
         logger.debug("Wiring application use cases.")
         self.auth_cases = AuthUseCases(
-            login=LoginUseCase(self.auth, self._clock),
-            logout=LogoutUseCase(self.auth),
+            login=LoginUseCase(self.auth, self.clock),
+            logout=LogoutUseCase(self.auth.user_repository, self.auth, self.clock),
             who_am_i=WhoAmIUseCase(self.auth),
             register_user=RegisterUserUseCase(self.auth, self.authz),
             change_password=ChangePasswordUseCase(self.auth, self.authz),
@@ -225,7 +225,7 @@ class Container:
             create=CreatePackageUseCase(self.customer_service, self.package_repo, self.authz),
             view=ViewPackageUseCase(self.package_repo, self.authz),
             view_all=ViewAllPackagesUseCase(self.package_repo, self.authz),
-            remove=RemovePackageUseCase(self.package_repo, self.unit_of_work, self.authz, clock=self._clock),
+            remove=RemovePackageUseCase(self.package_repo, self.unit_of_work, self.authz, clock=self.clock),
             view_unassigned=ViewUnassignedPackagesUseCase(self.package_repo, self.authz),
         )
 
@@ -234,9 +234,9 @@ class Container:
             view=ViewRouteUseCase(self.route_repo, self.authz),
             view_all=ViewAllRoutesUseCase(self.route_repo, self.authz),
             view_in_progress=ViewRoutesInProgressUseCase(self.route_repo, self.authz),
-            remove=RemoveRouteUseCase(self.route_repo, self.unit_of_work, self.authz, clock=self._clock),
+            remove=RemoveRouteUseCase(self.route_repo, self.unit_of_work, self.authz, clock=self.clock),
             assign_packages=AssignPackagesToRouteUseCase(
-                self.route_repo, self.package_repo, self.authz, clock=self._clock
+                self.route_repo, self.package_repo, self.authz, clock=self.clock
             ),
             assign_truck=AssignTruckToRouteUseCase(
                 self.route_repo, self.vehicle_manager, self.unit_of_work, self.authz
@@ -245,7 +245,7 @@ class Container:
                 self.route_repo, self.vehicle_manager, self.authz
             ),
             find_suitable_routes=FindSuitableRoutesForPackageUseCase(
-                self.route_repo, self.package_repo, self.authz, clock=self._clock
+                self.route_repo, self.package_repo, self.authz, clock=self.clock
             ),
         )
         self.truck_cases = TruckUseCases(

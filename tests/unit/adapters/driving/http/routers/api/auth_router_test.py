@@ -287,38 +287,47 @@ class AuthRouterShould(unittest.TestCase):
         principal = self._principal()
         user_repo = MagicMock()
         user_repo.increment_token_version_by_id.return_value = self._record(token_version=2)
+        auth_service = MagicMock()
+        auth_service.user_repository = user_repo
         self.app.dependency_overrides[auth_router_module.get_current_user] = lambda: principal
-        self.app.dependency_overrides[auth_router_module.get_user_repository] = lambda: user_repo
+        self.app.dependency_overrides[auth_router_module.get_auth_service] = lambda: auth_service
 
         response = self.client.post("/auth/logout")
 
         self.assertEqual(response.status_code, 204)
         user_repo.increment_token_version_by_id.assert_called_once_with(1)
+        auth_service.logout.assert_called_once_with()
 
     def test_logout_is_idempotent_when_user_record_is_already_missing(self) -> None:
         principal = self._principal()
         user_repo = MagicMock()
         user_repo.increment_token_version_by_id.return_value = None
+        auth_service = MagicMock()
+        auth_service.user_repository = user_repo
         self.app.dependency_overrides[auth_router_module.get_current_user] = lambda: principal
-        self.app.dependency_overrides[auth_router_module.get_user_repository] = lambda: user_repo
+        self.app.dependency_overrides[auth_router_module.get_auth_service] = lambda: auth_service
 
         response = self.client.post("/auth/logout")
 
         self.assertEqual(response.status_code, 204)
         user_repo.increment_token_version_by_id.assert_called_once_with(1)
+        auth_service.logout.assert_called_once_with()
 
     def test_logout_returns_generic_error_for_database_failure(self) -> None:
         principal = self._principal()
         user_repo = MagicMock()
         user_repo.increment_token_version_by_id.side_effect = DatabaseError.write_failed(Exception("boom"))
+        auth_service = MagicMock()
+        auth_service.user_repository = user_repo
         self.app.dependency_overrides[auth_router_module.get_current_user] = lambda: principal
-        self.app.dependency_overrides[auth_router_module.get_user_repository] = lambda: user_repo
+        self.app.dependency_overrides[auth_router_module.get_auth_service] = lambda: auth_service
 
         response = self.client.post("/auth/logout")
 
         self.assertEqual(response.status_code, 500)
         self.assertEqual(response.json()["detail"], "Database operation failed.")
         user_repo.increment_token_version_by_id.assert_called_once_with(1)
+        auth_service.logout.assert_not_called()
 
     def test_me_returns_null_for_absent_contact_fields(self) -> None:
         principal = self._principal(
