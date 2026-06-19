@@ -25,6 +25,7 @@ from src.adapters.driving.http.exception_handlers import (
     world_state_persistence_error_handler,
     world_state_runtime_swap_error_handler,
 )
+from src.application.enums.world_state_corruption_reasons import WorldStateCorruptionReason
 from src.application.exceptions.application_errors import (
     AuthenticationError,
     ConflictError,
@@ -92,7 +93,10 @@ class HttpExceptionHandlersShould(unittest.TestCase):
             ),
             (
                 world_state_corruption_error_handler,
-                WorldStateCorruptionError("C:/secret/world.json contains invalid data"),
+                WorldStateCorruptionError(
+                    "C:/secret/world.json contains invalid data",
+                    reason=WorldStateCorruptionReason.INVARIANT_VIOLATION,
+                ),
                 status.HTTP_400_BAD_REQUEST,
                 "World state snapshot is malformed.",
             ),

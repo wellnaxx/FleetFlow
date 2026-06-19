@@ -8,7 +8,6 @@ from src.adapters.driven.persistence.database.graph_loaders.world_graph_loader i
 from src.adapters.driven.persistence.database.snapshot_counters import load_snapshot_counters
 from src.adapters.driven.persistence.database.world_state_importer import PostgresWorldStateImporter
 from src.application.dto.world_state_snapshot_dto import CountersSnapshot, WorldStateSnapshot
-from src.application.exceptions.world_state_errors import WorldStateCorruptionError
 from src.application.services.world_state_schema import SCHEMA_VERSION, SUPPORTED_SCHEMA_VERSIONS
 from src.application.services.world_state_snapshot_builder import WorldStateSnapshotBuilder
 from src.application.services.world_state_snapshot_preparer import WorldStateSnapshotPreparer
@@ -75,14 +74,13 @@ class PostgresWorldStateGateway:
             snapshot: The world-state snapshot to apply.
 
         Raises:
-            WorldStateCorruptionError: If the snapshot is invalid or cannot be applied.
+            WorldStateCorruptionError: If the snapshot has unsupported schema,
+                invalid structure, invalid references, or invariant violations.
             DatabaseError: If there is an error during database operations.
         """
         logger.info("Applying world-state snapshot to PostgreSQL backend.")
-        try:
-            reconciled_world = self._snapshot_preparer.prepare(snapshot, SUPPORTED_SCHEMA_VERSIONS)
-        except (KeyError, TypeError, ValueError) as exc:
-            raise WorldStateCorruptionError(f"Invalid world state snapshot: {exc}") from exc
+
+        reconciled_world = self._snapshot_preparer.prepare(snapshot, SUPPORTED_SCHEMA_VERSIONS)
 
         self._importer.import_world(reconciled_world)
         logger.info("PostgreSQL world-state snapshot import completed.")

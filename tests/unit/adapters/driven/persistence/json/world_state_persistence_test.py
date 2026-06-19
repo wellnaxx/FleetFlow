@@ -16,6 +16,7 @@ from src.application.dto.world_state_snapshot_dto import (
     WorldSnapshotData,
     WorldStateSnapshot,
 )
+from src.application.enums.world_state_corruption_reasons import WorldStateCorruptionReason
 from src.application.exceptions.world_state_errors import (
     WorldStateCorruptionError,
     WorldStateFileNotFoundError,
@@ -264,7 +265,7 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
             with contextlib.suppress(OSError):
                 os.remove(path)
 
-        self.assertIn("Malformed world state JSON", str(ctx.exception))
+        self.assertEqual(ctx.exception.reason, WorldStateCorruptionReason.INVALID_STRUCTURE)
 
     def test_read_supports_truck_snapshots(self) -> None:
         snapshot = WorldStateSnapshot(
@@ -421,7 +422,7 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
             with contextlib.suppress(OSError):
                 os.remove(path)
 
-        self.assertIn("Malformed world state JSON", str(ctx.exception))
+        self.assertEqual(ctx.exception.reason, WorldStateCorruptionReason.INVALID_STRUCTURE)
 
     def test_read_rejects_legacy_flat_schema_for_v2(self) -> None:
         raw: dict[str, Any] = {
@@ -448,7 +449,37 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
             with contextlib.suppress(OSError):
                 os.remove(path)
 
-        self.assertIn("Malformed world state JSON", str(ctx.exception))
+        self.assertEqual(ctx.exception.reason, WorldStateCorruptionReason.UNSUPPORTED_SCHEMA)
+
+    def test_read_rejects_unknown_nested_schema_version(self) -> None:
+        raw: dict[str, Any] = {
+            "schema_version": 3,
+            "world": {
+                "counters": {
+                    "next_customer_id": 1,
+                    "next_package_id": 1,
+                    "next_route_id": 1,
+                },
+                "customers": [],
+                "packages": [],
+                "routes": [],
+                "trucks": [],
+            },
+        }
+
+        filename = f"world-state-{uuid.uuid4().hex}.json"
+        path = os.path.join(DATA_DIR, filename)
+        try:
+            with open(path, "w", encoding="utf-8") as file:
+                json.dump(raw, file)
+
+            with self.assertRaises(WorldStateCorruptionError) as ctx:
+                self.persistence.read(path)
+        finally:
+            with contextlib.suppress(OSError):
+                os.remove(path)
+
+        self.assertEqual(ctx.exception.reason, WorldStateCorruptionReason.UNSUPPORTED_SCHEMA)
 
     def test_read_missing_file_raises_world_state_file_not_found(self) -> None:
         filename = f"missing-{uuid.uuid4().hex}.json"
@@ -491,7 +522,7 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
             with contextlib.suppress(OSError):
                 os.remove(path)
 
-        self.assertIn("Malformed world state JSON", str(ctx.exception))
+        self.assertEqual(ctx.exception.reason, WorldStateCorruptionReason.MALFORMED_JSON)
 
     def test_read_malformed_truck_snapshot_raises_world_state_corruption_error(self) -> None:
         malformed_truck_cases: tuple[tuple[str, dict[str, object]], ...] = (
@@ -543,7 +574,7 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
                     with contextlib.suppress(OSError):
                         os.remove(path)
 
-                self.assertIn("Malformed world state JSON", str(ctx.exception))
+                self.assertEqual(ctx.exception.reason, WorldStateCorruptionReason.INVALID_STRUCTURE)
 
     def test_read_malformed_payload_raises_world_state_corruption_error(self) -> None:
         raw: dict[str, Any] = {
@@ -573,7 +604,46 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
             with contextlib.suppress(OSError):
                 os.remove(path)
 
-        self.assertIn("Malformed world state JSON", str(ctx.exception))
+        self.assertEqual(ctx.exception.reason, WorldStateCorruptionReason.INVALID_STRUCTURE)
+
+    def test_read_rejects_boolean_package_weight_as_invalid_structure(self) -> None:
+        raw: dict[str, Any] = {
+            "schema_version": 2,
+            "world": {
+                "counters": {
+                    "next_customer_id": 1,
+                    "next_package_id": 1,
+                    "next_route_id": 1,
+                },
+                "customers": [],
+                "packages": [
+                    {
+                        "package_id": 1,
+                        "start": "A",
+                        "end": "B",
+                        "weight": True,
+                        "customer_id": 1,
+                        "route_id": None,
+                    }
+                ],
+                "routes": [],
+                "trucks": [],
+            },
+        }
+
+        filename = f"world-state-{uuid.uuid4().hex}.json"
+        path = os.path.join(DATA_DIR, filename)
+        try:
+            with open(path, "w", encoding="utf-8") as file:
+                json.dump(raw, file)
+
+            with self.assertRaises(WorldStateCorruptionError) as ctx:
+                self.persistence.read(path)
+        finally:
+            with contextlib.suppress(OSError):
+                os.remove(path)
+
+        self.assertEqual(ctx.exception.reason, WorldStateCorruptionReason.INVALID_STRUCTURE)
 
     def test_read_payload_without_world_or_legacy_sections_raises_world_state_corruption_error(self) -> None:
         raw = {
@@ -593,7 +663,7 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
             with contextlib.suppress(OSError):
                 os.remove(path)
 
-        self.assertIn("Malformed world state JSON", str(ctx.exception))
+        self.assertEqual(ctx.exception.reason, WorldStateCorruptionReason.INVALID_STRUCTURE)
 
     def test_read_incomplete_legacy_flat_schema_raises_world_state_corruption_error(self) -> None:
         complete_legacy: dict[str, Any] = {
@@ -628,4 +698,4 @@ class JsonWorldStatePersistenceTests(unittest.TestCase):
                     with contextlib.suppress(OSError):
                         os.remove(path)
 
-                self.assertIn("Malformed world state JSON", str(ctx.exception))
+                self.assertEqual(ctx.exception.reason, WorldStateCorruptionReason.INVALID_STRUCTURE)

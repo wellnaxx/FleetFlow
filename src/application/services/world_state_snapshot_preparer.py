@@ -2,6 +2,8 @@ from collections.abc import Collection
 
 from src.application.dto.reconciled_world_dto import ReconciledWorld
 from src.application.dto.world_state_snapshot_dto import WorldStateSnapshot
+from src.application.enums.world_state_corruption_reasons import WorldStateCorruptionReason
+from src.application.exceptions.world_state_errors import WorldStateCorruptionError
 from src.application.services.world_snapshot_validator import WorldStateSnapshotValidator
 from src.application.services.world_state_linker import WorldStateSnapshotLinker
 from src.application.services.world_state_reconciliation_service import WorldStateReconciliationService
@@ -44,25 +46,35 @@ class WorldStateSnapshotPreparer:
             A ReconciledWorld DTO containing the prepared world state ready for import.
 
         Raises:
-            KeyError: If the snapshot is missing required data or has invalid references.
-            TypeError: If the snapshot has data of incorrect types.
-            ValueError: If the snapshot has invalid values or violates invariants.
+            WorldStateCorruptionError: If the snapshot has unsupported schema,
+                invalid structure, invalid references, or invariant violations.
         """
         self._validator.validate_snapshot(snapshot, supported_schema_versions)
 
         rebuilt_world = self._rebuilder.rebuild(snapshot)
         linked_trucks = self._linker.link(snapshot, rebuilt_world)
 
-        self._reconciler.reconcile_routes(
-            routes=list(rebuilt_world.routes.values()),
-            update_trucks=True,
-        )
-        truck_bindings = self._linker.build_truck_bindings(
-            route_snapshots=snapshot.world.routes,
-            routes=rebuilt_world.routes,
-            trucks_by_route_id=linked_trucks.trucks_by_route_id,
-            candidate_trucks_by_id=linked_trucks.candidate_trucks_by_id,
-        )
+        try:
+            self._reconciler.reconcile_routes(
+                routes=list(rebuilt_world.routes.values()),
+                update_trucks=True,
+            )
+        except RuntimeError as exc:
+            raise WorldStateCorruptionError(
+                str(exc), reason=WorldStateCorruptionReason.INVARIANT_VIOLATION
+            ) from exc
+
+        try:
+            truck_bindings = self._linker.build_truck_bindings(
+                route_snapshots=snapshot.world.routes,
+                routes=rebuilt_world.routes,
+                trucks_by_route_id=linked_trucks.trucks_by_route_id,
+                candidate_trucks_by_id=linked_trucks.candidate_trucks_by_id,
+            )
+        except KeyError as exc:
+            raise WorldStateCorruptionError(
+                str(exc), reason=WorldStateCorruptionReason.INVALID_REFERENCES
+            ) from exc
 
         return ReconciledWorld(
             customers=rebuilt_world.customers,

@@ -7,7 +7,6 @@ from src.application.dto.world_state_snapshot_dto import (
     CountersSnapshot,
     WorldStateSnapshot,
 )
-from src.application.exceptions.world_state_errors import WorldStateCorruptionError
 from src.application.services.world_state_schema import SCHEMA_VERSION, SUPPORTED_SCHEMA_VERSIONS
 from src.application.services.world_state_snapshot_builder import WorldStateSnapshotBuilder
 from src.application.services.world_state_snapshot_preparer import WorldStateSnapshotPreparer
@@ -116,13 +115,10 @@ class WorldStateSnapshotService:
             snapshot: Persisted or in-memory snapshot to apply.
 
         Raises:
-            WorldStateCorruptionError: If snapshot data is malformed or violates
-                load-time invariants before runtime replacement.
+            WorldStateCorruptionError: If the snapshot has unsupported schema,
+                invalid structure, invalid references, or invariant violations.
         """
-        try:
-            reconciled_world = self._preparer.prepare(snapshot, SUPPORTED_SCHEMA_VERSIONS)
-        except (KeyError, TypeError, ValueError) as exc:
-            raise WorldStateCorruptionError(f"Invalid world state snapshot: {exc}") from exc
+        reconciled_world = self._preparer.prepare(snapshot, SUPPORTED_SCHEMA_VERSIONS)
 
         self._swap_runtime_state(reconciled_world)
 

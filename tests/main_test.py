@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import cli_main
+from src.application.enums.world_state_corruption_reasons import WorldStateCorruptionReason
 from src.application.exceptions.world_state_errors import (
     WorldStateCorruptionError,
     WorldStateFileNotFoundError,
@@ -82,7 +83,10 @@ class MainStartupTests(unittest.TestCase):
 
     def test_main_warns_quarantines_and_continues_when_default_world_state_is_corrupt(self) -> None:
         container = _container(default_path="state.json")
-        container.state_cases.load.execute.side_effect = WorldStateCorruptionError("bad snapshot")
+        container.state_cases.load.execute.side_effect = WorldStateCorruptionError(
+            "bad snapshot",
+            reason=WorldStateCorruptionReason.INVARIANT_VIOLATION,
+        )
 
         with (
             patch("cli_main.print") as print_mock,
@@ -112,7 +116,10 @@ class MainStartupTests(unittest.TestCase):
         self,
     ) -> None:
         container = _container(default_path="state.json")
-        container.state_cases.load.execute.side_effect = WorldStateCorruptionError("bad snapshot")
+        container.state_cases.load.execute.side_effect = WorldStateCorruptionError(
+            "bad snapshot",
+            reason=WorldStateCorruptionReason.INVARIANT_VIOLATION,
+        )
 
         with (
             patch("cli_main.print") as print_mock,

@@ -11,9 +11,12 @@ from src.application.dto.world_state_snapshot_dto import (
     RouteSnapshot,
     WorldStateSnapshot,
 )
+from src.application.enums.world_state_corruption_reasons import WorldStateCorruptionReason
+from src.application.exceptions.world_state_errors import WorldStateCorruptionError
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.entities.delivery_route import DeliveryRoute
+from src.domain.exceptions import DomainValidationError
 from src.domain.value_objects.contact_info import ContactInfo
 
 
@@ -30,15 +33,23 @@ class WorldStateSnapshotRebuilder:
             Rebuilt domain objects and counters from the snapshot.
 
         Raises:
-            KeyError: If package snapshots reference missing rebuilt customers.
-            TypeError: If snapshot fields contain invalid domain value types.
-            ValueError: If rebuilt domain objects fail domain validation.
+            WorldStateCorruptionError: If package snapshots reference missing
+                rebuilt customers or rebuilt entities violate domain invariants.
         """
         world = snapshot.world
 
-        rebuilt_customers = self._rebuild_customers(world.customers)
-        rebuilt_packages = self._rebuild_packages(world.packages, rebuilt_customers)
-        rebuilt_routes = self._rebuild_routes(world.routes)
+        try:
+            rebuilt_customers = self._rebuild_customers(world.customers)
+            rebuilt_packages = self._rebuild_packages(world.packages, rebuilt_customers)
+            rebuilt_routes = self._rebuild_routes(world.routes)
+        except KeyError as exc:
+            raise WorldStateCorruptionError(
+                str(exc), reason=WorldStateCorruptionReason.INVALID_REFERENCES
+            ) from exc
+        except (TypeError, ValueError, DomainValidationError) as exc:
+            raise WorldStateCorruptionError(
+                str(exc), reason=WorldStateCorruptionReason.INVARIANT_VIOLATION
+            ) from exc
 
         return RebuiltWorld(
             customers=MappingProxyType(rebuilt_customers),
@@ -74,7 +85,7 @@ class WorldStateSnapshotRebuilder:
 
         Raises:
             TypeError: If contact fields contain invalid value types.
-            ValueError: If contact fields violate domain validation.
+            DomainValidationError: If contact fields violate domain validation.
         """
         return self._keyed_by(
             snapshots,
@@ -100,7 +111,7 @@ class WorldStateSnapshotRebuilder:
         Raises:
             KeyError: If a package references a missing customer.
             TypeError: If package fields contain invalid value types.
-            ValueError: If package fields violate domain validation.
+            DomainValidationError: If package fields violate domain validation.
         """
         rebuilt_packages: dict[int, DeliveryPackage] = {}
 
@@ -129,7 +140,8 @@ class WorldStateSnapshotRebuilder:
 
         Raises:
             TypeError: If route fields contain invalid value types.
-            ValueError: If route fields violate domain validation.
+            ValueError: If departure time serialization is invalid.
+            DomainValidationError: If route fields violate domain validation.
         """
         return self._keyed_by(
             snapshots,

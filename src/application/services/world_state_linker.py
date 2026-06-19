@@ -9,6 +9,8 @@ from src.application.dto.linked_truck_state_dto import LinkedTruckState
 from src.application.dto.rebuilt_world_dto import RebuiltWorld
 from src.application.dto.truck_binding_dto import TruckBinding
 from src.application.dto.world_state_snapshot_dto import RouteSnapshot, TruckSnapshot, WorldStateSnapshot
+from src.application.enums.world_state_corruption_reasons import WorldStateCorruptionReason
+from src.application.exceptions.world_state_errors import WorldStateCorruptionError
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.entities.truck import Truck
@@ -38,21 +40,41 @@ class WorldStateSnapshotLinker:
             Candidate truck links needed after reconciliation to build runtime truck bindings.
 
         Raises:
-            KeyError: If snapshot relationships reference missing rebuilt objects or fleet trucks.
-            TypeError: If truck runtime fields contain invalid value types.
-            ValueError: If truck runtime fields violate domain validation.
+            WorldStateCorruptionError: If snapshot relationships reference
+                missing rebuilt objects or fleet trucks, or if truck runtime
+                state violates snapshot invariants.
         """
-        self._link_packages_to_routes(
-            snapshots=snapshot.world.routes,
-            rebuilt_packages=rebuilt_world.packages,
-            rebuilt_routes=rebuilt_world.routes,
-        )
-        candidate_trucks_by_id = self._build_candidate_trucks(snapshot.world.trucks)
-        truck_by_route_id = self._link_candidate_trucks_to_routes(
-            route_snapshots=snapshot.world.routes,
-            rebuilt_routes=rebuilt_world.routes,
-            candidate_trucks_by_id=candidate_trucks_by_id,
-        )
+        try:
+            self._link_packages_to_routes(
+                snapshots=snapshot.world.routes,
+                rebuilt_packages=rebuilt_world.packages,
+                rebuilt_routes=rebuilt_world.routes,
+            )
+        except KeyError as exc:
+            raise WorldStateCorruptionError(
+                "Package-to-route linking failed: snapshot references missing "
+                f"rebuilt route or package id {self._missing_key(exc)}.",
+                reason=WorldStateCorruptionReason.INVALID_REFERENCES,
+            ) from exc
+        try:
+            candidate_trucks_by_id = self._build_candidate_trucks(snapshot.world.trucks)
+            truck_by_route_id = self._link_candidate_trucks_to_routes(
+                route_snapshots=snapshot.world.routes,
+                rebuilt_routes=rebuilt_world.routes,
+                candidate_trucks_by_id=candidate_trucks_by_id,
+            )
+        except KeyError as exc:
+            raise WorldStateCorruptionError(
+                "Truck-to-route linking failed: snapshot references missing "
+                f"rebuilt route or fleet truck id {self._missing_key(exc)}.",
+                reason=WorldStateCorruptionReason.INVALID_REFERENCES,
+            ) from exc
+        except (TypeError, ValueError) as exc:
+            raise WorldStateCorruptionError(
+                f"Truck runtime state linking failed while restoring candidate trucks: {exc}",
+                reason=WorldStateCorruptionReason.INVARIANT_VIOLATION,
+            ) from exc
+
         return LinkedTruckState(
             trucks_by_route_id=MappingProxyType(truck_by_route_id),
             candidate_trucks_by_id=MappingProxyType(candidate_trucks_by_id),
@@ -254,3 +276,10 @@ class WorldStateSnapshotLinker:
         clone.busy_until = truck.busy_until
         clone.in_transit_to = truck.in_transit_to
         return clone
+
+    @staticmethod
+    def _missing_key(exc: KeyError) -> object:
+        """Return the missing mapping key without KeyError quote formatting."""
+        if exc.args:
+            return exc.args[0]
+        return "<unknown>"

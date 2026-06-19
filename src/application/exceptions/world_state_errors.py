@@ -1,5 +1,6 @@
 """World-state persistence and loading exception types."""
 
+from src.application.enums.world_state_corruption_reasons import WorldStateCorruptionReason
 from src.application.exceptions.application_errors import ApplicationError
 
 
@@ -13,6 +14,10 @@ class WorldStateFileNotFoundError(WorldStateError):
 
 class WorldStateCorruptionError(WorldStateError):
     """Raised when a world-state file exists but cannot be parsed or validated."""
+
+    def __init__(self, message: str, *, reason: WorldStateCorruptionReason) -> None:
+        super().__init__(message)
+        self.reason = reason
 
 
 class WorldStatePersistenceError(WorldStateError):

@@ -19,6 +19,7 @@ from src.application.dto.world_state_snapshot_dto import (
     WorldSnapshotData,
     WorldStateSnapshot,
 )
+from src.application.enums.world_state_corruption_reasons import WorldStateCorruptionReason
 from src.application.exceptions.world_state_errors import WorldStateCorruptionError
 from src.application.services.world_snapshot_validator import WorldStateSnapshotValidator
 from src.application.services.world_state_linker import WorldStateSnapshotLinker
@@ -1020,13 +1021,14 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
             patch.object(
                 self.reconciler,
                 "reconcile_routes",
-                side_effect=ValueError("candidate graph is invalid"),
+                side_effect=RuntimeError("candidate graph is invalid"),
             ),
             self.assertRaises(WorldStateCorruptionError) as ctx,
         ):
             self.service.apply_snapshot(snapshot)
 
         self.assertIn("candidate graph is invalid", str(ctx.exception))
+        self.assertEqual(ctx.exception.reason, WorldStateCorruptionReason.INVARIANT_VIOLATION)
         self.assertIsNone(self.route_repo.get_by_id(1))
 
     def test_apply_snapshot_does_not_wrap_runtime_swap_failure_as_corruption(self) -> None:

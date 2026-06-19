@@ -5,6 +5,7 @@ from src.adapters.driven.persistence.database.graph_loaders.world_graph_loader i
 from src.adapters.driven.persistence.database.world_state_gateway import PostgresWorldStateGateway
 from src.application.dto.reconciled_world_dto import ReconciledWorld
 from src.application.dto.world_state_snapshot_dto import CountersSnapshot, WorldStateSnapshot
+from src.application.enums.world_state_corruption_reasons import WorldStateCorruptionReason
 from src.application.exceptions.world_state_errors import WorldStateCorruptionError
 from src.application.services.world_state_schema import SUPPORTED_SCHEMA_VERSIONS
 from src.domain.entities.customer import Customer
@@ -81,11 +82,14 @@ class PostgresWorldStateGatewayTests(unittest.TestCase):
         self.assertEqual(preparer.prepare.call_args.args[1], SUPPORTED_SCHEMA_VERSIONS)
         importer.import_world.assert_called_once_with(reconciled_world)
 
-    def test_apply_snapshot_wraps_invalid_snapshot_errors(self) -> None:
+    def test_apply_snapshot_propagates_snapshot_corruption(self) -> None:
         snapshot = MagicMock(spec=WorldStateSnapshot)
         preparer = MagicMock()
         importer = MagicMock()
-        preparer.prepare.side_effect = ValueError("bad route")
+        corruption = WorldStateCorruptionError(
+            "bad route", reason=WorldStateCorruptionReason.INVARIANT_VIOLATION
+        )
+        preparer.prepare.side_effect = corruption
 
         gateway = PostgresWorldStateGateway(
             snapshot_builder=MagicMock(),
@@ -96,5 +100,5 @@ class PostgresWorldStateGatewayTests(unittest.TestCase):
         with self.assertRaises(WorldStateCorruptionError) as ctx:
             gateway.apply_snapshot(snapshot)
 
-        self.assertIn("Invalid world state snapshot: bad route", str(ctx.exception))
+        self.assertIs(ctx.exception, corruption)
         importer.import_world.assert_not_called()

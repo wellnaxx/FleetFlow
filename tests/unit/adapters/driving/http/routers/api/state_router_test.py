@@ -9,6 +9,7 @@ from src.adapters.driven.persistence.database.errors import DatabaseError
 from src.adapters.driving.http.exception_handlers import register_exception_handlers
 from src.adapters.driving.http.routers.api import state_router as state_router_module
 from src.adapters.driving.http.routers.api.state_router import state_router
+from src.application.enums.world_state_corruption_reasons import WorldStateCorruptionReason
 from src.application.exceptions.application_errors import ValidationError
 from src.application.exceptions.world_state_errors import (
     WorldStateCorruptionError,
@@ -129,7 +130,10 @@ class StateRouterShould(unittest.TestCase):
 
     def test_load_world_returns_bad_request_for_corrupt_snapshot_without_leaking_path(self) -> None:
         use_case = MagicMock()
-        use_case.execute.side_effect = WorldStateCorruptionError("bad C:/secret/world.json")
+        use_case.execute.side_effect = WorldStateCorruptionError(
+            "bad C:/secret/world.json",
+            reason=WorldStateCorruptionReason.INVARIANT_VIOLATION,
+        )
         self.app.dependency_overrides[state_router_module.get_load_world_state_use_case] = lambda: use_case
 
         response = self.client.post("/state/load", json={"path": "world.json"})

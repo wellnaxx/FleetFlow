@@ -10,6 +10,8 @@ from src.application.dto.world_state_snapshot_dto import (
     WorldSnapshotData,
     WorldStateSnapshot,
 )
+from src.application.enums.world_state_corruption_reasons import WorldStateCorruptionReason
+from src.application.exceptions.world_state_errors import WorldStateCorruptionError
 from src.domain.entities.truck import Truck
 from src.domain.enums.truck_status import TruckStatus
 from src.domain.services.map import Map
@@ -44,19 +46,31 @@ class WorldStateSnapshotValidator:
         self, snapshot: WorldStateSnapshot, supported_schema_versions: Collection[int]
     ) -> None:
         if snapshot.schema_version not in supported_schema_versions:
-            raise ValueError(f"Unsupported schema version: {snapshot.schema_version}")
+            raise WorldStateCorruptionError(
+                f"Unsupported schema version: {snapshot.schema_version}",
+                reason=WorldStateCorruptionReason.UNSUPPORTED_SCHEMA,
+            )
 
         if snapshot.schema_version == 1 and snapshot.world.trucks:
-            raise ValueError("Schema v1 snapshots do not support truck runtime state.")
+            raise WorldStateCorruptionError(
+                "Schema v1 snapshots do not support truck runtime state.",
+                reason=WorldStateCorruptionReason.INVALID_STRUCTURE,
+            )
 
     def _validate_counters(self, counters: CountersSnapshot) -> None:
         if counters.next_customer_id < 1:
-            raise ValueError("Invalid next_customer_id in snapshot.")
+            raise WorldStateCorruptionError(
+                "Invalid next_customer_id in snapshot.", reason=WorldStateCorruptionReason.INVARIANT_VIOLATION
+            )
 
         if counters.next_package_id < 1:
-            raise ValueError("Invalid next_package_id in snapshot.")
+            raise WorldStateCorruptionError(
+                "Invalid next_package_id in snapshot.", reason=WorldStateCorruptionReason.INVARIANT_VIOLATION
+            )
         if counters.next_route_id < 1:
-            raise ValueError("Invalid next_route_id in snapshot.")
+            raise WorldStateCorruptionError(
+                "Invalid next_route_id in snapshot.", reason=WorldStateCorruptionReason.INVARIANT_VIOLATION
+            )
 
     def _validate_ids(self, world: WorldSnapshotData) -> None:
         self._ensure_unique_ids(
@@ -74,7 +88,10 @@ class WorldStateSnapshotValidator:
 
         for route in world.routes:
             if len(route.locations) < 2:
-                raise ValueError(f"Route {route.route_id} must contain at least two locations.")
+                raise WorldStateCorruptionError(
+                    f"Route {route.route_id} must contain at least two locations.",
+                    reason=WorldStateCorruptionReason.INVARIANT_VIOLATION,
+                )
             self._ensure_unique_ids(route.package_ids, f"package ids for route {route.route_id}")
 
     def _ensure_unique_ids(self, ids: tuple[int, ...] | list[int], label: str) -> None:
@@ -83,14 +100,20 @@ class WorldStateSnapshotValidator:
 
         for item_id in ids:
             if item_id < 1:
-                raise ValueError(f"Invalid {label} id in snapshot: {item_id}")
+                raise WorldStateCorruptionError(
+                    f"Invalid {label} id in snapshot: {item_id}",
+                    reason=WorldStateCorruptionReason.INVARIANT_VIOLATION,
+                )
             if item_id in seen:
                 duplicates.add(item_id)
             seen.add(item_id)
 
         if duplicates:
             dupes = ", ".join(str(item_id) for item_id in sorted(duplicates))
-            raise ValueError(f"Duplicate {label} ids in snapshot: {dupes}")
+            raise WorldStateCorruptionError(
+                f"Duplicate {label} ids in snapshot: {dupes}",
+                reason=WorldStateCorruptionReason.INVARIANT_VIOLATION,
+            )
 
     def _validate_references(self, world: WorldSnapshotData, fleet_by_id: dict[int, Truck]) -> None:
         customer_ids = {customer.customer_id for customer in world.customers}
@@ -100,23 +123,36 @@ class WorldStateSnapshotValidator:
 
         for package in world.packages:
             if package.customer_id not in customer_ids:
-                raise ValueError(
-                    f"Package {package.package_id} references missing customer {package.customer_id}."
+                raise WorldStateCorruptionError(
+                    f"Package {package.package_id} references missing customer {package.customer_id}.",
+                    reason=WorldStateCorruptionReason.INVALID_REFERENCES,
                 )
             if package.route_id is not None and package.route_id not in route_ids:
-                raise ValueError(f"Package {package.package_id} references missing route {package.route_id}.")
+                raise WorldStateCorruptionError(
+                    f"Package {package.package_id} references missing route {package.route_id}.",
+                    reason=WorldStateCorruptionReason.INVALID_REFERENCES,
+                )
 
         for route in world.routes:
             for package_id in route.package_ids:
                 if package_id not in package_ids:
-                    raise ValueError(f"Route {route.route_id} references missing package {package_id}.")
+                    raise WorldStateCorruptionError(
+                        f"Route {route.route_id} references missing package {package_id}.",
+                        reason=WorldStateCorruptionReason.INVALID_REFERENCES,
+                    )
             truck_vehicle_id = route.truck_vehicle_id
             if truck_vehicle_id is None:
                 continue
             if truck_vehicle_id not in fleet_by_id:
-                raise ValueError(f"Route {route.route_id} references missing truck {truck_vehicle_id}.")
+                raise WorldStateCorruptionError(
+                    f"Route {route.route_id} references missing truck {truck_vehicle_id}.",
+                    reason=WorldStateCorruptionReason.INVALID_REFERENCES,
+                )
             if truck_vehicle_id in assigned_truck_ids:
-                raise ValueError(f"Truck {truck_vehicle_id} is assigned to multiple routes in snapshot.")
+                raise WorldStateCorruptionError(
+                    f"Truck {truck_vehicle_id} is assigned to multiple routes in snapshot.",
+                    reason=WorldStateCorruptionReason.INVALID_REFERENCES,
+                )
             assigned_truck_ids.add(truck_vehicle_id)
 
     def _validate_truck_snapshots(
@@ -133,17 +169,29 @@ class WorldStateSnapshotValidator:
 
         for truck in world.trucks:
             if truck.vehicle_id < 1:
-                raise ValueError(f"Invalid truck id in snapshot: {truck.vehicle_id}")
+                raise WorldStateCorruptionError(
+                    f"Invalid truck id in snapshot: {truck.vehicle_id}",
+                    reason=WorldStateCorruptionReason.INVARIANT_VIOLATION,
+                )
 
             if truck.vehicle_id in seen_truck_ids:
-                raise ValueError(f"Duplicate truck id in snapshot: {truck.vehicle_id}")
+                raise WorldStateCorruptionError(
+                    f"Duplicate truck id in snapshot: {truck.vehicle_id}",
+                    reason=WorldStateCorruptionReason.INVARIANT_VIOLATION,
+                )
             seen_truck_ids.add(truck.vehicle_id)
 
             if truck.vehicle_id not in fleet_ids:
-                raise ValueError(f"Snapshot references missing truck {truck.vehicle_id}.")
+                raise WorldStateCorruptionError(
+                    f"Snapshot references missing truck {truck.vehicle_id}.",
+                    reason=WorldStateCorruptionReason.INVALID_REFERENCES,
+                )
 
             if truck.status not in TruckStatus.values():
-                raise ValueError(f"Truck {truck.vehicle_id} has invalid status {truck.status!r}.")
+                raise WorldStateCorruptionError(
+                    f"Truck {truck.vehicle_id} has invalid status {truck.status!r}.",
+                    reason=WorldStateCorruptionReason.INVARIANT_VIOLATION,
+                )
 
             status = TruckStatus(truck.status)
             self._validate_truck_snapshot_locations(truck)
@@ -152,51 +200,70 @@ class WorldStateSnapshotValidator:
             if truck.route_id is not None:
                 expected_route_id = route_trucks.get(truck.vehicle_id)
                 if expected_route_id != truck.route_id:
-                    raise ValueError(
+                    raise WorldStateCorruptionError(
                         f"Truck {truck.vehicle_id} points to route {truck.route_id}, "
-                        f"but route assignment points to {expected_route_id}."
+                        f"but route assignment points to {expected_route_id}.",
+                        reason=WorldStateCorruptionReason.INVALID_REFERENCES,
                     )
 
         if schema_version == 2:
             missing_truck_ids = fleet_ids - seen_truck_ids
             if missing_truck_ids:
                 missing = ", ".join(str(truck_id) for truck_id in sorted(missing_truck_ids))
-                raise ValueError(f"Schema v2 snapshot is missing truck snapshots: {missing}.")
+                raise WorldStateCorruptionError(
+                    f"Schema v2 snapshot is missing truck snapshots: {missing}.",
+                    reason=WorldStateCorruptionReason.INVALID_STRUCTURE,
+                )
 
         trucks_by_snapshot_id = {truck.vehicle_id: truck for truck in world.trucks}
 
         for truck_vehicle_id, route_id in route_trucks.items():
             truck_snapshot = trucks_by_snapshot_id.get(truck_vehicle_id)
             if truck_snapshot is not None and truck_snapshot.route_id != route_id:
-                raise ValueError(
+                raise WorldStateCorruptionError(
                     f"Route {route_id} assigns truck {truck_vehicle_id}, "
-                    f"but truck snapshot points to route {truck_snapshot.route_id}."
+                    f"but truck snapshot points to route {truck_snapshot.route_id}.",
+                    reason=WorldStateCorruptionReason.INVALID_REFERENCES,
                 )
 
     @staticmethod
     def _validate_truck_snapshot_locations(truck: TruckSnapshot) -> None:
         if truck.current_location is not None and not Map.is_valid_location(truck.current_location):
-            raise ValueError(
-                f"Truck {truck.vehicle_id} has unsupported current location {truck.current_location}."
+            raise WorldStateCorruptionError(
+                f"Truck {truck.vehicle_id} has unsupported current location {truck.current_location}.",
+                reason=WorldStateCorruptionReason.INVARIANT_VIOLATION,
             )
 
         if truck.in_transit_to is not None and not Map.is_valid_location(truck.in_transit_to):
-            raise ValueError(
-                f"Truck {truck.vehicle_id} has unsupported transit destination {truck.in_transit_to}."
+            raise WorldStateCorruptionError(
+                f"Truck {truck.vehicle_id} has unsupported transit destination {truck.in_transit_to}.",
+                reason=WorldStateCorruptionReason.INVARIANT_VIOLATION,
             )
 
     @staticmethod
     def _validate_truck_snapshot_runtime_state(truck: TruckSnapshot, status: TruckStatus) -> None:
         if status == TruckStatus.FREE:
             if truck.route_id is not None:
-                raise ValueError(f"Free truck {truck.vehicle_id} cannot point to route {truck.route_id}.")
+                raise WorldStateCorruptionError(
+                    f"Free truck {truck.vehicle_id} cannot point to route {truck.route_id}.",
+                    reason=WorldStateCorruptionReason.INVARIANT_VIOLATION,
+                )
             if truck.busy_from is not None or truck.busy_until is not None:
-                raise ValueError(f"Free truck {truck.vehicle_id} cannot have a busy window.")
+                raise WorldStateCorruptionError(
+                    f"Free truck {truck.vehicle_id} cannot have a busy window.",
+                    reason=WorldStateCorruptionReason.INVARIANT_VIOLATION,
+                )
             if truck.in_transit_to is not None:
-                raise ValueError(f"Free truck {truck.vehicle_id} cannot be in transit.")
+                raise WorldStateCorruptionError(
+                    f"Free truck {truck.vehicle_id} cannot be in transit.",
+                    reason=WorldStateCorruptionReason.INVARIANT_VIOLATION,
+                )
 
         if status == TruckStatus.ON_THE_WAY and truck.route_id is None:
-            raise ValueError(f"On-the-way truck {truck.vehicle_id} must point to a route.")
+            raise WorldStateCorruptionError(
+                f"On-the-way truck {truck.vehicle_id} must point to a route.",
+                reason=WorldStateCorruptionReason.INVARIANT_VIOLATION,
+            )
 
     def _validate_route_package_consistency(self, world: WorldSnapshotData) -> None:
         route_packages: dict[int, set[int]] = {route.route_id: set(route.package_ids) for route in world.routes}
@@ -207,18 +274,20 @@ class WorldStateSnapshotValidator:
                 continue
 
             if package.package_id not in route_packages.get(package.route_id, set()):
-                raise ValueError(
+                raise WorldStateCorruptionError(
                     f"Package {package.package_id} points to route {package.route_id}, "
-                    "but the route does not include that package."
+                    "but the route does not include that package.",
+                    reason=WorldStateCorruptionReason.INVALID_REFERENCES,
                 )
 
         for route in world.routes:
             for package_id in route.package_ids:
                 package_route_id = package_route_ids.get(package_id)
                 if package_route_id != route.route_id:
-                    raise ValueError(
+                    raise WorldStateCorruptionError(
                         f"Route {route.route_id} includes package {package_id}, "
-                        f"but the package points to route {package_route_id}."
+                        f"but the package points to route {package_route_id}.",
+                        reason=WorldStateCorruptionReason.INVALID_REFERENCES,
                     )
 
     def _validate_truck_route_compatibility(
@@ -233,25 +302,28 @@ class WorldStateSnapshotValidator:
                 continue
 
             if route.departure_time is None:
-                raise ValueError(
+                raise WorldStateCorruptionError(
                     f"Route {route.route_id} assigns truck {truck_vehicle_id}, "
-                    "but the route has no departure time."
+                    "but the route has no departure time.",
+                    reason=WorldStateCorruptionReason.INVARIANT_VIOLATION,
                 )
 
             truck = trucks_by_id[truck_vehicle_id]
 
             max_segment_load = self._route_max_segment_load(route, packages_by_id)
             if max_segment_load > truck.capacity:
-                raise ValueError(
+                raise WorldStateCorruptionError(
                     f"Route {route.route_id} assigns truck {truck_vehicle_id}, "
-                    f"but segment load {max_segment_load} exceeds capacity {truck.capacity}."
+                    f"but segment load {max_segment_load} exceeds capacity {truck.capacity}.",
+                    reason=WorldStateCorruptionReason.INVARIANT_VIOLATION,
                 )
 
             total_distance = self._route_distance_km(route.locations)
             if total_distance > truck.max_range:
-                raise ValueError(
+                raise WorldStateCorruptionError(
                     f"Route {route.route_id} assigns truck {truck_vehicle_id}, "
-                    f"but route distance {total_distance} exceeds range {truck.max_range}."
+                    f"but route distance {total_distance} exceeds range {truck.max_range}.",
+                    reason=WorldStateCorruptionReason.INVARIANT_VIOLATION,
                 )
 
     @staticmethod
@@ -292,17 +364,19 @@ class WorldStateSnapshotValidator:
 
             if email:
                 if email in seen_emails:
-                    raise ValueError(
+                    raise WorldStateCorruptionError(
                         f"Duplicate customer email in snapshot: {customer.email!r} "
-                        f"used by customers {seen_emails[email]} and {customer.customer_id}."
+                        f"used by customers {seen_emails[email]} and {customer.customer_id}.",
+                        reason=WorldStateCorruptionReason.INVARIANT_VIOLATION,
                     )
                 seen_emails[email] = customer.customer_id
 
             if phone:
                 if phone in seen_phones:
-                    raise ValueError(
+                    raise WorldStateCorruptionError(
                         f"Duplicate customer phone in snapshot: {customer.phone!r} "
-                        f"used by customers {seen_phones[phone]} and {customer.customer_id}."
+                        f"used by customers {seen_phones[phone]} and {customer.customer_id}.",
+                        reason=WorldStateCorruptionReason.INVARIANT_VIOLATION,
                     )
                 seen_phones[phone] = customer.customer_id
 
@@ -325,8 +399,9 @@ class WorldStateSnapshotValidator:
 
     def _validate_next_id(self, *, label: str, next_id: int, existing_ids: list[int]) -> None:
         if existing_ids and next_id <= max(existing_ids):
-            raise ValueError(
-                f"Invalid next_{label}_id in snapshot: {next_id} must be greater than existing {label} ids."
+            raise WorldStateCorruptionError(
+                f"Invalid next_{label}_id in snapshot: {next_id} must be greater than existing {label} ids.",
+                reason=WorldStateCorruptionReason.INVARIANT_VIOLATION,
             )
 
     def _validate_route_package_compatibility(self, world: WorldSnapshotData) -> None:
@@ -340,18 +415,21 @@ class WorldStateSnapshotValidator:
             locations = route.locations
 
             if package.start not in locations:
-                raise ValueError(
+                raise WorldStateCorruptionError(
                     f"Package {package.package_id} starts at {package.start}, "
-                    f"which is not on route {route.route_id}."
+                    f"which is not on route {route.route_id}.",
+                    reason=WorldStateCorruptionReason.INVARIANT_VIOLATION,
                 )
 
             if package.end not in locations:
-                raise ValueError(
+                raise WorldStateCorruptionError(
                     f"Package {package.package_id} ends at {package.end}, "
-                    f"which is not on route {route.route_id}."
+                    f"which is not on route {route.route_id}.",
+                    reason=WorldStateCorruptionReason.INVARIANT_VIOLATION,
                 )
 
             if locations.index(package.start) >= locations.index(package.end):
-                raise ValueError(
-                    f"Package {package.package_id} has invalid location order on route {route.route_id}."
+                raise WorldStateCorruptionError(
+                    f"Package {package.package_id} has invalid location order on route {route.route_id}.",
+                    reason=WorldStateCorruptionReason.INVARIANT_VIOLATION,
                 )

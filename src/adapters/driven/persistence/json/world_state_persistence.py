@@ -17,6 +17,7 @@ from src.application.dto.world_state_snapshot_dto import (
     WorldSnapshotData,
     WorldStateSnapshot,
 )
+from src.application.enums.world_state_corruption_reasons import WorldStateCorruptionReason
 from src.application.exceptions.world_state_errors import (
     WorldStateCorruptionError,
     WorldStateFileNotFoundError,
@@ -92,14 +93,13 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
             with open(abs_path, encoding="utf-8") as file:
                 raw: object = json.load(file)
         except json.JSONDecodeError as exc:
-            raise WorldStateCorruptionError(f"Malformed world state JSON: {abs_path}") from exc
+            raise WorldStateCorruptionError(
+                f"Malformed world state JSON: {abs_path}", reason=WorldStateCorruptionReason.MALFORMED_JSON
+            ) from exc
         except OSError as exc:
             raise WorldStatePersistenceError(f"Could not read world state file: {abs_path}") from exc
 
-        try:
-            snapshot = self._snapshot_from_raw(raw)
-        except (KeyError, TypeError, ValueError) as exc:
-            raise WorldStateCorruptionError(f"Malformed world state JSON: {abs_path}") from exc
+        snapshot = self._snapshot_from_raw(raw)
 
         logger.info("World-state JSON snapshot read from %r.", abs_path)
         return abs_path, snapshot
@@ -110,8 +110,19 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
 
     def _snapshot_from_raw(self, raw: object) -> WorldStateSnapshot:
         """Build a snapshot DTO from canonical or legacy JSON payloads."""
-        raw_dict = self._require_mapping(raw)
-        schema_version = self._require_int(raw_dict, "schema_version")
+        try:
+            raw_dict = self._require_mapping(raw)
+            schema_version = self._require_int(raw_dict, "schema_version")
+        except TypeError as exc:
+            raise WorldStateCorruptionError(
+                str(exc), reason=WorldStateCorruptionReason.INVALID_STRUCTURE
+            ) from exc
+
+        if schema_version not in (1, 2):
+            raise WorldStateCorruptionError(
+                f"Unsupported world state schema version: {schema_version}.",
+                reason=WorldStateCorruptionReason.UNSUPPORTED_SCHEMA,
+            )
 
         legacy_sections = ("counters", "customers", "packages", "routes")
         present_legacy_sections = [section for section in legacy_sections if section in raw_dict]
@@ -120,18 +131,30 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
 
         if world_obj is None:
             if schema_version != 1:
-                raise ValueError("Legacy flat world state payload is only supported for schema version 1.")
+                raise WorldStateCorruptionError(
+                    "Legacy flat world state payload is only supported for schema version 1.",
+                    reason=WorldStateCorruptionReason.UNSUPPORTED_SCHEMA,
+                )
 
             if "trucks" in raw_dict:
-                raise ValueError("Schema v1 world state payloads do not support truck snapshots.")
+                raise WorldStateCorruptionError(
+                    "Schema v1 world state payloads do not support truck snapshots.",
+                    reason=WorldStateCorruptionReason.INVALID_STRUCTURE,
+                )
 
             if not present_legacy_sections:
-                raise ValueError("World state payload must contain 'world' or complete legacy sections.")
+                raise WorldStateCorruptionError(
+                    "World state payload must contain 'world' or complete legacy sections.",
+                    reason=WorldStateCorruptionReason.INVALID_STRUCTURE,
+                )
 
             missing_sections = [section for section in legacy_sections if section not in raw_dict]
             if missing_sections:
                 missing = ", ".join(missing_sections)
-                raise ValueError(f"Legacy world state payload is missing required section(s): {missing}.")
+                raise WorldStateCorruptionError(
+                    f"Legacy world state payload is missing required section(s): {missing}.",
+                    reason=WorldStateCorruptionReason.INVALID_STRUCTURE,
+                )
 
             world_dict = {
                 "counters": raw_dict["counters"],
@@ -141,33 +164,58 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
                 "trucks": raw_dict.get("trucks", []),
             }
         else:
-            world_dict = self._require_mapping(world_obj)
+            try:
+                world_dict = self._require_mapping(world_obj)
+            except TypeError as exc:
+                raise WorldStateCorruptionError(
+                    str(exc), reason=WorldStateCorruptionReason.INVALID_STRUCTURE
+                ) from exc
+
             if schema_version == 1 and "trucks" in world_dict:
-                raise ValueError("Schema v1 world state payloads do not support truck snapshots.")
+                raise WorldStateCorruptionError(
+                    "Schema v1 world state payloads do not support truck snapshots.",
+                    reason=WorldStateCorruptionReason.INVALID_STRUCTURE,
+                )
             if schema_version == 2 and "trucks" not in world_dict:
-                raise ValueError("Schema v2 world state payloads require truck snapshots.")
+                raise WorldStateCorruptionError(
+                    "Schema v2 world state payloads require truck snapshots.",
+                    reason=WorldStateCorruptionReason.INVALID_STRUCTURE,
+                )
+        try:
+            counters_raw = self._require_mapping(world_dict.get("counters"))
+            customers_raw = self._require_list(world_dict.get("customers"))
+            packages_raw = self._require_list(world_dict.get("packages"))
+            routes_raw = self._require_list(world_dict.get("routes"))
+            trucks_raw = self._require_list(world_dict.get("trucks", []))
+        except TypeError as exc:
+            raise WorldStateCorruptionError(
+                str(exc), reason=WorldStateCorruptionReason.INVALID_STRUCTURE
+            ) from exc
 
-        counters_raw = self._require_mapping(world_dict.get("counters"))
-        customers_raw = self._require_list(world_dict.get("customers"))
-        packages_raw = self._require_list(world_dict.get("packages"))
-        routes_raw = self._require_list(world_dict.get("routes"))
-        trucks_raw = self._require_list(world_dict.get("trucks", []))
-
-        return WorldStateSnapshot(
-            schema_version=schema_version,
-            world=WorldSnapshotData(
-                counters=CountersSnapshot(
-                    next_customer_id=self._require_int(counters_raw, "next_customer_id"),
-                    next_package_id=self._require_int(counters_raw, "next_package_id"),
-                    next_route_id=self._require_int(counters_raw, "next_route_id"),
+        try:
+            return WorldStateSnapshot(
+                schema_version=schema_version,
+                world=WorldSnapshotData(
+                    counters=CountersSnapshot(
+                        next_customer_id=self._require_int(counters_raw, "next_customer_id"),
+                        next_package_id=self._require_int(counters_raw, "next_package_id"),
+                        next_route_id=self._require_int(counters_raw, "next_route_id"),
+                    ),
+                    customers=tuple(self._customer_snapshot_from_raw(obj) for obj in customers_raw),
+                    packages=tuple(self._package_snapshot_from_raw(obj) for obj in packages_raw),
+                    routes=tuple(self._route_snapshot_from_raw(obj) for obj in routes_raw),
+                    trucks=tuple(self._truck_snapshot_from_raw(obj) for obj in trucks_raw),
                 ),
-                customers=tuple(self._customer_snapshot_from_raw(obj) for obj in customers_raw),
-                packages=tuple(self._package_snapshot_from_raw(obj) for obj in packages_raw),
-                routes=tuple(self._route_snapshot_from_raw(obj) for obj in routes_raw),
-                trucks=tuple(self._truck_snapshot_from_raw(obj) for obj in trucks_raw),
-            ),
-            users=None,
-        )
+                users=None,
+            )
+        except TypeError as exc:
+            raise WorldStateCorruptionError(
+                str(exc), reason=WorldStateCorruptionReason.INVALID_STRUCTURE
+            ) from exc
+        except ValueError as exc:
+            raise WorldStateCorruptionError(
+                str(exc), reason=WorldStateCorruptionReason.INVARIANT_VIOLATION
+            ) from exc
 
     def _customer_snapshot_from_raw(self, raw: object) -> CustomerSnapshot:
         data = self._require_mapping(raw)
