@@ -1408,7 +1408,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
         )
 
         with patch(
-            "src.application.services.world_snapshot_validator.Map.is_valid_location",
+            "src.application.services.validators.truck_snapshot_validator.Map.is_valid_location",
             side_effect=_valid_location_except_moon,
         ):
             self.assert_corrupt(snapshot, "unsupported current location MOON")
@@ -1432,7 +1432,7 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
         )
 
         with patch(
-            "src.application.services.world_snapshot_validator.Map.is_valid_location",
+            "src.application.services.validators.truck_snapshot_validator.Map.is_valid_location",
             side_effect=_valid_location_except_moon,
         ):
             self.assert_corrupt(snapshot, "unsupported transit destination MOON")
