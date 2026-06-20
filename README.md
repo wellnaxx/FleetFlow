@@ -23,12 +23,14 @@ FleetFlow currently supports:
 - JWT access/refresh tokens for HTTP authentication, with token-version revocation.
 - Typed domain, application, and repository errors for expected validation, not-found, conflict, authentication, and persistence failures.
 - Global FastAPI exception handlers that map expected application/domain failures to stable, sanitized HTTP responses.
+- Immutable domain and application event types with per-entity/use-case pending-event recording, event checkpoints for rollback, and context-local envelope metadata.
 - Role-based authorization around CLI commands and application use cases.
 - Password hashing with PBKDF2-HMAC and strict persisted password-hash validation.
 - Configurable application logging to stdout and optional rotating log files, including HTTP request duration/status logging.
 - Environment-selected in-memory or PostgreSQL logistics persistence backend.
 - Manual save/load plus autosave after mutating commands when autosave is enabled.
 - Versioned JSON world-state snapshots containing customers, packages, routes, repository counters, and truck runtime state.
+- Reasoned world-state corruption handling that distinguishes malformed JSON, invalid structure, unsupported schema, invalid references, and invariant violations.
 - PostgreSQL world-state export/import through the same JSON snapshot format.
 - Startup recovery for default saved state: missing state is ignored, corrupt state is quarantined, and unexpected runtime errors still fail loudly.
 - A Postman/Newman collection covering authentication, authorization, logistics workflows, state import/export, validation, and token revocation.
@@ -55,22 +57,27 @@ FleetFlow/
 |   |       `-- http/             # FastAPI app, routers, schemas, request dependencies
 |   |-- application/
 |   |   |-- dto/                  # persisted snapshot and runtime transfer objects
+|   |   |-- enums/                # application-level classifications and reasons
+|   |   |-- eventing/             # execution context and event envelopes
+|   |   |-- events/               # immutable application event definitions
 |   |   |-- exceptions/           # application and world-state exception hierarchy
 |   |   |-- models/               # persisted application models such as UserRecord
 |   |   |-- results/              # use-case/service result objects
 |   |   |-- services/             # auth, authorization, heartbeat, reconciliation, snapshot services
+|   |   |   `-- validators/       # focused world-state schema, identity, reference, truck, and compatibility validators
 |   |   `-- use_cases/            # auth, package, route, truck, customer, and state workflows
 |   |-- composition/              # dependency container / composition root
 |   |-- domain/
 |   |   |-- entities/             # customers, packages, routes, trucks, users
 |   |   |-- enums/                # roles, permissions, item/route/truck statuses
+|   |   |-- events/               # immutable domain event definitions
 |   |   |-- exceptions.py         # typed domain validation, not-found, and conflict errors
 |   |   |-- services/             # Map and VehicleManager domain services
 |   |   `-- value_objects/        # ContactInfo, LocationCode
 |   |-- ports/
 |   |   |-- input/                # reserved for future input-port abstractions
 |   |   `-- output/               # repository, persistence, runtime, and vehicle ports
-|   `-- shared/                   # environment-variable helpers
+|   `-- shared/                   # environment helpers and generic event primitives
 |-- tests/
 |-- postman/                      # API collection, local environment, and runner notes
 |-- cli_main.py                  # CLI entrypoint
@@ -139,6 +146,18 @@ FleetFlow enforces the main logistics invariants in the domain and application l
 
 Expected domain failures use typed exceptions. Validation problems, missing domain entities, and conflict/business-rule failures are translated by application use cases and global HTTP exception handlers into stable CLI/API-facing messages instead of relying on raw `ValueError` text.
 
+## Events And Observability
+
+FleetFlow has an event-recording foundation for business facts and application workflows.
+
+- Domain entities record pending events for customer, package, and route lifecycle changes, including creation, assignment, detachment, pickup, delivery, scheduling, truck assignment/release, route start/completion, and removal.
+- Event-aware use cases record authentication, authorization-denial, and world-state import/export events.
+- Events are immutable and share an event id, business `occurred_at` timestamp, and UTC `recorded_at` timestamp.
+- Event checkpoints allow pending events to be rolled back with failed in-memory mutations.
+- `EventContext`, `EventActor`, and `EventEnvelope` provide correlation, source, actor, and causation metadata through `ContextVar`-local workflow context.
+
+Events are currently recorded in memory on the relevant entity or use case. FleetFlow does not yet include an event dispatcher, subscribers, an outbox, or durable audit-log persistence. Those are the next layers needed before events become externally observable or queryable.
+
 ## World-State Persistence
 
 FleetFlow stores local JSON files under the repository's `data/` directory by default:
@@ -169,13 +188,22 @@ The application-level snapshot preparation pipeline is shared by the in-memory a
 
 ```text
 WorldStateSnapshot
-  -> schema/version validation
-  -> graph invariant validation
+  -> schema, identity, reference, truck, compatibility, and customer validation
   -> rebuild detached candidate world
   -> link package/route/truck relationships
   -> reconcile route, package, and truck runtime state
   -> produce ReconciledWorld
 ```
+
+Snapshot corruption is represented by `WorldStateCorruptionError` with one stable reason:
+
+- `MALFORMED_JSON`: the source is not valid JSON.
+- `INVALID_STRUCTURE`: the JSON or versioned snapshot shape is invalid.
+- `UNSUPPORTED_SCHEMA`: the snapshot declares a schema version FleetFlow does not support.
+- `INVALID_REFERENCES`: ids or bidirectional links between snapshot records do not agree.
+- `INVARIANT_VIOLATION`: structurally valid data violates domain or runtime-state rules.
+
+`WorldStateSnapshotValidator` orchestrates focused validators for schema, identity/counters, references, truck runtime state, route/package and truck/route compatibility, and customer contact uniqueness. The same reason is preserved through rebuilding, linking, and reconciliation so `LoadWorldStateUseCase` can record `WorldStateCorruptionDetected` and `WorldStateImportFailed` pending application events without parsing error text.
 
 For the in-memory backend:
 
@@ -646,9 +674,9 @@ Remaining work includes operational migration tooling, stronger integration cove
 
 ### Audit log and domain events
 
-FleetFlow could record important completed actions, such as package assignment, route scheduling, truck dispatch, truck release, package delivery, login events, and world-state loads.
+FleetFlow already defines and records pending domain and application events for important actions such as package assignment, route scheduling, truck dispatch/release, package delivery, authentication, authorization denial, and world-state import/export. Event envelopes and context metadata are also available for correlation and actor attribution.
 
-A simple PostgreSQL-backed `audit_log` or `domain_events` table would be enough at first. External event brokers such as Kafka or Redis Streams would only make sense later if the project needed higher-volume event processing.
+The next step is dispatch: drain pending events after successful workflow completion, wrap them in the current event context, and invoke subscribers. A simple PostgreSQL-backed `audit_log` or outbox table would be enough for the first durable subscriber. External brokers such as Kafka or Redis Streams would only make sense later if the project needed higher-volume event processing or cross-service integration.
 
 ### Background jobs
 
