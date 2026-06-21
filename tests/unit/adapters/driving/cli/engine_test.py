@@ -46,6 +46,70 @@ class EngineTests(unittest.TestCase):
 
         self.assertIs(authz.current_user, auth.current_user)
 
+    def test_start_dispatches_main_menu_action_and_exits(self) -> None:
+        engine, _factory, _auth, _authz, _save_world, _advance = self.make_engine()
+
+        with (
+            patch.object(engine, "_exec_line") as mock_exec_line,
+            patch("builtins.input", side_effect=["4", "0"]),
+        ):
+            engine.start()
+
+        mock_exec_line.assert_called_once_with("viewallcustomers")
+        self.assertFalse(engine._running)  # pyright: ignore[reportPrivateUsage]
+
+    def test_start_accepts_command_mode_alias(self) -> None:
+        engine, _factory, _auth, _authz, _save_world, _advance = self.make_engine()
+
+        with (
+            patch.object(engine, "_command_mode") as mock_command_mode,
+            patch("builtins.input", side_effect=["command", "0"]),
+        ):
+            engine.start()
+
+        mock_command_mode.assert_called_once_with()
+
+    def test_start_reports_invalid_main_menu_choice(self) -> None:
+        engine, _factory, _auth, _authz, _save_world, _advance = self.make_engine()
+
+        with (
+            patch("builtins.print") as mock_print,
+            patch("builtins.input", side_effect=["invalid", "0"]),
+        ):
+            engine.start()
+
+        mock_print.assert_any_call("Invalid option. Type a number from the menu, or 'cmd' for command mode.")
+
+    def test_submenu_input_interrupt_returns_to_main_menu(self) -> None:
+        engine, _factory, _auth, _authz, _save_world, _advance = self.make_engine()
+
+        with (
+            patch("builtins.print") as mock_print,
+            patch("builtins.input", side_effect=KeyboardInterrupt),
+        ):
+            engine._menu_packages()  # pyright: ignore[reportPrivateUsage]
+
+        mock_print.assert_any_call("\n(back to main menu)")
+
+    def test_submenu_action_interrupt_keeps_submenu_open(self) -> None:
+        engine, _factory, _auth, _authz, _save_world, _advance = self.make_engine()
+        render = MagicMock()
+        action = MagicMock(side_effect=KeyboardInterrupt)
+
+        with (
+            patch("builtins.print") as mock_print,
+            patch("builtins.input", side_effect=["1", "0"]),
+        ):
+            engine._run_submenu(  # pyright: ignore[reportPrivateUsage]
+                render=render,
+                actions={"1": action},
+                name="Packages",
+            )
+
+        action.assert_called_once_with()
+        self.assertEqual(render.call_count, 2)
+        mock_print.assert_any_call("\n(cancelled Packages operation)")
+
     def test_exec_line_runs_heartbeat_for_normal_command(self) -> None:
         engine, factory, _auth, _authz, _save_world, advance = self.make_engine()
 
@@ -256,6 +320,35 @@ class EngineTests(unittest.TestCase):
         save_world.execute.assert_not_called()
         mock_print.assert_called_once_with("Loaded state.")
 
+    def test_start_retries_invalid_main_menu_choice_before_exiting(self) -> None:
+        engine, _factory, _auth, _authz, _save_world, _advance = self.make_engine()
+
+        with (
+            patch("builtins.input", side_effect=["unknown", "0"]),
+            patch("builtins.print") as mock_print,
+        ):
+            engine.start()
+
+        self.assertFalse(engine._running)  # pyright: ignore[reportPrivateUsage]
+        self.assertIn(
+            "Invalid option. Type a number from the menu, or 'cmd' for command mode.",
+            [call.args[0] for call in mock_print.call_args_list],
+        )
+        self.assertIn("Goodbye!", [call.args[0] for call in mock_print.call_args_list])
+
+    def test_menu_packages_retries_invalid_choice(self) -> None:
+        engine, _factory, _auth, _authz, _save_world, _advance = self.make_engine()
+
+        with (
+            patch("builtins.input", side_effect=["unknown", "0"]),
+            patch.object(engine, "_exec_line") as mock_exec_line,
+            patch("builtins.print") as mock_print,
+        ):
+            engine._menu_packages()  # pyright: ignore[reportPrivateUsage]
+
+        mock_exec_line.assert_not_called()
+        self.assertIn("Invalid option.", [call.args[0] for call in mock_print.call_args_list])
+
     def test_menu_state_quotes_save_paths_with_spaces(self) -> None:
         engine, _factory, _auth, _authz, _save_world, _advance = self.make_engine()
 
@@ -288,6 +381,30 @@ class EngineTests(unittest.TestCase):
             engine._menu_state()  # pyright: ignore[reportPrivateUsage]
 
         mock_command_mode.assert_called_once_with()
+
+    def test_menu_state_reprompts_from_menu_after_blank_path(self) -> None:
+        engine, _factory, _auth, _authz, _save_world, _advance = self.make_engine()
+
+        with (
+            patch("builtins.input", side_effect=["1", "", "0"]),
+            patch.object(engine, "_exec_line") as mock_exec_line,
+            patch("builtins.print") as mock_print,
+        ):
+            engine._menu_state()  # pyright: ignore[reportPrivateUsage]
+
+        mock_exec_line.assert_not_called()
+        self.assertIn("No file name entered.", [call.args[0] for call in mock_print.call_args_list])
+
+    def test_menu_trucks_dispatches_view_all_action(self) -> None:
+        engine, _factory, _auth, _authz, _save_world, _advance = self.make_engine()
+
+        with (
+            patch("builtins.input", side_effect=["1", "0"]),
+            patch.object(engine, "_exec_line") as mock_exec_line,
+        ):
+            engine._menu_trucks()  # pyright: ignore[reportPrivateUsage]
+
+        mock_exec_line.assert_called_once_with("viewalltrucks")
 
     def test_menu_packages_quotes_customer_name_with_spaces(self) -> None:
         engine, _factory, _auth, _authz, _save_world, _advance = self.make_engine()
