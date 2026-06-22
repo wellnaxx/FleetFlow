@@ -3,6 +3,7 @@
 from datetime import datetime
 
 from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
+from src.adapters.driving.cli.rendering.route_info_renderer import render_route_info
 from src.application.use_cases.routes.view_routes_in_progress import ViewRoutesInProgressUseCase
 from src.domain.entities.delivery_route import RoutePositionKind
 
@@ -26,7 +27,7 @@ class ViewRoutesInProgress(BaseCommand[ViewRoutesInProgressUseCase]):
 
         lines: list[str] = []
         for route, pos in active:
-            lines.append(route.info())
+            lines.append(render_route_info(route, position=pos))
             if pos.kind == RoutePositionKind.IN_TRANSIT:
                 lines.append(f"  >> Currently between {pos.from_city} → {pos.to_city}, ETA {pos.next_eta}")
             elif pos.kind == RoutePositionKind.AT_STOP:

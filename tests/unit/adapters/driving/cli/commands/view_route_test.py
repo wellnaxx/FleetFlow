@@ -23,12 +23,17 @@ class ViewRoute_Should(unittest.TestCase):
 
     @patch("src.adapters.driving.cli.commands.view_route.validate_params_exact")
     @patch("src.adapters.driving.cli.commands.view_route.try_parse_int")
-    def test_success_returns_route_info(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
+    @patch("src.adapters.driving.cli.commands.view_route.render_route_info", return_value="ROUTE-INFO")
+    def test_success_returns_route_info(
+        self,
+        mock_render: MagicMock,
+        mock_parse: MagicMock,
+        mock_validate: MagicMock,
+    ) -> None:
         mock_parse.return_value = 12
         cmd = self.make_cmd(["12"])
 
         route = MagicMock()
-        route.info.return_value = "ROUTE-INFO"
         cmd._use_case.execute.return_value = route  # type: ignore[reportAttributeAccessIssue]
 
         result = cmd.execute()
@@ -36,7 +41,7 @@ class ViewRoute_Should(unittest.TestCase):
         mock_validate.assert_called_once_with(("12",), 1)
         mock_parse.assert_called_once_with("12")
         cmd._use_case.execute.assert_called_once_with(12)  # type: ignore[reportUnknownMemberType]
-        route.info.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
+        mock_render.assert_called_once_with(route)
         self.assertEqual(result, "ROUTE-INFO")
 
     @patch("src.adapters.driving.cli.commands.view_route.validate_params_exact")
@@ -74,9 +79,9 @@ class ViewRoute_Should(unittest.TestCase):
         with (
             patch("src.adapters.driving.cli.commands.view_route.validate_params_exact") as mock_validate,
             patch("src.adapters.driving.cli.commands.view_route.try_parse_int", return_value=5),
+            patch("src.adapters.driving.cli.commands.view_route.render_route_info", return_value="ok"),
         ):
             route = MagicMock()
-            route.info.return_value = "ok"
             cmd._use_case.execute.return_value = route  # type: ignore[reportAttributeAccessIssue]
 
             _ = cmd.execute()
@@ -85,12 +90,17 @@ class ViewRoute_Should(unittest.TestCase):
 
     @patch("src.adapters.driving.cli.commands.view_route.validate_params_exact")
     @patch("src.adapters.driving.cli.commands.view_route.try_parse_int")
-    def test_ignores_extra_params_beyond_first(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
+    @patch("src.adapters.driving.cli.commands.view_route.render_route_info", return_value="ok")
+    def test_ignores_extra_params_beyond_first(
+        self,
+        _mock_render: MagicMock,
+        mock_parse: MagicMock,
+        mock_validate: MagicMock,
+    ) -> None:
         mock_parse.return_value = 1
         cmd = self.make_cmd(["1", "extra", "ignored"])
 
         route = MagicMock()
-        route.info.return_value = "ok"
         cmd._use_case.execute.return_value = route  # type: ignore[reportAttributeAccessIssue]
 
         _ = cmd.execute()

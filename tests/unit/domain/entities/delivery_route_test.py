@@ -774,31 +774,3 @@ class DeliveryRoute_Should(unittest.TestCase):
         self.assertIs(route.truck, truck)
         self.assertEqual(route.packages, (package,))
         self.assertEqual(route.arrival_time_at(LocationCode("AAA")), base)
-
-    def test_info_contains_key_lines(self, *_: object) -> None:
-        base = datetime(2025, 1, 1, 8, 0)
-        route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), LocationCode("CCC"), route_id=1)
-        route.schedule(base, occurred_at=EVENT_TIME)
-
-        info = route.info()
-
-        self.assertIn(f"Route ID: {route.route_id}", info)
-        self.assertIn("Truck ID: Not assigned", info)
-        self.assertIn("Start: AAA", info)
-        self.assertIn("End: CCC", info)
-        self.assertIn("Departure:", info)
-        self.assertIn("Total Distance: 300 km", info)
-        self.assertIn("Stops:", info)
-        self.assertIn("Assigned weight: 0.00 kg", info)
-
-        self.assertTrue(
-            any(
-                status_line in info
-                for status_line in [
-                    "Status: AT_STOP",
-                    "Status: IN_TRANSIT",
-                    "Status: BEFORE_START",
-                    "Status: AFTER_END",
-                ]
-            )
-        )

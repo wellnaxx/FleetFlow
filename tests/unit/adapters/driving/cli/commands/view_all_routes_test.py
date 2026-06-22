@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call, patch
 
 from src.adapters.driving.cli.commands.view_all_routes import ViewAllRoutes
 from src.application.use_cases.pagination import PageResult
@@ -31,14 +31,13 @@ class TestViewAllRoutes_Should(unittest.TestCase):
         self.assertEqual(result, "No routes available.")
         cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
 
-    def test_with_multiple_routes(self) -> None:
+    @patch("src.adapters.driving.cli.commands.view_all_routes.render_route_info")
+    def test_with_multiple_routes(self, mock_render: MagicMock) -> None:
         cmd = self.make_cmd()
 
         mock_route1 = MagicMock()
-        mock_route1.info.return_value = "Route 1 Info"
-
         mock_route2 = MagicMock()
-        mock_route2.info.return_value = "Route 2 Info"
+        mock_render.side_effect = ["Route 1 Info", "Route 2 Info"]
 
         cmd._use_case.execute.return_value = PageResult(  # type: ignore[reportAttributeAccessIssue]
             items=(mock_route1, mock_route2),
@@ -51,8 +50,7 @@ class TestViewAllRoutes_Should(unittest.TestCase):
 
         self.assertEqual(result, "Route 1 Info\n\nRoute 2 Info")
         cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
-        mock_route1.info.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
-        mock_route2.info.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
+        mock_render.assert_has_calls([call(mock_route1), call(mock_route2)])
 
     def test_execute_propagates_errors_from_use_case(self) -> None:
         cmd = self.make_cmd()

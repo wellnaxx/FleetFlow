@@ -13,10 +13,8 @@ class ViewRoutesInProgress_Should(unittest.TestCase):
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
-    def _mk_route(self, text: str) -> MagicMock:
-        r = MagicMock()
-        r.info.return_value = text
-        return r
+    def _mk_route(self) -> MagicMock:
+        return MagicMock()
 
     def test_execute_propagates_permission_errors_from_use_case(self) -> None:
         cmd = self.make_cmd()
@@ -42,18 +40,24 @@ class ViewRoutesInProgress_Should(unittest.TestCase):
         self.assertEqual(out, "No routes in progress.")
 
     @patch("src.adapters.driving.cli.commands.view_routes_in_progress.datetime")
-    def test_formats_in_transit_and_at_stop(self, mock_dt: MagicMock) -> None:
+    @patch("src.adapters.driving.cli.commands.view_routes_in_progress.render_route_info")
+    def test_formats_in_transit_and_at_stop(
+        self,
+        mock_render: MagicMock,
+        mock_dt: MagicMock,
+    ) -> None:
         fixed_now = datetime(2025, 9, 27, 11, 30)
         mock_dt.now.return_value = fixed_now
 
         cmd = self.make_cmd()
 
-        route1 = self._mk_route("Route 7: SYD → MEL")
+        route1 = self._mk_route()
         pos1 = SimpleNamespace(kind="IN_TRANSIT", from_city="SYD", to_city="MEL", next_eta="2025-10-12 06:00")
 
-        route2 = self._mk_route("Route 9: MEL → ADL")
+        route2 = self._mk_route()
         pos2 = SimpleNamespace(kind="AT_STOP", stop_city="MEL")
 
+        mock_render.side_effect = ["Route 7: SYD → MEL", "Route 9: MEL → ADL"]
         cmd._use_case.execute.return_value = [  # type: ignore[reportAttributeAccessIssue]
             (route1, pos1),
             (route2, pos2),
@@ -71,16 +75,22 @@ class ViewRoutesInProgress_Should(unittest.TestCase):
         self.assertEqual(lines[4], "  >> Currently at stop: MEL")
         self.assertEqual(lines[5], "")
 
-        route1.info.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
-        route2.info.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
+        mock_render.assert_any_call(route1, position=pos1)
+        mock_render.assert_any_call(route2, position=pos2)
 
     @patch("src.adapters.driving.cli.commands.view_routes_in_progress.datetime")
-    def test_unknown_pos_kind_includes_only_route_info_and_blank_line(self, mock_dt: MagicMock) -> None:
+    @patch("src.adapters.driving.cli.commands.view_routes_in_progress.render_route_info")
+    def test_unknown_pos_kind_includes_only_route_info_and_blank_line(
+        self,
+        mock_render: MagicMock,
+        mock_dt: MagicMock,
+    ) -> None:
         mock_dt.now.return_value = datetime(2025, 9, 27, 12, 0)
         cmd = self.make_cmd()
 
-        route = self._mk_route("Route 1: A → B")
+        route = self._mk_route()
         pos = SimpleNamespace(kind="SOMETHING_ELSE")
+        mock_render.return_value = "Route 1: A → B"
 
         cmd._use_case.execute.return_value = [(route, pos)]  # type: ignore[reportAttributeAccessIssue]
 
@@ -88,18 +98,24 @@ class ViewRoutesInProgress_Should(unittest.TestCase):
         lines = out.split("\n")
 
         self.assertEqual(lines, ["Route 1: A → B", ""])
-        route.info.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
+        mock_render.assert_called_once_with(route, position=pos)
 
     @patch("src.adapters.driving.cli.commands.view_routes_in_progress.datetime")
-    def test_multiple_entries_have_blank_separators(self, mock_dt: MagicMock) -> None:
+    @patch("src.adapters.driving.cli.commands.view_routes_in_progress.render_route_info")
+    def test_multiple_entries_have_blank_separators(
+        self,
+        mock_render: MagicMock,
+        mock_dt: MagicMock,
+    ) -> None:
         mock_dt.now.return_value = datetime(2025, 9, 27, 13, 0)
         cmd = self.make_cmd()
 
-        r1 = self._mk_route("R1")
+        r1 = self._mk_route()
         p1 = SimpleNamespace(kind="AT_STOP", stop_city="X")
 
-        r2 = self._mk_route("R2")
+        r2 = self._mk_route()
         p2 = SimpleNamespace(kind="AT_STOP", stop_city="Y")
+        mock_render.side_effect = ["R1", "R2"]
 
         cmd._use_case.execute.return_value = [(r1, p1), (r2, p2)]  # type: ignore[reportAttributeAccessIssue]
         out = cmd.execute()
