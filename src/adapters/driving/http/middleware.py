@@ -2,10 +2,15 @@
 
 import logging
 import time
+from uuid import uuid4
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
+
+from src.application.enums.event_sources import EventSource
+from src.application.eventing.context import EventContext
+from src.application.eventing.current_context import bind_event_context
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +34,13 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         start = time.monotonic()
 
         try:
-            response = await call_next(request)
+            with bind_event_context(
+                EventContext(
+                    correlation_id=uuid4(),
+                    source=EventSource.HTTP,
+                )
+            ):
+                response = await call_next(request)
         except Exception:
             duration_ms = (time.monotonic() - start) * 1000
             logger.exception(

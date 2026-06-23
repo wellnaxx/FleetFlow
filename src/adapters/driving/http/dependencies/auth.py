@@ -1,9 +1,12 @@
-from dataclasses import dataclass
+from collections.abc import AsyncGenerator
+from dataclasses import dataclass, replace
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 
 from src.adapters.driven.security.auth_token_service import TokenPayload, TokenType, decode_token
+from src.application.eventing.current_context import bind_event_context, get_event_context
+from src.application.eventing.envelope import EventActor
 from src.application.exceptions.application_errors import UnsupportedRoleError, ValidationError
 from src.application.models.user_record import UserRecord
 from src.application.services.authorization_service import AuthorizationService
@@ -95,24 +98,37 @@ def principal_from_token(
     return AuthenticatedPrincipal(record=record, user=user, authz=authz, token=payload)
 
 
-def get_current_user(
+async def get_current_user(
     token: str = Depends(oauth2_scheme),
     user_repo: UserRepositoryPort = Depends(get_user_repository),
-) -> AuthenticatedPrincipal:
+) -> AsyncGenerator[AuthenticatedPrincipal]:
     """Dependency to retrieve the currently authenticated user based on the provided JWT token.
 
     Args:
         token: The JWT token provided in the Authorization header.
         user_repo: The user repository to retrieve user information.
 
-    Returns:
-        An AuthenticatedPrincipal representing the currently authenticated user.
+    Yields:
+        An AuthenticatedPrincipal representing the currently authenticated user
+        while an actor-enriched event context is bound.
 
     Raises:
         HTTPException: Raised with:
             * 401 - Invalid, expired, revoked, mismatched, or userless token.
     """
-    return principal_from_token(token, user_repo)
+    principal = principal_from_token(token, user_repo)
+
+    request_context = get_event_context()
+    actor_context = replace(
+        request_context,
+        actor=EventActor(
+            user_id=principal.record.user_id,
+            username=principal.record.username,
+        )
+    )
+
+    with bind_event_context(actor_context):
+        yield principal
 
 
 def get_optional_user(

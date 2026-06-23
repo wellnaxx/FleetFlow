@@ -1,21 +1,32 @@
 import unittest
 from unittest.mock import MagicMock, patch
+from uuid import uuid4
 
 from fastapi import HTTPException, status
 
 from src.adapters.driven.security.auth_token_service import TokenPayload
 from src.adapters.driving.http.dependencies import auth as auth_module
 from src.adapters.driving.http.dependencies.auth import (
+    AuthenticatedPrincipal,
     _runtime_user_from_record,  # pyright: ignore[reportPrivateUsage]
+    get_current_user,
     get_optional_user,
     principal_from_token,
 )
+from src.application.enums.event_sources import EventSource
+from src.application.eventing.context import EventContext
+from src.application.eventing.current_context import (
+    bind_event_context,
+    get_event_context,
+    get_optional_event_context,
+)
 from src.application.models.user_record import UserRecord
+from src.application.services.authorization_service import AuthorizationService
 from src.domain.entities.users.employee import Employee
 from src.domain.entities.users.manager import Manager
 
 
-class HttpAuthDependencyShould(unittest.TestCase):
+class HttpAuthDependencyShould(unittest.IsolatedAsyncioTestCase):
     def test_runtime_user_from_record_returns_manager(self) -> None:
         record = self._record(role="MANAGER")
 
@@ -120,6 +131,68 @@ class HttpAuthDependencyShould(unittest.TestCase):
 
         self.assertIs(ctx.exception, unauthorized)
 
+    async def test_get_current_user_binds_authenticated_actor_to_request_context(self) -> None:
+        user_repo = MagicMock()
+        principal = self._principal()
+        request_context = self._request_context()
+
+        with (
+            bind_event_context(request_context),
+            patch.object(auth_module, "principal_from_token", return_value=principal) as from_token,
+        ):
+            dependency = get_current_user("access-token", user_repo)
+            resolved_principal = await anext(dependency)
+            actor_context = get_event_context()
+
+            self.assertIs(resolved_principal, principal)
+            self.assertIsNot(actor_context, request_context)
+            self.assertEqual(actor_context.correlation_id, request_context.correlation_id)
+            self.assertIs(actor_context.source, EventSource.HTTP)
+            self.assertIsNotNone(actor_context.actor)
+            assert actor_context.actor is not None
+            self.assertEqual(actor_context.actor.user_id, 1)
+            self.assertEqual(actor_context.actor.username, "alice")
+
+            await dependency.aclose()
+            self.assertIs(get_event_context(), request_context)
+
+        from_token.assert_called_once_with("access-token", user_repo)
+        self.assertIsNone(get_optional_event_context())
+
+    async def test_get_current_user_restores_request_context_when_endpoint_fails(self) -> None:
+        user_repo = MagicMock()
+        request_context = self._request_context()
+
+        with (
+            bind_event_context(request_context),
+            patch.object(auth_module, "principal_from_token", return_value=self._principal()),
+        ):
+            dependency = get_current_user("access-token", user_repo)
+            await anext(dependency)
+
+            with self.assertRaisesRegex(RuntimeError, "endpoint failed"):
+                await dependency.athrow(RuntimeError("endpoint failed"))
+
+            self.assertIs(get_event_context(), request_context)
+
+        self.assertIsNone(get_optional_event_context())
+
+    async def test_get_current_user_leaves_request_context_unchanged_when_token_validation_fails(self) -> None:
+        user_repo = MagicMock()
+        request_context = self._request_context()
+        failure = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token revoked.")
+
+        with (
+            bind_event_context(request_context),
+            patch.object(auth_module, "principal_from_token", side_effect=failure),
+            self.assertRaises(HTTPException) as ctx,
+        ):
+            dependency = get_current_user("access-token", user_repo)
+            await anext(dependency)
+
+        self.assertIs(ctx.exception, failure)
+        self.assertIsNone(get_optional_event_context())
+
     def _record(self, *, role: str) -> UserRecord:
         return UserRecord(
             user_id=1,
@@ -142,4 +215,21 @@ class HttpAuthDependencyShould(unittest.TestCase):
             username="alice",
             role="MANAGER",
             token_version=1,
+        )
+
+    def _principal(self) -> AuthenticatedPrincipal:
+        record = self._record(role="MANAGER")
+        user = Manager(user_id=record.user_id, name=record.name)
+        return AuthenticatedPrincipal(
+            record=record,
+            user=user,
+            authz=AuthorizationService(current_user=user),
+            token=self._token_payload(),
+        )
+
+    @staticmethod
+    def _request_context() -> EventContext:
+        return EventContext(
+            correlation_id=uuid4(),
+            source=EventSource.HTTP,
         )
