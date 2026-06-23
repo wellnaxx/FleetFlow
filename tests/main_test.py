@@ -1,15 +1,21 @@
 import unittest
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 import cli_main
+from src.application.enums.event_sources import EventSource
 from src.application.enums.world_state_corruption_reasons import WorldStateCorruptionReason
+from src.application.eventing.current_context import get_event_context, get_optional_event_context
 from src.application.exceptions.world_state_errors import (
     WorldStateCorruptionError,
     WorldStateFileNotFoundError,
     WorldStateRuntimeSwapError,
 )
 from src.domain.enums.auth import Role
+
+if TYPE_CHECKING:
+    from src.application.eventing.context import EventContext
 
 
 def _container(*, autosave_enabled: bool = True, default_path: str = "state.json") -> MagicMock:
@@ -48,6 +54,78 @@ class MainStartupTests(unittest.TestCase):
             engine_cls=engine_cls,
             engine=engine,
         )
+
+    def test_main_binds_one_startup_context_and_clears_it_before_engine_start(self) -> None:
+        container = _container(default_path="state.json")
+        observed_contexts: list[EventContext] = []
+        user_repo = MagicMock()
+        engine = MagicMock()
+
+        def get_container() -> MagicMock:
+            observed_contexts.append(get_event_context())
+            return container
+
+        def get_user_repository() -> MagicMock:
+            observed_contexts.append(get_event_context())
+            return user_repo
+
+        def bootstrap_admin(_auth: MagicMock, _store: MagicMock) -> None:
+            observed_contexts.append(get_event_context())
+
+        def load_default_state(_path: str) -> None:
+            observed_contexts.append(get_event_context())
+
+        def start_engine() -> None:
+            self.assertIsNone(get_optional_event_context())
+
+        container.state_cases.load.execute.side_effect = load_default_state
+        engine.start.side_effect = start_engine
+
+        with (
+            patch("cli_main.os.path.exists", return_value=True),
+            patch("cli_main.get_container", side_effect=get_container),
+            patch("cli_main.get_user_repository", side_effect=get_user_repository),
+            patch("cli_main.bootstrap_admin", side_effect=bootstrap_admin),
+            patch("cli_main.CommandFactory"),
+            patch("cli_main.Engine", return_value=engine),
+        ):
+            cli_main.main()
+
+        self.assertEqual(len(observed_contexts), 4)
+        self.assertTrue(all(context is observed_contexts[0] for context in observed_contexts))
+        self.assertIs(observed_contexts[0].source, EventSource.STARTUP)
+        self.assertIsNone(observed_contexts[0].actor)
+        engine.start.assert_called_once_with()
+        self.assertIsNone(get_optional_event_context())
+
+    def test_main_clears_startup_context_when_bootstrap_fails(self) -> None:
+        container = _container()
+        observed_contexts: list[EventContext] = []
+
+        def get_container() -> MagicMock:
+            observed_contexts.append(get_event_context())
+            return container
+
+        def fail_bootstrap(_auth: MagicMock, _store: MagicMock) -> None:
+            observed_contexts.append(get_event_context())
+            raise RuntimeError("bootstrap failed")
+
+        with (
+            patch("cli_main.get_container", side_effect=get_container),
+            patch("cli_main.get_user_repository", return_value=MagicMock()),
+            patch("cli_main.bootstrap_admin", side_effect=fail_bootstrap),
+            patch("cli_main.CommandFactory") as command_factory,
+            patch("cli_main.Engine") as engine,
+            self.assertRaisesRegex(RuntimeError, "bootstrap failed"),
+        ):
+            cli_main.main()
+
+        self.assertEqual(len(observed_contexts), 2)
+        self.assertTrue(all(context is observed_contexts[0] for context in observed_contexts))
+        self.assertIs(observed_contexts[0].source, EventSource.STARTUP)
+        self.assertIsNone(get_optional_event_context())
+        command_factory.assert_not_called()
+        engine.assert_not_called()
 
     def test_main_skips_world_state_load_when_autosave_missing(self) -> None:
         container = _container(default_path="state.json")

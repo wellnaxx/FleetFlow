@@ -3,10 +3,14 @@ import logging
 import os
 import sys
 from datetime import datetime
+from uuid import uuid4
 
 from src.adapters.driven.logging.config import configure_logging
 from src.adapters.driving.cli.command_factory import CommandFactory
 from src.adapters.driving.cli.engine import Engine
+from src.application.enums.event_sources import EventSource
+from src.application.eventing.context import EventContext
+from src.application.eventing.current_context import bind_event_context
 from src.application.exceptions.world_state_errors import WorldStateCorruptionError, WorldStateFileNotFoundError
 from src.application.services.auth_service import AuthService
 from src.composition.container import Container
@@ -113,18 +117,24 @@ def main() -> None:
     configure_logging()
     logger.info("Starting FleetFlow CLI.")
 
-    container = get_container()
-    logger.info(
-        "FleetFlow CLI configured with autosave=%s, default_world_state_path=%r.",
-        container.autosave_enabled,
-        container.default_world_state_path,
-    )
+    with bind_event_context(
+        EventContext(
+            correlation_id=uuid4(),
+            source=EventSource.STARTUP,
+        )
+    ):
+        container = get_container()
+        logger.info(
+            "FleetFlow CLI configured with autosave=%s, default_world_state_path=%r.",
+            container.autosave_enabled,
+            container.default_world_state_path,
+        )
 
-    auth = container.auth
-    store = get_user_repository()
-    bootstrap_admin(auth, store)
+        auth = container.auth
+        store = get_user_repository()
+        bootstrap_admin(auth, store)
 
-    _load_default_world_state(container)
+        _load_default_world_state(container)
 
     cmd_factory = CommandFactory(container)
     Engine(
