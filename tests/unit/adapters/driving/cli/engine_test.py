@@ -1,8 +1,15 @@
 import unittest
+from types import SimpleNamespace
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 from src.adapters.driving.cli.engine import Engine
+from src.application.enums.event_sources import EventSource
+from src.application.eventing.current_context import get_event_context, get_optional_event_context
 from src.application.results.heartbeat_summary_result import HeartbeatSummary
+
+if TYPE_CHECKING:
+    from src.application.eventing.context import EventContext
 
 
 class EngineTests(unittest.TestCase):
@@ -18,6 +25,8 @@ class EngineTests(unittest.TestCase):
     ) -> tuple[Engine, MagicMock, MagicMock, MagicMock, MagicMock, MagicMock]:
         factory = MagicMock()
         auth = MagicMock()
+        auth.current_user = None
+        auth.last_username = None
         authz = MagicMock()
         save_world = MagicMock()
         advance = MagicMock()
@@ -128,6 +137,72 @@ class EngineTests(unittest.TestCase):
         advance.execute.assert_called_once_with()
         cmd.execute.assert_called_once_with()
         mock_print.assert_called_once_with("ok")
+
+    def test_exec_line_binds_one_cli_context_for_heartbeat_command_and_autosave(self) -> None:
+        engine, factory, _auth, _authz, save_world, advance = self.make_engine()
+        observed_contexts: list[EventContext] = []
+
+        def execute_command() -> str:
+            observed_contexts.append(get_event_context())
+            return "ok"
+
+        def advance_world() -> HeartbeatSummary:
+            observed_contexts.append(get_event_context())
+            return HeartbeatSummary(
+                mutated_routes=(),
+                mutated_packages=(),
+                mutated_trucks_moved=(),
+                mutated_trucks_released=(),
+            )
+
+        def autosave(_path: str) -> None:
+            observed_contexts.append(get_event_context())
+
+        cmd = MagicMock()
+        cmd.skips_heartbeat = False
+        cmd.mutates_state = True
+        cmd.mutates_session = False
+        cmd.autosaves_state = True
+        cmd.execute.side_effect = execute_command
+        factory.create.return_value = cmd
+        advance.execute.side_effect = advance_world
+        save_world.execute.side_effect = autosave
+
+        engine._exec_line("createroute SYD MEL")  # pyright: ignore[reportPrivateUsage]
+
+        self.assertEqual(len(observed_contexts), 3)
+        self.assertTrue(all(context is observed_contexts[0] for context in observed_contexts))
+        self.assertIs(observed_contexts[0].source, EventSource.CLI)
+        self.assertIsNone(observed_contexts[0].actor)
+        self.assertIsNone(get_optional_event_context())
+
+    def test_exec_line_binds_authenticated_actor_from_pre_command_session(self) -> None:
+        engine, factory, auth, _authz, _save_world, _advance = self.make_engine()
+        auth.current_user = SimpleNamespace(user_id=7)
+        auth.last_username = "  Fleet.Manager  "
+        observed_contexts: list[EventContext] = []
+
+        def execute_command() -> str:
+            observed_contexts.append(get_event_context())
+            return "ok"
+
+        cmd = MagicMock()
+        cmd.skips_heartbeat = True
+        cmd.mutates_state = False
+        cmd.mutates_session = False
+        cmd.autosaves_state = False
+        cmd.execute.side_effect = execute_command
+        factory.create.return_value = cmd
+
+        engine._exec_line("viewallroutes")  # pyright: ignore[reportPrivateUsage]
+
+        context = observed_contexts[0]
+        self.assertIs(context.source, EventSource.CLI)
+        self.assertIsNotNone(context.actor)
+        assert context.actor is not None
+        self.assertEqual(context.actor.user_id, 7)
+        self.assertEqual(context.actor.username, "fleet.manager")
+        self.assertIsNone(get_optional_event_context())
 
     def test_exec_line_skips_heartbeat_for_opt_out_command(self) -> None:
         engine, factory, _auth, _authz, _save_world, advance = self.make_engine()

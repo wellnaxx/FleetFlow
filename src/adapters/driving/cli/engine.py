@@ -4,8 +4,13 @@ import logging
 import shlex
 from collections.abc import Callable
 from datetime import datetime
+from uuid import uuid4
 
 from src.adapters.driving.cli.command_factory import CommandFactory
+from src.application.enums.event_sources import EventSource
+from src.application.eventing.context import EventContext
+from src.application.eventing.current_context import bind_event_context
+from src.application.eventing.envelope import EventActor
 from src.application.results.heartbeat_summary_result import HeartbeatSummary
 from src.application.services.auth_service import AuthService
 from src.application.services.authorization_service import AuthorizationService
@@ -330,6 +335,21 @@ class Engine:
         if not line or not line.strip():
             return
 
+        with bind_event_context(
+            EventContext(
+                correlation_id=uuid4(),
+                source=EventSource.CLI,
+                actor=self._event_actor(),
+            )
+        ):
+            self._exec_line_in_context(line)
+
+    def _exec_line_in_context(self, line: str) -> None:
+        """Execute one CLI workflow while its event context is bound.
+
+        Args:
+            line: Non-empty command line to parse and execute.
+        """
         try:
             cmd = self._factory.create(line)
             heartbeat_changed = False
@@ -375,6 +395,24 @@ class Engine:
         except Exception as e:
             logger.exception("Unexpected CLI error while executing %r", line)
             print(f"Unexpected error: {e}")
+
+    def _event_actor(self) -> EventActor | None:
+        """Return the authenticated CLI actor captured before command execution.
+
+        Login and registration commands intentionally run without an actor when
+        no session exists yet. Session-mutating commands retain the actor that
+        initiated the workflow because the context is created before execution.
+        """
+        user = self.auth.current_user
+        username = self.auth.last_username
+
+        if user is None or not username:
+            return None
+
+        return EventActor(
+            user_id=user.user_id,
+            username=username,
+        )
 
     @staticmethod
     def _join_command(parts: list[str]) -> str:
