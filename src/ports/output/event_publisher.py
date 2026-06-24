@@ -1,3 +1,5 @@
+"""Output port for publishing enveloped events beyond application workflows."""
+
 from typing import Protocol
 
 from src.application.eventing.envelope import EventEnvelope
@@ -11,7 +13,8 @@ class EventPublisherPort(Protocol):
     do not create workflow metadata or decide which events should be emitted;
     those responsibilities belong to event draining and context enrichment.
     Delivery, retry, and handler-failure policy are defined by the concrete
-    publisher implementation.
+    publisher implementation. ``EventEnvelope`` is covariant, allowing this
+    port to publish envelopes containing any concrete ``Event`` subtype.
     """
 
     def publish(self, envelope: EventEnvelope[Event]) -> None:

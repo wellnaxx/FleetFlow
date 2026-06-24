@@ -45,6 +45,11 @@ class EventActor:
 class EventEnvelope[E: Event]:
     """Capture immutable execution and causality context for one event.
 
+    The event payload is stored privately and exposed through a read-only
+    property. This lets PEP 695 variance inference treat ``EventEnvelope`` as
+    covariant in ``E``: an ``EventEnvelope[RouteCreated]`` can be published
+    where an ``EventEnvelope[Event]`` is expected.
+
     Attributes:
         event: Domain or application event being published.
         source: Execution origin that produced the event.
@@ -55,9 +60,42 @@ class EventEnvelope[E: Event]:
         envelope_id: Unique identifier for this publication envelope.
     """
 
-    event: E
+    _event: E
     source: EventSource
     correlation_id: UUID
     actor: EventActor | None = None
     causation_id: UUID | None = None
     envelope_id: UUID = field(default_factory=uuid4)
+
+    def __init__(
+        self,
+        *,
+        event: E,
+        source: EventSource,
+        correlation_id: UUID,
+        actor: EventActor | None = None,
+        causation_id: UUID | None = None,
+        envelope_id: UUID | None = None,
+    ) -> None:
+        """Create an immutable envelope while preserving a public event API.
+
+        Args:
+            event: Domain or application event to publish.
+            source: Execution origin that produced the event.
+            correlation_id: Identifier shared by the producing workflow.
+            actor: Authenticated initiator of the workflow, when present.
+            causation_id: Identifier of the direct event or command cause.
+            envelope_id: Explicit publication identifier. A new UUID is
+                generated when omitted.
+        """
+        object.__setattr__(self, "_event", event)
+        object.__setattr__(self, "source", source)
+        object.__setattr__(self, "correlation_id", correlation_id)
+        object.__setattr__(self, "actor", actor)
+        object.__setattr__(self, "causation_id", causation_id)
+        object.__setattr__(self, "envelope_id", envelope_id if envelope_id is not None else uuid4())
+
+    @property
+    def event(self) -> E:
+        """Return the immutable domain or application event payload."""
+        return self._event

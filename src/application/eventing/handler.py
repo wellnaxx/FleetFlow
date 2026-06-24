@@ -1,3 +1,5 @@
+"""Protocols for handling enveloped domain and application events."""
+
 from typing import Protocol
 
 from src.application.eventing.envelope import EventEnvelope
