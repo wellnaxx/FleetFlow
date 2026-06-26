@@ -1,3 +1,5 @@
+"""Cached runtime factories for FleetFlow's shared application graph."""
+
 import logging
 from functools import lru_cache
 
@@ -7,6 +9,7 @@ from src.adapters.driven.persistence.json.user_store import JSONUserStore
 from src.application.services.auth_service import AuthService
 from src.composition.config import PersistenceBackend, get_app_config
 from src.composition.container import Container, build_container
+from src.composition.event_subscriptions import build_eventing_components
 from src.ports.output.user_repository import UserRepositoryPort
 
 logger = logging.getLogger(__name__)
@@ -52,7 +55,9 @@ def get_container() -> Container:
     """Get the application's dependency injection container.
 
     Returns:
-        The Container instance used by the application.
+        The shared Container instance, including persistence adapters, use
+        cases, and eventing infrastructure.
     """
     logger.info("Building shared application container.")
-    return build_container(get_auth_service(), get_app_config())
+    eventing = build_eventing_components()
+    return build_container(get_auth_service(), eventing.collector, get_app_config())

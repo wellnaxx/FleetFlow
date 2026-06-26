@@ -1,4 +1,4 @@
-"""Application composition root for CLI runtime dependencies."""
+"""Application composition root for shared CLI and HTTP runtime dependencies."""
 
 import logging
 from datetime import datetime
@@ -21,6 +21,7 @@ from src.adapters.driven.persistence.memory.world_state_gateway import (
     InMemoryWorldStateGateway,
     InMemoryWorldStateRuntime,
 )
+from src.application.eventing.collector import EventCollector
 from src.application.services.auth_service import AuthService
 from src.application.services.authorization_service import AuthorizationService
 from src.application.services.customer_service import CustomerService
@@ -74,7 +75,7 @@ logger = logging.getLogger(__name__)
 
 
 class Container:
-    """Wire repositories, services, and use cases for the CLI application."""
+    """Wire repositories, services, use cases, and shared runtime services."""
 
     auth_cases: AuthUseCases
     customer_cases: CustomerUseCases
@@ -83,17 +84,27 @@ class Container:
     truck_cases: TruckUseCases
     state_cases: StateUseCases
 
-    def __init__(self, auth: AuthService, config: AppConfig | None = None) -> None:
+    def __init__(
+        self,
+        auth: AuthService,
+        event_collector: EventCollector,
+        config: AppConfig | None = None,
+    ) -> None:
         """Construct the application dependency graph.
 
         Args:
             auth: Shared authentication service used by auth-related use cases
                 and authorization checks.
+            event_collector: Shared event collector used by driving adapters to
+                publish pending domain and application events after workflows
+                complete successfully.
             config: Application configuration. When omitted, it is loaded from
                 the environment.
         """
         config = config or get_app_config()
         logger.info("Wiring application container for %s backend.", config.persistence_backend.value)
+
+        self.event_collector = event_collector
 
         if config.persistence_backend is PersistenceBackend.MEMORY:
             self._wire_memory()
@@ -258,14 +269,15 @@ class Container:
         )
 
 
-def build_container(auth: AuthService, config: AppConfig | None = None) -> Container:
+def build_container(auth: AuthService, collector: EventCollector, config: AppConfig | None = None) -> Container:
     """Build the application container from explicit or environment config.
 
     Args:
         auth: Shared authentication service.
+        collector: Event collector shared by HTTP and CLI driving adapters.
         config: Optional application configuration override.
 
     Returns:
         Fully wired application container.
     """
-    return Container(auth=auth, config=config)
+    return Container(auth=auth, event_collector=collector, config=config)
