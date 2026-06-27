@@ -10,6 +10,7 @@ class TestRemovePackage_Should(unittest.TestCase):
         cmd = RemovePackage.__new__(RemovePackage)
         cmd._params = params  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._event_collector = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
     def test_execute_propagates_permission_errors_from_use_case(self) -> None:
@@ -67,8 +68,14 @@ class TestRemovePackage_Should(unittest.TestCase):
     ) -> None:
         cmd = self.make_cmd(["42"])
         mock_try_parse.return_value = 42
-        removed_pkg = SimpleNamespace(package_id=42)
-        cmd._use_case.execute.return_value = removed_pkg  # type: ignore[reportAttributeAccessIssue]
+        package = SimpleNamespace(package_id=42)
+        customer = MagicMock()
+        route = MagicMock()
+        cmd._use_case.execute.return_value = SimpleNamespace(  # type: ignore[reportAttributeAccessIssue]
+            package=package,
+            customer=customer,
+            route=route,
+        )
 
         result = cmd.execute()
 
@@ -76,6 +83,32 @@ class TestRemovePackage_Should(unittest.TestCase):
         mock_validate.assert_called_once_with(["42"], 1)
         mock_try_parse.assert_called_once_with("42")
         cmd._use_case.execute.assert_called_once_with(42)  # type: ignore[reportUnknownMemberType]
+        cmd._event_collector.drain.assert_called_once_with((package, customer, route))  # type: ignore[reportUnknownMemberType]
+
+    @patch("src.adapters.driving.cli.commands.remove_package.validate_params_exact")
+    @patch("src.adapters.driving.cli.commands.remove_package.try_parse_int")
+    def test_removed_package_without_route_drains_package_and_customer_only(
+        self,
+        mock_try_parse: MagicMock,
+        mock_validate: MagicMock,
+    ) -> None:
+        cmd = self.make_cmd(["42"])
+        mock_try_parse.return_value = 42
+        package = SimpleNamespace(package_id=42)
+        customer = MagicMock()
+        cmd._use_case.execute.return_value = SimpleNamespace(  # type: ignore[reportAttributeAccessIssue]
+            package=package,
+            customer=customer,
+            route=None,
+        )
+
+        result = cmd.execute()
+
+        self.assertEqual(result, "Package 42 removed.")
+        mock_validate.assert_called_once_with(["42"], 1)
+        mock_try_parse.assert_called_once_with("42")
+        cmd._use_case.execute.assert_called_once_with(42)  # type: ignore[reportUnknownMemberType]
+        cmd._event_collector.drain.assert_called_once_with((package, customer))  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.remove_package.validate_params_exact")
     @patch("src.adapters.driving.cli.commands.remove_package.try_parse_int")

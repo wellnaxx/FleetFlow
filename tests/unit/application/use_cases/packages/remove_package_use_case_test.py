@@ -49,7 +49,9 @@ class RemovePackageUseCase_Should(unittest.TestCase):
 
         result = self.use_case.execute(42)
 
-        self.assertIs(result, package)
+        self.assertIs(result.package, package)
+        self.assertIs(result.customer, package.customer)
+        self.assertIsNone(result.route)
         self.mock_packages.get_by_id.assert_called_once_with(42)
         package.customer.remove_package.assert_called_once_with(package)
         self.unit_of_work.packages.remove.assert_called_once_with(42)
@@ -65,7 +67,9 @@ class RemovePackageUseCase_Should(unittest.TestCase):
 
         result = self.use_case.execute(42)
 
-        self.assertIs(result, package)
+        self.assertIs(result.package, package)
+        self.assertIs(result.customer, package.customer)
+        self.assertIs(result.route, route)
         self.mock_packages.get_by_id.assert_called_once_with(42)
         route.detach_package.assert_called_once_with(
             package,
@@ -93,7 +97,9 @@ class RemovePackageUseCase_Should(unittest.TestCase):
 
         result = self.use_case.execute(42)
 
-        self.assertIs(result, package)
+        self.assertIs(result.package, package)
+        self.assertIs(result.customer, customer)
+        self.assertIs(result.route, route)
         self.assertIsNone(package.route_id)
         self.assertNotIn(package, route.packages)
         self.assertNotIn(package, customer.delivery_packages)
@@ -177,5 +183,6 @@ class RemovePackageUseCase_Should(unittest.TestCase):
         package.restore_state.assert_called_once_with(package_snapshot)
         package.restore_event_checkpoint.assert_called_once_with(3)
         route.restore_package_link.assert_called_once_with(package)
+        route.restore_event_checkpoint.assert_called_once_with(route.event_checkpoint.return_value)
         customer.restore_package_link.assert_called_once_with(package)
         self.unit_of_work.commit.assert_not_called()

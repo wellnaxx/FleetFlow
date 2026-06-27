@@ -5,6 +5,7 @@ from collections.abc import Callable
 from datetime import datetime
 
 from src.application.exceptions.application_errors import NotFoundError
+from src.application.results.remove_package_result import RemovePackageResult
 from src.application.services.authorization_service import AuthorizationService, requires_all
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.entities.delivery_package import DeliveryPackage
@@ -17,7 +18,7 @@ from src.ports.output.unit_of_work import UnitOfWorkPort
 logger = logging.getLogger(__name__)
 
 
-class RemovePackageUseCase(AuthorizedUseCase[DeliveryPackage]):
+class RemovePackageUseCase(AuthorizedUseCase[RemovePackageResult]):
     """Remove a package from the repository and any assigned route."""
 
     def __init__(
@@ -41,14 +42,15 @@ class RemovePackageUseCase(AuthorizedUseCase[DeliveryPackage]):
         self._clock = clock
 
     @requires_all(Permission.PACKAGE_REMOVE, Permission.PACKAGE_VIEW)
-    def execute(self, package_id: int) -> DeliveryPackage:
+    def execute(self, package_id: int) -> RemovePackageResult:
         """Remove a package by id.
 
         Args:
             package_id: Identifier of the package to remove.
 
         Returns:
-            The removed package entity.
+            Removal result containing the removed package, its customer, and
+            the route it was detached from, if it had one.
 
         Raises:
             PermissionError: If the caller lacks required package permissions.
@@ -58,11 +60,12 @@ class RemovePackageUseCase(AuthorizedUseCase[DeliveryPackage]):
             EntityNotFoundError: If customer-package ownership state is inconsistent.
         """
         package = self._get_package(package_id)
-
-        package_snapshot = package.snapshot_state()
-        event_checkpoint = package.event_checkpoint()
         route = package.route
         customer = package.customer
+
+        package_snapshot = package.snapshot_state()
+        package_event_checkpoint = package.event_checkpoint()
+        route_event_checkpoint = route.event_checkpoint() if route is not None else None
         occurred_at = self._clock()
 
         try:
@@ -76,16 +79,19 @@ class RemovePackageUseCase(AuthorizedUseCase[DeliveryPackage]):
         except Exception:
             logger.exception("Package removal did not complete successfully. Restoring package.")
             package.restore_state(package_snapshot)
-            package.restore_event_checkpoint(event_checkpoint)
+            package.restore_event_checkpoint(package_event_checkpoint)
 
             if route is not None:
                 route.restore_package_link(package)
+
+                if route_event_checkpoint is not None:
+                    route.restore_event_checkpoint(route_event_checkpoint)
 
             customer.restore_package_link(package)
             raise
 
         logger.info("Removed package %d.", package_id)
-        return package
+        return RemovePackageResult(package, customer, route)
 
     def _get_package(self, package_id: int) -> DeliveryPackage:
         package = self._packages.get_by_id(package_id)

@@ -44,13 +44,15 @@ class RuntimePackageRemovalIntegrationTests(unittest.TestCase):
             package_repo.add(package)
 
         unit_of_work = InMemoryUnitOfWork(routes=MagicMock(), packages=package_repo, trucks=MagicMock())
-        removed = RemovePackageUseCase(
+        result = RemovePackageUseCase(
             package_repo,
             unit_of_work,
             manager_authz(),
         ).execute(package.package_id)
 
-        self.assertIs(removed, package)
+        self.assertIs(result.package, package)
+        self.assertIs(result.customer, customer)
+        self.assertIs(result.route, route)
         self.assertIsNone(package_repo.get_by_id(package.package_id))
 
         self.assertEqual(route.packages, ())
