@@ -11,6 +11,7 @@ class CreateRoute_Should(unittest.TestCase):
         cmd = CreateRoute.__new__(CreateRoute)
         cmd._params = tuple(params)  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._event_collector = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
     def test_mutates_state_true(self) -> None:
@@ -45,6 +46,7 @@ class CreateRoute_Should(unittest.TestCase):
             result,
             "Route 42 created: SYD -> MEL -> ADL | Departure: (unscheduled) | Distance: 1365 km",
         )
+        cmd._event_collector.drain.assert_called_once_with((route,))  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.create_route.parse_departure_from_tail")
     @patch("src.adapters.driving.cli.commands.create_route.validate_params_count")
@@ -66,6 +68,7 @@ class CreateRoute_Should(unittest.TestCase):
             result,
             "Route 7 created: SYD -> MEL | Departure: 2025-10-12 06:00 | Distance: 878 km",
         )
+        cmd._event_collector.drain.assert_called_once_with((route,))  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.create_route.parse_departure_from_tail")
     @patch("src.adapters.driving.cli.commands.create_route.validate_params_count")
