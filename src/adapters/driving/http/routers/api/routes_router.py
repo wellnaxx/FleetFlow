@@ -3,6 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from src.adapters.driving.http.dependencies.eventing import get_event_collector
 from src.adapters.driving.http.dependencies.use_cases import (
     get_assign_packages_to_route_use_case,
     get_assign_truck_to_route_use_case,
@@ -28,6 +29,7 @@ from src.adapters.driving.http.schemas.routes import (
     RouteResponse,
 )
 from src.adapters.driving.http.schemas.trucks import TruckResponse
+from src.application.eventing.collector import EventCollector
 from src.application.results.assign_packages_to_route_result import AssignPackagesToRouteResult
 from src.application.use_cases.pagination import PageQuery
 from src.application.use_cases.routes.assign_packages_to_route import AssignPackagesToRouteUseCase
@@ -147,12 +149,14 @@ def _assign_packages_response(
 def create_route(
     request: RouteCreateRequest,
     use_case: Annotated[CreateRouteUseCase, Depends(get_create_route_use_case)],
+    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
 ) -> RouteResponse:
     """Create a new delivery route.
 
     Args:
         request: The request body containing route creation details.
         use_case: Use case for creating a route, injected by FastAPI.
+        event_collector: Collector used to publish route creation events.
 
     Returns:
         The created route details.
@@ -167,6 +171,8 @@ def create_route(
         locations=request.locations,
         departure_time=request.departure_time,
     )
+
+    event_collector.drain((route,))
     return _route_response(route)
 
 
@@ -253,13 +259,16 @@ def get_route(
 
 @routes_router.delete("/{route_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_route(
-    route_id: int, use_case: Annotated[RemoveRouteUseCase, Depends(get_remove_route_use_case)]
+    route_id: int,
+    use_case: Annotated[RemoveRouteUseCase, Depends(get_remove_route_use_case)],
+    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
 ) -> None:
     """Remove one delivery route by id.
 
     Args:
         route_id: Identifier of the route to remove.
         use_case: Use case for removing one route, injected by FastAPI.
+        event_collector: Collector used to publish route removal events.
 
     Returns:
         None.
@@ -270,7 +279,8 @@ def delete_route(
             * 404 - Route not found.
             * 500 - Database operation failure.
     """
-    use_case.execute(route_id=route_id)
+    route = use_case.execute(route_id=route_id)
+    event_collector.drain((route,))
 
 
 @routes_router.patch("/{route_id}/packages", status_code=status.HTTP_200_OK)
@@ -278,6 +288,7 @@ def assign_packages_to_route(
     route_id: int,
     request: AssignPackagesToRouteRequest,
     use_case: Annotated[AssignPackagesToRouteUseCase, Depends(get_assign_packages_to_route_use_case)],
+    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
 ) -> AssignPackagesToRouteResponse:
     """Assign packages to a delivery route.
 
@@ -285,6 +296,7 @@ def assign_packages_to_route(
         route_id: Identifier of the route receiving packages.
         request: Package identifiers to assign.
         use_case: Use case for assigning packages to a route, injected by FastAPI.
+        event_collector: Collector used to publish route package-assignment events.
 
     Returns:
         Per-package assignment successes and errors.
@@ -296,6 +308,10 @@ def assign_packages_to_route(
             * 500 - Database operation failure.
     """
     result = use_case.execute(route_id=route_id, package_ids=request.package_ids)
+
+    if result.successes:
+        event_collector.drain((result.successes[0].route,))
+
     return _assign_packages_response(result)
 
 
@@ -304,6 +320,7 @@ def assign_truck_to_route(
     route_id: int,
     request: AssignTruckToRouteRequest,
     use_case: Annotated[AssignTruckToRouteUseCase, Depends(get_assign_truck_to_route_use_case)],
+    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
 ) -> AssignTruckToRouteResponse:
     """Assign a truck to a delivery route.
 
@@ -311,6 +328,7 @@ def assign_truck_to_route(
         route_id: Identifier of the route receiving a truck.
         request: Truck identifier to assign.
         use_case: Use case for assigning a truck to a route, injected by FastAPI.
+        event_collector: Collector used to publish truck-assignment events.
 
     Returns:
         Route and truck identifiers for the successful assignment.
@@ -325,6 +343,7 @@ def assign_truck_to_route(
     # Domain route timing currently uses naive local datetimes.
     now = datetime.now()
     result = use_case.execute(truck_id=request.truck_id, route_id=route_id, now=now)
+    event_collector.drain((result.route,))
     return AssignTruckToRouteResponse(route_id=result.route_id, truck_id=result.truck_id)
 
 

@@ -123,8 +123,11 @@ class RoutesRouterShould(unittest.TestCase):
 
     def test_create_route_returns_created_route(self) -> None:
         use_case = MagicMock()
-        use_case.execute.return_value = self._route(route_id=31)
+        event_collector = MagicMock()
+        route = self._route(route_id=31)
+        use_case.execute.return_value = route
         self.app.dependency_overrides[routes_router_module.get_create_route_use_case] = lambda: use_case
+        self.app.dependency_overrides[routes_router_module.get_event_collector] = lambda: event_collector
 
         response = self.client.post(
             "/routes/",
@@ -134,6 +137,7 @@ class RoutesRouterShould(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()["route_id"], 31)
         use_case.execute.assert_called_once_with(locations=["SYD", "MEL"], departure_time=None)
+        event_collector.drain.assert_called_once_with((route,))
 
     def test_create_route_returns_bad_request_for_invalid_route(self) -> None:
         use_case = MagicMock()
@@ -225,12 +229,17 @@ class RoutesRouterShould(unittest.TestCase):
 
     def test_delete_route_removes_route(self) -> None:
         use_case = MagicMock()
+        event_collector = MagicMock()
+        route = self._route(route_id=61)
+        use_case.execute.return_value = route
         self.app.dependency_overrides[routes_router_module.get_remove_route_use_case] = lambda: use_case
+        self.app.dependency_overrides[routes_router_module.get_event_collector] = lambda: event_collector
 
         response = self.client.delete("/routes/61")
 
         self.assertEqual(response.status_code, 204)
         use_case.execute.assert_called_once_with(route_id=61)
+        event_collector.drain.assert_called_once_with((route,))
 
     def test_delete_route_returns_not_found_for_missing_route(self) -> None:
         use_case = MagicMock()
@@ -254,6 +263,7 @@ class RoutesRouterShould(unittest.TestCase):
 
     def test_assign_packages_to_route_returns_nested_assignment_response(self) -> None:
         use_case = MagicMock()
+        event_collector = MagicMock()
         route = self._route(route_id=71)
         use_case.execute.return_value = AssignPackagesToRouteResult(
             successes=[
@@ -269,6 +279,7 @@ class RoutesRouterShould(unittest.TestCase):
         self.app.dependency_overrides[routes_router_module.get_assign_packages_to_route_use_case] = lambda: (
             use_case
         )
+        self.app.dependency_overrides[routes_router_module.get_event_collector] = lambda: event_collector
 
         response = self.client.patch("/routes/71/packages", json={"package_ids": [1, 2]})
 
@@ -281,6 +292,27 @@ class RoutesRouterShould(unittest.TestCase):
         self.assertEqual(payload["successes"][0]["route"]["package_ids"], [])
         self.assertEqual(payload["errors"][0]["message"], "Package 2 not found.")
         use_case.execute.assert_called_once_with(route_id=71, package_ids=[1, 2])
+        event_collector.drain.assert_called_once_with((route,))
+
+    def test_assign_packages_to_route_with_only_errors_does_not_drain_events(self) -> None:
+        use_case = MagicMock()
+        event_collector = MagicMock()
+        use_case.execute.return_value = AssignPackagesToRouteResult(
+            successes=[],
+            errors=[PackageAssignmentError(package_id=2, message="Package 2 not found.")],
+        )
+        self.app.dependency_overrides[routes_router_module.get_assign_packages_to_route_use_case] = lambda: (
+            use_case
+        )
+        self.app.dependency_overrides[routes_router_module.get_event_collector] = lambda: event_collector
+
+        response = self.client.patch("/routes/71/packages", json={"package_ids": [2]})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["successes"], [])
+        self.assertEqual(response.json()["errors"][0]["message"], "Package 2 not found.")
+        use_case.execute.assert_called_once_with(route_id=71, package_ids=[2])
+        event_collector.drain.assert_not_called()
 
     def test_assign_packages_to_route_returns_not_found_for_missing_route(self) -> None:
         use_case = MagicMock()
@@ -319,20 +351,24 @@ class RoutesRouterShould(unittest.TestCase):
 
     def test_assign_truck_to_route_returns_assignment_response(self) -> None:
         use_case = MagicMock()
+        event_collector = MagicMock()
+        route = self._route(route_id=81)
         use_case.execute.return_value = AssignTruckToRouteResult(
             route_id=81,
             truck_id=7,
-            route=MagicMock(),
+            route=route,
         )
         self.app.dependency_overrides[routes_router_module.get_assign_truck_to_route_use_case] = lambda: (
             use_case
         )
+        self.app.dependency_overrides[routes_router_module.get_event_collector] = lambda: event_collector
 
         response = self.client.patch("/routes/81/truck", json={"truck_id": 7})
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"route_id": 81, "truck_id": 7})
         use_case.execute.assert_called_once_with(truck_id=7, route_id=81, now=ANY)
+        event_collector.drain.assert_called_once_with((route,))
 
     def test_assign_truck_to_route_returns_conflict_for_unsuitable_truck(self) -> None:
         use_case = MagicMock()
