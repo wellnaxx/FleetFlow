@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 
+from src.domain.entities.delivery_route import DeliveryRoute
+
 
 @dataclass(frozen=True, slots=True)
 class PackageAssignmentSuccess:
@@ -10,6 +12,7 @@ class PackageAssignmentSuccess:
     package_id: int
     route_id: int
     eta_text: str
+    route: DeliveryRoute
 
 
 @dataclass(frozen=True, slots=True)

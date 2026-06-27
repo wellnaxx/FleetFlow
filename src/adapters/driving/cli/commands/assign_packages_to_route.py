@@ -1,11 +1,11 @@
 """CLI command for assigning packages to routes."""
 
-from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
+from src.adapters.driving.cli.commands.base_command.event_draining_command import EventDrainingCommand
 from src.adapters.driving.cli.commands.validation_helpers import try_parse_int, validate_params_count
 from src.application.use_cases.routes.assign_packages_to_route import AssignPackagesToRouteUseCase
 
 
-class AssignPackagesToRoute(BaseCommand[AssignPackagesToRouteUseCase]):
+class AssignPackagesToRoute(EventDrainingCommand[AssignPackagesToRouteUseCase]):
     """Attach one or more packages to a route."""
 
     mutates_state = True
@@ -27,6 +27,9 @@ class AssignPackagesToRoute(BaseCommand[AssignPackagesToRouteUseCase]):
         package_ids = [try_parse_int(pid) for pid in self._params[1:]]
 
         result = self._use_case.execute(route_id, package_ids)
+
+        if result.successes:
+            self._event_collector.drain((result.successes[0].route,))
 
         success_lines = [
             f"Assigned package {s.package_id} to route {s.route_id}. ETA: {s.eta_text}"

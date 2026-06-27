@@ -154,6 +154,7 @@ class AssignPackagesToRouteUseCase(AuthorizedUseCase[AssignPackagesToRouteResult
             package_id=package.package_id,
             route_id=route.route_id,
             eta_text=self._format_eta(route, package),
+            route=route,
         )
 
     def _format_eta(self, route: DeliveryRoute, package: DeliveryPackage) -> str:

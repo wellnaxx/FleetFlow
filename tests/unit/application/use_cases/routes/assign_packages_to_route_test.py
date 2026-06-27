@@ -78,6 +78,7 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
                         package_id=8,
                         route_id=7,
                         eta_text="N/A (route unscheduled)",
+                        route=route,
                     )
                 ],
                 errors=[],
@@ -204,6 +205,7 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
                         package_id=8,
                         route_id=7,
                         eta_text="N/A (route unscheduled)",
+                        route=route,
                     )
                 ],
                 errors=[

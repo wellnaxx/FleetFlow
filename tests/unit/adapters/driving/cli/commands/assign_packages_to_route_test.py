@@ -18,6 +18,7 @@ class AssignPackageToRoute_Should(unittest.TestCase):
         cmd = AssignPackagesToRoute.__new__(AssignPackagesToRoute)
         cmd._params = tuple(params)  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._event_collector = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
     def test_execute_propagates_permission_errors_from_use_case(self) -> None:
@@ -35,12 +36,14 @@ class AssignPackageToRoute_Should(unittest.TestCase):
     def test_execute_success_single_package(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
         mock_parse.side_effect = _parse_int
         cmd = self.make_cmd(["5", "42"])
+        route = MagicMock()
         cmd._use_case.execute.return_value = AssignPackagesToRouteResult(  # type: ignore[reportAttributeAccessIssue]
             successes=[
                 PackageAssignmentSuccess(
                     package_id=42,
                     route_id=5,
                     eta_text="N/A (route unscheduled)",
+                    route=route,
                 )
             ],
             errors=[],
@@ -51,6 +54,7 @@ class AssignPackageToRoute_Should(unittest.TestCase):
         mock_validate.assert_called_once_with(("5", "42"), 2)
         self.assertEqual(mock_parse.call_args_list, [call("5"), call("42")])
         cmd._use_case.execute.assert_called_once_with(5, [42])  # type: ignore[reportUnknownMemberType]
+        cmd._event_collector.drain.assert_called_once_with((route,))  # type: ignore[reportUnknownMemberType]
         self.assertEqual(result, "Assigned package 42 to route 5. ETA: N/A (route unscheduled)")
 
     @patch("src.adapters.driving.cli.commands.assign_packages_to_route.validate_params_count")
@@ -58,11 +62,16 @@ class AssignPackageToRoute_Should(unittest.TestCase):
     def test_execute_success_multiple_packages(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
         mock_parse.side_effect = _parse_int
         cmd = self.make_cmd(["7", "8", "9", "10"])
+        route = MagicMock()
         cmd._use_case.execute.return_value = AssignPackagesToRouteResult(  # type: ignore[reportAttributeAccessIssue]
             successes=[
-                PackageAssignmentSuccess(package_id=8, route_id=7, eta_text="2025-10-01 18:00"),
-                PackageAssignmentSuccess(package_id=9, route_id=7, eta_text="2025-10-01 19:00"),
-                PackageAssignmentSuccess(package_id=10, route_id=7, eta_text="N/A"),
+                PackageAssignmentSuccess(
+                    package_id=8, route_id=7, eta_text="2025-10-01 18:00", route=route
+                ),
+                PackageAssignmentSuccess(
+                    package_id=9, route_id=7, eta_text="2025-10-01 19:00", route=route
+                ),
+                PackageAssignmentSuccess(package_id=10, route_id=7, eta_text="N/A", route=route),
             ],
             errors=[],
         )
@@ -72,6 +81,7 @@ class AssignPackageToRoute_Should(unittest.TestCase):
         mock_validate.assert_called_once_with(("7", "8", "9", "10"), 2)
         self.assertEqual(mock_parse.call_args_list, [call("7"), call("8"), call("9"), call("10")])
         cmd._use_case.execute.assert_called_once_with(7, [8, 9, 10])  # type: ignore[reportUnknownMemberType]
+        cmd._event_collector.drain.assert_called_once_with((route,))  # type: ignore[reportUnknownMemberType]
         self.assertEqual(
             result,
             "\n".join(
@@ -90,9 +100,12 @@ class AssignPackageToRoute_Should(unittest.TestCase):
     ) -> None:
         mock_parse.side_effect = _parse_int
         cmd = self.make_cmd(["7", "8", "9"])
+        route = MagicMock()
         cmd._use_case.execute.return_value = AssignPackagesToRouteResult(  # type: ignore[reportAttributeAccessIssue]
             successes=[
-                PackageAssignmentSuccess(package_id=8, route_id=7, eta_text="2025-10-01 18:00"),
+                PackageAssignmentSuccess(
+                    package_id=8, route_id=7, eta_text="2025-10-01 18:00", route=route
+                ),
             ],
             errors=[
                 PackageAssignmentError(
@@ -109,6 +122,7 @@ class AssignPackageToRoute_Should(unittest.TestCase):
             "Assigned package 8 to route 7. ETA: 2025-10-01 18:00\n\n"
             "Failed:\n- Package 9 is already on route 2.",
         )
+        cmd._event_collector.drain.assert_called_once_with((route,))  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.assign_packages_to_route.validate_params_count")
     @patch("src.adapters.driving.cli.commands.assign_packages_to_route.try_parse_int")
@@ -127,6 +141,7 @@ class AssignPackageToRoute_Should(unittest.TestCase):
         result = cmd.execute()
 
         self.assertEqual(result, "")
+        cmd._event_collector.drain.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.assign_packages_to_route.validate_params_count")
     def test_execute_raises_when_params_count_invalid(self, mock_validate: MagicMock) -> None:
