@@ -11,6 +11,7 @@ class AuthRegisterUser_Should(unittest.TestCase):
         cmd = AuthRegisterUser.__new__(AuthRegisterUser)
         cmd._params = params or []  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._event_collector = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
     def test_register_skips_heartbeat(self) -> None:

@@ -2,13 +2,13 @@
 
 import getpass
 
-from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
+from src.adapters.driving.cli.commands.base_command.event_draining_command import EventDrainingCommand
 from src.adapters.driving.cli.commands.validation_helpers import validate_passwords
 from src.application.use_cases.auth.register_user import RegisterUserUseCase
 from src.domain.enums.auth import Role
 
 
-class AuthRegisterUser(BaseCommand[RegisterUserUseCase]):
+class AuthRegisterUser(EventDrainingCommand[RegisterUserUseCase]):
     """Register employee or manager users from CLI input.
 
     Usage:
@@ -48,12 +48,16 @@ class AuthRegisterUser(BaseCommand[RegisterUserUseCase]):
         confirm = getpass.getpass("Confirm password: ")
         validate_passwords(password, confirm)
 
-        rec = self._use_case.execute(
-            username=username,
-            role=role,
-            name=name,
-            email=email,
-            phone_number=phone,
-            password=password,
+        rec = self._run_and_drain(
+            self._use_case,
+            lambda: self._use_case.execute(
+                username=username,
+                role=role,
+                name=name,
+                email=email,
+                phone_number=phone,
+                password=password,
+            ),
         )
+
         return f"Created {rec.role} user '{rec.username}' (id={rec.user_id})."
