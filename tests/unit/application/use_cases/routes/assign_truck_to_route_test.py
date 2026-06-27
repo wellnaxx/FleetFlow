@@ -5,7 +5,6 @@ from unittest.mock import MagicMock
 
 from src.application.exceptions.application_errors import ConflictError, NotFoundError
 from src.application.use_cases.routes.assign_truck_to_route import (
-    AssignTruckToRouteResult,
     AssignTruckToRouteUseCase,
 )
 from src.domain.entities.delivery_route import DeliveryRoute
@@ -95,7 +94,9 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
 
         result = self.use_case.execute(11, 22, now=fixed_now)
 
-        self.assertEqual(result, AssignTruckToRouteResult(route_id=22, truck_id=11))
+        self.assertEqual(result.route_id, 22)
+        self.assertEqual(result.truck_id, 11)
+        self.assertIs(result.route, route)
         self.assertEqual(self.mock_vehicles.is_suitable_for_route.call_args.args[1].departure_time, fixed_now)
         route.schedule.assert_called_once_with(fixed_now, occurred_at=fixed_now)
         route.assign_truck.assert_called_once_with(truck, occurred_at=fixed_now)
@@ -134,7 +135,9 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
 
         result = self.use_case.execute(11, 22, now=fixed_now)
 
-        self.assertEqual(result, AssignTruckToRouteResult(route_id=22, truck_id=11))
+        self.assertEqual(result.route_id, 22)
+        self.assertEqual(result.truck_id, 11)
+        self.assertIs(result.route, route)
         route.schedule.assert_not_called()
         self.mock_vehicles.is_suitable_for_route.assert_called_once_with(truck, route)
         route.assign_truck.assert_called_once_with(truck, occurred_at=fixed_now)
@@ -210,7 +213,9 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
 
         result = self.use_case.execute(11, 22, now=fixed_now)
 
-        self.assertEqual(result, AssignTruckToRouteResult(route_id=22, truck_id=11))
+        self.assertEqual(result.route_id, 22)
+        self.assertEqual(result.truck_id, 11)
+        self.assertIs(result.route, route)
         route.assign_truck.assert_called_once_with(truck, occurred_at=fixed_now)
         self.assertIs(route.truck, truck)
         self.mock_routes.update_state.assert_not_called()

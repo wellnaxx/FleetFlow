@@ -10,6 +10,7 @@ class AssignTruckToRoute_Should(unittest.TestCase):
         cmd = AssignTruckToRoute.__new__(AssignTruckToRoute)
         cmd._params = tuple(params)  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._event_collector = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
     def test_mutates_state_true(self) -> None:
@@ -42,13 +43,15 @@ class AssignTruckToRoute_Should(unittest.TestCase):
         mock_parse.side_effect = [11, 22]
 
         cmd = self.make_cmd(["11", "22"])
-        cmd._use_case.execute.return_value = MagicMock(route_id=22)  # type: ignore[reportAttributeAccessIssue]
+        route = MagicMock()
+        cmd._use_case.execute.return_value = MagicMock(route_id=22, route=route)  # type: ignore[reportAttributeAccessIssue]
 
         result = cmd.execute()
 
         mock_validate.assert_called_once_with(("11", "22"), 2)
         self.assertEqual(mock_parse.call_args_list, [call("11"), call("22")])
         cmd._use_case.execute.assert_called_once_with(11, 22, fixed_now)  # type: ignore[reportUnknownMemberType]
+        cmd._event_collector.drain.assert_called_once_with((route,))  # type: ignore[reportUnknownMemberType]
         self.assertEqual(result, "Assigned truck 11 to route 22.")
 
     @patch("src.adapters.driving.cli.commands.assign_truck_to_route.datetime")
@@ -64,11 +67,13 @@ class AssignTruckToRoute_Should(unittest.TestCase):
         mock_parse.side_effect = [5, 7]
 
         cmd = self.make_cmd(["5", "7"])
-        cmd._use_case.execute.return_value = MagicMock(route_id=999)  # type: ignore[reportAttributeAccessIssue]
+        route = MagicMock()
+        cmd._use_case.execute.return_value = MagicMock(route_id=999, route=route)  # type: ignore[reportAttributeAccessIssue]
 
         result = cmd.execute()
 
         self.assertEqual(result, "Assigned truck 5 to route 999.")
+        cmd._event_collector.drain.assert_called_once_with((route,))  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
     def test_execute_raises_when_param_count_invalid(self, mock_validate: MagicMock) -> None:
@@ -152,12 +157,14 @@ class AssignTruckToRoute_Should(unittest.TestCase):
         mock_parse.side_effect = [10, 20]
 
         cmd = self.make_cmd(["10", "20"])
-        cmd._use_case.execute.return_value = MagicMock(route_id=20)  # type: ignore[reportAttributeAccessIssue]
+        route = MagicMock()
+        cmd._use_case.execute.return_value = MagicMock(route_id=20, route=route)  # type: ignore[reportAttributeAccessIssue]
 
         _ = cmd.execute()
 
         self.assertEqual(mock_parse.call_args_list, [call("10"), call("20")])
         cmd._use_case.execute.assert_called_once()  # type: ignore[reportUnknownMemberType]
+        cmd._event_collector.drain.assert_called_once_with((route,))  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.assign_truck_to_route.datetime")
     @patch("src.adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
@@ -172,8 +179,10 @@ class AssignTruckToRoute_Should(unittest.TestCase):
         mock_parse.side_effect = [1, 2]
 
         cmd = self.make_cmd(["1", "2"])
-        cmd._use_case.execute.return_value = MagicMock(route_id=2)  # type: ignore[reportAttributeAccessIssue]
+        route = MagicMock()
+        cmd._use_case.execute.return_value = MagicMock(route_id=2, route=route)  # type: ignore[reportAttributeAccessIssue]
 
         _ = cmd.execute()
 
         mock_validate.assert_called_once_with(("1", "2"), 2)
+        cmd._event_collector.drain.assert_called_once_with((route,))  # type: ignore[reportUnknownMemberType]

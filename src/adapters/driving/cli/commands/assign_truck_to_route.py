@@ -2,12 +2,12 @@
 
 from datetime import datetime
 
-from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
+from src.adapters.driving.cli.commands.base_command.event_draining_command import EventDrainingCommand
 from src.adapters.driving.cli.commands.validation_helpers import try_parse_int, validate_params_exact
 from src.application.use_cases.routes.assign_truck_to_route import AssignTruckToRouteUseCase
 
 
-class AssignTruckToRoute(BaseCommand[AssignTruckToRouteUseCase]):
+class AssignTruckToRoute(EventDrainingCommand[AssignTruckToRouteUseCase]):
     """Assign a truck to a route, scheduling unscheduled routes at command time."""
 
     mutates_state = True
@@ -30,5 +30,7 @@ class AssignTruckToRoute(BaseCommand[AssignTruckToRouteUseCase]):
         now = datetime.now()
 
         result = self._use_case.execute(truck_id, route_id, now)
+
+        self._event_collector.drain((result.route,))
 
         return f"Assigned truck {truck_id} to route {result.route_id}."

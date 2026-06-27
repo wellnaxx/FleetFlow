@@ -46,6 +46,7 @@ class AssignTruckToRouteResult:
 
     route_id: int
     truck_id: int
+    route: DeliveryRoute
 
 
 class AssignTruckToRouteUseCase(AuthorizedUseCase[AssignTruckToRouteResult]):
@@ -99,7 +100,7 @@ class AssignTruckToRouteUseCase(AuthorizedUseCase[AssignTruckToRouteResult]):
         self._assign_and_persist(route=route, truck=truck, now=now)
 
         logger.info("Assigned truck %d to route %d.", truck.vehicle_id, route.route_id)
-        return AssignTruckToRouteResult(route_id=route.route_id, truck_id=truck.vehicle_id)
+        return AssignTruckToRouteResult(route_id=route.route_id, truck_id=truck.vehicle_id, route=route)
 
     def _get_route(self, route_id: int) -> DeliveryRoute:
         route = self._routes.get_by_id(route_id)
