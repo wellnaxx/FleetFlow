@@ -10,6 +10,7 @@ class AuthChangePassword_Should(unittest.TestCase):
         cmd._params = params or []  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case.current_session_username = "alice"  # type: ignore[reportAttributeAccessIssue]
+        cmd._event_collector = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
     def test_change_password_skips_heartbeat(self) -> None:

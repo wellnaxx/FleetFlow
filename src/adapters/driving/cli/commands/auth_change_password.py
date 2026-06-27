@@ -2,12 +2,12 @@
 
 import getpass
 
-from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
+from src.adapters.driving.cli.commands.base_command.event_draining_command import EventDrainingCommand
 from src.adapters.driving.cli.commands.validation_helpers import validate_passwords
 from src.application.use_cases.auth.change_password import ChangePasswordUseCase
 
 
-class AuthChangePassword(BaseCommand[ChangePasswordUseCase]):
+class AuthChangePassword(EventDrainingCommand[ChangePasswordUseCase]):
     """Change the current user's password or reset another user's password.
 
     Usage:
@@ -34,7 +34,8 @@ class AuthChangePassword(BaseCommand[ChangePasswordUseCase]):
             new_pw = getpass.getpass(f"New password for '{target}': ")
             confirm = getpass.getpass("Confirm new password: ")
             validate_passwords(new_pw, confirm)
-            self._use_case.execute(target, new_pw)
+
+            self._run_and_drain(self._use_case, lambda: self._use_case.execute(target, new_pw))
             return f"Password reset for '{target}'."
 
         old_pw = getpass.getpass("Old password: ")
@@ -42,9 +43,13 @@ class AuthChangePassword(BaseCommand[ChangePasswordUseCase]):
         confirm = getpass.getpass("Confirm new password: ")
         validate_passwords(new_pw, confirm)
 
-        self._use_case.execute_current_user(
-            self._use_case.current_session_username,
-            new_pw,
-            old_password=old_pw,
+        self._run_and_drain(
+            self._use_case,
+            lambda: self._use_case.execute_current_user(
+                self._use_case.current_session_username,
+                new_pw,
+                old_password=old_pw,
+            ),
         )
+
         return "Password changed."
