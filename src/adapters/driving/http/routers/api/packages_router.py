@@ -3,6 +3,7 @@ from typing import Annotated, Protocol
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from src.adapters.driving.http.dependencies.eventing import get_event_collector
 from src.adapters.driving.http.dependencies.use_cases import (
     get_create_package_use_case,
     get_find_suitable_routes_for_package_use_case,
@@ -18,6 +19,7 @@ from src.adapters.driving.http.schemas.packages import (
     PackageResponse,
     PackageSuitableRouteResponse,
 )
+from src.application.eventing.collector import EventCollector
 from src.application.exceptions.application_errors import ConflictError
 from src.application.use_cases.packages.create_package import CreatePackageUseCase
 from src.application.use_cases.packages.remove_package import RemovePackageUseCase
@@ -99,12 +101,14 @@ def _package_page_response(
 def create_package(
     request: PackageCreateRequest,
     use_case: Annotated[CreatePackageUseCase, Depends(get_create_package_use_case)],
+    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
 ) -> PackageResponse:
     """Create a new package delivery request.
 
     Args:
         request: The package creation request data.
         use_case: The use case for creating a package, injected by FastAPI.
+        event_collector: Collector used to publish package and customer events.
 
     Returns:
         A response model representing the newly created package.
@@ -127,6 +131,8 @@ def create_package(
         )
     except (ConflictError, DomainConflictError, EntityNotFoundError) as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+    event_collector.drain((package, package.customer))
     return _package_response(package)
 
 
@@ -248,11 +254,14 @@ def find_suitable_routes_for_package(
 def delete_package(
     package_id: int,
     use_case: Annotated[RemovePackageUseCase, Depends(get_remove_package_use_case)],
+    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
 ) -> None:
     """Delete a package by its ID.
 
     Args:
         package_id: The ID of the package to delete.
+        use_case: The use case for removing a package, injected by FastAPI.
+        event_collector: Collector used to publish package, customer, and route events.
 
     Returns:
         None
@@ -265,6 +274,12 @@ def delete_package(
             * 500 - Database operation failure.
     """
     try:
-        use_case.execute(package_id=package_id)
+        result = use_case.execute(package_id=package_id)
     except (DomainConflictError, EntityNotFoundError) as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    else:
+        event_collector.drain(
+            (result.package, result.customer)
+            if result.route is None
+            else (result.package, result.customer, result.route)
+        )

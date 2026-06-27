@@ -10,6 +10,7 @@ from src.adapters.driving.http.routers.api import packages_router as packages_ro
 from src.adapters.driving.http.routers.api.packages_router import packages_router
 from src.application.exceptions.application_errors import NotFoundError, ValidationError
 from src.application.results.find_suitable_packages_for_route_result import SuitableRouteForPackage
+from src.application.results.remove_package_result import RemovePackageResult
 from src.application.use_cases.pagination import PageQuery, PageResult
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
@@ -31,8 +32,11 @@ class PackagesRouterShould(unittest.TestCase):
 
     def test_create_package_returns_created_package(self) -> None:
         use_case = MagicMock()
-        use_case.execute.return_value = self._package()
+        event_collector = MagicMock()
+        package = self._package()
+        use_case.execute.return_value = package
         self.app.dependency_overrides[packages_router_module.get_create_package_use_case] = lambda: use_case
+        self.app.dependency_overrides[packages_router_module.get_event_collector] = lambda: event_collector
 
         response = self.client.post(
             "/packages",
@@ -57,6 +61,7 @@ class PackagesRouterShould(unittest.TestCase):
             email="",
             phone="",
         )
+        event_collector.drain.assert_called_once_with((package, package.customer))
 
     def test_create_package_returns_bad_request_for_invalid_input(self) -> None:
         use_case = MagicMock()
@@ -257,12 +262,41 @@ class PackagesRouterShould(unittest.TestCase):
 
     def test_delete_package_removes_package(self) -> None:
         use_case = MagicMock()
+        event_collector = MagicMock()
+        package = self._package(package_id=4, with_route=True)
+        route = package.route
+        self.assertIsNotNone(route)
+        use_case.execute.return_value = RemovePackageResult(
+            package=package,
+            customer=package.customer,
+            route=route,
+        )
         self.app.dependency_overrides[packages_router_module.get_remove_package_use_case] = lambda: use_case
+        self.app.dependency_overrides[packages_router_module.get_event_collector] = lambda: event_collector
 
         response = self.client.delete("/packages/4")
 
         self.assertEqual(response.status_code, 204)
         use_case.execute.assert_called_once_with(package_id=4)
+        event_collector.drain.assert_called_once_with((package, package.customer, route))
+
+    def test_delete_package_without_route_drains_package_and_customer_only(self) -> None:
+        use_case = MagicMock()
+        event_collector = MagicMock()
+        package = self._package(package_id=4)
+        use_case.execute.return_value = RemovePackageResult(
+            package=package,
+            customer=package.customer,
+            route=None,
+        )
+        self.app.dependency_overrides[packages_router_module.get_remove_package_use_case] = lambda: use_case
+        self.app.dependency_overrides[packages_router_module.get_event_collector] = lambda: event_collector
+
+        response = self.client.delete("/packages/4")
+
+        self.assertEqual(response.status_code, 204)
+        use_case.execute.assert_called_once_with(package_id=4)
+        event_collector.drain.assert_called_once_with((package, package.customer))
 
     def test_delete_package_returns_not_found_for_missing_package(self) -> None:
         use_case = MagicMock()
