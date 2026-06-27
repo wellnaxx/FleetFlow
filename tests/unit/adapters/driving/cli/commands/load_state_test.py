@@ -9,6 +9,7 @@ class LoadStateTests(unittest.TestCase):
         cmd = LoadState.__new__(LoadState)
         cmd._params = tuple(params or [])  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._event_collector = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
     def test_mutates_state_true(self) -> None:
@@ -39,6 +40,7 @@ class LoadStateTests(unittest.TestCase):
 
         mock_validate.assert_called_once_with(cmd.params, 0, 1)
         cmd._use_case.execute.assert_called_once_with("/data/snapshots/state-2025-09-01.json")  # type: ignore[reportUnknownMemberType]
+        cmd._event_collector.drain.assert_called_once_with((cmd._use_case,))  # type: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
         self.assertEqual(result, "Loaded state from /abs/state-2025-09-01.json")
 
     @patch("src.adapters.driving.cli.commands.load_state.validate_params_count")
