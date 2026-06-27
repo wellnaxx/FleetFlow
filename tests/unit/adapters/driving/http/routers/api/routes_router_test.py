@@ -254,8 +254,16 @@ class RoutesRouterShould(unittest.TestCase):
 
     def test_assign_packages_to_route_returns_nested_assignment_response(self) -> None:
         use_case = MagicMock()
+        route = self._route(route_id=71)
         use_case.execute.return_value = AssignPackagesToRouteResult(
-            successes=[PackageAssignmentSuccess(package_id=1, route_id=71, eta_text="2026-05-24 10:00")],
+            successes=[
+                PackageAssignmentSuccess(
+                    package_id=1,
+                    route_id=71,
+                    eta_text="2026-05-24 10:00",
+                    route=route,
+                )
+            ],
             errors=[PackageAssignmentError(package_id=2, message="Package 2 not found.")],
         )
         self.app.dependency_overrides[routes_router_module.get_assign_packages_to_route_use_case] = lambda: (
@@ -265,8 +273,13 @@ class RoutesRouterShould(unittest.TestCase):
         response = self.client.patch("/routes/71/packages", json={"package_ids": [1, 2]})
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["successes"][0]["package_id"], 1)
-        self.assertEqual(response.json()["errors"][0]["message"], "Package 2 not found.")
+        payload = response.json()
+        self.assertEqual(payload["successes"][0]["package_id"], 1)
+        self.assertEqual(payload["successes"][0]["route_id"], 71)
+        self.assertEqual(payload["successes"][0]["route"]["route_id"], 71)
+        self.assertEqual(payload["successes"][0]["route"]["locations"], ["SYD", "MEL"])
+        self.assertEqual(payload["successes"][0]["route"]["package_ids"], [])
+        self.assertEqual(payload["errors"][0]["message"], "Package 2 not found.")
         use_case.execute.assert_called_once_with(route_id=71, package_ids=[1, 2])
 
     def test_assign_packages_to_route_returns_not_found_for_missing_route(self) -> None:
@@ -306,7 +319,11 @@ class RoutesRouterShould(unittest.TestCase):
 
     def test_assign_truck_to_route_returns_assignment_response(self) -> None:
         use_case = MagicMock()
-        use_case.execute.return_value = AssignTruckToRouteResult(route_id=81, truck_id=7)
+        use_case.execute.return_value = AssignTruckToRouteResult(
+            route_id=81,
+            truck_id=7,
+            route=MagicMock(),
+        )
         self.app.dependency_overrides[routes_router_module.get_assign_truck_to_route_use_case] = lambda: (
             use_case
         )

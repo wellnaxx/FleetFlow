@@ -129,6 +129,7 @@ def _assign_packages_response(
                 package_id=success.package_id,
                 route_id=success.route_id,
                 eta_text=success.eta_text,
+                route=_route_response(success.route),
             )
             for success in result.successes
         ],

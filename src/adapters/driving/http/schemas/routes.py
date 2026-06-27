@@ -82,6 +82,7 @@ class PackageAssignmentSuccessResponse(BaseModel):
     eta_text: str = Field(
         ..., description="Human-readable estimated time of arrival for the package at its destination."
     )
+    route: RouteResponse = Field(..., description="Updated route after the package assignment.")
 
 
 class PackageAssignmentErrorResponse(BaseModel):
