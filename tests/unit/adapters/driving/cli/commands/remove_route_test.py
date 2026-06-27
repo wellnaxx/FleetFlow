@@ -9,6 +9,7 @@ class TestRemoveRoute_Should(unittest.TestCase):
         cmd = RemoveRoute.__new__(RemoveRoute)
         cmd._params = tuple(params)  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._event_collector = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
     def test_execute_propagates_permission_errors_from_use_case(self) -> None:
@@ -77,6 +78,7 @@ class TestRemoveRoute_Should(unittest.TestCase):
         mock_validate.assert_called_once_with(("42",), 1)
         mock_parse.assert_called_once_with("42")
         cmd._use_case.execute.assert_called_once_with(42)  # type: ignore[reportUnknownMemberType]
+        cmd._event_collector.drain.assert_called_once_with((route,))  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.remove_route.validate_params_exact")
     @patch("src.adapters.driving.cli.commands.remove_route.try_parse_int")

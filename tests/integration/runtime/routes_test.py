@@ -87,7 +87,7 @@ class RuntimeRoutesIntegrationTests(unittest.TestCase):
             now=datetime(2025, 1, 1, 10, 0),
         )
 
-        self.assertEqual(result, AssignTruckToRouteResult(route_id=route.route_id, truck_id=5))
+        self.assertEqual(result, AssignTruckToRouteResult(route_id=route.route_id, truck_id=5, route=route))
         self.assertIs(route.truck, truck)
         self.assertIs(truck.route, route)
         self.assertEqual(route.departure_time, datetime(2025, 1, 1, 10, 0))
