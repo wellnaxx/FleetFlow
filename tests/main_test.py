@@ -265,6 +265,7 @@ class MainStartupTests(unittest.TestCase):
             "state.json",
             container.state_cases.advance,
             True,
+            container.event_collector,
         )
 
 

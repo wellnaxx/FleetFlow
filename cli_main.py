@@ -145,6 +145,7 @@ def main() -> None:
         container.default_world_state_path,
         container.state_cases.advance,
         container.autosave_enabled,
+        container.event_collector,
     ).start()
 
 

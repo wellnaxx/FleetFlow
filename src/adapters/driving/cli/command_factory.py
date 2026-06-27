@@ -30,61 +30,61 @@ from src.adapters.driving.cli.commands.view_routes_in_progress import ViewRoutes
 from src.adapters.driving.cli.commands.view_unassigned_packages import ViewUnassignedPackages
 from src.composition.container import Container
 
-type CommandEntry[T] = tuple[type[BaseCommand[T]], Callable[[Container], T]]
+type CommandParams = tuple[str, ...]
+type CommandBuilder = Callable[[Container, CommandParams], BaseCommand[Any]]
 
-
-def bind_command[T](
-    command_cls: type[BaseCommand[T]],
-    getter: Callable[[Container], T],
-) -> CommandEntry[T]:
-    """Bind a command class to the container lookup for its use case.
-
-    Args:
-        command_cls: CLI command class to instantiate.
-        getter: Function that retrieves the matching use case from the container.
-
-    Returns:
-        A registry entry consumed by `CommandFactory`.
-    """
-    return command_cls, getter
-
-
-_CONTAINER_COMMANDS: dict[str, CommandEntry[Any]] = {
-    "save": bind_command(SaveState, lambda container: container.state_cases.save),
-    "load": bind_command(LoadState, lambda container: container.state_cases.load),
-    "login": bind_command(AuthLogin, lambda container: container.auth_cases.login),
-    "logout": bind_command(AuthLogout, lambda container: container.auth_cases.logout),
-    "whoami": bind_command(AuthWhoAmI, lambda container: container.auth_cases.who_am_i),
-    "registeruser": bind_command(AuthRegisterUser, lambda container: container.auth_cases.register_user),
-    "changepassword": bind_command(AuthChangePassword, lambda container: container.auth_cases.change_password),
-    "createpackage": bind_command(CreatePackage, lambda container: container.package_cases.create),
-    "viewpackage": bind_command(ViewPackage, lambda container: container.package_cases.view),
-    "viewallpackages": bind_command(ViewAllPackages, lambda container: container.package_cases.view_all),
-    "removepackage": bind_command(RemovePackage, lambda container: container.package_cases.remove),
-    "viewunassignedpackages": bind_command(
-        ViewUnassignedPackages, lambda container: container.package_cases.view_unassigned
+_CONTAINER_COMMANDS: dict[str, CommandBuilder] = {
+    "login": lambda container, params: AuthLogin(params, container.auth_cases.login, container.event_collector),
+    "logout": lambda container, params: AuthLogout(
+        params, container.auth_cases.logout, container.event_collector
     ),
-    "viewallcustomers": bind_command(ViewAllCustomers, lambda container: container.customer_cases.view_all),
-    "createroute": bind_command(CreateRoute, lambda container: container.route_cases.create),
-    "viewroute": bind_command(ViewRoute, lambda container: container.route_cases.view),
-    "viewallroutes": bind_command(ViewAllRoutes, lambda container: container.route_cases.view_all),
-    "viewroutesinprogress": bind_command(
-        ViewRoutesInProgress, lambda container: container.route_cases.view_in_progress
+    "whoami": lambda container, params: AuthWhoAmI(params, container.auth_cases.who_am_i),
+    "registeruser": lambda container, params: AuthRegisterUser(
+        params, container.auth_cases.register_user, container.event_collector
     ),
-    "removeroute": bind_command(RemoveRoute, lambda container: container.route_cases.remove),
-    "assigntrucktoroute": bind_command(
-        AssignTruckToRoute, lambda container: container.route_cases.assign_truck
+    "changepassword": lambda container, params: AuthChangePassword(
+        params, container.auth_cases.change_password, container.event_collector
     ),
-    "findsuitabletrucksforroute": bind_command(
-        FindSuitableTrucksForRoute, lambda container: container.route_cases.find_suitable_trucks
+    "save": lambda container, params: SaveState(params, container.state_cases.save, container.event_collector),
+    "load": lambda container, params: LoadState(params, container.state_cases.load, container.event_collector),
+    "createpackage": lambda container, params: CreatePackage(
+        params,
+        container.package_cases.create,
+        container.event_collector,
     ),
-    "findsuitableroutesforpackage": bind_command(
-        FindSuitableRoutesForPackage, lambda container: container.route_cases.find_suitable_routes
+    "viewpackage": lambda container, params: ViewPackage(params, container.package_cases.view),
+    "viewallpackages": lambda container, params: ViewAllPackages(params, container.package_cases.view_all),
+    "removepackage": lambda container, params: RemovePackage(
+        params, container.package_cases.remove, container.event_collector
     ),
-    "assignpackagestoroute": bind_command(
-        AssignPackagesToRoute, lambda container: container.route_cases.assign_packages
+    "viewunassignedpackages": lambda container, params: ViewUnassignedPackages(
+        params, container.package_cases.view_unassigned
     ),
-    "viewalltrucks": bind_command(ViewAllTrucks, lambda container: container.truck_cases.view_all),
+    "viewallcustomers": lambda container, params: ViewAllCustomers(params, container.customer_cases.view_all),
+    "createroute": lambda container, params: CreateRoute(
+        params, container.route_cases.create, container.event_collector
+    ),
+    "viewroute": lambda container, params: ViewRoute(params, container.route_cases.view),
+    "viewallroutes": lambda container, params: ViewAllRoutes(params, container.route_cases.view_all),
+    "viewroutesinprogress": lambda container, params: ViewRoutesInProgress(
+        params, container.route_cases.view_in_progress
+    ),
+    "removeroute": lambda container, params: RemoveRoute(
+        params, container.route_cases.remove, container.event_collector
+    ),
+    "assigntrucktoroute": lambda container, params: AssignTruckToRoute(
+        params, container.route_cases.assign_truck, container.event_collector
+    ),
+    "assignpackagestoroute": lambda container, params: AssignPackagesToRoute(
+        params, container.route_cases.assign_packages, container.event_collector
+    ),
+    "findsuitabletrucksforroute": lambda container, params: FindSuitableTrucksForRoute(
+        params, container.route_cases.find_suitable_trucks
+    ),
+    "findsuitableroutesforpackage": lambda container, params: FindSuitableRoutesForPackage(
+        params, container.route_cases.find_suitable_routes
+    ),
+    "viewalltrucks": lambda container, params: ViewAllTrucks(params, container.truck_cases.view_all),
 }
 
 
@@ -116,9 +116,8 @@ class CommandFactory:
             raise ValueError("No command given.")
         name, params = tokens[0].lower(), tokens[1:]
 
-        entry = _CONTAINER_COMMANDS.get(name)
-        if entry is None:
+        builder = _CONTAINER_COMMANDS.get(name)
+        if builder is None:
             raise ValueError(f"Invalid command name: {name}!")
 
-        cls, get_use_case = entry
-        return cls(params, get_use_case(self._container))
+        return builder(self._container, tuple(params))

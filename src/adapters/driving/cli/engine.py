@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from src.adapters.driving.cli.command_factory import CommandFactory
 from src.application.enums.event_sources import EventSource
+from src.application.eventing.collector import EventCollector
 from src.application.eventing.context import EventContext
 from src.application.eventing.current_context import bind_event_context
 from src.application.eventing.envelope import EventActor
@@ -37,6 +38,7 @@ class Engine:
         autosave_path: str,
         advance_world_state: AdvanceWorldStateUseCase,
         autosave_enabled: bool,
+        event_collector: EventCollector,
     ) -> None:
         """Initialize the CLI engine.
 
@@ -48,6 +50,7 @@ class Engine:
             autosave_path: Default autosave path for state mutations.
             advance_world_state: Use case used to run the pre-command heartbeat.
             autosave_enabled: Whether autosave is enabled.
+            event_collector: Collector used to publish heartbeat and autosave events.
         """
         self._factory = factory
         self.auth = auth
@@ -57,6 +60,7 @@ class Engine:
         self._advance_world_state = advance_world_state
         self._autosave_enabled: bool = autosave_enabled
         self._running: bool = False
+        self._event_collector = event_collector
 
     def _rebind_app(self) -> None:
         """Synchronize authorization state after session-changing commands."""
@@ -360,6 +364,8 @@ class Engine:
                 heartbeat_summary = self._advance_world_state.execute()
                 heartbeat_changed = self._heartbeat_changed(heartbeat_summary)
                 if heartbeat_changed:
+                    self._event_collector.drain((self._advance_world_state,))
+
                     logger.info("Pre-command heartbeat changed world state before %s.", command_name)
 
             out = cmd.execute()
@@ -372,8 +378,14 @@ class Engine:
                     logger.info("Autosaving world state after %s.", command_name)
                     self._save_world_state.execute(self._autosave_path)
                 except Exception as se:
+                    try:
+                        self._event_collector.drain((self._save_world_state,))
+                    except Exception:
+                        logger.exception("Failed to publish autosave failure events.")
                     logger.exception("Autosave failed after executing %r", line)
                     print(f"Warning: autosave failed: {se}")
+                else:
+                    self._event_collector.drain((self._save_world_state,))
 
             if out:
                 print(out)

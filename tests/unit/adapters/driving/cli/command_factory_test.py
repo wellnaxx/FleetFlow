@@ -43,6 +43,7 @@ class CommandFactoryShould(unittest.TestCase):
             truck_cases=SimpleNamespace(
                 view_all=MagicMock(),
             ),
+            event_collector=MagicMock(),
         )
         factory = CommandFactory(container=container)  # type: ignore[reportArgumentType]
         return factory, container
@@ -65,19 +66,18 @@ class CommandFactoryShould(unittest.TestCase):
 
     def test_case_insensitive_name_and_param_parsing_with_quotes(self) -> None:
         factory, container = self.make_factory()
-        cmd_cls = MagicMock()
         sentinel_cmd = object()
-        cmd_cls.return_value = sentinel_cmd
+        builder = MagicMock(return_value=sentinel_cmd)
 
         with patch.dict(
             "src.adapters.driving.cli.command_factory._CONTAINER_COMMANDS",
-            {"viewpackage": (cmd_cls, lambda c: c.package_cases.view)},  # type: ignore[reportUnknownLambdaType, reportUnknownVariableType]
+            {"viewpackage": builder},
             clear=False,
         ):
             result = factory.create('ViEwPaCkAgE "42  "')
 
         self.assertIs(result, sentinel_cmd)
-        cmd_cls.assert_called_once_with(["42  "], container.package_cases.view)
+        builder.assert_called_once_with(container, ("42  ",))
 
     def test_container_backed_commands_receive_params_and_use_case(self) -> None:
         factory, container = self.make_factory()
@@ -148,17 +148,17 @@ class CommandFactoryShould(unittest.TestCase):
         ]
 
         for raw_input, command_name, params, expected_use_case in cases:
+            del expected_use_case
             with self.subTest(command_name=command_name):
-                cmd_cls = MagicMock()
                 sentinel_cmd = object()
-                cmd_cls.return_value = sentinel_cmd
+                builder = MagicMock(return_value=sentinel_cmd)
 
                 with patch.dict(
                     "src.adapters.driving.cli.command_factory._CONTAINER_COMMANDS",
-                    {command_name: (cmd_cls, lambda _container, uc=expected_use_case: uc)},  # type: ignore[reportUnknownLambdaType, reportUnknownVariableType]
+                    {command_name: builder},
                     clear=False,
                 ):
                     result = factory.create(raw_input)
 
                 self.assertIs(result, sentinel_cmd)
-                cmd_cls.assert_called_once_with(params, expected_use_case)
+                builder.assert_called_once_with(container, tuple(params))

@@ -29,7 +29,11 @@ class ContainerTests(unittest.TestCase):
             )
         )
 
-        container = Container(auth, AppConfig(persistence_backend=PersistenceBackend.MEMORY))
+        container = Container(
+            auth,
+            MagicMock(),
+            AppConfig(persistence_backend=PersistenceBackend.MEMORY),
+        )
 
         self.assertIsInstance(container.customer_repo, InMemoryCustomerRepository)
         self.assertIsInstance(container.package_repo, InMemoryPackageRepository)
@@ -69,7 +73,11 @@ class ContainerTests(unittest.TestCase):
             )
         )
 
-        container = Container(auth, AppConfig(persistence_backend=PersistenceBackend.POSTGRES))
+        container = Container(
+            auth,
+            MagicMock(),
+            AppConfig(persistence_backend=PersistenceBackend.POSTGRES),
+        )
 
         self.assertIs(container.package_repo, package_repo_cls.return_value)
         self.assertIs(container.customer_repo, customer_repo_cls.return_value)

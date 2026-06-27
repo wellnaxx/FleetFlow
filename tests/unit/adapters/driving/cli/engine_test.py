@@ -30,6 +30,7 @@ class EngineTests(unittest.TestCase):
         authz = MagicMock()
         save_world = MagicMock()
         advance = MagicMock()
+        event_collector = MagicMock()
         advance.execute.return_value = HeartbeatSummary(
             mutated_routes=(),
             mutated_packages=(),
@@ -44,6 +45,7 @@ class EngineTests(unittest.TestCase):
             autosave_path="state.json",
             advance_world_state=advance,
             autosave_enabled=autosave_enabled,
+            event_collector=event_collector,
         )
         return engine, factory, auth, authz, save_world, advance
 
@@ -240,6 +242,8 @@ class EngineTests(unittest.TestCase):
         advance.execute.assert_called_once_with()
         cmd.execute.assert_called_once_with()
         save_world.execute.assert_called_once_with("state.json")
+        event_collector: MagicMock = engine._event_collector  # pyright: ignore[reportPrivateUsage, reportAssignmentType]
+        event_collector.drain.assert_called_once_with((save_world,))
         mock_print.assert_called_once_with("ok")
 
     def test_exec_line_does_not_autosave_non_mutating_commands(self) -> None:
@@ -280,6 +284,10 @@ class EngineTests(unittest.TestCase):
 
         advance.execute.assert_called_once_with()
         save_world.execute.assert_called_once_with("state.json")
+        event_collector: MagicMock = engine._event_collector  # pyright: ignore[reportPrivateUsage, reportAssignmentType]
+        self.assertEqual(event_collector.drain.call_count, 2)
+        event_collector.drain.assert_any_call((advance,))
+        event_collector.drain.assert_any_call((save_world,))
         mock_print.assert_called_once_with("ok")
 
     def test_exec_line_rebinds_after_session_mutation(self) -> None:
@@ -321,6 +329,8 @@ class EngineTests(unittest.TestCase):
             engine._exec_line("createroute A B")  # pyright: ignore[reportPrivateUsage]
 
         advance.execute.assert_called_once_with()
+        event_collector: MagicMock = engine._event_collector  # pyright: ignore[reportPrivateUsage, reportAssignmentType]
+        event_collector.drain.assert_called_once_with((save_world,))
         mock_logger.exception.assert_called_once_with(
             "Autosave failed after executing %r",
             "createroute A B",

@@ -86,5 +86,5 @@ class RuntimeCompositionTests(unittest.TestCase):
         self.assertIs(container, build_container_mock.return_value)
         auth = build_container_mock.call_args.args[0]
         self.assertIs(auth._store, postgres_repo_cls.return_value)  # pyright: ignore[reportPrivateUsage]
-        self.assertIs(build_container_mock.call_args.args[1], config)
+        self.assertIs(build_container_mock.call_args.args[2], config)
         postgres_repo_cls.assert_called_once_with()
