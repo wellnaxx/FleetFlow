@@ -10,6 +10,7 @@ class AuthLogin_Should(unittest.TestCase):
         cmd = AuthLogin.__new__(AuthLogin)
         cmd._params = params or []  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._event_collector = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
     def test_mutates_session_true(self) -> None:
