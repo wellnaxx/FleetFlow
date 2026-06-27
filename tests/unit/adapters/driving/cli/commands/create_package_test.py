@@ -10,6 +10,7 @@ class CreatePackage_Tests(unittest.TestCase):
         cmd = CreatePackage.__new__(CreatePackage)
         cmd._params = params  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._event_collector = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
     def test_mutates_state_true(self) -> None:
@@ -58,6 +59,7 @@ class CreatePackage_Tests(unittest.TestCase):
             phone="",
         )
         self.assertEqual(result, "Package 123 was created for customer Alice (ID: 55) successfully.")
+        cmd._event_collector.drain.assert_called_once_with((pkg, pkg.customer))  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.create_package.validate_params_count")
     @patch("src.adapters.driving.cli.commands.create_package.try_parse_float")
@@ -85,6 +87,7 @@ class CreatePackage_Tests(unittest.TestCase):
             phone="0412345678",
         )
         self.assertEqual(result, "Package 999 was created for customer Bob (ID: 1) successfully.")
+        cmd._event_collector.drain.assert_called_once_with((pkg, pkg.customer))  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.create_package.validate_params_count")
     @patch("src.adapters.driving.cli.commands.create_package.try_parse_float")

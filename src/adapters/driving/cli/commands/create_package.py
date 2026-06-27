@@ -1,11 +1,11 @@
 """CLI command for creating delivery packages."""
 
-from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
+from src.adapters.driving.cli.commands.base_command.event_draining_command import EventDrainingCommand
 from src.adapters.driving.cli.commands.validation_helpers import try_parse_float, validate_params_count
 from src.application.use_cases.packages.create_package import CreatePackageUseCase
 
 
-class CreatePackage(BaseCommand[CreatePackageUseCase]):
+class CreatePackage(EventDrainingCommand[CreatePackageUseCase]):
     """Create a package from CLI parameters."""
 
     mutates_state = True
@@ -30,7 +30,7 @@ class CreatePackage(BaseCommand[CreatePackageUseCase]):
         email = self._params[4] if len(self._params) > 4 else ""
         phone = self._params[5] if len(self._params) > 5 else ""
 
-        pkg = self._use_case.execute(
+        package = self._use_case.execute(
             start=start,
             end=end,
             weight=weight,
@@ -39,7 +39,9 @@ class CreatePackage(BaseCommand[CreatePackageUseCase]):
             phone=phone,
         )
 
+        self._event_collector.drain((package, package.customer))
+
         return (
-            f"Package {pkg.package_id} was created for customer {name} "
-            f"(ID: {pkg.customer.customer_id}) successfully."
+            f"Package {package.package_id} was created for customer {name} "
+            f"(ID: {package.customer.customer_id}) successfully."
         )
