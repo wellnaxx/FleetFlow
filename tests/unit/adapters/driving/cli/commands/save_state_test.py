@@ -9,6 +9,7 @@ class SaveStateShould(unittest.TestCase):
         cmd = SaveState.__new__(SaveState)
         cmd._params = tuple(params or [])  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._event_collector = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
     def test_no_mutates_state_flag(self) -> None:
