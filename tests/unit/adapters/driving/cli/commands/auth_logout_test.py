@@ -11,6 +11,7 @@ class AuthLogout_Should(unittest.TestCase):
         cmd = AuthLogout.__new__(AuthLogout)
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         cmd._params = []  # type: ignore[reportAttributeAccessIssue]  # not used, but keep consistent with other commands
+        cmd._event_collector = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
     def test_mutates_session_true(self) -> None:
