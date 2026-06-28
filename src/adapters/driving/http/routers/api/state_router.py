@@ -3,11 +3,13 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from src.adapters.driven.persistence.database.errors import DatabaseError
+from src.adapters.driving.http.dependencies.eventing import execute_and_drain_events, get_event_collector
 from src.adapters.driving.http.dependencies.use_cases import (
     get_load_world_state_use_case,
     get_save_world_state_use_case,
 )
 from src.adapters.driving.http.schemas.state import WorldStatePathRequest, WorldStatePathResponse
+from src.application.eventing.collector import EventCollector
 from src.application.exceptions.world_state_errors import (
     WorldStateFileNotFoundError,
     WorldStatePersistenceError,
@@ -23,12 +25,14 @@ state_router = APIRouter(prefix="/state", tags=["state"])
 def save_world(
     use_case: Annotated[SaveWorldStateUseCase, Depends(get_save_world_state_use_case)],
     request: WorldStatePathRequest,
+    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
 ) -> WorldStatePathResponse:
     """Save the current world state to a snapshot path.
 
     Args:
         use_case: Use case for saving world state, injected by FastAPI.
         request: Snapshot path request.
+        event_collector: Collector used to publish world-state export events.
 
     Returns:
         Resolved path metadata for the saved snapshot.
@@ -40,7 +44,11 @@ def save_world(
             * 500 - Snapshot export or persistence failure.
     """
     try:
-        path = use_case.execute(request.path)
+        path = execute_and_drain_events(
+            recorder=use_case,
+            event_collector=event_collector,
+            action=lambda: use_case.execute(request.path),
+        )
         return WorldStatePathResponse(path=path, message="World state saved.")
     except (DatabaseError, WorldStatePersistenceError) as exc:
         raise HTTPException(
@@ -53,12 +61,14 @@ def save_world(
 def load_world(
     use_case: Annotated[LoadWorldStateUseCase, Depends(get_load_world_state_use_case)],
     request: WorldStatePathRequest,
+    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
 ) -> WorldStatePathResponse:
     """Load world state from a snapshot path.
 
     Args:
         use_case: Use case for loading world state, injected by FastAPI.
         request: Snapshot path request.
+        event_collector: Collector used to publish world-state import events.
 
     Returns:
         Resolved path metadata for the loaded snapshot.
@@ -71,7 +81,11 @@ def load_world(
             * 500 - Snapshot import or persistence failure.
     """
     try:
-        path = use_case.execute(request.path)
+        path = execute_and_drain_events(
+            recorder=use_case,
+            event_collector=event_collector,
+            action=lambda: use_case.execute(request.path),
+        )
         return WorldStatePathResponse(path=path, message="World state loaded.")
     except WorldStateFileNotFoundError as exc:
         raise HTTPException(

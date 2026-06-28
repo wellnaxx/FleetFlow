@@ -31,8 +31,10 @@ class StateRouterShould(unittest.TestCase):
 
     def test_save_world_returns_snapshot_metadata(self) -> None:
         use_case = MagicMock()
+        event_collector = MagicMock()
         use_case.execute.return_value = "C:/snapshots/world.json"
         self.app.dependency_overrides[state_router_module.get_save_world_state_use_case] = lambda: use_case
+        self.app.dependency_overrides[state_router_module.get_event_collector] = lambda: event_collector
 
         response = self.client.post("/state/save", json={"path": "world.json"})
 
@@ -43,6 +45,7 @@ class StateRouterShould(unittest.TestCase):
         )
         saved_path = use_case.execute.call_args.args[0]
         self.assertEqual(Path(saved_path).name, "world.json")
+        event_collector.drain.assert_called_once_with((use_case,))
 
     def test_save_world_rejects_invalid_path_before_use_case(self) -> None:
         use_case = MagicMock()
@@ -65,23 +68,29 @@ class StateRouterShould(unittest.TestCase):
 
     def test_save_world_returns_bad_request_for_validation_error(self) -> None:
         use_case = MagicMock()
+        event_collector = MagicMock()
         use_case.execute.side_effect = ValidationError("Invalid snapshot path.")
         self.app.dependency_overrides[state_router_module.get_save_world_state_use_case] = lambda: use_case
+        self.app.dependency_overrides[state_router_module.get_event_collector] = lambda: event_collector
 
         response = self.client.post("/state/save", json={"path": "world.json"})
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["detail"], "Invalid snapshot path.")
+        event_collector.drain.assert_called_once_with((use_case,))
 
     def test_save_world_returns_generic_error_for_persistence_failure(self) -> None:
         use_case = MagicMock()
+        event_collector = MagicMock()
         use_case.execute.side_effect = WorldStatePersistenceError("C:/secret/path/world.json denied")
         self.app.dependency_overrides[state_router_module.get_save_world_state_use_case] = lambda: use_case
+        self.app.dependency_overrides[state_router_module.get_event_collector] = lambda: event_collector
 
         response = self.client.post("/state/save", json={"path": "world.json"})
 
         self.assertEqual(response.status_code, 500)
         self.assertEqual(response.json()["detail"], "World state persistence failed.")
+        event_collector.drain.assert_called_once_with((use_case,))
 
     def test_save_world_returns_generic_error_for_database_failure(self) -> None:
         use_case = MagicMock()
@@ -95,8 +104,10 @@ class StateRouterShould(unittest.TestCase):
 
     def test_load_world_returns_snapshot_metadata(self) -> None:
         use_case = MagicMock()
+        event_collector = MagicMock()
         use_case.execute.return_value = "C:/snapshots/world.json"
         self.app.dependency_overrides[state_router_module.get_load_world_state_use_case] = lambda: use_case
+        self.app.dependency_overrides[state_router_module.get_event_collector] = lambda: event_collector
 
         response = self.client.post("/state/load", json={"path": "world.json"})
 
@@ -107,6 +118,7 @@ class StateRouterShould(unittest.TestCase):
         )
         loaded_path = use_case.execute.call_args.args[0]
         self.assertEqual(Path(loaded_path).name, "world.json")
+        event_collector.drain.assert_called_once_with((use_case,))
 
     def test_load_world_returns_forbidden_for_permission_error(self) -> None:
         use_case = MagicMock()
@@ -120,26 +132,32 @@ class StateRouterShould(unittest.TestCase):
 
     def test_load_world_returns_not_found_without_leaking_path(self) -> None:
         use_case = MagicMock()
+        event_collector = MagicMock()
         use_case.execute.side_effect = WorldStateFileNotFoundError("missing C:/secret/world.json")
         self.app.dependency_overrides[state_router_module.get_load_world_state_use_case] = lambda: use_case
+        self.app.dependency_overrides[state_router_module.get_event_collector] = lambda: event_collector
 
         response = self.client.post("/state/load", json={"path": "world.json"})
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["detail"], "World state snapshot not found.")
+        event_collector.drain.assert_called_once_with((use_case,))
 
     def test_load_world_returns_bad_request_for_corrupt_snapshot_without_leaking_path(self) -> None:
         use_case = MagicMock()
+        event_collector = MagicMock()
         use_case.execute.side_effect = WorldStateCorruptionError(
             "bad C:/secret/world.json",
             reason=WorldStateCorruptionReason.INVARIANT_VIOLATION,
         )
         self.app.dependency_overrides[state_router_module.get_load_world_state_use_case] = lambda: use_case
+        self.app.dependency_overrides[state_router_module.get_event_collector] = lambda: event_collector
 
         response = self.client.post("/state/load", json={"path": "world.json"})
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["detail"], "World state snapshot is malformed.")
+        event_collector.drain.assert_called_once_with((use_case,))
 
     def test_load_world_returns_bad_request_for_validation_error(self) -> None:
         use_case = MagicMock()
