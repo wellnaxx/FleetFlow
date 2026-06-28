@@ -23,7 +23,7 @@ FleetFlow currently supports:
 - JWT access/refresh tokens for HTTP authentication, with token-version revocation.
 - Typed domain, application, and repository errors for expected validation, not-found, conflict, authentication, and persistence failures.
 - Global FastAPI exception handlers that map expected application/domain failures to stable, sanitized HTTP responses.
-- Immutable domain and application event types with per-entity/use-case pending-event recording, event checkpoints for rollback, and context-local envelope metadata.
+- Immutable domain and application event types with per-entity/use-case pending-event recording, event checkpoints for rollback, context-local envelope metadata, synchronous in-process dispatch, and structured event logging.
 - Role-based authorization around CLI commands and application use cases.
 - Password hashing with PBKDF2-HMAC and strict persisted password-hash validation.
 - Configurable application logging to stdout and optional rotating log files, including HTTP request duration/status logging.
@@ -47,6 +47,7 @@ FleetFlow/
 |-- src/
 |   |-- adapters/
 |   |   |-- driven/
+|   |   |   |-- events/           # in-process event dispatcher and structured event logging handler
 |   |   |   |-- logging/          # stdout/file logging configuration
 |   |   |   |-- persistence/database/ # PostgreSQL repositories, SQL, graph loaders, unit of work, snapshot gateway/importer
 |   |   |   |-- persistence/json/ # JSON world-state and user persistence
@@ -58,7 +59,7 @@ FleetFlow/
 |   |-- application/
 |   |   |-- dto/                  # persisted snapshot and runtime transfer objects
 |   |   |-- enums/                # application-level classifications and reasons
-|   |   |-- eventing/             # execution context and event envelopes
+|   |   |-- eventing/             # collector, execution context, event envelopes, handler protocol
 |   |   |-- events/               # immutable application event definitions
 |   |   |-- exceptions/           # application and world-state exception hierarchy
 |   |   |-- models/               # persisted application models such as UserRecord
@@ -76,7 +77,7 @@ FleetFlow/
 |   |   `-- value_objects/        # ContactInfo, LocationCode
 |   |-- ports/
 |   |   |-- input/                # reserved for future input-port abstractions
-|   |   `-- output/               # repository, persistence, runtime, and vehicle ports
+|   |   `-- output/               # repository, persistence, runtime, event publisher, and vehicle ports
 |   `-- shared/                   # environment helpers and generic event primitives
 |-- tests/
 |-- postman/                      # API collection, local environment, and runner notes
@@ -89,25 +90,30 @@ The CLI runtime flow is:
 
 ```text
 CLI Menu / Command Mode
+  -> Bind CLI EventContext
   -> CLI Command
   -> Application Use Case
   -> Application Service / Port
   -> Domain Entity / Domain Service
   -> In-memory/PostgreSQL Repository or JSON Persistence Adapter
+  -> EventCollector drains pending events
+  -> In-process EventDispatcher invokes subscribers
 ```
 
 The HTTP runtime flow is:
 
 ```text
 FastAPI Router
-  -> Request Dependency / Authenticated Principal
+  -> Request Dependency / Authenticated Principal / EventContext
   -> Application Use Case
   -> Application Service / Port
   -> Domain Entity / Domain Service
   -> In-memory/PostgreSQL Repository or JSON Persistence Adapter
+  -> EventCollector drains pending events
+  -> In-process EventDispatcher invokes subscribers
 ```
 
-The composition root is `src/composition/container.py`. It wires repositories, domain services, application services, world-state persistence, runtime state management, and use-case registries. `src/composition/runtime.py` provides cached runtime dependencies shared by the CLI and HTTP adapters.
+The composition root is `src/composition/container.py`. It wires repositories, domain services, application services, world-state persistence, runtime state management, the event collector, and use-case registries. `src/composition/runtime.py` provides cached runtime dependencies shared by the CLI and HTTP adapters. Event subscriptions are centralized in `src/composition/event_subscriptions.py`.
 
 ## Domain Model
 
@@ -148,15 +154,19 @@ Expected domain failures use typed exceptions. Validation problems, missing doma
 
 ## Events And Observability
 
-FleetFlow has an event-recording foundation for business facts and application workflows.
+FleetFlow has an in-process event pipeline for business facts and application workflows.
 
 - Domain entities record pending events for customer, package, and route lifecycle changes, including creation, assignment, detachment, pickup, delivery, scheduling, truck assignment/release, route start/completion, and removal.
-- Event-aware use cases record authentication, authorization-denial, and world-state import/export events.
+- Event-aware use cases record authentication, authorization-denial, heartbeat, world-state import/export, and world-state corruption events.
 - Events are immutable and share an event id, business `occurred_at` timestamp, and UTC `recorded_at` timestamp.
 - Event checkpoints allow pending events to be rolled back with failed in-memory mutations.
 - `EventContext`, `EventActor`, and `EventEnvelope` provide correlation, source, actor, and causation metadata through `ContextVar`-local workflow context.
+- CLI commands and HTTP router handlers bind event context before draining pending events. CLI heartbeat and autosave events are drained under the surrounding CLI command context.
+- `EventCollector` captures pending events from use cases and entities, wraps them with the current context, publishes them, and clears recorders only after the publisher accepts the batch.
+- `InProcessEventDispatcher` routes envelopes by exact event type to subscribed handlers.
+- `StructuredEventLoggingHandler` is currently subscribed to all event types and writes event metadata to the configured application logger.
 
-Events are currently recorded in memory on the relevant entity or use case. FleetFlow does not yet include an event dispatcher, subscribers, an outbox, or durable audit-log persistence. Those are the next layers needed before events become externally observable or queryable.
+Events are currently dispatched synchronously in process after workflow persistence completes. FleetFlow does not yet include a durable audit-log repository or transactional outbox. Those are the next layers needed before event history becomes queryable and resilient to process crashes between business-state commit and handler execution.
 
 ## World-State Persistence
 
@@ -340,7 +350,7 @@ LOG_FILE=logs/fleetflow.log
 
 Supported levels are `CRITICAL`, `ERROR`, `WARNING`, `INFO`, `DEBUG`, and `NOTSET`. File logs rotate at 10 MiB with five retained backups. Omit `LOG_FILE` to log only to stdout.
 
-Logging covers startup/composition, selected mutating use cases, CLI command execution, persistence operations, global HTTP failures, and HTTP request method/path/status/duration. Passwords, JWTs, and database query parameters are not intentionally logged.
+Logging covers startup/composition, selected mutating use cases, CLI command execution, persistence operations, global HTTP failures, HTTP request method/path/status/duration, and published event-envelope metadata. Event logs include event type, event id, occurred/recorded timestamps, envelope id, correlation id, source, causation id, and actor identity when available. Passwords, JWTs, and database query parameters are not intentionally logged.
 
 ### Windows PowerShell
 
@@ -580,6 +590,8 @@ The CLI engine performs heartbeat/reconciliation around command execution. Recon
 
 Mutating commands are autosaved to the default world-state path when autosave is enabled. Autosave is enabled for the in-memory backend and disabled for the PostgreSQL backend. With PostgreSQL, `save` and `load` remain explicit snapshot export/import commands, but normal command mutations are persisted directly through database repositories and units of work.
 
+Heartbeat and autosave run inside the current CLI command event context, so their application events share the command correlation id and actor when they are triggered by user-entered CLI work.
+
 ## Testing
 
 The project supports both `pytest` and `unittest` discovery.
@@ -648,7 +660,7 @@ python -m mypy .
 
 ## Roadmap
 
-FleetFlow is currently a logistics backend with CLI and HTTP driving adapters, a layered/hexagonal architecture, domain entities, use cases, ports, in-memory repositories, a PostgreSQL repository adapter, JSON world-state persistence, authentication, autosave/load support, heartbeat reconciliation, and segment-aware route capacity checks.
+FleetFlow is currently a logistics backend with CLI and HTTP driving adapters, a layered/hexagonal architecture, domain entities, use cases, ports, in-memory repositories, a PostgreSQL repository adapter, JSON world-state persistence, authentication, autosave/load support, heartbeat reconciliation, segment-aware route capacity checks, and synchronous in-process event publication.
 
 The current architecture leaves several possible paths for future development. These are not required for the core project to work, but they are natural extensions if the project continues growing.
 
@@ -674,9 +686,9 @@ Remaining work includes operational migration tooling, stronger integration cove
 
 ### Audit log and domain events
 
-FleetFlow already defines and records pending domain and application events for important actions such as package assignment, route scheduling, truck dispatch/release, package delivery, authentication, authorization denial, and world-state import/export. Event envelopes and context metadata are also available for correlation and actor attribution.
+FleetFlow already defines and records pending domain and application events for important actions such as package assignment, route scheduling, truck dispatch/release, package delivery, authentication, authorization denial, heartbeat advancement, and world-state import/export. Event envelopes and context metadata are available for correlation and actor attribution, and the in-process dispatcher currently publishes those envelopes to a structured logging handler.
 
-The next step is dispatch: drain pending events after successful workflow completion, wrap them in the current event context, and invoke subscribers. A simple PostgreSQL-backed `audit_log` or outbox table would be enough for the first durable subscriber. External brokers such as Kafka or Redis Streams would only make sense later if the project needed higher-volume event processing or cross-service integration.
+The next step is durable consumption: add an audit-log port and repository, then subscribe an audit handler that writes normalized audit records from event envelopes. A transactional outbox can follow once durable audit writes work in process. External brokers such as Kafka or Redis Streams would only make sense later if the project needed higher-volume event processing or cross-service integration.
 
 ### Background jobs
 
