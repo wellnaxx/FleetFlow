@@ -17,6 +17,7 @@ from src.adapters.driving.http.routers.api.auth_router import (
 )
 from src.application.exceptions.application_errors import AuthenticationError, ValidationError
 from src.application.models.user_record import UserRecord
+from src.application.results.login_result import LoginResult
 from src.application.services.authorization_service import AuthorizationService
 from src.domain.entities.users.manager import Manager
 from src.domain.enums.auth import Role
@@ -33,9 +34,12 @@ class AuthRouterShould(unittest.TestCase):
         self.app.dependency_overrides.clear()
 
     def test_login_returns_token_pair(self) -> None:
-        auth_service = MagicMock()
-        auth_service.authenticate.return_value = (self._record(), object())
-        self.app.dependency_overrides[auth_router_module.get_auth_service] = lambda: auth_service
+        use_case = MagicMock()
+        event_collector = MagicMock()
+        record = self._record()
+        use_case.execute.return_value = LoginResult(record=record, user=self._principal(record).user)
+        self.app.dependency_overrides[auth_router_module.get_login_use_case] = lambda: use_case
+        self.app.dependency_overrides[auth_router_module.get_event_collector] = lambda: event_collector
 
         with self._patched_tokens():
             response = self.client.post(
@@ -52,12 +56,15 @@ class AuthRouterShould(unittest.TestCase):
                 "token_type": "bearer",
             },
         )
-        auth_service.authenticate.assert_called_once_with("alice", "Secret123!")
+        use_case.execute.assert_called_once_with("alice", "Secret123!")
+        event_collector.drain.assert_called_once_with((use_case,))
 
     def test_login_returns_unauthorized_for_invalid_credentials(self) -> None:
-        auth_service = MagicMock()
-        auth_service.authenticate.side_effect = AuthenticationError("bad credentials")
-        self.app.dependency_overrides[auth_router_module.get_auth_service] = lambda: auth_service
+        use_case = MagicMock()
+        event_collector = MagicMock()
+        use_case.execute.side_effect = AuthenticationError("bad credentials")
+        self.app.dependency_overrides[auth_router_module.get_login_use_case] = lambda: use_case
+        self.app.dependency_overrides[auth_router_module.get_event_collector] = lambda: event_collector
 
         response = self.client.post(
             "/auth/login",
@@ -66,11 +73,16 @@ class AuthRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json()["detail"], "Invalid username or password.")
+        use_case.execute.assert_called_once_with("alice", "wrong")
+        event_collector.drain.assert_called_once_with((use_case,))
 
     def test_login_returns_bad_request_for_invalid_persisted_role_before_token_creation(self) -> None:
-        auth_service = MagicMock()
-        auth_service.authenticate.return_value = (self._record(role="OWNER"), object())
-        self.app.dependency_overrides[auth_router_module.get_auth_service] = lambda: auth_service
+        use_case = MagicMock()
+        event_collector = MagicMock()
+        record = self._record(role="OWNER")
+        use_case.execute.return_value = LoginResult(record=record, user=self._principal(record).user)
+        self.app.dependency_overrides[auth_router_module.get_login_use_case] = lambda: use_case
+        self.app.dependency_overrides[auth_router_module.get_event_collector] = lambda: event_collector
 
         with self._patched_tokens() as token_mocks:
             response = self.client.post(
@@ -80,13 +92,17 @@ class AuthRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["detail"], "Invalid persisted user role.")
+        use_case.execute.assert_called_once_with("alice", "Secret123!")
+        event_collector.drain.assert_called_once_with((use_case,))
         token_mocks["create_access_token"].assert_not_called()
         token_mocks["create_refresh_token"].assert_not_called()
 
     def test_register_returns_created_user(self) -> None:
         use_case = MagicMock()
+        event_collector = MagicMock()
         use_case.execute.return_value = self._record(user_id=2, username="bob", role=Role.EMPLOYEE.value)
         self.app.dependency_overrides[auth_router_module.get_register_user_use_case] = lambda: use_case
+        self.app.dependency_overrides[auth_router_module.get_event_collector] = lambda: event_collector
 
         response = self.client.post(
             "/auth/register",
@@ -110,6 +126,7 @@ class AuthRouterShould(unittest.TestCase):
             phone_number="",
             password="Secret123!",
         )
+        event_collector.drain.assert_called_once_with((use_case,))
 
     def test_register_returns_forbidden_for_permission_error(self) -> None:
         use_case = MagicMock()
@@ -132,8 +149,10 @@ class AuthRouterShould(unittest.TestCase):
     def test_change_password_changes_current_user_password(self) -> None:
         principal = self._principal()
         use_case = MagicMock()
+        event_collector = MagicMock()
         self.app.dependency_overrides[auth_router_module.get_current_user] = lambda: principal
         self.app.dependency_overrides[auth_router_module.get_change_password_use_case] = lambda: use_case
+        self.app.dependency_overrides[auth_router_module.get_event_collector] = lambda: event_collector
 
         response = self.client.post(
             "/auth/change-password",
@@ -149,13 +168,16 @@ class AuthRouterShould(unittest.TestCase):
             new_password="NewSecret123!",
             old_password="OldSecret123!",
         )
+        event_collector.drain.assert_called_once_with((use_case,))
 
     def test_change_password_returns_bad_request_for_invalid_password(self) -> None:
         principal = self._principal()
         use_case = MagicMock()
+        event_collector = MagicMock()
         use_case.execute_current_user.side_effect = AuthenticationError("Old password incorrect.")
         self.app.dependency_overrides[auth_router_module.get_current_user] = lambda: principal
         self.app.dependency_overrides[auth_router_module.get_change_password_use_case] = lambda: use_case
+        self.app.dependency_overrides[auth_router_module.get_event_collector] = lambda: event_collector
 
         response = self.client.post(
             "/auth/change-password",
@@ -167,6 +189,7 @@ class AuthRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["detail"], "Old password incorrect.")
+        event_collector.drain.assert_called_once_with((use_case,))
 
     def test_change_password_returns_forbidden_for_permission_error(self) -> None:
         principal = self._principal()
@@ -188,7 +211,9 @@ class AuthRouterShould(unittest.TestCase):
 
     def test_reset_password_resets_target_password(self) -> None:
         use_case = MagicMock()
+        event_collector = MagicMock()
         self.app.dependency_overrides[auth_router_module.get_change_password_use_case] = lambda: use_case
+        self.app.dependency_overrides[auth_router_module.get_event_collector] = lambda: event_collector
 
         response = self.client.post(
             "/auth/users/bob/reset-password",
@@ -197,6 +222,7 @@ class AuthRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 204)
         use_case.execute.assert_called_once_with(username="bob", new_password="ResetSecret123!")
+        event_collector.drain.assert_called_once_with((use_case,))
 
     def test_reset_password_returns_bad_request_for_invalid_password(self) -> None:
         use_case = MagicMock()
@@ -283,51 +309,49 @@ class AuthRouterShould(unittest.TestCase):
         self.assertEqual(token_input["role"], Role.EMPLOYEE.value)
         token_mocks["create_refresh_token"].assert_called_once_with(token_input)
 
-    def test_logout_increments_token_version(self) -> None:
+    def test_logout_executes_logout_use_case(self) -> None:
         principal = self._principal()
-        user_repo = MagicMock()
-        user_repo.increment_token_version_by_id.return_value = self._record(token_version=2)
-        auth_service = MagicMock()
-        auth_service.user_repository = user_repo
+        use_case = MagicMock()
+        event_collector = MagicMock()
         self.app.dependency_overrides[auth_router_module.get_current_user] = lambda: principal
-        self.app.dependency_overrides[auth_router_module.get_auth_service] = lambda: auth_service
+        self.app.dependency_overrides[auth_router_module.get_logout_use_case] = lambda: use_case
+        self.app.dependency_overrides[auth_router_module.get_event_collector] = lambda: event_collector
 
         response = self.client.post("/auth/logout")
 
         self.assertEqual(response.status_code, 204)
-        user_repo.increment_token_version_by_id.assert_called_once_with(1)
-        auth_service.logout.assert_called_once_with()
+        use_case.execute.assert_called_once_with(user_id=1, username="alice")
+        event_collector.drain.assert_called_once_with((use_case,))
 
-    def test_logout_is_idempotent_when_user_record_is_already_missing(self) -> None:
+    def test_logout_drains_events_when_user_record_is_already_missing(self) -> None:
         principal = self._principal()
-        user_repo = MagicMock()
-        user_repo.increment_token_version_by_id.return_value = None
-        auth_service = MagicMock()
-        auth_service.user_repository = user_repo
+        use_case = MagicMock()
+        event_collector = MagicMock()
         self.app.dependency_overrides[auth_router_module.get_current_user] = lambda: principal
-        self.app.dependency_overrides[auth_router_module.get_auth_service] = lambda: auth_service
+        self.app.dependency_overrides[auth_router_module.get_logout_use_case] = lambda: use_case
+        self.app.dependency_overrides[auth_router_module.get_event_collector] = lambda: event_collector
 
         response = self.client.post("/auth/logout")
 
         self.assertEqual(response.status_code, 204)
-        user_repo.increment_token_version_by_id.assert_called_once_with(1)
-        auth_service.logout.assert_called_once_with()
+        use_case.execute.assert_called_once_with(user_id=1, username="alice")
+        event_collector.drain.assert_called_once_with((use_case,))
 
     def test_logout_returns_generic_error_for_database_failure(self) -> None:
         principal = self._principal()
-        user_repo = MagicMock()
-        user_repo.increment_token_version_by_id.side_effect = DatabaseError.write_failed(Exception("boom"))
-        auth_service = MagicMock()
-        auth_service.user_repository = user_repo
+        use_case = MagicMock()
+        event_collector = MagicMock()
+        use_case.execute.side_effect = DatabaseError.write_failed(Exception("boom"))
         self.app.dependency_overrides[auth_router_module.get_current_user] = lambda: principal
-        self.app.dependency_overrides[auth_router_module.get_auth_service] = lambda: auth_service
+        self.app.dependency_overrides[auth_router_module.get_logout_use_case] = lambda: use_case
+        self.app.dependency_overrides[auth_router_module.get_event_collector] = lambda: event_collector
 
         response = self.client.post("/auth/logout")
 
         self.assertEqual(response.status_code, 500)
         self.assertEqual(response.json()["detail"], "Database operation failed.")
-        user_repo.increment_token_version_by_id.assert_called_once_with(1)
-        auth_service.logout.assert_not_called()
+        use_case.execute.assert_called_once_with(user_id=1, username="alice")
+        event_collector.drain.assert_called_once_with((use_case,))
 
     def test_me_returns_null_for_absent_contact_fields(self) -> None:
         principal = self._principal(

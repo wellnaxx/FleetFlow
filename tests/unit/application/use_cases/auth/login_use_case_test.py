@@ -21,7 +21,8 @@ class LoginUseCase_Should(unittest.TestCase):
 
         result = use_case.execute("alice", "Secret123")
 
-        self.assertIs(result, user)
+        self.assertIs(result.record, record)
+        self.assertIs(result.user, user)
         auth.login.assert_called_once_with("alice", "Secret123")
 
         event = use_case.pending_events[0]

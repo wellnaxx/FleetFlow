@@ -13,8 +13,10 @@ from src.adapters.driving.http.dependencies.auth import (
     get_current_user,
     principal_from_token,
 )
+from src.adapters.driving.http.dependencies.eventing import execute_and_drain_events, get_event_collector
 from src.adapters.driving.http.dependencies.use_cases import (
     get_change_password_use_case,
+    get_login_use_case,
     get_logout_use_case,
     get_register_user_use_case,
 )
@@ -26,16 +28,17 @@ from src.adapters.driving.http.schemas.auth import (
     ResetUserPasswordRequest,
     TokenResponse,
 )
+from src.application.eventing.collector import EventCollector
 from src.application.exceptions.application_errors import (
     AuthenticationError,
     ValidationError,
 )
 from src.application.models.user_record import UserRecord
-from src.application.services.auth_service import AuthService
 from src.application.use_cases.auth.change_password import ChangePasswordUseCase
+from src.application.use_cases.auth.login import LoginUseCase
 from src.application.use_cases.auth.logout import LogoutUseCase
 from src.application.use_cases.auth.register_user import RegisterUserUseCase
-from src.composition.runtime import get_auth_service, get_user_repository
+from src.composition.runtime import get_user_repository
 from src.domain.enums.auth import Role
 from src.ports.output.user_repository import UserRepositoryPort
 
@@ -127,12 +130,14 @@ def _current_user_response(record: UserRecord) -> CurrentUserResponse:
 def register(
     request: RegisterUserRequest,
     use_case: Annotated[RegisterUserUseCase, Depends(get_register_user_use_case)],
+    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
 ) -> CurrentUserResponse:
     """Register a new user account.
 
     Args:
         request: Registration request body.
         use_case: Use case for registering users, injected by FastAPI.
+        event_collector: Collector used to publish registration events.
 
     Returns:
         A response model representing the newly registered user.
@@ -144,13 +149,18 @@ def register(
             * 409 - Username already exists.
             * 500 - Database operation failure.
     """
-    record = use_case.execute(
-        username=request.username,
-        role=request.role,
-        name=request.name,
-        email=request.email or "",
-        phone_number=request.phone_number or "",
-        password=request.password,
+
+    record = execute_and_drain_events(
+        recorder=use_case,
+        event_collector=event_collector,
+        action=lambda: use_case.execute(
+            username=request.username,
+            role=request.role,
+            name=request.name,
+            email=request.email or "",
+            phone_number=request.phone_number or "",
+            password=request.password,
+        ),
     )
 
     return _current_user_response(record)
@@ -159,13 +169,15 @@ def register(
 @auth_router.post("/login", status_code=status.HTTP_200_OK)
 def login(
     form_data: Annotated[LoginFormData, Depends(_get_login_form_data)],
-    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    use_case: Annotated[LoginUseCase, Depends(get_login_use_case)],
+    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
 ) -> TokenResponse:
     """Authenticate with username/password and return an access + refresh token pair.
 
     Args:
         form_data: Login credentials extracted from form data.
-        auth_service: Authentication service, injected by FastAPI.
+        use_case: Use case for authenticating users, injected by FastAPI.
+        event_collector: Collector used to publish authentication events.
 
     Returns:
         A token response containing a new access token and refresh token.
@@ -177,8 +189,12 @@ def login(
             * 500 - Database operation failure.
     """
     try:
-        record, _ = auth_service.authenticate(form_data.username, form_data.password)
-        return _token_response(record)
+        result = execute_and_drain_events(
+            recorder=use_case,
+            event_collector=event_collector,
+            action=lambda: use_case.execute(form_data.username, form_data.password),
+        )
+        return _token_response(result.record)
     except AuthenticationError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -191,6 +207,7 @@ def change_password(
     request: ChangeOwnPasswordRequest,
     principal: Annotated[AuthenticatedPrincipal, Depends(get_current_user)],
     use_case: Annotated[ChangePasswordUseCase, Depends(get_change_password_use_case)],
+    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
 ) -> None:
     """Change the current user's password.
 
@@ -198,6 +215,7 @@ def change_password(
         request: Current and new password request body.
         principal: Currently authenticated user, injected by FastAPI.
         use_case: Use case for changing passwords, injected by FastAPI.
+        event_collector: Collector used to publish password-change events.
 
     Returns:
         None
@@ -210,10 +228,14 @@ def change_password(
             * 500 - Database operation failure.
     """
     try:
-        use_case.execute_current_user(
-            username=principal.record.username,
-            new_password=request.new_password,
-            old_password=request.current_password,
+        execute_and_drain_events(
+            recorder=use_case,
+            event_collector=event_collector,
+            action=lambda: use_case.execute_current_user(
+                username=principal.record.username,
+                new_password=request.new_password,
+                old_password=request.current_password,
+            ),
         )
     except AuthenticationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -224,6 +246,7 @@ def reset_password(
     username: str,
     request: ResetUserPasswordRequest,
     use_case: Annotated[ChangePasswordUseCase, Depends(get_change_password_use_case)],
+    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
 ) -> None:
     """Reset another user's password. This endpoint is intended for admin use.
 
@@ -231,6 +254,7 @@ def reset_password(
         username: Username of the user whose password should be reset.
         request: New password request body.
         use_case: Use case for changing passwords, injected by FastAPI.
+        event_collector: Collector used to publish password-reset events.
 
     Returns:
         None
@@ -242,7 +266,11 @@ def reset_password(
             * 404 - Target user does not exist.
             * 500 - Database operation failure.
     """
-    use_case.execute(username=username, new_password=request.new_password)
+    execute_and_drain_events(
+        recorder=use_case,
+        event_collector=event_collector,
+        action=lambda: use_case.execute(username=username, new_password=request.new_password),
+    )
 
 
 @auth_router.post("/refresh", status_code=status.HTTP_200_OK)
@@ -276,12 +304,14 @@ def refresh_token(
 def logout(
     principal: Annotated[AuthenticatedPrincipal, Depends(get_current_user)],
     use_case: Annotated[LogoutUseCase, Depends(get_logout_use_case)],
+    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
 ) -> None:
     """Invalidate all sessions for the current user.
 
     Args:
         principal: Currently authenticated user, injected by FastAPI.
         use_case: Use case for logging out, injected by FastAPI.
+        event_collector: Collector used to publish logout and token-revocation events.
 
     Returns:
         None
@@ -291,7 +321,14 @@ def logout(
             * 401 - Invalid, expired, revoked, or userless access token.
             * 500 - Database operation failure.
     """
-    use_case.execute(user_id=principal.record.user_id, username=principal.record.username)
+    execute_and_drain_events(
+        recorder=use_case,
+        event_collector=event_collector,
+        action=lambda: use_case.execute(
+            user_id=principal.record.user_id,
+            username=principal.record.username,
+        ),
+    )
 
 
 @auth_router.get("/me", status_code=status.HTTP_200_OK)

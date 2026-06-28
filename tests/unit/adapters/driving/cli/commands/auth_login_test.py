@@ -13,6 +13,9 @@ class AuthLogin_Should(unittest.TestCase):
         cmd._event_collector = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
+    def login_result(self, *, name: str, role: str) -> SimpleNamespace:
+        return SimpleNamespace(user=SimpleNamespace(name=name, role=SimpleNamespace(value=role)))
+
     def test_mutates_session_true(self) -> None:
         self.assertTrue(AuthLogin.mutates_session)
 
@@ -24,8 +27,7 @@ class AuthLogin_Should(unittest.TestCase):
         # Arrange
         cmd = self.make_cmd(params=["alice "])  # note trailing space; code does NOT strip this path
         mock_getpass.return_value = "secretPW"
-        user_obj = SimpleNamespace(name="Alice", role=SimpleNamespace(value="ADMIN"))
-        cmd._use_case.execute.return_value = user_obj  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = self.login_result(name="Alice", role="ADMIN")  # type: ignore[reportAttributeAccessIssue]
 
         # Act
         result = cmd.execute()
@@ -44,8 +46,7 @@ class AuthLogin_Should(unittest.TestCase):
         cmd = self.make_cmd(params=[])  # triggers prompt path
         mock_input.return_value = "  Bob\t"
         mock_getpass.return_value = "pw123456"
-        user_obj = SimpleNamespace(name="Bob", role=SimpleNamespace(value="USER"))
-        cmd._use_case.execute.return_value = user_obj  # type: ignore[reportAttributeAccessIssue]
+        cmd._use_case.execute.return_value = self.login_result(name="Bob", role="USER")  # type: ignore[reportAttributeAccessIssue]
 
         # Act
         result = cmd.execute()
@@ -79,9 +80,7 @@ class AuthLogin_Should(unittest.TestCase):
         # Arrange
         cmd = self.make_cmd(params=["dave"])
         mock_getpass.return_value = "pw"
-        cmd._use_case.execute.return_value = SimpleNamespace(  # type: ignore[reportAttributeAccessIssue]
-            name="Dave", role=SimpleNamespace(value="OP")
-        )
+        cmd._use_case.execute.return_value = self.login_result(name="Dave", role="OP")  # type: ignore[reportAttributeAccessIssue]
 
         # Act
         _ = cmd.execute()
@@ -97,9 +96,7 @@ class AuthLogin_Should(unittest.TestCase):
         """
         cmd = self.make_cmd(params=[""])
         mock_getpass.return_value = "pw"
-        cmd._use_case.execute.return_value = SimpleNamespace(  # type: ignore[reportAttributeAccessIssue]
-            name="", role=SimpleNamespace(value="USER")
-        )
+        cmd._use_case.execute.return_value = self.login_result(name="", role="USER")  # type: ignore[reportAttributeAccessIssue]
 
         _ = cmd.execute()
 

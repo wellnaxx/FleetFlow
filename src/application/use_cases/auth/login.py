@@ -12,15 +12,15 @@ from src.application.exceptions.password_errors import (
     LoginUserNotFoundError,
     LoginWrongPasswordError,
 )
+from src.application.results.login_result import LoginResult
 from src.application.services.auth_service import AuthService
 from src.application.use_cases.base.base_use_case import BaseUseCase
 from src.application.use_cases.base.event_mixin import ApplicationEventRecorderMixin
-from src.domain.entities.users.user import User
 
 logger = logging.getLogger(__name__)
 
 
-class LoginUseCase(BaseUseCase[User], ApplicationEventRecorderMixin):
+class LoginUseCase(BaseUseCase[LoginResult], ApplicationEventRecorderMixin):
     """Authenticate a user through the auth service."""
 
     def __init__(self, auth: AuthService, clock: Callable[[], datetime] = datetime.now) -> None:
@@ -35,15 +35,15 @@ class LoginUseCase(BaseUseCase[User], ApplicationEventRecorderMixin):
 
         self._pending_events = []
 
-    def execute(self, username: str, password: str) -> User:
-        """Authenticate a user and return the runtime user entity.
+    def execute(self, username: str, password: str) -> LoginResult:
+        """Authenticate a user and return persisted and runtime user data.
 
         Args:
             username: Login username.
             password: Plain-text password.
 
         Returns:
-            The authenticated runtime user entity.
+            Login result containing the persisted user record and runtime user entity.
 
         Raises:
             AuthenticationError: If the username is unknown or password is invalid.
@@ -72,7 +72,7 @@ class LoginUseCase(BaseUseCase[User], ApplicationEventRecorderMixin):
             )
 
         logger.info("User %r authenticated.", username.strip().lower())
-        return user
+        return LoginResult(rec, user)
 
     def _record_login_rejection(
         self,
