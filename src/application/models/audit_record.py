@@ -16,15 +16,7 @@ from uuid import UUID
 from src.application.enums.audit_actions import AuditAction
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.event_sources import EventSource
-
-# Scalar values allowed by JSON.
-type JSONPrimitive = str | int | float | bool | None
-
-# Any JSON-compatible value after event payload serialization.
-type JSONValue = JSONPrimitive | list[JSONValue] | dict[str, JSONValue]
-
-# Top-level event-specific JSON payload stored with an audit record.
-type JSONObject = dict[str, JSONValue]
+from src.shared.json_types import JSONObject
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
