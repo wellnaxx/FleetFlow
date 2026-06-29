@@ -1,3 +1,5 @@
+"""Shared type aliases for strict JSON-compatible data."""
+
 # Scalar values allowed by JSON.
 type JSONPrimitive = str | int | float | bool | None
 
