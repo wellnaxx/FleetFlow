@@ -97,6 +97,14 @@ class WorldStateQueries:
     reset_route_sequence: str
 
 
+@dataclass(frozen=True, slots=True)
+class AuditQueries:
+    add: str
+    list_all: str
+    list_page: str
+    list_page_with_total: str
+
+
 class QueryRegistry:
     """Lazy SQL query registry.
 
@@ -241,6 +249,23 @@ class QueryRegistry:
             reset_customer_sequence=load_sql("world_state/reset_customer_sequence.sql"),
             reset_package_sequence=load_sql("world_state/reset_package_sequence.sql"),
             reset_route_sequence=load_sql("world_state/reset_route_sequence.sql"),
+        )
+    
+    @cached_property
+    def audit(self) -> AuditQueries:
+        """Load audit SQL queries.
+
+        Returns:
+            Audit query collection.
+
+        Raises:
+            FileNotFoundError: If an audit SQL file is missing.
+        """
+        return AuditQueries(
+            add=load_sql("audit/add.sql"),
+            list_all=load_sql("audit/list_all.sql"),
+            list_page=load_sql("audit/list_page.sql"),
+            list_page_with_total=load_sql("audit/list_page_with_total.sql"),
         )
 
 
