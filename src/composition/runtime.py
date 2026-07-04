@@ -3,13 +3,16 @@
 import logging
 from functools import lru_cache
 
+from src.adapters.driven.persistence.database.repositories.audit_repository import PostgresAuditRepository
 from src.adapters.driven.persistence.database.repositories.user_repository import PostgresUserRepository
 from src.adapters.driven.persistence.json.config import get_json_config
 from src.adapters.driven.persistence.json.user_store import JSONUserStore
+from src.adapters.driven.persistence.memory.audit_repository import InMemoryAuditRepository
 from src.application.services.auth_service import AuthService
 from src.composition.config import PersistenceBackend, get_app_config
 from src.composition.container import Container, build_container
 from src.composition.event_subscriptions import build_eventing_components
+from src.ports.output.audit_repository import AuditRepositoryPort
 from src.ports.output.user_repository import UserRepositoryPort
 
 logger = logging.getLogger(__name__)
@@ -51,6 +54,28 @@ def get_auth_service() -> AuthService:
 
 
 @lru_cache(maxsize=1)
+def get_audit_repository() -> AuditRepositoryPort:
+    """Get the audit repository shared by event handlers and the container.
+
+    Returns:
+        The audit repository for the configured persistence backend.
+
+    Raises:
+        ValueError: If the configured persistence backend is unsupported.
+    """
+    config = get_app_config()
+    if config.persistence_backend is PersistenceBackend.MEMORY:
+        logger.info("Using in-memory audit repository.")
+        return InMemoryAuditRepository()
+    if config.persistence_backend is PersistenceBackend.POSTGRES:
+        logger.info("Using PostgreSQL audit repository.")
+        return PostgresAuditRepository()
+
+    logger.critical("Unsupported persistence backend configured: %r.", config.persistence_backend)
+    raise ValueError(f"Unsupported persistence backend: {config.persistence_backend!r}")
+
+
+@lru_cache(maxsize=1)
 def get_container() -> Container:
     """Get the application's dependency injection container.
 
@@ -59,5 +84,7 @@ def get_container() -> Container:
         cases, and eventing infrastructure.
     """
     logger.info("Building shared application container.")
-    eventing = build_eventing_components()
-    return build_container(get_auth_service(), eventing.collector, get_app_config())
+    config = get_app_config()
+    audit_repository = get_audit_repository()
+    eventing = build_eventing_components(audit_repository)
+    return build_container(get_auth_service(), eventing.collector, config, audit_repository)

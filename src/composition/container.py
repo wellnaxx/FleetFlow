@@ -3,6 +3,7 @@
 import logging
 from datetime import datetime
 
+from src.adapters.driven.persistence.database.repositories.audit_repository import PostgresAuditRepository
 from src.adapters.driven.persistence.database.repositories.customer_repository import PostgresCustomerRepository
 from src.adapters.driven.persistence.database.repositories.package_repository import PostgresPackageRepository
 from src.adapters.driven.persistence.database.repositories.route_repository import PostgresRouteRepository
@@ -12,6 +13,7 @@ from src.adapters.driven.persistence.database.world_state_gateway import Postgre
 from src.adapters.driven.persistence.database.world_state_importer import PostgresWorldStateImporter
 from src.adapters.driven.persistence.json.config import get_json_config
 from src.adapters.driven.persistence.json.world_state_persistence import JsonWorldStatePersistence
+from src.adapters.driven.persistence.memory.audit_repository import InMemoryAuditRepository
 from src.adapters.driven.persistence.memory.customer_repository import InMemoryCustomerRepository
 from src.adapters.driven.persistence.memory.package_repository import InMemoryPackageRepository
 from src.adapters.driven.persistence.memory.route_repository import InMemoryRouteRepository
@@ -70,6 +72,7 @@ from src.application.use_cases.use_case_registry import (
 from src.composition.config import AppConfig, PersistenceBackend, get_app_config
 from src.composition.seed_fleet import seed_fleet_if_empty
 from src.domain.services.vehicle_manager import VehicleManager
+from src.ports.output.audit_repository import AuditRepositoryPort
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +92,7 @@ class Container:
         auth: AuthService,
         event_collector: EventCollector,
         config: AppConfig | None = None,
+        audit_repository: AuditRepositoryPort | None = None,
     ) -> None:
         """Construct the application dependency graph.
 
@@ -100,11 +104,15 @@ class Container:
                 complete successfully.
             config: Application configuration. When omitted, it is loaded from
                 the environment.
+            audit_repository: Optional repository instance shared with the
+                audit event handler. When omitted, the container creates one
+                for the configured persistence backend.
         """
         config = config or get_app_config()
         logger.info("Wiring application container for %s backend.", config.persistence_backend.value)
 
         self.event_collector = event_collector
+        self._audit_repository = audit_repository
 
         if config.persistence_backend is PersistenceBackend.MEMORY:
             self._wire_memory()
@@ -152,6 +160,7 @@ class Container:
             packages=self.package_repo,
             trucks=self.truck_repo,
         )
+        self.audit_repo = self._audit_repository or InMemoryAuditRepository()
 
     def _wire_postgres(self) -> None:
         """Wire PostgreSQL persistence implementations."""
@@ -161,6 +170,7 @@ class Container:
         self.route_repo = PostgresRouteRepository()
         self.truck_repo = PostgresTruckRepository()
         self.unit_of_work = PostgresUnitOfWork()
+        self.audit_repo = self._audit_repository or PostgresAuditRepository()
 
     def _wire_world_state(self, config: AppConfig) -> None:
         """Wire world-state snapshot import/export for the active backend."""
@@ -269,15 +279,22 @@ class Container:
         )
 
 
-def build_container(auth: AuthService, collector: EventCollector, config: AppConfig | None = None) -> Container:
+def build_container(
+    auth: AuthService,
+    collector: EventCollector,
+    config: AppConfig | None = None,
+    audit_repository: AuditRepositoryPort | None = None,
+) -> Container:
     """Build the application container from explicit or environment config.
 
     Args:
         auth: Shared authentication service.
         collector: Event collector shared by HTTP and CLI driving adapters.
         config: Optional application configuration override.
+        audit_repository: Optional audit repository shared with event
+            subscriptions.
 
     Returns:
         Fully wired application container.
     """
-    return Container(auth=auth, event_collector=collector, config=config)
+    return Container(auth=auth, event_collector=collector, config=config, audit_repository=audit_repository)

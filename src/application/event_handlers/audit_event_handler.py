@@ -32,8 +32,9 @@ class AuditEventHandler[E: Event](EventHandler[E]):
 
         Raises:
             ValueError: If the event type has no audit descriptor mapping.
-            Exception: Propagates persistence failures from the audit
-                repository implementation.
+
+        Repository failures are intentionally not caught. The dispatcher and
+        collector treat audit persistence failure as event publication failure.
         """
         audit_descriptor = map_event_to_audit_descriptor(envelope.event)
         draft = AuditRecordDraft(
