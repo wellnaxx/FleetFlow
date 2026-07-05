@@ -69,7 +69,6 @@ class AuthChangePassword_Should(unittest.TestCase):
             cmd.execute()
         self.assertIn("Unauthenticated", str(ctx.exception))
         cmd._use_case.execute_current_user.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
-            "alice",
             "BrandNew123",
             old_password="OldPass123",
         )
@@ -87,7 +86,6 @@ class AuthChangePassword_Should(unittest.TestCase):
             cmd.execute()
         self.assertIn("no username", str(ctx.exception))
         cmd._use_case.execute_current_user.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
-            None,
             "BrandNew123",
             old_password="OldPass123",
         )
@@ -112,7 +110,6 @@ class AuthChangePassword_Should(unittest.TestCase):
             cmd.execute()
         self.assertIn("at least 8", str(ctx.exception))
         cmd._use_case.execute_current_user.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
-            "alice",
             "short",
             old_password="OldPass123",
         )
@@ -129,7 +126,6 @@ class AuthChangePassword_Should(unittest.TestCase):
             cmd.execute()
         self.assertIn("must be different", str(ctx.exception))
         cmd._use_case.execute_current_user.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
-            "alice",
             "SamePass123",
             old_password="SamePass123",
         )
@@ -142,7 +138,6 @@ class AuthChangePassword_Should(unittest.TestCase):
         result = cmd.execute()
 
         cmd._use_case.execute_current_user.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
-            "alice",
             "BrandNew123",
             old_password="OldPass123",
         )

@@ -8,11 +8,11 @@ from src.adapters.driven.security.auth_token_service import TokenPayload, TokenT
 from src.application.eventing.current_context import bind_event_context, get_event_context
 from src.application.eventing.envelope import EventActor
 from src.application.exceptions.application_errors import UnsupportedRoleError, ValidationError
+from src.application.models.current_user_principal import CurrentUserPrincipal
 from src.application.models.user_record import UserRecord
 from src.application.services.authorization_service import AuthorizationService
-from src.application.services.runtime_user_factory import create_runtime_user_from_record
+from src.application.services.runtime_user_factory import create_runtime_authenticated_user_from_record
 from src.composition.runtime import get_user_repository
-from src.domain.entities.users.user import User
 from src.ports.output.user_repository import UserRepositoryPort
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
@@ -20,29 +20,30 @@ oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_e
 
 
 @dataclass(frozen=True, slots=True)
-class AuthenticatedPrincipal:
+class AuthenticatedHTTPPrincipal:
+    """HTTP-authenticated request identity and validated token metadata."""
+
     record: UserRecord
-    user: User
+    current_user: CurrentUserPrincipal
     authz: AuthorizationService
     token: TokenPayload
 
 
-def _runtime_user_from_record(record: UserRecord) -> User:
-    """Convert a UserRecord from the repository into a runtime User entity
-    for authentication and authorization purposes.
+def _runtime_user_from_record(record: UserRecord) -> CurrentUserPrincipal:
+    """Convert a persisted user record into a current-user principal.
 
     Args:
         record: The UserRecord retrieved from the user repository.
 
     Returns:
-        A User entity (Manager or Employee) corresponding to the user's role.
+        Current-user principal corresponding to the persisted user's role.
 
     Raises:
         HTTPException: Raised with:
             * 401 - Invalid or unsupported user role.
     """
     try:
-        return create_runtime_user_from_record(record)
+        return create_runtime_authenticated_user_from_record(record)
     except ValidationError as exc:
         detail = "Unsupported user role" if isinstance(exc, UnsupportedRoleError) else "Invalid user role"
         raise HTTPException(
@@ -56,8 +57,8 @@ def principal_from_token(
     user_repo: UserRepositoryPort,
     *,
     expected_type: TokenType = "access",
-) -> AuthenticatedPrincipal:
-    """Validate a JWT token, retrieve the corresponding user, and construct an AuthenticatedPrincipal.
+) -> AuthenticatedHTTPPrincipal:
+    """Validate a JWT token and construct an authenticated HTTP principal.
 
     Args:
         token: The JWT token to validate.
@@ -65,7 +66,8 @@ def principal_from_token(
         expected_type: The expected type of the token ("access" or "refresh").
 
     Returns:
-        An AuthenticatedPrincipal containing the validated user information.
+        HTTP principal containing the persisted record, current-user principal,
+        request-scoped authorization service, and decoded token.
 
     Raises:
         HTTPException: Raised with:
@@ -95,13 +97,13 @@ def principal_from_token(
 
     user = _runtime_user_from_record(record)
     authz = AuthorizationService(current_user=user)
-    return AuthenticatedPrincipal(record=record, user=user, authz=authz, token=payload)
+    return AuthenticatedHTTPPrincipal(record=record, current_user=user, authz=authz, token=payload)
 
 
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
     user_repo: UserRepositoryPort = Depends(get_user_repository),
-) -> AsyncGenerator[AuthenticatedPrincipal]:
+) -> AsyncGenerator[AuthenticatedHTTPPrincipal]:
     """Dependency to retrieve the currently authenticated user based on the provided JWT token.
 
     Args:
@@ -109,7 +111,7 @@ async def get_current_user(
         user_repo: The user repository to retrieve user information.
 
     Yields:
-        An AuthenticatedPrincipal representing the currently authenticated user
+        Authenticated HTTP principal representing the current request user
         while an actor-enriched event context is bound.
 
     Raises:
@@ -122,9 +124,9 @@ async def get_current_user(
     actor_context = replace(
         request_context,
         actor=EventActor(
-            user_id=principal.record.user_id,
-            username=principal.record.username,
-        )
+            user_id=principal.current_user.user_id,
+            username=principal.current_user.username,
+        ),
     )
 
     with bind_event_context(actor_context):
@@ -134,7 +136,7 @@ async def get_current_user(
 def get_optional_user(
     token: str | None = Depends(oauth2_scheme_optional),
     user_repo: UserRepositoryPort = Depends(get_user_repository),
-) -> AuthenticatedPrincipal | None:
+) -> AuthenticatedHTTPPrincipal | None:
     """Dependency to optionally retrieve the currently authenticated user based on the provided JWT token.
 
     Args:
@@ -142,7 +144,7 @@ def get_optional_user(
         user_repo: The user repository to retrieve user information.
 
     Returns:
-        An AuthenticatedPrincipal representing the currently authenticated user,
+        Authenticated HTTP principal representing the current request user,
             or None if no valid token is provided
 
     Raises:

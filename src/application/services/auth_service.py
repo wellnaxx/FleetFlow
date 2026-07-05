@@ -1,4 +1,4 @@
-"""Authentication service for persisted users and runtime sessions."""
+"""Authentication service for persisted users and current-user sessions."""
 
 from src.adapters.driven.security.password_hasher import PasswordHash, hash_password, verify_password
 from src.application.exceptions.application_errors import (
@@ -21,9 +21,9 @@ from src.application.exceptions.password_errors import (
     RegistrationPasswordCriteriaNotMetError,
     RegistrationUsernameAlreadyExistsError,
 )
+from src.application.models.current_user_principal import CurrentUserPrincipal
 from src.application.models.user_record import UserRecord
-from src.application.services.runtime_user_factory import create_runtime_user_from_record
-from src.domain.entities.users.user import User
+from src.application.services.runtime_user_factory import create_runtime_authenticated_user_from_record
 from src.domain.enums.auth import Role
 from src.domain.value_objects.contact_info import ContactInfo
 from src.ports.output.repository_errors import DuplicateKeyError
@@ -40,11 +40,10 @@ class AuthService:
             user_store: Repository used to persist and retrieve user records.
         """
         self._store = user_store
-        self._current_user: User | None = None
-        self.last_username: str | None = None
+        self._current_user: CurrentUserPrincipal | None = None
 
     @property
-    def current_user(self) -> User | None:
+    def current_user(self) -> CurrentUserPrincipal | None:
         """Return the currently authenticated user, if any."""
         return self._current_user
 
@@ -119,43 +118,42 @@ class AuthService:
         except ValueError as exc:
             raise NotFoundError("User not found.") from exc
 
-    def login(self, username: str, password: str) -> tuple[UserRecord, User]:
-        """Authenticate a user and hydrate the runtime user entity.
+    def login(self, username: str, password: str) -> tuple[CurrentUserPrincipal, UserRecord]:
+        """Authenticate a user and store the current-user principal.
 
         Args:
             username: Login username.
             password: Plain-text password supplied by the user.
 
         Returns:
-            The authenticated runtime user entity along with its record.
+            Tuple of authenticated principal and persisted user record.
 
         Raises:
             LoginUserNotFoundError: If the username is unknown.
             LoginInvalidPersistedPasswordHashError: If the stored password hash is invalid.
             LoginWrongPasswordError: If the password is invalid.
-            LoginInvalidUserRuntimeError: If persisted user data cannot hydrate a runtime user.
+            LoginInvalidUserRuntimeError: If persisted user data cannot hydrate a principal.
         """
-        rec, user = self.authenticate(username, password)
+        principal, record = self.authenticate(username, password)
 
-        self._current_user = user
-        self.last_username = rec.username
-        return rec, user
+        self._current_user = principal
+        return principal, record
 
-    def authenticate(self, username: str, password: str) -> tuple[UserRecord, User]:
-        """Verify credentials and return the persisted record plus runtime user without mutating session.
+    def authenticate(self, username: str, password: str) -> tuple[CurrentUserPrincipal, UserRecord]:
+        """Verify credentials and return the principal plus record without mutating session.
 
         Args:
             username: Login username.
             password: Plain-text password supplied by the user.
 
         Returns:
-            A tuple containing the persisted user record and the hydrated runtime user entity.
+            Tuple of authenticated principal and persisted user record.
 
         Raises:
             LoginUserNotFoundError: If the username is unknown.
             LoginInvalidPersistedPasswordHashError: If the stored password hash is invalid.
             LoginWrongPasswordError: If the password is invalid.
-            LoginInvalidUserRuntimeError: If persisted user data cannot hydrate a runtime user.
+            LoginInvalidUserRuntimeError: If persisted user data cannot hydrate a principal.
         """
         rec = self._store.get_by_username(username)
 
@@ -170,15 +168,14 @@ class AuthService:
             raise LoginWrongPasswordError(user_id=rec.user_id, username=rec.username)
 
         try:
-            user = create_runtime_user_from_record(rec)
-        except ValueError as exc:
+            principal = create_runtime_authenticated_user_from_record(rec)
+        except ValidationError as exc:
             raise LoginInvalidUserRuntimeError(str(exc), user_id=rec.user_id, username=rec.username) from exc
-        return rec, user
+        return principal, rec
 
     def logout(self) -> None:
         """Clear the active authentication session."""
         self._current_user = None
-        self.last_username = None
 
     def change_password(self, username: str, old_password: str, new_password: str) -> UserRecord:
         """Change a password after verifying the old password.

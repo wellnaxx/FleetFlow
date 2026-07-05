@@ -5,21 +5,21 @@ from functools import wraps
 from typing import Concatenate, Protocol
 
 from src.application.events.auth_events import AuthorizationDenied
+from src.application.models.current_user_principal import CurrentUserPrincipal
 from src.application.use_cases.base.event_mixin import ApplicationEventRecorderMixin
-from src.domain.entities.users.user import User
 from src.domain.enums.auth import ROLE_PERMISSIONS, Permission
 
 
 class AuthorizationService:
     """Tracks current user and exposes permission checks."""
 
-    def __init__(self, current_user: User | None) -> None:
+    def __init__(self, current_user: CurrentUserPrincipal | None) -> None:
         """Initialize authorization state.
 
         Args:
-            current_user: Current runtime user, or `None` when unauthenticated.
+            current_user: Current authenticated principal, or `None` when unauthenticated.
         """
-        self.current_user: User | None = current_user
+        self.current_user: CurrentUserPrincipal | None = current_user
 
     def has(self, perm: Permission) -> bool:
         """Return whether the current user has a permission.
@@ -148,7 +148,7 @@ def _record_authorization_denied(
     target.record_event(
         AuthorizationDenied(
             user_id=current_user.user_id if current_user is not None else None,
-            username=None,
+            username=current_user.username if current_user is not None else None,
             required_permissions=required_permissions,
             occurred_at=target.event_occurred_at(),
         )

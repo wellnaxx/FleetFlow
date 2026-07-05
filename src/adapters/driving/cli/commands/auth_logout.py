@@ -17,5 +17,5 @@ class AuthLogout(EventDrainingCommand[LogoutUseCase]):
         Returns:
             Logout confirmation text.
         """
-        self._run_and_drain(self._use_case, lambda: self._use_case.execute_current_session())
+        self._run_and_drain(self._use_case, lambda: self._use_case.execute())
         return "Logged out."

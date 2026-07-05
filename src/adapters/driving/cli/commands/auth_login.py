@@ -26,4 +26,4 @@ class AuthLogin(EventDrainingCommand[LoginUseCase]):
         username = self._params[0] if self._params else input("Username: ").strip()
         password = getpass.getpass("Password: ")
         result = self._run_and_drain(self._use_case, lambda: self._use_case.execute(username, password))
-        return f"Logged in as {result.user.name} [{result.user.role.value}]"
+        return f"Logged in as {result.principal.name} [{result.principal.role.value}]"

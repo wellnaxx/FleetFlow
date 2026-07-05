@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from src.adapters.driven.persistence.database.errors import DatabaseError
 from src.adapters.driven.security.auth_token_service import TokenPayload
-from src.adapters.driving.http.dependencies.auth import AuthenticatedPrincipal
+from src.adapters.driving.http.dependencies.auth import AuthenticatedHTTPPrincipal
 from src.adapters.driving.http.exception_handlers import register_exception_handlers
 from src.adapters.driving.http.routers.api import auth_router as auth_router_module
 from src.adapters.driving.http.routers.api.auth_router import (
@@ -16,10 +16,10 @@ from src.adapters.driving.http.routers.api.auth_router import (
     auth_router,
 )
 from src.application.exceptions.application_errors import AuthenticationError, ValidationError
+from src.application.models.current_user_principal import CurrentUserPrincipal
 from src.application.models.user_record import UserRecord
 from src.application.results.login_result import LoginResult
 from src.application.services.authorization_service import AuthorizationService
-from src.domain.entities.users.manager import Manager
 from src.domain.enums.auth import Role
 
 
@@ -37,7 +37,9 @@ class AuthRouterShould(unittest.TestCase):
         use_case = MagicMock()
         event_collector = MagicMock()
         record = self._record()
-        use_case.execute.return_value = LoginResult(record=record, user=self._principal(record).user)
+        use_case.execute.return_value = LoginResult(
+            record=record, principal=self._principal(record).current_user
+        )
         self.app.dependency_overrides[auth_router_module.get_login_use_case] = lambda: use_case
         self.app.dependency_overrides[auth_router_module.get_event_collector] = lambda: event_collector
 
@@ -80,7 +82,9 @@ class AuthRouterShould(unittest.TestCase):
         use_case = MagicMock()
         event_collector = MagicMock()
         record = self._record(role="OWNER")
-        use_case.execute.return_value = LoginResult(record=record, user=self._principal(record).user)
+        use_case.execute.return_value = LoginResult(
+            record=record, principal=self._principal(record).current_user
+        )
         self.app.dependency_overrides[auth_router_module.get_login_use_case] = lambda: use_case
         self.app.dependency_overrides[auth_router_module.get_event_collector] = lambda: event_collector
 
@@ -164,7 +168,6 @@ class AuthRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 204)
         use_case.execute_current_user.assert_called_once_with(
-            username="alice",
             new_password="NewSecret123!",
             old_password="OldSecret123!",
         )
@@ -320,7 +323,7 @@ class AuthRouterShould(unittest.TestCase):
         response = self.client.post("/auth/logout")
 
         self.assertEqual(response.status_code, 204)
-        use_case.execute.assert_called_once_with(user_id=1, username="alice")
+        use_case.execute.assert_called_once_with()
         event_collector.drain.assert_called_once_with((use_case,))
 
     def test_logout_drains_events_when_user_record_is_already_missing(self) -> None:
@@ -334,7 +337,7 @@ class AuthRouterShould(unittest.TestCase):
         response = self.client.post("/auth/logout")
 
         self.assertEqual(response.status_code, 204)
-        use_case.execute.assert_called_once_with(user_id=1, username="alice")
+        use_case.execute.assert_called_once_with()
         event_collector.drain.assert_called_once_with((use_case,))
 
     def test_logout_returns_generic_error_for_database_failure(self) -> None:
@@ -350,7 +353,7 @@ class AuthRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 500)
         self.assertEqual(response.json()["detail"], "Database operation failed.")
-        use_case.execute.assert_called_once_with(user_id=1, username="alice")
+        use_case.execute.assert_called_once_with()
         event_collector.drain.assert_called_once_with((use_case,))
 
     def test_me_returns_null_for_absent_contact_fields(self) -> None:
@@ -393,12 +396,19 @@ class AuthRouterShould(unittest.TestCase):
         with patch.multiple(auth_router_module, **token_mocks):
             yield token_mocks
 
-    def _principal(self, record: UserRecord | None = None) -> AuthenticatedPrincipal:
+    def _principal(self, record: UserRecord | None = None) -> AuthenticatedHTTPPrincipal:
         record = record or self._record()
-        user = Manager(record.user_id, record.name, record.email, record.phone_number)
-        return AuthenticatedPrincipal(
+        user = CurrentUserPrincipal(
+            user_id=record.user_id,
+            username=record.username,
+            name=record.name,
+            email=record.email,
+            phone_number=record.phone_number,
+            role=Role(record.role) if record.role in {role.value for role in Role} else Role.MANAGER,
+        )
+        return AuthenticatedHTTPPrincipal(
             record=record,
-            user=user,
+            current_user=user,
             authz=AuthorizationService(user),
             token=self._token_payload(),
         )

@@ -10,7 +10,7 @@ from starlette.responses import Response
 
 from src.adapters.driven.security.auth_token_service import TokenPayload
 from src.adapters.driving.http.dependencies import auth as auth_module
-from src.adapters.driving.http.dependencies.auth import AuthenticatedPrincipal, get_current_user
+from src.adapters.driving.http.dependencies.auth import AuthenticatedHTTPPrincipal, get_current_user
 from src.adapters.driving.http.middleware import RequestLoggingMiddleware
 from src.application.enums.event_sources import EventSource
 from src.application.eventing.context import EventContext
@@ -19,9 +19,10 @@ from src.application.eventing.current_context import (
     get_event_context,
     get_optional_event_context,
 )
+from src.application.models.current_user_principal import CurrentUserPrincipal
 from src.application.models.user_record import UserRecord
 from src.application.services.authorization_service import AuthorizationService
-from src.domain.entities.users.manager import Manager
+from src.domain.enums.auth import Role
 
 
 class HttpRequestLoggingMiddlewareShould(unittest.IsolatedAsyncioTestCase):
@@ -83,20 +84,18 @@ class HttpRequestLoggingMiddlewareShould(unittest.IsolatedAsyncioTestCase):
 
     @staticmethod
     def _request() -> Request:
-        return Request(
-            {
-                "type": "http",
-                "http_version": "1.1",
-                "method": "GET",
-                "scheme": "http",
-                "path": "/health",
-                "raw_path": b"/health",
-                "query_string": b"",
-                "headers": [],
-                "client": ("testclient", 50000),
-                "server": ("testserver", 80),
-            }
-        )
+        return Request({
+            "type": "http",
+            "http_version": "1.1",
+            "method": "GET",
+            "scheme": "http",
+            "path": "/health",
+            "raw_path": b"/health",
+            "query_string": b"",
+            "headers": [],
+            "client": ("testclient", 50000),
+            "server": ("testserver", 80),
+        })
 
 
 class HttpEventContextIntegrationShould(unittest.TestCase):
@@ -106,7 +105,7 @@ class HttpEventContextIntegrationShould(unittest.TestCase):
         observed_contexts: list[EventContext] = []
 
         def protected(
-            _principal: Annotated[AuthenticatedPrincipal, Depends(get_current_user)],
+            _principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
         ) -> dict[str, str]:
             context = get_event_context()
             observed_contexts.append(context)
@@ -131,7 +130,7 @@ class HttpEventContextIntegrationShould(unittest.TestCase):
         from_token.assert_called_once_with("access-token", user_repo)
 
     @staticmethod
-    def _principal() -> AuthenticatedPrincipal:
+    def _principal() -> AuthenticatedHTTPPrincipal:
         record = UserRecord(
             user_id=1,
             username="alice",
@@ -142,10 +141,17 @@ class HttpEventContextIntegrationShould(unittest.TestCase):
             password="hash",
             token_version=1,
         )
-        user = Manager(user_id=record.user_id, name=record.name)
-        return AuthenticatedPrincipal(
+        user = CurrentUserPrincipal(
+            user_id=record.user_id,
+            username=record.username,
+            name=record.name,
+            email=record.email,
+            phone_number=record.phone_number,
+            role=Role.MANAGER,
+        )
+        return AuthenticatedHTTPPrincipal(
             record=record,
-            user=user,
+            current_user=user,
             authz=AuthorizationService(current_user=user),
             token=TokenPayload(
                 sub="1",

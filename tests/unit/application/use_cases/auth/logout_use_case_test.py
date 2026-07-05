@@ -1,21 +1,36 @@
 import unittest
 from datetime import datetime
-from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from src.application.enums.token_revocation_reasons import TokenRevocationReason
-from src.application.events.auth_events import UserSessionEnded, UserTokensRevoked
+from src.application.events.auth_events import AuthorizationDenied, UserSessionEnded, UserTokensRevoked
+from src.application.models.current_user_principal import CurrentUserPrincipal
+from src.application.services.authorization_service import AuthorizationService
 from src.application.use_cases.auth.logout import LogoutUseCase
+from src.domain.enums.auth import Permission, Role
+
+
+def _principal(username: str = "alice") -> CurrentUserPrincipal:
+    return CurrentUserPrincipal(
+        user_id=7,
+        username=username,
+        name="Alice",
+        email="alice@example.com",
+        phone_number="0412345678",
+        role=Role.EMPLOYEE,
+    )
 
 
 class LogoutUseCase_Should(unittest.TestCase):
     def test_revokes_tokens_logs_out_and_records_events(self) -> None:
         auth = MagicMock()
+        auth.current_user = _principal()
+        authz = AuthorizationService(auth.current_user)
         user_repo = MagicMock()
         occurred_at = datetime(2025, 1, 1, 12, 0)
-        use_case = LogoutUseCase(user_repo, auth, clock=lambda: occurred_at)
+        use_case = LogoutUseCase(user_repo, auth, authz, clock=lambda: occurred_at)
 
-        result = use_case.execute(user_id=7, username="alice")
+        result = use_case.execute()
 
         self.assertIsNone(result)
         user_repo.increment_token_version_by_id.assert_called_once_with(7)
@@ -37,40 +52,61 @@ class LogoutUseCase_Should(unittest.TestCase):
 
     def test_does_not_clear_session_or_record_events_when_revocation_fails(self) -> None:
         auth = MagicMock()
+        auth.current_user = _principal()
+        authz = AuthorizationService(auth.current_user)
         user_repo = MagicMock()
         user_repo.increment_token_version_by_id.side_effect = RuntimeError("db failed")
-        use_case = LogoutUseCase(user_repo, auth)
+        use_case = LogoutUseCase(user_repo, auth, authz)
 
         with self.assertRaises(RuntimeError):
-            use_case.execute(user_id=7, username="alice")
+            use_case.execute()
 
         auth.logout.assert_not_called()
         self.assertEqual(use_case.pending_events, ())
 
-    def test_execute_current_session_uses_auth_service_identity(self) -> None:
-        auth = MagicMock()
-        auth.current_user = SimpleNamespace(user_id=7)
-        auth.last_username = "  Alice  "
-        user_repo = MagicMock()
-        use_case = LogoutUseCase(user_repo, auth)
-
-        use_case.execute_current_session()
-
-        user_repo.increment_token_version_by_id.assert_called_once_with(7)
-        auth.logout.assert_called_once_with()
-        event = use_case.pending_events[0]
-        self.assertIsInstance(event, UserTokensRevoked)
-        assert isinstance(event, UserTokensRevoked)
-        self.assertEqual(event.username, "alice")
-
-    def test_execute_current_session_requires_authenticated_user(self) -> None:
+    def test_execute_requires_authenticated_user(self) -> None:
         auth = MagicMock()
         auth.current_user = None
         user_repo = MagicMock()
-        use_case = LogoutUseCase(user_repo, auth)
+        occurred_at = datetime(2025, 1, 1, 12, 0)
+        use_case = LogoutUseCase(user_repo, auth, AuthorizationService(None), clock=lambda: occurred_at)
 
         with self.assertRaises(PermissionError):
-            use_case.execute_current_session()
+            use_case.execute()
 
         user_repo.increment_token_version_by_id.assert_not_called()
         auth.logout.assert_not_called()
+
+        event = use_case.pending_events[0]
+        self.assertIsInstance(event, AuthorizationDenied)
+        assert isinstance(event, AuthorizationDenied)
+        self.assertIsNone(event.user_id)
+        self.assertIsNone(event.username)
+        self.assertEqual(event.required_permissions, (Permission.AUTHENTICATED,))
+        self.assertEqual(event.occurred_at, occurred_at)
+
+    def test_execute_rejects_blank_authenticated_username_and_records_denial(self) -> None:
+        auth = MagicMock()
+        auth.current_user = _principal(username="   ")
+        user_repo = MagicMock()
+        occurred_at = datetime(2025, 1, 1, 12, 0)
+        use_case = LogoutUseCase(
+            user_repo,
+            auth,
+            AuthorizationService(auth.current_user),
+            clock=lambda: occurred_at,
+        )
+
+        with self.assertRaises(PermissionError):
+            use_case.execute()
+
+        user_repo.increment_token_version_by_id.assert_not_called()
+        auth.logout.assert_not_called()
+
+        event = use_case.pending_events[0]
+        self.assertIsInstance(event, AuthorizationDenied)
+        assert isinstance(event, AuthorizationDenied)
+        self.assertEqual(event.user_id, 7)
+        self.assertEqual(event.username, "   ")
+        self.assertEqual(event.required_permissions, (Permission.AUTHENTICATED,))
+        self.assertEqual(event.occurred_at, occurred_at)

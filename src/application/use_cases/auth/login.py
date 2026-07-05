@@ -36,14 +36,14 @@ class LoginUseCase(BaseUseCase[LoginResult], ApplicationEventRecorderMixin):
         self._pending_events = []
 
     def execute(self, username: str, password: str) -> LoginResult:
-        """Authenticate a user and return persisted and runtime user data.
+        """Authenticate a user and return persisted record plus current principal.
 
         Args:
             username: Login username.
             password: Plain-text password.
 
         Returns:
-            Login result containing the persisted user record and runtime user entity.
+            Login result containing the persisted user record and authenticated principal.
 
         Raises:
             AuthenticationError: If the username is unknown or password is invalid.
@@ -52,7 +52,7 @@ class LoginUseCase(BaseUseCase[LoginResult], ApplicationEventRecorderMixin):
         occurred_at = self._clock()
 
         try:
-            rec, user = self._auth.login(username, password)
+            principal, record = self._auth.login(username, password)
         except (
             LoginUserNotFoundError,
             LoginInvalidPersistedPasswordHashError,
@@ -64,15 +64,15 @@ class LoginUseCase(BaseUseCase[LoginResult], ApplicationEventRecorderMixin):
         else:
             self._record_event(
                 UserAuthenticated(
-                    user_id=user.user_id,
-                    username=rec.username,
-                    role=user.role,
+                    user_id=principal.user_id,
+                    username=principal.username,
+                    role=principal.role,
                     occurred_at=occurred_at,
                 )
             )
 
         logger.info("User %r authenticated.", username.strip().lower())
-        return LoginResult(rec, user)
+        return LoginResult(record, principal)
 
     def _record_login_rejection(
         self,

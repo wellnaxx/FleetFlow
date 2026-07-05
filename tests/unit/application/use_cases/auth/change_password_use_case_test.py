@@ -44,7 +44,6 @@ class ChangePasswordUseCase_Should(unittest.TestCase):
 
     def test_self_service_branch_calls_change_password(self) -> None:
         auth = MagicMock()
-        auth.last_username = "alice"
         now = datetime(2026, 1, 2, 3, 4)
         auth.change_password.return_value = _user_record(42, "alice")
         use_case = ChangePasswordUseCase(auth, manager_authz(), clock=lambda: now)
@@ -63,7 +62,6 @@ class ChangePasswordUseCase_Should(unittest.TestCase):
 
     def test_self_service_branch_rejects_other_users_without_admin_permission(self) -> None:
         auth = MagicMock()
-        auth.last_username = "alice"
         use_case = ChangePasswordUseCase(auth, employee_authz())
 
         with self.assertRaises(PermissionError) as ctx:
@@ -72,53 +70,33 @@ class ChangePasswordUseCase_Should(unittest.TestCase):
         self.assertIn("another user's password", str(ctx.exception))
         auth.change_password.assert_not_called()
 
-    def test_current_user_branch_uses_explicit_username(self) -> None:
+    def test_current_user_branch_uses_authenticated_principal_username(self) -> None:
         auth = MagicMock()
-        auth.last_username = "alice"
         now = datetime(2026, 1, 2, 3, 4)
-        auth.change_password.return_value = _user_record(2, "alice")
+        auth.change_password.return_value = _user_record(2, "employee")
         use_case = ChangePasswordUseCase(auth, employee_authz(), clock=lambda: now)
 
         result = use_case.execute_current_user(
-            " Alice ",
             "NewSecret123",
             old_password="OldSecret123",
         )
 
         self.assertIsNone(result)
-        auth.change_password.assert_called_once_with("alice", "OldSecret123", "NewSecret123")
+        auth.change_password.assert_called_once_with("employee", "OldSecret123", "NewSecret123")
         auth.reset_password.assert_not_called()
         event = use_case.pending_events[0]
         self.assertIsInstance(event, UserPasswordChanged)
         assert isinstance(event, UserPasswordChanged)
         self.assertEqual(event.user_id, 2)
-        self.assertEqual(event.username, "alice")
+        self.assertEqual(event.username, "employee")
         self.assertEqual(event.occurred_at, now)
-
-    def test_current_user_branch_rejects_username_mismatch(self) -> None:
-        auth = MagicMock()
-        auth.last_username = "alice"
-        use_case = ChangePasswordUseCase(auth, employee_authz())
-
-        with self.assertRaises(PermissionError) as ctx:
-            use_case.execute_current_user("bob", "NewSecret123", old_password="OldSecret123")
-
-        self.assertIn("Username does not match authenticated user.", str(ctx.exception))
-        auth.change_password.assert_not_called()
-        event = use_case.pending_events[0]
-        self.assertIsInstance(event, AuthorizationDenied)
-        assert isinstance(event, AuthorizationDenied)
-        self.assertEqual(event.user_id, 2)
-        self.assertEqual(event.username, "bob")
-        self.assertEqual(event.required_permissions, (Permission.AUTHENTICATED,))
 
     def test_current_user_branch_requires_authenticated_user(self) -> None:
         auth = MagicMock()
-        auth.last_username = "alice"
         use_case = ChangePasswordUseCase(auth, AuthorizationService(None))
 
         with self.assertRaises(PermissionError) as ctx:
-            use_case.execute_current_user("alice", "NewSecret123", old_password="OldSecret123")
+            use_case.execute_current_user("NewSecret123", old_password="OldSecret123")
 
         self.assertIn("Unauthenticated", str(ctx.exception))
         auth.change_password.assert_not_called()
@@ -126,21 +104,6 @@ class ChangePasswordUseCase_Should(unittest.TestCase):
         self.assertIsInstance(event, AuthorizationDenied)
         assert isinstance(event, AuthorizationDenied)
         self.assertIsNone(event.user_id)
-        self.assertEqual(event.required_permissions, (Permission.AUTHENTICATED,))
-
-    def test_current_user_branch_requires_username(self) -> None:
-        auth = MagicMock()
-        use_case = ChangePasswordUseCase(auth, employee_authz())
-
-        with self.assertRaises(PermissionError) as ctx:
-            use_case.execute_current_user(None, "NewSecret123", old_password="OldSecret123")
-
-        self.assertIn("no username", str(ctx.exception))
-        auth.change_password.assert_not_called()
-        event = use_case.pending_events[0]
-        self.assertIsInstance(event, AuthorizationDenied)
-        assert isinstance(event, AuthorizationDenied)
-        self.assertEqual(event.user_id, 2)
         self.assertEqual(event.required_permissions, (Permission.AUTHENTICATED,))
 
     def test_rejects_blank_target_username(self) -> None:

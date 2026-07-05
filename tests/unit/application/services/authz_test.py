@@ -4,15 +4,21 @@ from typing import Any
 from unittest.mock import patch
 
 from src.application.events.auth_events import AuthorizationDenied
+from src.application.models.current_user_principal import CurrentUserPrincipal
 from src.application.services.authorization_service import AuthorizationService, requires, requires_all
 from src.application.use_cases.base.event_mixin import ApplicationEventRecorderMixin
-from src.domain.entities.users.user import User
 from src.domain.enums.auth import Permission, Role
-from src.domain.value_objects.contact_info import ContactInfo
 
 
-def _user(role: Role) -> User:
-    return User(ContactInfo("Test User", "test@example.com", "0400000000"), role, 1)
+def _user(role: Role) -> CurrentUserPrincipal:
+    return CurrentUserPrincipal(
+        user_id=1,
+        username="test.user",
+        name="Test User",
+        email="test@example.com",
+        phone_number="0400000000",
+        role=role,
+    )
 
 
 EMPTY_ROLE_PERMISSIONS: dict[Role, set[Permission]] = {}
@@ -138,7 +144,7 @@ class Authz_Should(unittest.TestCase):
         self.assertIsInstance(event, AuthorizationDenied)
         assert isinstance(event, AuthorizationDenied)
         self.assertEqual(event.user_id, 1)
-        self.assertIsNone(event.username)
+        self.assertEqual(event.username, "test.user")
         self.assertEqual(event.required_permissions, (Permission.PACKAGE_CREATE,))
         self.assertEqual(event.occurred_at, occurred_at)
 
@@ -217,7 +223,7 @@ class Authz_Should(unittest.TestCase):
         self.assertIsInstance(event, AuthorizationDenied)
         assert isinstance(event, AuthorizationDenied)
         self.assertEqual(event.user_id, 1)
-        self.assertIsNone(event.username)
+        self.assertEqual(event.username, "test.user")
         self.assertEqual(event.required_permissions, (Permission.ROUTE_REMOVE,))
         self.assertEqual(event.occurred_at, occurred_at)
 

@@ -46,7 +46,6 @@ class AuthChangePassword(EventDrainingCommand[ChangePasswordUseCase]):
         self._run_and_drain(
             self._use_case,
             lambda: self._use_case.execute_current_user(
-                self._use_case.current_session_username,
                 new_pw,
                 old_password=old_pw,
             ),

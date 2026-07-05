@@ -37,6 +37,8 @@ class Permission(Enum):
     APP_SAVE_STATE = auto()
     APP_LOAD_STATE = auto()
 
+    AUDIT_VIEW = auto()
+
     AUTHENTICATED = auto()  # signals that authentication was required but missing (used in denial events)
 
 
@@ -66,6 +68,7 @@ _MANAGER_PERMISSIONS: frozenset[Permission] = _EMPLOYEE_PERMISSIONS | frozenset(
         Permission.ADMIN_USER,
         Permission.APP_SAVE_STATE,
         Permission.APP_LOAD_STATE,
+        Permission.AUDIT_VIEW,
     }
 )
 

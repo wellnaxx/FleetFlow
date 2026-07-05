@@ -9,7 +9,7 @@ from src.adapters.driven.security.auth_token_service import (
     create_refresh_token,
 )
 from src.adapters.driving.http.dependencies.auth import (
-    AuthenticatedPrincipal,
+    AuthenticatedHTTPPrincipal,
     get_current_user,
     principal_from_token,
 )
@@ -205,7 +205,6 @@ def login(
 @auth_router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
 def change_password(
     request: ChangeOwnPasswordRequest,
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_user)],
     use_case: Annotated[ChangePasswordUseCase, Depends(get_change_password_use_case)],
     event_collector: Annotated[EventCollector, Depends(get_event_collector)],
 ) -> None:
@@ -232,7 +231,6 @@ def change_password(
             recorder=use_case,
             event_collector=event_collector,
             action=lambda: use_case.execute_current_user(
-                username=principal.record.username,
                 new_password=request.new_password,
                 old_password=request.current_password,
             ),
@@ -302,7 +300,6 @@ def refresh_token(
 
 @auth_router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 def logout(
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_user)],
     use_case: Annotated[LogoutUseCase, Depends(get_logout_use_case)],
     event_collector: Annotated[EventCollector, Depends(get_event_collector)],
 ) -> None:
@@ -324,16 +321,13 @@ def logout(
     execute_and_drain_events(
         recorder=use_case,
         event_collector=event_collector,
-        action=lambda: use_case.execute(
-            user_id=principal.record.user_id,
-            username=principal.record.username,
-        ),
+        action=lambda: use_case.execute(),
     )
 
 
 @auth_router.get("/me", status_code=status.HTTP_200_OK)
 def me(
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_user)],
+    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
 ) -> CurrentUserResponse:
     """Get details about the currently authenticated user.
 

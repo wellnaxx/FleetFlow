@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
+from src.application.models.current_user_principal import CurrentUserPrincipal
 from src.application.models.user_record import UserRecord
-from src.domain.entities.users.user import User
 
 
 @dataclass(frozen=True, slots=True)
@@ -10,8 +10,8 @@ class LoginResult:
 
     Attributes:
         record: Persisted user record used for token creation and response data.
-        user: Runtime user entity used by CLI/session-facing adapters.
+        principal: Current authenticated principal used by session-aware adapters.
     """
 
     record: UserRecord
-    user: User
+    principal: CurrentUserPrincipal

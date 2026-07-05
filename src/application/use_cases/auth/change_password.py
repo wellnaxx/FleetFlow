@@ -175,19 +175,15 @@ class ChangePasswordUseCase(AuthorizedUseCase[None], ApplicationEventRecorderMix
             )
             self._log_password_updated("Password changed", target_username)
 
-    def execute_current_user(self, username: str | None, new_password: str, old_password: str) -> None:
+    def execute_current_user(self, new_password: str, old_password: str) -> None:
         """Change the currently authenticated user's password.
 
         Args:
-            username: Authenticated username supplied by the driving adapter.
             new_password: Replacement plain-text password.
             old_password: Existing password required for verification.
 
         Raises:
             PermissionError: If no user is authenticated.
-            PermissionError: If the driving adapter does not provide a username.
-            PermissionError: If the supplied username does not match the
-                authenticated user.
             ValidationError: If the username is invalid, persisted password
                 data is invalid, password validation fails, or the new
                 password matches the old one.
@@ -195,6 +191,8 @@ class ChangePasswordUseCase(AuthorizedUseCase[None], ApplicationEventRecorderMix
             AuthenticationError: If the old password is wrong.
         """
         occurred_at = self._clock()
+        current_user = self.authz.current_user
+        username = current_user.username if current_user is not None else None
 
         try:
             self._require_authenticated()
@@ -209,16 +207,9 @@ class ChangePasswordUseCase(AuthorizedUseCase[None], ApplicationEventRecorderMix
             )
             raise
 
-        if username is None:
-            self._record_event(
-                AuthorizationDenied(
-                    user_id=self._current_user_id(),
-                    username=username,
-                    required_permissions=(Permission.AUTHENTICATED,),
-                    occurred_at=occurred_at,
-                )
-            )
-            raise PermissionError("Authenticated user has no username.")
+        current_user = self.authz.current_user
+        assert current_user is not None
+        username = current_user.username
 
         try:
             current_username = self._normalize_username(username)
@@ -267,21 +258,19 @@ class ChangePasswordUseCase(AuthorizedUseCase[None], ApplicationEventRecorderMix
 
     @property
     def current_session_username(self) -> str | None:
-        """Return the username recorded by a session-oriented auth service."""
+        """Return the username from the current authenticated principal."""
         return self._current_username()
 
     def _current_username(self) -> str | None:
-        """Return the authenticated username from auth session state."""
-        if self.authz.current_user is None:
+        """Return the authenticated username from authorization state."""
+        current_user = self.authz.current_user
+        if current_user is None:
             return None
 
-        last_username = self._auth.last_username
-        return (
-            last_username.strip().lower() if isinstance(last_username, str) and last_username.strip() else None
-        )
+        return current_user.username.strip().lower() if current_user.username.strip() else None
 
     def _current_user_id(self) -> int | None:
-        """Return the authenticated runtime user id, if any."""
+        """Return the authenticated principal user id, if any."""
         current_user = self.authz.current_user
         return current_user.user_id if current_user is not None else None
 

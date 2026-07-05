@@ -416,10 +416,10 @@ class Engine:
         initiated the workflow because the context is created before execution.
         """
         user = self.auth.current_user
-        username = self.auth.last_username
-
-        if user is None or not username:
+        if user is None:
             return None
+        
+        username = user.username
 
         return EventActor(
             user_id=user.user_id,

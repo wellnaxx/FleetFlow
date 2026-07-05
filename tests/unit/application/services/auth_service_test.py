@@ -7,10 +7,9 @@ from src.application.exceptions.application_errors import (
     NotFoundError,
     ValidationError,
 )
+from src.application.exceptions.password_errors import LoginInvalidUserRuntimeError
 from src.application.models.user_record import UserRecord
 from src.application.services.auth_service import AuthService
-from src.domain.entities.users.employee import Employee
-from src.domain.entities.users.manager import Manager
 from src.domain.enums.auth import Role
 
 VALID_PASSWORD_HASH = "pbkdf2_sha256$200000$U0FMVFNBTFRTQUxUU0FMVA==$SEFTSEhBU0hIQVNI"
@@ -127,7 +126,7 @@ class AuthService_Should(unittest.TestCase):
 
     @patch("src.application.services.auth_service.verify_password", return_value=True)
     @patch("src.application.services.auth_service.PasswordHash.parse", return_value=object())
-    def test_login_success_manager_and_sets_last_username(
+    def test_login_success_manager_sets_current_principal(
         self,
         _parse: MagicMock,
         _verify: MagicMock,
@@ -145,16 +144,16 @@ class AuthService_Should(unittest.TestCase):
         )
         store.get_by_username.return_value = rec
 
-        record, user = svc.login("boss", "CorrectHorse")
+        principal, record = svc.login("boss", "CorrectHorse")
 
         self.assertIs(record, rec)
-        self.assertIsInstance(user, Manager)
-        self.assertEqual(user.user_id, 101)
-        self.assertEqual(user.name, "Bea")
-        self.assertEqual(user.email, "bea@ex.com")
-        self.assertEqual(user.phone_number, "0412345678")
-        self.assertEqual(svc.current_user, user)
-        self.assertEqual(svc.last_username, "boss")
+        self.assertEqual(principal.user_id, 101)
+        self.assertEqual(principal.username, "boss")
+        self.assertEqual(principal.name, "Bea")
+        self.assertEqual(principal.email, "bea@ex.com")
+        self.assertEqual(principal.phone_number, "0412345678")
+        self.assertIs(principal.role, Role.MANAGER)
+        self.assertEqual(svc.current_user, principal)
 
     @patch("src.application.services.auth_service.verify_password", return_value=True)
     @patch("src.application.services.auth_service.PasswordHash.parse", return_value=object())
@@ -171,15 +170,15 @@ class AuthService_Should(unittest.TestCase):
         )
         store.get_by_username.return_value = rec
 
-        record, user = svc.login("alice", "ok")
+        principal, record = svc.login("alice", "ok")
 
         self.assertIs(record, rec)
-        self.assertIsInstance(user, Employee)
-        self.assertEqual(user.user_id, 202)
-        self.assertEqual(user.name, "Alice")
-        self.assertEqual(user.email, "alice@example.com")
-        self.assertEqual(user.phone_number, "0498765432")
-        self.assertEqual(svc.last_username, "alice")
+        self.assertEqual(principal.user_id, 202)
+        self.assertEqual(principal.username, "alice")
+        self.assertEqual(principal.name, "Alice")
+        self.assertEqual(principal.email, "alice@example.com")
+        self.assertEqual(principal.phone_number, "0498765432")
+        self.assertIs(principal.role, Role.EMPLOYEE)
 
     @patch("src.application.services.auth_service.verify_password", return_value=False)
     @patch("src.application.services.auth_service.PasswordHash.parse", return_value=object())
@@ -200,7 +199,6 @@ class AuthService_Should(unittest.TestCase):
             svc.login("u", "bad")
         self.assertIn("Invalid username or password.", str(ctx.exception))
         self.assertIsNone(svc.current_user)
-        self.assertIsNone(svc.last_username)
 
     def test_login_unknown_user_raises(self) -> None:
         svc, store = self.make_service()
@@ -209,15 +207,12 @@ class AuthService_Should(unittest.TestCase):
             svc.login("nouser", "pw")
         self.assertIn("Invalid username or password.", str(ctx.exception))
         self.assertIsNone(svc.current_user)
-        self.assertIsNone(svc.last_username)
 
-    def test_logout_clears_current_user_and_last_username(self) -> None:
+    def test_logout_clears_current_user(self) -> None:
         svc, _store = self.make_service()
         svc._current_user = object()  # type: ignore[reportAttributeAccessIssue]
-        svc.last_username = "someone"
         svc.logout()
         self.assertIsNone(svc.current_user)
-        self.assertIsNone(svc.last_username)
 
     @patch("src.application.services.auth_service.hash_password")
     @patch("src.application.services.auth_service.verify_password")
@@ -374,13 +369,14 @@ class AuthService_Should(unittest.TestCase):
             password=VALID_PASSWORD_HASH,
         )
 
-        record, user = auth.login("alice", "pw")
+        principal, record = auth.login("alice", "pw")
 
         self.assertIs(record, store.get_by_username.return_value)
-        self.assertIsInstance(user, Manager)
-        self.assertEqual(user.user_id, 42)
-        self.assertEqual(user.name, "Alice")
-        self.assertEqual(auth.current_user, user)
+        self.assertEqual(principal.user_id, 42)
+        self.assertEqual(principal.username, "alice")
+        self.assertEqual(principal.name, "Alice")
+        self.assertIs(principal.role, Role.MANAGER)
+        self.assertEqual(auth.current_user, principal)
         mock_verify.assert_called_once()
 
     @patch("src.application.services.auth_service.verify_password", return_value=True)
@@ -398,13 +394,14 @@ class AuthService_Should(unittest.TestCase):
             password=VALID_PASSWORD_HASH,
         )
 
-        record, user = auth.login("bob", "pw")
+        principal, record = auth.login("bob", "pw")
 
         self.assertIs(record, store.get_by_username.return_value)
-        self.assertIsInstance(user, Employee)
-        self.assertEqual(user.user_id, 17)
-        self.assertEqual(user.name, "Bob")
-        self.assertEqual(auth.current_user, user)
+        self.assertEqual(principal.user_id, 17)
+        self.assertEqual(principal.username, "bob")
+        self.assertEqual(principal.name, "Bob")
+        self.assertIs(principal.role, Role.EMPLOYEE)
+        self.assertEqual(auth.current_user, principal)
         mock_verify.assert_called_once()
 
     @patch("src.application.services.auth_service.verify_password", return_value=True)
@@ -421,9 +418,11 @@ class AuthService_Should(unittest.TestCase):
             password=VALID_PASSWORD_HASH,
         )
 
-        with self.assertRaises(ValidationError) as ctx:
+        with self.assertRaises(LoginInvalidUserRuntimeError) as ctx:
             auth.login("badrole", "pw")
 
         self.assertIn("Invalid persisted role", str(ctx.exception))
+        self.assertEqual(ctx.exception.user_id, 99)
+        self.assertEqual(ctx.exception.username, "badrole")
         self.assertIsNone(auth.current_user)
         mock_verify.assert_called_once()

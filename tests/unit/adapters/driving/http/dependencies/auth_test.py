@@ -7,7 +7,7 @@ from fastapi import HTTPException, status
 from src.adapters.driven.security.auth_token_service import TokenPayload
 from src.adapters.driving.http.dependencies import auth as auth_module
 from src.adapters.driving.http.dependencies.auth import (
-    AuthenticatedPrincipal,
+    AuthenticatedHTTPPrincipal,
     _runtime_user_from_record,  # pyright: ignore[reportPrivateUsage]
     get_current_user,
     get_optional_user,
@@ -20,10 +20,10 @@ from src.application.eventing.current_context import (
     get_event_context,
     get_optional_event_context,
 )
+from src.application.models.current_user_principal import CurrentUserPrincipal
 from src.application.models.user_record import UserRecord
 from src.application.services.authorization_service import AuthorizationService
-from src.domain.entities.users.employee import Employee
-from src.domain.entities.users.manager import Manager
+from src.domain.enums.auth import Role
 
 
 class HttpAuthDependencyShould(unittest.IsolatedAsyncioTestCase):
@@ -32,16 +32,18 @@ class HttpAuthDependencyShould(unittest.IsolatedAsyncioTestCase):
 
         user = _runtime_user_from_record(record)  # type: ignore[reportPrivateUsage]
 
-        self.assertIsInstance(user, Manager)
+        self.assertIsInstance(user, CurrentUserPrincipal)
         self.assertEqual(user.user_id, record.user_id)
+        self.assertIs(user.role, Role.MANAGER)
 
     def test_runtime_user_from_record_returns_employee(self) -> None:
         record = self._record(role="EMPLOYEE")
 
         user = _runtime_user_from_record(record)  # type: ignore[reportPrivateUsage]
 
-        self.assertIsInstance(user, Employee)
+        self.assertIsInstance(user, CurrentUserPrincipal)
         self.assertEqual(user.user_id, record.user_id)
+        self.assertIs(user.role, Role.EMPLOYEE)
 
     def test_runtime_user_from_record_raises_unauthorized_for_invalid_role(self) -> None:
         record = self._record(role="OWNER")
@@ -60,7 +62,8 @@ class HttpAuthDependencyShould(unittest.IsolatedAsyncioTestCase):
             principal = principal_from_token("refresh-token", user_repo, expected_type="refresh")
 
         self.assertEqual(principal.record.username, "alice")
-        self.assertIsInstance(principal.user, Manager)
+        self.assertIsInstance(principal.current_user, CurrentUserPrincipal)
+        self.assertIs(principal.current_user.role, Role.MANAGER)
         user_repo.get_by_id.assert_called_once_with(1)
 
     def test_principal_from_token_validates_access_token_and_returns_principal(self) -> None:
@@ -71,7 +74,8 @@ class HttpAuthDependencyShould(unittest.IsolatedAsyncioTestCase):
             principal = principal_from_token("access-token", user_repo, expected_type="access")
 
         self.assertEqual(principal.record.username, "alice")
-        self.assertIsInstance(principal.user, Manager)
+        self.assertIsInstance(principal.current_user, CurrentUserPrincipal)
+        self.assertIs(principal.current_user.role, Role.MANAGER)
         user_repo.get_by_id.assert_called_once_with(1)
 
     def test_principal_from_token_raises_refresh_specific_message_for_invalid_refresh_token(self) -> None:
@@ -217,12 +221,19 @@ class HttpAuthDependencyShould(unittest.IsolatedAsyncioTestCase):
             token_version=1,
         )
 
-    def _principal(self) -> AuthenticatedPrincipal:
+    def _principal(self) -> AuthenticatedHTTPPrincipal:
         record = self._record(role="MANAGER")
-        user = Manager(user_id=record.user_id, name=record.name)
-        return AuthenticatedPrincipal(
+        user = CurrentUserPrincipal(
+            user_id=record.user_id,
+            username=record.username,
+            name=record.name,
+            email=record.email,
+            phone_number=record.phone_number,
+            role=Role.MANAGER,
+        )
+        return AuthenticatedHTTPPrincipal(
             record=record,
-            user=user,
+            current_user=user,
             authz=AuthorizationService(current_user=user),
             token=self._token_payload(),
         )

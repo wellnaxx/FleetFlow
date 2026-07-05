@@ -1,15 +1,27 @@
 import unittest
-from types import SimpleNamespace
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 from src.adapters.driving.cli.engine import Engine
 from src.application.enums.event_sources import EventSource
 from src.application.eventing.current_context import get_event_context, get_optional_event_context
+from src.application.models.current_user_principal import CurrentUserPrincipal
 from src.application.results.heartbeat_summary_result import HeartbeatSummary
+from src.domain.enums.auth import Role
 
 if TYPE_CHECKING:
     from src.application.eventing.context import EventContext
+
+
+def _principal(user_id: int = 7, username: str = "fleet.manager") -> CurrentUserPrincipal:
+    return CurrentUserPrincipal(
+        user_id=user_id,
+        username=username,
+        name="Fleet Manager",
+        email="manager@example.com",
+        phone_number="0412345678",
+        role=Role.MANAGER,
+    )
 
 
 class EngineTests(unittest.TestCase):
@@ -26,7 +38,6 @@ class EngineTests(unittest.TestCase):
         factory = MagicMock()
         auth = MagicMock()
         auth.current_user = None
-        auth.last_username = None
         authz = MagicMock()
         save_world = MagicMock()
         advance = MagicMock()
@@ -51,7 +62,7 @@ class EngineTests(unittest.TestCase):
 
     def test_rebind_app_updates_authz_current_user(self) -> None:
         engine, _factory, auth, authz, _save_world, _advance = self.make_engine()
-        auth.current_user = object()
+        auth.current_user = _principal()
 
         engine._rebind_app()  # pyright: ignore[reportPrivateUsage]
 
@@ -180,8 +191,7 @@ class EngineTests(unittest.TestCase):
 
     def test_exec_line_binds_authenticated_actor_from_pre_command_session(self) -> None:
         engine, factory, auth, _authz, _save_world, _advance = self.make_engine()
-        auth.current_user = SimpleNamespace(user_id=7)
-        auth.last_username = "  Fleet.Manager  "
+        auth.current_user = _principal(user_id=7, username="fleet.manager")
         observed_contexts: list[EventContext] = []
 
         def execute_command() -> str:
@@ -292,7 +302,7 @@ class EngineTests(unittest.TestCase):
 
     def test_exec_line_rebinds_after_session_mutation(self) -> None:
         engine, factory, auth, authz, _save_world, advance = self.make_engine()
-        auth.current_user = object()
+        auth.current_user = _principal()
 
         cmd = MagicMock()
         cmd.skips_heartbeat = True

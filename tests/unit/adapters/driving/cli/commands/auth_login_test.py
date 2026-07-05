@@ -14,7 +14,7 @@ class AuthLogin_Should(unittest.TestCase):
         return cmd
 
     def login_result(self, *, name: str, role: str) -> SimpleNamespace:
-        return SimpleNamespace(user=SimpleNamespace(name=name, role=SimpleNamespace(value=role)))
+        return SimpleNamespace(principal=SimpleNamespace(name=name, role=SimpleNamespace(value=role)))
 
     def test_mutates_session_true(self) -> None:
         self.assertTrue(AuthLogin.mutates_session)

@@ -232,7 +232,7 @@ class Container:
         logger.debug("Wiring application use cases.")
         self.auth_cases = AuthUseCases(
             login=LoginUseCase(self.auth, self.clock),
-            logout=LogoutUseCase(self.auth.user_repository, self.auth, self.clock),
+            logout=LogoutUseCase(self.auth.user_repository, self.auth, self.authz, self.clock),
             who_am_i=WhoAmIUseCase(self.auth),
             register_user=RegisterUserUseCase(self.auth, self.authz),
             change_password=ChangePasswordUseCase(self.auth, self.authz),

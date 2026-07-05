@@ -174,7 +174,7 @@ class LoginWrongPasswordError(AuthenticationError, LoginRejectedMixin):
 
 
 class LoginInvalidUserRuntimeError(ValidationError, LoginRejectedMixin):
-    """Raised when login cannot hydrate persisted user data into a runtime user."""
+    """Raised when login cannot hydrate persisted user data into a current-user principal."""
 
     def __init__(self, message: str, *, user_id: int, username: str) -> None:
         super().__init__(message)

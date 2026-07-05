@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import Depends
 
-from src.adapters.driving.http.dependencies.auth import AuthenticatedPrincipal, get_current_user
+from src.adapters.driving.http.dependencies.auth import AuthenticatedHTTPPrincipal, get_current_user
 from src.application.services.auth_service import AuthService
 from src.application.use_cases.auth.change_password import ChangePasswordUseCase
 from src.application.use_cases.auth.login import LoginUseCase
@@ -36,7 +36,7 @@ from src.composition.runtime import get_auth_service, get_container
 
 
 def get_register_user_use_case(
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_user)],
+    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> RegisterUserUseCase:
     """Build the user-registration use case for the authenticated request.
@@ -71,7 +71,7 @@ def get_login_use_case(
 
 
 def get_change_password_use_case(
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_user)],
+    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
     container: Annotated[Container, Depends(get_container)],
 ) -> ChangePasswordUseCase:
@@ -92,23 +92,30 @@ def get_change_password_use_case(
 
 
 def get_logout_use_case(
+    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
     container: Annotated[Container, Depends(get_container)],
 ) -> LogoutUseCase:
     """Build the logout use case for an authenticated request.
 
     Args:
+        principal: Authenticated HTTP principal carrying request-scoped authorization.
         auth_service: Shared authentication service used to clear local session state.
         container: Application dependency container.
 
     Returns:
         Logout use case bound to the active user repository and auth service.
     """
-    return LogoutUseCase(user_repository=auth_service.user_repository, auth=auth_service, clock=container.clock)
+    return LogoutUseCase(
+        user_repository=auth_service.user_repository,
+        auth=auth_service,
+        authz=principal.authz,
+        clock=container.clock,
+    )
 
 
 def get_view_all_customers_use_case(
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_user)],
+    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
     container: Annotated[Container, Depends(get_container)],
 ) -> ViewAllCustomersUseCase:
     """Build the customer-listing use case for the authenticated request.
@@ -127,7 +134,7 @@ def get_view_all_customers_use_case(
 
 
 def get_create_package_use_case(
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_user)],
+    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
     container: Annotated[Container, Depends(get_container)],
 ) -> CreatePackageUseCase:
     """Build the package-creation use case for the authenticated request.
@@ -146,7 +153,7 @@ def get_create_package_use_case(
 
 
 def get_view_package_use_case(
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_user)],
+    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
     container: Annotated[Container, Depends(get_container)],
 ) -> ViewPackageUseCase:
     """Build the package-detail use case for the authenticated request.
@@ -165,7 +172,7 @@ def get_view_package_use_case(
 
 
 def get_view_all_packages_use_case(
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_user)],
+    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
     container: Annotated[Container, Depends(get_container)],
 ) -> ViewAllPackagesUseCase:
     """Build the package-listing use case for the authenticated request.
@@ -184,7 +191,7 @@ def get_view_all_packages_use_case(
 
 
 def get_view_unassigned_packages_use_case(
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_user)],
+    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
     container: Annotated[Container, Depends(get_container)],
 ) -> ViewUnassignedPackagesUseCase:
     """Build the unassigned-package listing use case for the authenticated request.
@@ -203,7 +210,7 @@ def get_view_unassigned_packages_use_case(
 
 
 def get_remove_package_use_case(
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_user)],
+    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
     container: Annotated[Container, Depends(get_container)],
 ) -> RemovePackageUseCase:
     """Build the package-removal use case for the authenticated request.
@@ -222,7 +229,7 @@ def get_remove_package_use_case(
 
 
 def get_create_route_use_case(
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_user)],
+    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
     container: Annotated[Container, Depends(get_container)],
 ) -> CreateRouteUseCase:
     """Build the route-creation use case for the authenticated request.
@@ -241,7 +248,7 @@ def get_create_route_use_case(
 
 
 def get_view_all_routes_use_case(
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_user)],
+    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
     container: Annotated[Container, Depends(get_container)],
 ) -> ViewAllRoutesUseCase:
     """Build the route-listing use case for the authenticated request.
@@ -260,7 +267,7 @@ def get_view_all_routes_use_case(
 
 
 def get_view_routes_in_progress_use_case(
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_user)],
+    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
     container: Annotated[Container, Depends(get_container)],
 ) -> ViewRoutesInProgressUseCase:
     """Build the in-progress route listing use case for the authenticated request.
@@ -279,7 +286,7 @@ def get_view_routes_in_progress_use_case(
 
 
 def get_view_route_use_case(
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_user)],
+    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
     container: Annotated[Container, Depends(get_container)],
 ) -> ViewRouteUseCase:
     """Build the route-detail use case for the authenticated request.
@@ -298,7 +305,7 @@ def get_view_route_use_case(
 
 
 def get_remove_route_use_case(
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_user)],
+    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
     container: Annotated[Container, Depends(get_container)],
 ) -> RemoveRouteUseCase:
     """Build the route-removal use case for the authenticated request.
@@ -317,7 +324,7 @@ def get_remove_route_use_case(
 
 
 def get_assign_packages_to_route_use_case(
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_user)],
+    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
     container: Annotated[Container, Depends(get_container)],
 ) -> AssignPackagesToRouteUseCase:
     """Build the package-to-route assignment use case for the authenticated request.
@@ -336,7 +343,7 @@ def get_assign_packages_to_route_use_case(
 
 
 def get_assign_truck_to_route_use_case(
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_user)],
+    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
     container: Annotated[Container, Depends(get_container)],
 ) -> AssignTruckToRouteUseCase:
     """Build the truck-to-route assignment use case for the authenticated request.
@@ -360,7 +367,7 @@ def get_assign_truck_to_route_use_case(
 
 
 def get_find_suitable_trucks_for_route_use_case(
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_user)],
+    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
     container: Annotated[Container, Depends(get_container)],
 ) -> FindSuitableTrucksForRouteUseCase:
     """Build the route-to-suitable-trucks search use case for the authenticated request.
@@ -383,7 +390,7 @@ def get_find_suitable_trucks_for_route_use_case(
 
 
 def get_find_suitable_routes_for_package_use_case(
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_user)],
+    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
     container: Annotated[Container, Depends(get_container)],
 ) -> FindSuitableRoutesForPackageUseCase:
     """Build the package-to-suitable-routes search use case for the authenticated request.
@@ -406,7 +413,7 @@ def get_find_suitable_routes_for_package_use_case(
 
 
 def get_view_all_trucks_use_case(
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_user)],
+    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
     container: Annotated[Container, Depends(get_container)],
 ) -> ViewAllTrucksUseCase:
     """Build the truck-listing use case for the authenticated request.
@@ -439,7 +446,7 @@ def get_advance_world_state_use_case(
 
 
 def get_save_world_state_use_case(
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_user)],
+    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
     container: Annotated[Container, Depends(get_container)],
 ) -> SaveWorldStateUseCase:
     """Build the world-state save use case for the authenticated request.
@@ -462,7 +469,7 @@ def get_save_world_state_use_case(
 
 
 def get_load_world_state_use_case(
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_user)],
+    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
     container: Annotated[Container, Depends(get_container)],
 ) -> LoadWorldStateUseCase:
     """Build the world-state load use case for the authenticated request.
