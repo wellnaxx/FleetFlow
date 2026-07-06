@@ -56,7 +56,7 @@ class TestRemovePackage_Should(unittest.TestCase):
 
         self.assertIn("Parameter 'str' is not a valid integer.", str(ctx.exception))
         mock_validate.assert_called_once_with(["str"], 1)
-        mock_try_parse.assert_called_once_with("str")
+        mock_try_parse.assert_called_once_with("str", "package_id")
         cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.remove_package.validate_params_exact")
@@ -81,7 +81,7 @@ class TestRemovePackage_Should(unittest.TestCase):
 
         self.assertEqual(result, "Package 42 removed.")
         mock_validate.assert_called_once_with(["42"], 1)
-        mock_try_parse.assert_called_once_with("42")
+        mock_try_parse.assert_called_once_with("42", "package_id")
         cmd._use_case.execute.assert_called_once_with(42)  # type: ignore[reportUnknownMemberType]
         cmd._event_collector.drain.assert_called_once_with((package, customer, route))  # type: ignore[reportUnknownMemberType]
 
@@ -106,7 +106,7 @@ class TestRemovePackage_Should(unittest.TestCase):
 
         self.assertEqual(result, "Package 42 removed.")
         mock_validate.assert_called_once_with(["42"], 1)
-        mock_try_parse.assert_called_once_with("42")
+        mock_try_parse.assert_called_once_with("42", "package_id")
         cmd._use_case.execute.assert_called_once_with(42)  # type: ignore[reportUnknownMemberType]
         cmd._event_collector.drain.assert_called_once_with((package, customer))  # type: ignore[reportUnknownMemberType]
 
@@ -126,5 +126,5 @@ class TestRemovePackage_Should(unittest.TestCase):
 
         self.assertIn("Package with ID 42 not found", str(ctx.exception))
         mock_validate.assert_called_once_with(["42"], 1)
-        mock_try_parse.assert_called_once_with("42")
+        mock_try_parse.assert_called_once_with("42", "package_id")
         cmd._use_case.execute.assert_called_once_with(42)  # type: ignore[reportUnknownMemberType]

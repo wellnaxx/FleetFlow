@@ -23,8 +23,8 @@ class AssignPackagesToRoute(EventDrainingCommand[AssignPackagesToRouteUseCase]):
         """
         validate_params_count(self._params, 2)
 
-        route_id = try_parse_int(self._params[0])
-        package_ids = [try_parse_int(pid) for pid in self._params[1:]]
+        route_id = try_parse_int(self._params[0], "route_id")
+        package_ids = [try_parse_int(pid, "package_id") for pid in self._params[1:]]
 
         result = self._use_case.execute(route_id, package_ids)
 

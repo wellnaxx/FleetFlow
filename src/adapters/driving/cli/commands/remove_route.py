@@ -22,7 +22,7 @@ class RemoveRoute(EventDrainingCommand[RemoveRouteUseCase]):
             ValueError: If the route id is invalid or the route is missing.
         """
         validate_params_exact(self._params, 1)
-        route_id = try_parse_int(self._params[0])
+        route_id = try_parse_int(self._params[0], "route_id")
         route = self._use_case.execute(route_id)
 
         self._event_collector.drain((route,))

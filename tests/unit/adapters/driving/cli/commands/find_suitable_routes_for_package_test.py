@@ -52,7 +52,7 @@ class FindSuitableRoutesForPackage_Should(unittest.TestCase):
         result = cmd.execute()
 
         mock_validate.assert_called_once_with(("77",), 1)
-        mock_parse.assert_called_once_with("77")
+        mock_parse.assert_called_once_with("77", "package_id")
         cmd._use_case.execute.assert_called_once_with(77)  # type: ignore[reportUnknownMemberType]
 
         lines = result.splitlines()

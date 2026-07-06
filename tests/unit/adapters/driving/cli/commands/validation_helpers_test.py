@@ -62,7 +62,12 @@ class TryParseInt_Should(unittest.TestCase):
     def test_invalid_raises_with_message(self):
         with self.assertRaises(ValueError) as ctx:
             try_parse_int("4.2")
-        self.assertIn("Invalid value for ID", str(ctx.exception))
+        self.assertIn("Invalid value for value", str(ctx.exception))
+
+    def test_invalid_uses_supplied_field_name(self):
+        with self.assertRaises(ValueError) as ctx:
+            try_parse_int("4.2", "--limit")
+        self.assertIn("Invalid value for --limit", str(ctx.exception))
 
 
 class TryParseFloat_Should(unittest.TestCase):
@@ -75,6 +80,11 @@ class TryParseFloat_Should(unittest.TestCase):
     def test_invalid_raises_with_message(self):
         with self.assertRaises(ValueError) as ctx:
             try_parse_float("abc")
+        self.assertIn("Invalid value for value", str(ctx.exception))
+
+    def test_invalid_uses_supplied_field_name(self):
+        with self.assertRaises(ValueError) as ctx:
+            try_parse_float("abc", "weight")
         self.assertIn("Invalid value for weight", str(ctx.exception))
 
 

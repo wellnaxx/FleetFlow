@@ -19,6 +19,6 @@ class ViewPackage(BaseCommand[ViewPackageUseCase]):
             ValueError: If the parameter count or id is invalid.
         """
         validate_params_exact(self._params, 1)
-        package_id = try_parse_int(self._params[0])
+        package_id = try_parse_int(self._params[0], "package_id")
         package = self._use_case.execute(package_id)
         return package.info()

@@ -29,7 +29,7 @@ class RemovePackage(EventDrainingCommand[RemovePackageUseCase]):
             ValueError: If the package id is invalid or the package is missing.
         """
         validate_params_exact(self._params, 1)
-        package_id = try_parse_int(self._params[0])
+        package_id = try_parse_int(self._params[0], "package_id")
         result = self._use_case.execute(package_id)
 
         self._event_collector.drain(

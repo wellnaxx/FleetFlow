@@ -25,7 +25,7 @@ class CreatePackage(EventDrainingCommand[CreatePackageUseCase]):
 
         start = self._params[0]
         end = self._params[1]
-        weight = try_parse_float(self._params[2])
+        weight = try_parse_float(self._params[2], "weight")
         name = self._params[3]
         email = self._params[4] if len(self._params) > 4 else ""
         phone = self._params[5] if len(self._params) > 5 else ""

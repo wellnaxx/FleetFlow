@@ -55,7 +55,7 @@ class TestRemoveRoute_Should(unittest.TestCase):
 
         self.assertIn("Parameter 'str' is not a valid integer.", str(ctx.exception))
         mock_validate.assert_called_once_with(("str",), 1)
-        mock_parse.assert_called_once_with("str")
+        mock_parse.assert_called_once_with("str", "route_id")
         cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.remove_route.validate_params_exact")
@@ -76,7 +76,7 @@ class TestRemoveRoute_Should(unittest.TestCase):
 
         self.assertEqual(result, "Route 42 removed.")
         mock_validate.assert_called_once_with(("42",), 1)
-        mock_parse.assert_called_once_with("42")
+        mock_parse.assert_called_once_with("42", "route_id")
         cmd._use_case.execute.assert_called_once_with(42)  # type: ignore[reportUnknownMemberType]
         cmd._event_collector.drain.assert_called_once_with((route,))  # type: ignore[reportUnknownMemberType]
 
@@ -96,5 +96,5 @@ class TestRemoveRoute_Should(unittest.TestCase):
 
         self.assertIn("Route with ID 42 not found", str(ctx.exception))
         mock_validate.assert_called_once_with(("42",), 1)
-        mock_parse.assert_called_once_with("42")
+        mock_parse.assert_called_once_with("42", "route_id")
         cmd._use_case.execute.assert_called_once_with(42)  # type: ignore[reportUnknownMemberType]

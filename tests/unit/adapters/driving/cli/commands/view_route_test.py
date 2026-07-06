@@ -39,7 +39,7 @@ class ViewRoute_Should(unittest.TestCase):
         result = cmd.execute()
 
         mock_validate.assert_called_once_with(("12",), 1)
-        mock_parse.assert_called_once_with("12")
+        mock_parse.assert_called_once_with("12", "route_id")
         cmd._use_case.execute.assert_called_once_with(12)  # type: ignore[reportUnknownMemberType]
         mock_render.assert_called_once_with(route)
         self.assertEqual(result, "ROUTE-INFO")
@@ -56,7 +56,7 @@ class ViewRoute_Should(unittest.TestCase):
 
         self.assertIn("Route with ID 77 not found", str(ctx.exception))
         mock_validate.assert_called_once_with(("77",), 1)
-        mock_parse.assert_called_once_with("77")
+        mock_parse.assert_called_once_with("77", "route_id")
         cmd._use_case.execute.assert_called_once_with(77)  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.view_route.validate_params_exact")
@@ -70,7 +70,7 @@ class ViewRoute_Should(unittest.TestCase):
 
         self.assertIn("not an int", str(ctx.exception))
         mock_validate.assert_called_once_with(("abc",), 1)
-        mock_parse.assert_called_once_with("abc")
+        mock_parse.assert_called_once_with("abc", "route_id")
         cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
     def test_validate_params_exact_called_with_one(self) -> None:
@@ -106,7 +106,7 @@ class ViewRoute_Should(unittest.TestCase):
         _ = cmd.execute()
 
         mock_validate.assert_called_once_with(("1", "extra", "ignored"), 1)
-        mock_parse.assert_called_once_with("1")
+        mock_parse.assert_called_once_with("1", "route_id")
         cmd._use_case.execute.assert_called_once_with(1)  # type: ignore[reportUnknownMemberType]
 
     def test_no_mutates_flags(self) -> None:

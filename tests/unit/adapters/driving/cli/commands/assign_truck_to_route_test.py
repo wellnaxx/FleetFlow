@@ -49,7 +49,7 @@ class AssignTruckToRoute_Should(unittest.TestCase):
         result = cmd.execute()
 
         mock_validate.assert_called_once_with(("11", "22"), 2)
-        self.assertEqual(mock_parse.call_args_list, [call("11"), call("22")])
+        self.assertEqual(mock_parse.call_args_list, [call("11", "truck_id"), call("22", "route_id")])
         cmd._use_case.execute.assert_called_once_with(11, 22, fixed_now)  # type: ignore[reportUnknownMemberType]
         cmd._event_collector.drain.assert_called_once_with((route,))  # type: ignore[reportUnknownMemberType]
         self.assertEqual(result, "Assigned truck 11 to route 22.")
@@ -101,7 +101,7 @@ class AssignTruckToRoute_Should(unittest.TestCase):
 
         self.assertIn("not an int", str(ctx.exception))
         mock_validate.assert_called_once_with(("truckX", "2"), 2)
-        mock_parse.assert_called_once_with("truckX")
+        mock_parse.assert_called_once_with("truckX", "truck_id")
         cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
@@ -119,7 +119,7 @@ class AssignTruckToRoute_Should(unittest.TestCase):
 
         self.assertIn("bad route id", str(ctx.exception))
         mock_validate.assert_called_once_with(("13", "routeY"), 2)
-        self.assertEqual(mock_parse.call_args_list, [call("13"), call("routeY")])
+        self.assertEqual(mock_parse.call_args_list, [call("13", "truck_id"), call("routeY", "route_id")])
         cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.assign_truck_to_route.datetime")
@@ -162,7 +162,7 @@ class AssignTruckToRoute_Should(unittest.TestCase):
 
         _ = cmd.execute()
 
-        self.assertEqual(mock_parse.call_args_list, [call("10"), call("20")])
+        self.assertEqual(mock_parse.call_args_list, [call("10", "truck_id"), call("20", "route_id")])
         cmd._use_case.execute.assert_called_once()  # type: ignore[reportUnknownMemberType]
         cmd._event_collector.drain.assert_called_once_with((route,))  # type: ignore[reportUnknownMemberType]
 

@@ -9,7 +9,7 @@ from src.application.results.assign_packages_to_route_result import (
 )
 
 
-def _parse_int(value: str) -> int:
+def _parse_int(value: str, _field_name: str = "value") -> int:
     return int(value)
 
 
@@ -52,7 +52,7 @@ class AssignPackageToRoute_Should(unittest.TestCase):
         result = cmd.execute()
 
         mock_validate.assert_called_once_with(("5", "42"), 2)
-        self.assertEqual(mock_parse.call_args_list, [call("5"), call("42")])
+        self.assertEqual(mock_parse.call_args_list, [call("5", "route_id"), call("42", "package_id")])
         cmd._use_case.execute.assert_called_once_with(5, [42])  # type: ignore[reportUnknownMemberType]
         cmd._event_collector.drain.assert_called_once_with((route,))  # type: ignore[reportUnknownMemberType]
         self.assertEqual(result, "Assigned package 42 to route 5. ETA: N/A (route unscheduled)")
@@ -79,7 +79,10 @@ class AssignPackageToRoute_Should(unittest.TestCase):
         result = cmd.execute()
 
         mock_validate.assert_called_once_with(("7", "8", "9", "10"), 2)
-        self.assertEqual(mock_parse.call_args_list, [call("7"), call("8"), call("9"), call("10")])
+        self.assertEqual(
+            mock_parse.call_args_list,
+            [call("7", "route_id"), call("8", "package_id"), call("9", "package_id"), call("10", "package_id")],
+        )
         cmd._use_case.execute.assert_called_once_with(7, [8, 9, 10])  # type: ignore[reportUnknownMemberType]
         cmd._event_collector.drain.assert_called_once_with((route,))  # type: ignore[reportUnknownMemberType]
         self.assertEqual(
@@ -169,7 +172,7 @@ class AssignPackageToRoute_Should(unittest.TestCase):
 
         self.assertIn("not an int", str(ctx.exception))
         mock_validate.assert_called_once_with(("routeX", "2"), 2)
-        mock_parse.assert_called_once_with("routeX")
+        mock_parse.assert_called_once_with("routeX", "route_id")
         cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.assign_packages_to_route.validate_params_count")
@@ -186,7 +189,7 @@ class AssignPackageToRoute_Should(unittest.TestCase):
             cmd.execute()
 
         self.assertIn("bad package id", str(ctx.exception))
-        self.assertEqual(mock_parse.call_args_list, [call("7"), call("p1")])
+        self.assertEqual(mock_parse.call_args_list, [call("7", "route_id"), call("p1", "package_id")])
         cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.assign_packages_to_route.validate_params_count")
@@ -230,5 +233,8 @@ class AssignPackageToRoute_Should(unittest.TestCase):
 
         cmd.execute()
 
-        self.assertEqual(mock_parse.call_args_list, [call("10"), call("20"), call("30")])
+        self.assertEqual(
+            mock_parse.call_args_list,
+            [call("10", "route_id"), call("20", "package_id"), call("30", "package_id")],
+        )
         cmd._use_case.execute.assert_called_once_with(10, [20, 30])  # type: ignore[reportUnknownMemberType]

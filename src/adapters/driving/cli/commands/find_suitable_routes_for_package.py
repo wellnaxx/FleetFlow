@@ -21,7 +21,7 @@ class FindSuitableRoutesForPackage(BaseCommand[FindSuitableRoutesForPackageUseCa
             ValueError: If the package id is invalid or missing.
         """
         validate_params_exact(self._params, 1)
-        package_id = try_parse_int(self._params[0])
+        package_id = try_parse_int(self._params[0], "package_id")
 
         matches = self._use_case.execute(package_id)
         if not matches:

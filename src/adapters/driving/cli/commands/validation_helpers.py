@@ -43,11 +43,12 @@ def validate_params_exact(params: Sequence[str], expected_count: int) -> None:
         )
 
 
-def try_parse_int(s: str) -> int:
+def try_parse_int(value: str, field_name: str = "value") -> int:
     """Parse an integer CLI value.
 
     Args:
-        s: Raw CLI token.
+        value: Raw CLI token.
+        field_name: Human-readable field or option name for error messages.
 
     Returns:
         Parsed integer value.
@@ -56,16 +57,17 @@ def try_parse_int(s: str) -> int:
         ValueError: If the token is not an integer.
     """
     try:
-        return int(s)
+        return int(value)
     except (ValueError, TypeError) as err:
-        raise ValueError("Invalid value for ID. Should be an integer.") from err
+        raise ValueError(f"Invalid value for {field_name}. Should be an integer.") from err
 
 
-def try_parse_float(s: str) -> float:
+def try_parse_float(value: str, field_name: str = "value") -> float:
     """Parse a floating-point CLI value.
 
     Args:
-        s: Raw CLI token.
+        value: Raw CLI token.
+        field_name: Human-readable field or option name for error messages.
 
     Returns:
         Parsed floating-point value.
@@ -74,9 +76,9 @@ def try_parse_float(s: str) -> float:
         ValueError: If the token is not numeric.
     """
     try:
-        return float(s)
+        return float(value)
     except (ValueError, TypeError) as err:
-        raise ValueError("Invalid value for weight. Should be a number.") from err
+        raise ValueError(f"Invalid value for {field_name}. Should be a number.") from err
 
 
 def parse_departure_from_tail(tokens: list[str]) -> tuple[list[str], datetime | None]:
@@ -112,6 +114,7 @@ def parse_departure_from_tail(tokens: list[str]) -> tuple[list[str], datetime | 
             continue
 
     return tokens, None
+
 
 def validate_passwords(new_pw: str, confirm: str) -> None:
     """Validate that the new password and confirmation match."""

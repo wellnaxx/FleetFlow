@@ -5,6 +5,10 @@ from unittest.mock import MagicMock, patch
 from src.adapters.driving.cli.commands.create_package import CreatePackage
 
 
+def _parse_float(value: str, _field_name: str = "value") -> float:
+    return float(value)
+
+
 class CreatePackage_Tests(unittest.TestCase):
     def make_cmd(self, params: list[str]) -> CreatePackage:
         cmd = CreatePackage.__new__(CreatePackage)
@@ -40,7 +44,7 @@ class CreatePackage_Tests(unittest.TestCase):
         mock_parse_float: MagicMock,
         mock_validate: MagicMock,
     ) -> None:
-        mock_parse_float.side_effect = float
+        mock_parse_float.side_effect = _parse_float
         cmd = self.make_cmd(["A1", "B2", "12.5", "Alice"])
 
         pkg = SimpleNamespace(package_id=123, customer=SimpleNamespace(customer_id=55))
@@ -49,7 +53,7 @@ class CreatePackage_Tests(unittest.TestCase):
         result = cmd.execute()
 
         mock_validate.assert_called_once_with(["A1", "B2", "12.5", "Alice"], 4, 6)
-        mock_parse_float.assert_called_once_with("12.5")
+        mock_parse_float.assert_called_once_with("12.5", "weight")
         cmd._use_case.execute.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
             start="A1",
             end="B2",
@@ -77,7 +81,7 @@ class CreatePackage_Tests(unittest.TestCase):
         result = cmd.execute()
 
         mock_validate.assert_called_once_with(["S1", "E9", "7", "Bob", "bob@ex.com", "0412345678"], 4, 6)
-        mock_parse_float.assert_called_once_with("7")
+        mock_parse_float.assert_called_once_with("7", "weight")
         cmd._use_case.execute.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
             start="S1",
             end="E9",

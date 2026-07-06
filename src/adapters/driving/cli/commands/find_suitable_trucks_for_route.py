@@ -19,7 +19,7 @@ class FindSuitableTrucksForRoute(BaseCommand[FindSuitableTrucksForRouteUseCase])
             ValueError: If the route id is invalid or missing.
         """
         validate_params_exact(self._params, 1)
-        route_id = try_parse_int(self._params[0])
+        route_id = try_parse_int(self._params[0], "route_id")
         trucks = self._use_case.execute(route_id)
         if not trucks:
             return "No suitable trucks found."

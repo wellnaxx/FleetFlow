@@ -20,6 +20,6 @@ class ViewRoute(BaseCommand[ViewRouteUseCase]):
             ValueError: If the parameter count or route id is invalid.
         """
         validate_params_exact(self._params, 1)
-        route_id = try_parse_int(self._params[0])
+        route_id = try_parse_int(self._params[0], "route_id")
         route = self._use_case.execute(route_id)
         return render_route_info(route)

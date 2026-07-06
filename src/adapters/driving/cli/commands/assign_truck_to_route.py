@@ -25,8 +25,8 @@ class AssignTruckToRoute(EventDrainingCommand[AssignTruckToRouteUseCase]):
         """
         validate_params_exact(self._params, 2)
 
-        truck_id = try_parse_int(self._params[0])
-        route_id = try_parse_int(self._params[1])
+        truck_id = try_parse_int(self._params[0], "truck_id")
+        route_id = try_parse_int(self._params[1], "route_id")
         now = datetime.now()
 
         result = self._use_case.execute(truck_id, route_id, now)

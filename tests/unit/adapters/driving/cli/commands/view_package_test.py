@@ -38,7 +38,7 @@ class TestViewPackage_Should(unittest.TestCase):
         result = cmd.execute()
 
         mock_validate.assert_called_once_with(["123"], 1)
-        mock_try_parse.assert_called_once_with("123")
+        mock_try_parse.assert_called_once_with("123", "package_id")
         cmd._use_case.execute.assert_called_once_with(123)  # type: ignore[reportUnknownMemberType]
         self.assertEqual(result, "Package 123 details")
 
@@ -58,7 +58,7 @@ class TestViewPackage_Should(unittest.TestCase):
 
         self.assertIn("Package with ID 999 not found", str(context.exception))
         mock_validate.assert_called_once_with(["999"], 1)
-        mock_try_parse.assert_called_once_with("999")
+        mock_try_parse.assert_called_once_with("999", "package_id")
         cmd._use_case.execute.assert_called_once_with(999)  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.view_package.validate_params_exact")
@@ -88,5 +88,5 @@ class TestViewPackage_Should(unittest.TestCase):
 
         self.assertIn("Parameter 'abc' is not a valid integer.", str(context.exception))
         mock_validate.assert_called_once_with(["abc"], 1)
-        mock_try_parse.assert_called_once_with("abc")
+        mock_try_parse.assert_called_once_with("abc", "package_id")
         cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]

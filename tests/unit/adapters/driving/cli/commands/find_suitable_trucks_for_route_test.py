@@ -37,7 +37,7 @@ class FindSuitableTrucksForRoute_Tests(unittest.TestCase):
         out = cmd.execute()
 
         mock_validate.assert_called_once_with(("15",), 1)
-        mock_parse.assert_called_once_with("15")
+        mock_parse.assert_called_once_with("15", "route_id")
         cmd._use_case.execute.assert_called_once_with(15)  # type: ignore[reportUnknownMemberType]
 
         lines = out.splitlines()
@@ -55,7 +55,7 @@ class FindSuitableTrucksForRoute_Tests(unittest.TestCase):
         out = cmd.execute()
 
         mock_validate.assert_called_once_with(("9",), 1)
-        mock_parse.assert_called_once_with("9")
+        mock_parse.assert_called_once_with("9", "route_id")
         cmd._use_case.execute.assert_called_once_with(9)  # type: ignore[reportUnknownMemberType]
         self.assertEqual(out, "No suitable trucks found.")
 
@@ -71,7 +71,7 @@ class FindSuitableTrucksForRoute_Tests(unittest.TestCase):
 
         self.assertIn("Route with ID 77 not found", str(ctx.exception))
         mock_validate.assert_called_once_with(("77",), 1)
-        mock_parse.assert_called_once_with("77")
+        mock_parse.assert_called_once_with("77", "route_id")
         cmd._use_case.execute.assert_called_once_with(77)  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.find_suitable_trucks_for_route.validate_params_exact")
@@ -85,7 +85,7 @@ class FindSuitableTrucksForRoute_Tests(unittest.TestCase):
 
         self.assertIn("not an int", str(ctx.exception))
         mock_validate.assert_called_once_with(("x",), 1)
-        mock_parse.assert_called_once_with("x")
+        mock_parse.assert_called_once_with("x", "route_id")
         cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
 
     def test_validate_params_exact_called_with_one(self) -> None:
