@@ -79,9 +79,21 @@ def try_parse_float(value: str, field_name: str = "value") -> float:
         return float(value)
     except (ValueError, TypeError) as err:
         raise ValueError(f"Invalid value for {field_name}. Should be a number.") from err
-    
+
 
 def normalize_string(value: str, field_name: str = "value") -> str:
+    """Normalize a non-empty CLI string token for case-insensitive matching.
+
+    Args:
+        value: Raw CLI token.
+        field_name: Human-readable field or option name for error messages.
+
+    Returns:
+        Lowercase string with surrounding whitespace removed.
+
+    Raises:
+        ValueError: If the normalized value is empty.
+    """
     normalized_value = value.strip().lower()
     if not normalized_value:
         raise ValueError(f"{field_name} must not be an empty string.")
@@ -89,6 +101,21 @@ def normalize_string(value: str, field_name: str = "value") -> str:
 
 
 def try_parse_datetime(value: str, field_name: str = "value") -> datetime:
+    """Parse a CLI datetime value using supported command formats.
+
+    Supported formats are ``YYYY-MM-DDTHH:MM:SS``, ``YYYY-MM-DD HH:MM``,
+    and ``YYYY-MM-DD``.
+
+    Args:
+        value: Raw CLI token.
+        field_name: Human-readable field or option name for error messages.
+
+    Returns:
+        Parsed naive ``datetime`` value.
+
+    Raises:
+        ValueError: If the token does not match a supported datetime format.
+    """
     for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
         try:
             return datetime.strptime(value, fmt)
@@ -134,6 +161,14 @@ def parse_departure_from_tail(tokens: list[str]) -> tuple[list[str], datetime | 
 
 
 def validate_passwords(new_pw: str, confirm: str) -> None:
-    """Validate that the new password and confirmation match."""
+    """Validate that the new password and confirmation match.
+
+    Args:
+        new_pw: Proposed new password.
+        confirm: Confirmation password entered by the user.
+
+    Raises:
+        ValueError: If the two password values differ.
+    """
     if new_pw != confirm:
         raise ValueError("Passwords do not match.")
