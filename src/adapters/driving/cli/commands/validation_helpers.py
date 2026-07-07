@@ -79,6 +79,23 @@ def try_parse_float(value: str, field_name: str = "value") -> float:
         return float(value)
     except (ValueError, TypeError) as err:
         raise ValueError(f"Invalid value for {field_name}. Should be a number.") from err
+    
+
+def normalize_string(value: str, field_name: str = "value") -> str:
+    normalized_value = value.strip().lower()
+    if not normalized_value:
+        raise ValueError(f"{field_name} must not be an empty string.")
+    return normalized_value
+
+
+def try_parse_datetime(value: str, field_name: str = "value") -> datetime:
+    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(value, fmt)
+        except ValueError:
+            continue
+
+    raise ValueError(f"{field_name} must be a datetime, e.g. 2026-07-06T14:30:00.")
 
 
 def parse_departure_from_tail(tokens: list[str]) -> tuple[list[str], datetime | None]:
