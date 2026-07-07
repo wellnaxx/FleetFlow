@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
+from src.application.models.user_record import UserRecord
 from src.domain.enums.auth import Role
 
 
@@ -92,3 +93,22 @@ class CurrentUserResponse(BaseModel):
     name: str = Field(..., description="Full name of the authenticated user.")
     email: str | None = Field(default=None, description="Email address of the authenticated user.")
     phone_number: str | None = Field(default=None, description="Phone number of the authenticated user.")
+
+    @classmethod
+    def from_record(cls, record: UserRecord) -> "CurrentUserResponse":
+        """Build an HTTP response from a persisted user record.
+
+        Args:
+            record: Persisted user record returned by authentication use cases.
+
+        Returns:
+            Serialized current-user response.
+        """
+        return cls(
+            user_id=record.user_id,
+            username=record.username,
+            role=record.role,
+            name=record.name,
+            email=record.email or None,
+            phone_number=record.phone_number or None,
+        )

@@ -14,23 +14,18 @@ from src.adapters.driving.http.dependencies.use_cases import (
     get_view_route_use_case,
     get_view_routes_in_progress_use_case,
 )
-from src.adapters.driving.http.routers.shared import truck_response
 from src.adapters.driving.http.schemas.routes import (
     AssignPackagesToRouteRequest,
     AssignPackagesToRouteResponse,
     AssignTruckToRouteRequest,
     AssignTruckToRouteResponse,
-    PackageAssignmentErrorResponse,
-    PackageAssignmentSuccessResponse,
     RouteCreateRequest,
-    RouteInProgressPositionKind,
     RouteInProgressResponse,
     RoutePageResponse,
     RouteResponse,
 )
 from src.adapters.driving.http.schemas.trucks import TruckResponse
 from src.application.eventing.collector import EventCollector
-from src.application.results.assign_packages_to_route_result import AssignPackagesToRouteResult
 from src.application.use_cases.pagination import PageQuery
 from src.application.use_cases.routes.assign_packages_to_route import AssignPackagesToRouteUseCase
 from src.application.use_cases.routes.assign_truck_to_route import AssignTruckToRouteUseCase
@@ -40,109 +35,8 @@ from src.application.use_cases.routes.remove_route import RemoveRouteUseCase
 from src.application.use_cases.routes.view_all_routes import ViewAllRoutesUseCase
 from src.application.use_cases.routes.view_route import ViewRouteUseCase
 from src.application.use_cases.routes.view_routes_in_progress import ViewRoutesInProgressUseCase
-from src.domain.entities.delivery_route import DeliveryRoute, RoutePosition, RoutePositionKind
 
 routes_router = APIRouter(prefix="/routes", tags=["routes"])
-
-
-def _route_response(route: DeliveryRoute) -> RouteResponse:
-    """Convert a route entity to an HTTP response model.
-
-    Args:
-        route: Route entity to convert.
-
-    Returns:
-        Response model representing the route.
-    """
-    return RouteResponse(
-        route_id=route.route_id,
-        locations=[str(location) for location in route.locations],
-        departure_time=route.departure_time,
-        status=route.status,
-        truck_id=route.truck.vehicle_id if route.truck else None,
-        total_distance_km=route.total_distance_km,
-        eta_final=route.eta_final,
-        package_ids=[package.package_id for package in route.packages],
-    )
-
-
-def _route_in_progress_response(route: DeliveryRoute, position: RoutePosition) -> RouteInProgressResponse:
-    """Convert an active route and computed position into an HTTP response.
-
-    Args:
-        route: Active route entity.
-        position: Computed route position at the request time.
-
-    Returns:
-        Response model containing route details and active position fields.
-
-    Raises:
-        HTTPException: Raised with:
-            * 500 - Route position calculation failure.
-    """
-    try:
-        return RouteInProgressResponse(
-            route=_route_response(route),
-            position_kind=_route_position_kind(position),
-            current_location=str(position.stop_city) if position.kind == RoutePositionKind.AT_STOP else None,
-            in_transit_from=str(position.from_city) if position.kind == RoutePositionKind.IN_TRANSIT else None,
-            in_transit_to=str(position.to_city) if position.kind == RoutePositionKind.IN_TRANSIT else None,
-        )
-    except RuntimeError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Route position calculation failed.",
-        ) from exc
-
-
-def _route_position_kind(position: RoutePosition) -> RouteInProgressPositionKind:
-    """Return the HTTP-supported active route position kind.
-
-    Args:
-        position: Computed route position to expose through HTTP.
-
-    Returns:
-        Supported active-route position kind.
-
-    Raises:
-        RuntimeError: If the position is not an active in-progress position.
-    """
-    if position.kind == RoutePositionKind.AT_STOP:
-        return "AT_STOP"
-    if position.kind == RoutePositionKind.IN_TRANSIT:
-        return "IN_TRANSIT"
-    raise RuntimeError(f"Unsupported in-progress route position kind: {position.kind}")
-
-
-def _assign_packages_response(
-    result: AssignPackagesToRouteResult,
-) -> AssignPackagesToRouteResponse:
-    """Convert a package-assignment use-case result into an HTTP response.
-
-    Args:
-        result: Application result containing assignment successes and errors.
-
-    Returns:
-        HTTP response model with nested success and error details.
-    """
-    return AssignPackagesToRouteResponse(
-        successes=[
-            PackageAssignmentSuccessResponse(
-                package_id=success.package_id,
-                route_id=success.route_id,
-                eta_text=success.eta_text,
-                route=_route_response(success.route),
-            )
-            for success in result.successes
-        ],
-        errors=[
-            PackageAssignmentErrorResponse(
-                package_id=error.package_id,
-                message=error.message,
-            )
-            for error in result.errors
-        ],
-    )
 
 
 @routes_router.post("/", status_code=status.HTTP_201_CREATED)
@@ -173,7 +67,7 @@ def create_route(
     )
 
     event_collector.drain((route,))
-    return _route_response(route)
+    return RouteResponse.from_route(route)
 
 
 @routes_router.get("/", status_code=status.HTTP_200_OK)
@@ -201,14 +95,7 @@ def list_routes(
             * 500 - Database operation failure.
     """
     result = use_case.execute(PageQuery(limit=limit, offset=offset, include_total=include_total))
-    items = [_route_response(route) for route in result.items]
-    return RoutePageResponse(
-        items=items,
-        total=result.total,
-        count=result.count,
-        limit=result.limit,
-        offset=result.offset,
-    )
+    return RoutePageResponse.from_page(result)
 
 
 @routes_router.get("/in-progress", status_code=status.HTTP_200_OK)
@@ -231,7 +118,16 @@ def list_in_progress_routes(
     # Domain route timing currently uses naive local datetimes.
     now = datetime.now()
     active_routes = use_case.execute(now=now)
-    return [_route_in_progress_response(route, position) for route, position in active_routes]
+    try:
+        return [
+            RouteInProgressResponse.from_route_position(route, position)
+            for route, position in active_routes
+        ]
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Route position calculation failed.",
+        ) from exc
 
 
 @routes_router.get("/{route_id}", status_code=status.HTTP_200_OK)
@@ -254,7 +150,7 @@ def get_route(
             * 500 - Database operation failure.
     """
     route = use_case.execute(route_id=route_id)
-    return _route_response(route)
+    return RouteResponse.from_route(route)
 
 
 @routes_router.delete("/{route_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -312,7 +208,7 @@ def assign_packages_to_route(
     if result.successes:
         event_collector.drain((result.successes[0].route,))
 
-    return _assign_packages_response(result)
+    return AssignPackagesToRouteResponse.from_result(result)
 
 
 @routes_router.patch("/{route_id}/truck", status_code=status.HTTP_200_OK)
@@ -344,7 +240,7 @@ def assign_truck_to_route(
     now = datetime.now()
     result = use_case.execute(truck_id=request.truck_id, route_id=route_id, now=now)
     event_collector.drain((result.route,))
-    return AssignTruckToRouteResponse(route_id=result.route_id, truck_id=result.truck_id)
+    return AssignTruckToRouteResponse.from_result(result)
 
 
 @routes_router.get("/{route_id}/suitable-trucks", status_code=status.HTTP_200_OK)
@@ -370,4 +266,4 @@ def find_suitable_trucks_for_route(
             * 500 - Database operation failure.
     """
     trucks = use_case.execute(route_id=route_id)
-    return [truck_response(truck) for truck in trucks]
+    return [TruckResponse.from_truck(truck) for truck in trucks]

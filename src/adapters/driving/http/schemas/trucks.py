@@ -3,6 +3,7 @@ from typing import Self
 
 from pydantic import BaseModel, Field, PositiveInt, model_validator
 
+from src.domain.entities.truck import Truck
 from src.domain.enums.truck_status import TruckStatus
 
 
@@ -39,3 +40,26 @@ class TruckResponse(BaseModel):
         if self.busy_from is not None and self.busy_until is not None and self.busy_from > self.busy_until:
             raise ValueError("busy_from must be before or equal to busy_until.")
         return self
+
+    @classmethod
+    def from_truck(cls, truck: Truck) -> "TruckResponse":
+        """Build an HTTP response from a truck entity.
+
+        Args:
+            truck: Domain truck entity returned by a use case.
+
+        Returns:
+            Serialized truck response.
+        """
+        return cls(
+            vehicle_id=truck.vehicle_id,
+            name=str(truck.name),
+            capacity=truck.capacity,
+            max_range=truck.max_range,
+            status=truck.status,
+            current_location=str(truck.current_location) if truck.current_location is not None else None,
+            route_id=truck.route.route_id if truck.route is not None else None,
+            busy_from=truck.busy_from,
+            busy_until=truck.busy_until,
+            in_transit_to=str(truck.in_transit_to) if truck.in_transit_to is not None else None,
+        )

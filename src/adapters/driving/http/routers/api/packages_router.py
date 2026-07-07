@@ -1,5 +1,4 @@
-from collections.abc import Callable
-from typing import Annotated, Protocol
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -12,7 +11,6 @@ from src.adapters.driving.http.dependencies.use_cases import (
     get_view_package_use_case,
     get_view_unassigned_packages_use_case,
 )
-from src.adapters.driving.http.schemas.customers import CustomerResponse
 from src.adapters.driving.http.schemas.packages import (
     PackageCreateRequest,
     PackagePageResponse,
@@ -26,75 +24,13 @@ from src.application.use_cases.packages.remove_package import RemovePackageUseCa
 from src.application.use_cases.packages.view_all_packages import ViewAllPackagesUseCase
 from src.application.use_cases.packages.view_package import ViewPackageUseCase
 from src.application.use_cases.packages.view_unassigned_packages import ViewUnassignedPackagesUseCase
-from src.application.use_cases.pagination import PageQuery, PageResult
+from src.application.use_cases.pagination import PageQuery
 from src.application.use_cases.routes.find_suitable_routes_for_package import (
     FindSuitableRoutesForPackageUseCase,
 )
-from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.exceptions import DomainConflictError, EntityNotFoundError
 
 packages_router = APIRouter(prefix="/packages", tags=["packages"])
-
-
-def _package_response(package: DeliveryPackage) -> PackageResponse:
-    """Convert a DeliveryPackage entity to a PackageResponse model.
-
-    Args:
-        package: The DeliveryPackage entity to convert.
-
-    Returns:
-        A PackageResponse model representing the given package.
-
-    Note:
-        This function centralizes the mapping logic from the domain entity to the API response model,
-        ensuring consistency across different endpoints that return package data.
-    """
-    return PackageResponse(
-        start_location=str(package.start_location),
-        end_location=str(package.end_location),
-        weight=package.weight,
-        package_id=package.package_id,
-        status=package.status,
-        current_location=str(package.current_location) if package.current_location else None,
-        expected_arrival=package.expected_arrival,
-        customer=CustomerResponse(
-            customer_id=package.customer.customer_id,
-            name=package.customer.name,
-            email=package.customer.email,
-            phone_number=package.customer.phone_number,
-        ),
-        route_id=package.route_id,
-    )
-
-
-class PackagePageUseCase(Protocol):
-    """Use case contract for package listing endpoints."""
-
-    def execute(self, query: PageQuery) -> PageResult[DeliveryPackage]:
-        """Return a package page for the given query."""
-        ...
-
-
-def _package_page_response(
-    use_case: PackagePageUseCase,
-    mapper: Callable[[DeliveryPackage], PackageResponse],
-    limit: int,
-    offset: int,
-    include_total: bool,
-) -> PackagePageResponse:
-    """Build one paginated package response from a package listing use case."""
-    result: PageResult[DeliveryPackage] = use_case.execute(
-        PageQuery(limit=limit, offset=offset, include_total=include_total)
-    )
-
-    items = [mapper(package) for package in result.items]
-    return PackagePageResponse(
-        items=items,
-        total=result.total,
-        count=result.count,
-        limit=result.limit,
-        offset=result.offset,
-    )
 
 
 @packages_router.post("", status_code=status.HTTP_201_CREATED)
@@ -133,7 +69,7 @@ def create_package(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
     event_collector.drain((package, package.customer))
-    return _package_response(package)
+    return PackageResponse.from_package(package)
 
 
 @packages_router.get("", status_code=status.HTTP_200_OK)
@@ -160,7 +96,8 @@ def list_packages(
             * 403 - Insufficient permissions.
             * 500 - Database operation failure.
     """
-    return _package_page_response(use_case, _package_response, limit, offset, include_total)
+    result = use_case.execute(PageQuery(limit=limit, offset=offset, include_total=include_total))
+    return PackagePageResponse.from_page(result)
 
 
 @packages_router.get("/unassigned", status_code=status.HTTP_200_OK)
@@ -187,7 +124,8 @@ def list_unassigned_packages(
             * 403 - Insufficient permissions.
             * 500 - Database operation failure.
     """
-    return _package_page_response(use_case, _package_response, limit, offset, include_total)
+    result = use_case.execute(PageQuery(limit=limit, offset=offset, include_total=include_total))
+    return PackagePageResponse.from_page(result)
 
 
 @packages_router.get("/{package_id}", status_code=status.HTTP_200_OK)
@@ -211,7 +149,7 @@ def get_package(
             * 500 - Database operation failure.
     """
     package = use_case.execute(package_id=package_id)
-    return _package_response(package)
+    return PackageResponse.from_package(package)
 
 
 @packages_router.get("/{package_id}/suitable-routes", status_code=status.HTTP_200_OK)
@@ -237,17 +175,7 @@ def find_suitable_routes_for_package(
             * 500 - Database operation failure.
     """
     results = use_case.execute(package_id=package_id)
-    return [
-        PackageSuitableRouteResponse(
-            route_id=result.route_id,
-            start_location=str(result.start_location),
-            end_location=str(result.end_location),
-            eta=result.eta,
-            capacity_left=result.capacity_left,
-            end_city=str(result.end_city),
-        )
-        for result in results
-    ]
+    return [PackageSuitableRouteResponse.from_match(result) for result in results]
 
 
 @packages_router.delete("/{package_id}", status_code=status.HTTP_204_NO_CONTENT)

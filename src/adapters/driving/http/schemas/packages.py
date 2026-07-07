@@ -3,6 +3,9 @@ from datetime import datetime
 from pydantic import BaseModel, EmailStr, Field, NonNegativeFloat, NonNegativeInt, PositiveFloat, PositiveInt
 
 from src.adapters.driving.http.schemas.customers import CustomerResponse
+from src.application.results.find_suitable_packages_for_route_result import SuitableRouteForPackage
+from src.application.use_cases.pagination import PageResult
+from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.enums.item_status import ItemStatus
 
 
@@ -39,6 +42,28 @@ class PackageResponse(PackageBase):
         None, description="Identifier of the assigned delivery route, or null if not assigned."
     )
 
+    @classmethod
+    def from_package(cls, package: DeliveryPackage) -> "PackageResponse":
+        """Build an HTTP response from a package entity.
+
+        Args:
+            package: Domain package entity returned by a use case.
+
+        Returns:
+            Serialized package response.
+        """
+        return cls(
+            start_location=str(package.start_location),
+            end_location=str(package.end_location),
+            weight=package.weight,
+            package_id=package.package_id,
+            status=package.status,
+            current_location=str(package.current_location) if package.current_location else None,
+            expected_arrival=package.expected_arrival,
+            customer=CustomerResponse.from_customer(package.customer),
+            route_id=package.route_id,
+        )
+
 
 class PackagePageResponse(BaseModel):
     """Paginated response model for package listings."""
@@ -48,6 +73,24 @@ class PackagePageResponse(BaseModel):
     count: NonNegativeInt
     limit: PositiveInt | None = None
     offset: NonNegativeInt
+
+    @classmethod
+    def from_page(cls, page: PageResult[DeliveryPackage]) -> "PackagePageResponse":
+        """Build a paginated HTTP response from a package page result.
+
+        Args:
+            page: Application page result containing package entities.
+
+        Returns:
+            Serialized package page response.
+        """
+        return cls(
+            items=[PackageResponse.from_package(package) for package in page.items],
+            total=page.total,
+            count=page.count,
+            limit=page.limit,
+            offset=page.offset,
+        )
 
 
 class PackageSuitableRouteResponse(BaseModel):
@@ -65,3 +108,22 @@ class PackageSuitableRouteResponse(BaseModel):
         description="Remaining truck capacity, or null when no truck is assigned.",
     )
     end_city: str = Field(..., description="Package destination city used for the route match.")
+
+    @classmethod
+    def from_match(cls, match: SuitableRouteForPackage) -> "PackageSuitableRouteResponse":
+        """Build an HTTP response from a suitable-route match.
+
+        Args:
+            match: Application result describing one route that can carry a package.
+
+        Returns:
+            Serialized suitable-route response.
+        """
+        return cls(
+            route_id=match.route_id,
+            start_location=str(match.start_location),
+            end_location=str(match.end_location),
+            eta=match.eta,
+            capacity_left=match.capacity_left,
+            end_city=str(match.end_city),
+        )

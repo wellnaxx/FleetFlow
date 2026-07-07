@@ -3,7 +3,6 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, status
 
 from src.adapters.driving.http.dependencies.use_cases import get_view_all_trucks_use_case
-from src.adapters.driving.http.routers.shared import truck_response
 from src.adapters.driving.http.schemas.trucks import TruckResponse
 from src.application.use_cases.trucks.view_all_trucks import ViewAllTrucksUseCase
 
@@ -28,4 +27,4 @@ def list_trucks(
             * 500 - Database operation failure.
     """
     trucks = use_case.execute()
-    return [truck_response(truck) for truck in trucks]
+    return [TruckResponse.from_truck(truck) for truck in trucks]

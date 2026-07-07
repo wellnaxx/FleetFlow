@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 
 from src.adapters.driving.http.dependencies.use_cases import get_view_all_customers_use_case
-from src.adapters.driving.http.schemas.customers import CustomerPageResponse, CustomerResponse
+from src.adapters.driving.http.schemas.customers import CustomerPageResponse
 from src.application.use_cases.customers.view_all_customers import ViewAllCustomersUseCase
 from src.application.use_cases.pagination import PageQuery
 
@@ -34,19 +34,4 @@ def list_customers(
             * 403 - Insufficient permissions.
     """
     result = use_case.execute(PageQuery(limit=limit, offset=offset, include_total=include_total))
-    items = [
-        CustomerResponse(
-            customer_id=customer.customer_id,
-            name=customer.name,
-            email=customer.email,
-            phone_number=customer.phone_number,
-        )
-        for customer in result.items
-    ]
-    return CustomerPageResponse(
-        items=items,
-        total=result.total,
-        count=result.count,
-        limit=result.limit,
-        offset=result.offset,
-    )
+    return CustomerPageResponse.from_page(result)

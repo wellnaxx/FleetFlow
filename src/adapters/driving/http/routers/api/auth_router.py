@@ -107,25 +107,6 @@ def _token_response(record: UserRecord) -> TokenResponse:
     )
 
 
-def _current_user_response(record: UserRecord) -> CurrentUserResponse:
-    """Convert a persisted user record to a current-user response model.
-
-    Args:
-        record: User record to convert.
-
-    Returns:
-        A response model representing the user.
-    """
-    return CurrentUserResponse(
-        user_id=record.user_id,
-        username=record.username,
-        role=record.role,
-        name=record.name,
-        email=record.email or None,
-        phone_number=record.phone_number or None,
-    )
-
-
 @auth_router.post("/register", status_code=status.HTTP_201_CREATED)
 def register(
     request: RegisterUserRequest,
@@ -163,7 +144,7 @@ def register(
         ),
     )
 
-    return _current_user_response(record)
+    return CurrentUserResponse.from_record(record)
 
 
 @auth_router.post("/login", status_code=status.HTTP_200_OK)
@@ -341,4 +322,4 @@ def me(
         HTTPException: Raised with:
             * 401 - Invalid, expired, revoked, or userless access token.
     """
-    return _current_user_response(principal.record)
+    return CurrentUserResponse.from_record(principal.record)
