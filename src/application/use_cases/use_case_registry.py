@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 
+from src.application.use_cases.audit.view_audits import ViewAuditLogsUseCase
 from src.application.use_cases.auth.change_password import ChangePasswordUseCase
 from src.application.use_cases.auth.login import LoginUseCase
 from src.application.use_cases.auth.logout import LogoutUseCase
@@ -88,3 +89,10 @@ class StateUseCases:
     advance: AdvanceWorldStateUseCase
     save: SaveWorldStateUseCase
     load: LoadWorldStateUseCase
+
+
+@dataclass(frozen=True, slots=True)
+class AuditUseCases:
+    """Audit-facing use cases."""
+
+    view_audit_logs: ViewAuditLogsUseCase

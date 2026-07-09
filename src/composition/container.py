@@ -35,6 +35,7 @@ from src.application.services.world_state_snapshot_builder import WorldStateSnap
 from src.application.services.world_state_snapshot_preparer import WorldStateSnapshotPreparer
 from src.application.services.world_state_snapshot_rebuilder import WorldStateSnapshotRebuilder
 from src.application.services.world_state_snapshot_service import WorldStateSnapshotService
+from src.application.use_cases.audit.view_audits import ViewAuditLogsUseCase
 from src.application.use_cases.auth.change_password import ChangePasswordUseCase
 from src.application.use_cases.auth.login import LoginUseCase
 from src.application.use_cases.auth.logout import LogoutUseCase
@@ -62,6 +63,7 @@ from src.application.use_cases.state.load_world import LoadWorldStateUseCase
 from src.application.use_cases.state.save_world import SaveWorldStateUseCase
 from src.application.use_cases.trucks.view_all_trucks import ViewAllTrucksUseCase
 from src.application.use_cases.use_case_registry import (
+    AuditUseCases,
     AuthUseCases,
     CustomerUseCases,
     PackageUseCases,
@@ -86,6 +88,7 @@ class Container:
     route_cases: RouteUseCases
     truck_cases: TruckUseCases
     state_cases: StateUseCases
+    audit_use_cases: AuditUseCases
 
     def __init__(
         self,
@@ -276,6 +279,9 @@ class Container:
             advance=AdvanceWorldStateUseCase(self.heartbeat_service),
             save=SaveWorldStateUseCase(self.world_state_gateway, self.world_state_persistence, self.authz),
             load=LoadWorldStateUseCase(self.world_state_gateway, self.world_state_persistence, self.authz),
+        )
+        self.audit_use_cases = AuditUseCases(
+            view_audit_logs=ViewAuditLogsUseCase(self.audit_repo, self.authz, clock=self.clock)
         )
 
 

@@ -501,6 +501,63 @@ class EngineTests(unittest.TestCase):
 
         mock_exec_line.assert_called_once_with("viewalltrucks")
 
+    def test_menu_audits_dispatches_view_logs_action(self) -> None:
+        engine, _factory, _auth, _authz, _save_world, _advance = self.make_engine()
+
+        with (
+            patch("builtins.input", side_effect=["1", "0"]),
+            patch.object(engine, "_view_audits") as mock_view_audits,
+        ):
+            engine._menu_audits()  # pyright: ignore[reportPrivateUsage]
+
+        mock_view_audits.assert_called_once_with()
+
+    def test_view_audits_builds_option_command_from_prompts(self) -> None:
+        engine, _factory, _auth, _authz, _save_world, _advance = self.make_engine()
+
+        with (
+            patch.object(engine, "_exec_line") as mock_exec_line,
+            patch(
+                "builtins.input",
+                side_effect=[
+                    "PackageCreated",
+                    "package",
+                    "42",
+                    "created",
+                    "7",
+                    "Alice Smith",
+                    "CLI",
+                    "2026-07-09 10:00",
+                    "",
+                    "",
+                    "",
+                    "25",
+                    "5",
+                    "yes",
+                ],
+            ),
+        ):
+            engine._view_audits()  # pyright: ignore[reportPrivateUsage]
+
+        mock_exec_line.assert_called_once_with(
+            "viewauditlogs --event_type PackageCreated --resource_type package --resource_id 42 "
+            "--action created --actor_user_id 7 --actor_username 'Alice Smith' --source CLI "
+            "--occurred_from '2026-07-09 10:00' --limit 25 --offset 5 --total"
+        )
+
+    def test_view_audits_rejects_total_without_limit(self) -> None:
+        engine, _factory, _auth, _authz, _save_world, _advance = self.make_engine()
+
+        with (
+            patch.object(engine, "_exec_line") as mock_exec_line,
+            patch("builtins.print") as mock_print,
+            patch("builtins.input", side_effect=[""] * 13 + ["y"]),
+        ):
+            engine._view_audits()  # pyright: ignore[reportPrivateUsage]
+
+        mock_exec_line.assert_not_called()
+        mock_print.assert_called_once_with("Include total requires a limit.")
+
     def test_menu_packages_quotes_customer_name_with_spaces(self) -> None:
         engine, _factory, _auth, _authz, _save_world, _advance = self.make_engine()
 

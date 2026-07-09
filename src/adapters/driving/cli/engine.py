@@ -78,6 +78,7 @@ class Engine:
                 "3": self._menu_trucks,
                 "4": lambda: self._exec_line("viewallcustomers"),
                 "5": self._menu_state,
+                "6": self._menu_audits,
                 "login": lambda: self._exec_line("login"),
                 "logout": lambda: self._exec_line("logout"),
                 "whoami": lambda: self._exec_line("whoami"),
@@ -305,6 +306,57 @@ class Engine:
             return
         self._exec_line(self._join_command(["load", path]))
 
+    def _menu_audits(self) -> None:
+        """Show audit-log operations and dispatch the selected action."""
+        self._run_submenu(
+            render=self._print_audit_menu,
+            actions=self._with_command_mode_aliases(
+                {"1": self._view_audits},
+                self._command_mode,
+            ),
+            name="Audit",
+        )
+
+    def _view_audits(self) -> None:
+        """Prompt for audit-log filters and execute the audit listing command."""
+        args: list[str] = []
+
+        self._append_optional_option(args, "--event_type", "Event type")
+        self._append_optional_option(args, "--resource_type", "Resource type")
+        self._append_optional_option(args, "--resource_id", "Resource ID")
+        self._append_optional_option(args, "--action", "Action")
+        self._append_optional_option(args, "--actor_user_id", "Actor user ID")
+        self._append_optional_option(args, "--actor_username", "Actor username")
+        self._append_optional_option(args, "--source", "Source")
+        self._append_optional_option(args, "--occurred_from", "Occurred from")
+        self._append_optional_option(args, "--occurred_to", "Occurred to")
+        self._append_optional_option(args, "--created_from", "Created from")
+        self._append_optional_option(args, "--created_to", "Created to")
+
+        limit = input("Limit (blank for all): ").strip()
+        if limit:
+            args.extend(["--limit", limit])
+
+        offset = input("Offset (blank for 0): ").strip()
+        if offset:
+            args.extend(["--offset", offset])
+
+        include_total = input("Include total? (y/N): ").strip().lower()
+        if include_total in {"y", "yes"}:
+            if not limit:
+                print("Include total requires a limit.")
+                return
+            args.append("--total")
+
+        self._exec_line(self._join_command(["viewauditlogs", *args]))
+
+    @staticmethod
+    def _append_optional_option(args: list[str], option: str, prompt: str) -> None:
+        """Append a CLI option when the corresponding prompt receives a value."""
+        value = input(f"{prompt} (optional): ").strip()
+        if value:
+            args.extend([option, value])
+
     def _command_mode(self) -> None:
         """
         Raw command input loop (power users).
@@ -418,7 +470,7 @@ class Engine:
         user = self.auth.current_user
         if user is None:
             return None
-        
+
         username = user.username
 
         return EventActor(
@@ -480,6 +532,14 @@ class Engine:
         print("0) Back to main menu")
 
     @staticmethod
+    def _print_audit_menu() -> None:
+        """Print audit submenu options."""
+        print("\nLogistics App Audit Menu")
+        print("1) View Audit Logs")
+        print(":) Command Mode (type 'cmd')")
+        print("0) Back to main menu")
+
+    @staticmethod
     def _print_main_menu() -> None:
         print("\n=== Logistics App ===")
         print("1) Packages")
@@ -487,6 +547,7 @@ class Engine:
         print("3) Trucks")
         print("4) Customers")
         print("5) State")
+        print("6) Audit Logs")
         print("cmd) Command Mode")
         print("login) Login")
         print("logout) Logout")
@@ -506,6 +567,7 @@ class Engine:
         print("  viewallroutes")
         print("  viewallpackages")
         print("  viewalltrucks")
+        print("  viewauditlogs --limit 50 --total")
         print("  save <filename>")
         print("  load <filename>")
         print("  login | logout | whoami")

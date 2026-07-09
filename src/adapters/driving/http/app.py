@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from src.adapters.driving.http.exception_handlers import register_exception_handlers
 from src.adapters.driving.http.middleware import RequestLoggingMiddleware
+from src.adapters.driving.http.routers.api.audit_router import audit_router
 from src.adapters.driving.http.routers.api.auth_router import auth_router
 from src.adapters.driving.http.routers.api.customers_router import customers_router
 from src.adapters.driving.http.routers.api.packages_router import packages_router
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="FleetFlow API", description="REST API for managing FleetFlow operations", version="1.0")
 app.add_middleware(RequestLoggingMiddleware)
+app.include_router(audit_router, prefix=API_PREFIX)
 app.include_router(auth_router, prefix=API_PREFIX)
 app.include_router(customers_router, prefix=API_PREFIX)
 app.include_router(packages_router, prefix=API_PREFIX)

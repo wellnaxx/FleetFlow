@@ -24,6 +24,7 @@ from src.adapters.driving.cli.commands.view_all_customers import ViewAllCustomer
 from src.adapters.driving.cli.commands.view_all_packages import ViewAllPackages
 from src.adapters.driving.cli.commands.view_all_routes import ViewAllRoutes
 from src.adapters.driving.cli.commands.view_all_trucks import ViewAllTrucks
+from src.adapters.driving.cli.commands.view_audits import ViewAuditLogs
 from src.adapters.driving.cli.commands.view_package import ViewPackage
 from src.adapters.driving.cli.commands.view_route import ViewRoute
 from src.adapters.driving.cli.commands.view_routes_in_progress import ViewRoutesInProgress
@@ -85,6 +86,9 @@ _CONTAINER_COMMANDS: dict[str, CommandBuilder] = {
         params, container.route_cases.find_suitable_routes
     ),
     "viewalltrucks": lambda container, params: ViewAllTrucks(params, container.truck_cases.view_all),
+    "viewauditlogs": lambda container, params: ViewAuditLogs(
+        params, container.audit_use_cases.view_audit_logs, container.event_collector
+    ),
 }
 
 
