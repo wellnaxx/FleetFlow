@@ -5,6 +5,8 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
+from psycopg.types.json import Jsonb
+
 from src.adapters.driven.persistence.database.queries import QUERIES
 from src.adapters.driven.persistence.database.repositories.audit_repository import PostgresAuditRepository
 from src.application.enums.audit_actions import AuditAction
@@ -32,6 +34,13 @@ class PostgresAuditRepositoryTests(unittest.TestCase):
 
         self.repo.add(draft)
 
+        sql, params = execute_write_mock.call_args.args
+        payload_param = params[-1]
+
+        self.assertEqual(sql, QUERIES.audit.add)
+        self.assertIsInstance(payload_param, Jsonb)
+        assert isinstance(payload_param, Jsonb)
+        self.assertEqual(payload_param.obj, {"package_id": "20"})
         execute_write_mock.assert_called_once_with(
             QUERIES.audit.add,
             (
@@ -48,7 +57,7 @@ class PostgresAuditRepositoryTests(unittest.TestCase):
                 "package",
                 "20",
                 "created",
-                {"package_id": "20"},
+                payload_param,
             ),
         )
 

@@ -2,6 +2,8 @@
 
 from collections.abc import Sequence
 
+from psycopg.types.json import Jsonb
+
 from src.adapters.driven.persistence.database.executor import execute_write, fetch_all
 from src.adapters.driven.persistence.database.mappers.audit import map_audit_record
 from src.adapters.driven.persistence.database.queries import QUERIES
@@ -47,7 +49,7 @@ class PostgresAuditRepository(AuditRepositoryPort):
                 draft.resource_type.value,
                 draft.resource_id,
                 draft.action.value,
-                draft.payload_json,
+                Jsonb(draft.payload_json),
             ),
         )
 
