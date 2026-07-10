@@ -67,6 +67,7 @@ from src.shared.event import Event
 NOW = datetime(2025, 1, 1, 12, 0)
 LATER = datetime(2025, 1, 1, 18, 0)
 COUNTS = WorldStateEntityCounts(customers=1, packages=2, routes=3, trucks=4)
+PREVIOUS_COUNTS = WorldStateEntityCounts(customers=0, packages=1, routes=2, trucks=3)
 
 
 class AuditDescriptorMapperTests(unittest.TestCase):
@@ -376,7 +377,7 @@ class AuditDescriptorMapperTests(unittest.TestCase):
                 AuditAction.AUTHORIZATION_DENIED,
             ),
             (
-                FleetSeeded(truck_count=3, backend="memory", occurred_at=NOW),
+                FleetSeeded(seeded_truck_ids=(1, 2, 3), backend="memory", occurred_at=NOW),
                 AuditResourceType.FLEET,
                 None,
                 AuditAction.SEEDED,
@@ -407,7 +408,8 @@ class AuditDescriptorMapperTests(unittest.TestCase):
                 WorldStateImported(
                     snapshot_path="data/world.json",
                     schema_version=2,
-                    entity_counts=COUNTS,
+                    previous_entity_counts=PREVIOUS_COUNTS,
+                    new_entity_counts=COUNTS,
                     occurred_at=NOW,
                 ),
                 AuditResourceType.WORLD_STATE,
@@ -450,7 +452,8 @@ class AuditDescriptorMapperTests(unittest.TestCase):
                 WorldStateRuntimeSwapped(
                     snapshot_path="data/world.json",
                     schema_version=2,
-                    entity_counts=COUNTS,
+                    previous_entity_counts=PREVIOUS_COUNTS,
+                    new_entity_counts=COUNTS,
                     occurred_at=NOW,
                 ),
                 AuditResourceType.WORLD_STATE,
@@ -461,7 +464,8 @@ class AuditDescriptorMapperTests(unittest.TestCase):
                 WorldStateStartupRestored(
                     snapshot_path="data/world.json",
                     schema_version=2,
-                    entity_counts=COUNTS,
+                    previous_entity_counts=PREVIOUS_COUNTS,
+                    new_entity_counts=COUNTS,
                     occurred_at=NOW,
                 ),
                 AuditResourceType.WORLD_STATE,
@@ -509,6 +513,20 @@ class AuditDescriptorMapperTests(unittest.TestCase):
                 self.assertEqual(descriptor.resource_id, resource_id)
                 self.assertEqual(descriptor.action, action)
                 self.assertIsInstance(descriptor.payload_json, dict)
+                for key in ("previous_route_id", "new_route_id"):
+                    if key in descriptor.payload_json:
+                        value = descriptor.payload_json[key]
+                        self.assertTrue(value is None or isinstance(value, str))
+
+    def test_serializes_customer_created_without_contact_pii(self) -> None:
+        descriptor = map_event_to_audit_descriptor(
+            CustomerCreated(
+                customer_id=10,
+                occurred_at=NOW,
+            )
+        )
+
+        self.assertEqual(descriptor.payload_json, {"customer_id": "10"})
 
     def test_serializes_package_created_payload(self) -> None:
         descriptor = map_event_to_audit_descriptor(
@@ -518,6 +536,9 @@ class AuditDescriptorMapperTests(unittest.TestCase):
                 start_location=LocationCode("SYD"),
                 end_location=LocationCode("MEL"),
                 weight=12.5,
+                initial_status=ItemStatus.TODO,
+                initial_location=LocationCode("SYD"),
+                expected_arrival=None,
                 occurred_at=NOW,
             )
         )
@@ -530,16 +551,74 @@ class AuditDescriptorMapperTests(unittest.TestCase):
                 "start_location": "SYD",
                 "end_location": "MEL",
                 "weight": 12.5,
+                "initial_status": ItemStatus.TODO.value,
+                "initial_location": "SYD",
+                "expected_arrival": None,
             },
         )
 
     def test_serializes_route_removed_nullable_truck_id(self) -> None:
         descriptor = map_event_to_audit_descriptor(
-            RouteRemoved(route_id=30, detached_package_ids=(20, 21), released_truck_id=None, occurred_at=NOW)
+            RouteRemoved(
+                route_id=30,
+                previous_status=RouteStatus.PLANNED,
+                previous_locations=(LocationCode("SYD"), LocationCode("MEL")),
+                previous_departure_time=None,
+                previous_expected_completion_time=None,
+                detached_package_ids=(20, 21),
+                released_truck_id=None,
+                occurred_at=NOW,
+            )
         )
 
         self.assertEqual(descriptor.payload_json["detached_package_ids"], ["20", "21"])
         self.assertIsNone(descriptor.payload_json["released_truck_id"])
+
+    def test_serializes_route_transition_ids_as_optional_strings(self) -> None:
+        assigned = map_event_to_audit_descriptor(
+            PackageAssignedToRoute(
+                package_id=20,
+                previous_route_id=None,
+                new_route_id=30,
+                previous_expected_arrival=None,
+                new_expected_arrival=LATER,
+                occurred_at=NOW,
+            )
+        )
+        detached = map_event_to_audit_descriptor(
+            PackageDetachedFromRoute(
+                package_id=20,
+                previous_route_id=30,
+                new_route_id=None,
+                previous_status=ItemStatus.IN_PROGRESS,
+                new_status=ItemStatus.TODO,
+                previous_location=LocationCode("SYD"),
+                new_location=LocationCode("SYD"),
+                previous_expected_arrival=LATER,
+                new_expected_arrival=None,
+                reason=PackageDetachmentReason.ROUTE_REMOVED,
+                occurred_at=NOW,
+            )
+        )
+
+        self.assertIsNone(assigned.payload_json["previous_route_id"])
+        self.assertEqual(assigned.payload_json["new_route_id"], "30")
+        self.assertEqual(detached.payload_json["previous_route_id"], "30")
+        self.assertIsNone(detached.payload_json["new_route_id"])
+
+    def test_serializes_route_completed_expected_completion_time(self) -> None:
+        descriptor = map_event_to_audit_descriptor(
+            RouteCompleted(
+                route_id=30,
+                previous_status=RouteStatus.IN_PROGRESS,
+                new_status=RouteStatus.COMPLETED,
+                departure_time=NOW,
+                expected_completion_time=LATER,
+                occurred_at=LATER,
+            )
+        )
+
+        self.assertEqual(descriptor.payload_json["expected_completion_time"], LATER.isoformat())
 
     def test_serializes_authorization_denied_permissions_by_name(self) -> None:
         descriptor = map_event_to_audit_descriptor(

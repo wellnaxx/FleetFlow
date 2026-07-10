@@ -1,6 +1,7 @@
 """Application events describing world-state persistence workflows."""
 
 from dataclasses import dataclass
+from typing import ClassVar
 
 from src.application.enums.world_state_corruption_reasons import WorldStateCorruptionReason
 from src.application.enums.world_state_failure_reasons import WorldStateFailureReason
@@ -30,10 +31,12 @@ class WorldStateExportFailed(ApplicationEvent):
 @dataclass(frozen=True, slots=True, kw_only=True)
 class WorldStateImported(ApplicationEvent):
     """Event recorded when the world state is imported from a file."""
+    event_version: ClassVar[int] = 2
 
     snapshot_path: str
     schema_version: int
-    entity_counts: WorldStateEntityCounts
+    previous_entity_counts: WorldStateEntityCounts
+    new_entity_counts: WorldStateEntityCounts
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -65,19 +68,23 @@ class WorldStateSnapshotQuarantined(ApplicationEvent):
 @dataclass(frozen=True, slots=True, kw_only=True)
 class WorldStateRuntimeSwapped(ApplicationEvent):
     """Event recorded when the in-memory runtime state is atomically replaced."""
+    event_version: ClassVar[int] = 2
 
     snapshot_path: str
     schema_version: int
-    entity_counts: WorldStateEntityCounts
+    previous_entity_counts: WorldStateEntityCounts
+    new_entity_counts: WorldStateEntityCounts
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class WorldStateStartupRestored(ApplicationEvent):
     """Event recorded when world state is automatically restored at startup."""
+    event_version: ClassVar[int] = 2
 
     snapshot_path: str
     schema_version: int
-    entity_counts: WorldStateEntityCounts
+    previous_entity_counts: WorldStateEntityCounts
+    new_entity_counts: WorldStateEntityCounts
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

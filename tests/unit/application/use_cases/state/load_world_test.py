@@ -1,9 +1,10 @@
 import unittest
 from datetime import datetime
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 
 from src.application.dto.world_state_snapshot_dto import (
     CountersSnapshot,
+    CustomerSnapshot,
     WorldSnapshotData,
     WorldStateSnapshot,
 )
@@ -11,6 +12,7 @@ from src.application.enums.world_state_corruption_reasons import WorldStateCorru
 from src.application.enums.world_state_failure_reasons import WorldStateFailureReason
 from src.application.events.world_state_events import (
     WorldStateCorruptionDetected,
+    WorldStateImported,
     WorldStateImportFailed,
 )
 from src.application.exceptions.application_errors import ValidationError
@@ -62,6 +64,53 @@ class LoadWorldStateUseCaseTests(unittest.TestCase):
         persistence.read.assert_called_once_with("state.json")
         gateway.apply_snapshot.assert_called_once_with(snapshot)
         self.assertEqual(result, "/abs/state.json")
+
+    def test_execute_records_distinct_previous_and_imported_entity_counts(self) -> None:
+        previous_snapshot = WorldStateSnapshot(
+            schema_version=1,
+            world=WorldSnapshotData(
+                counters=CountersSnapshot(2, 1, 1),
+                customers=(CustomerSnapshot(1, "Existing", "", ""),),
+                packages=(),
+                routes=(),
+            ),
+        )
+        imported_snapshot = WorldStateSnapshot(
+            schema_version=2,
+            world=WorldSnapshotData(
+                counters=CountersSnapshot(3, 1, 1),
+                customers=(
+                    CustomerSnapshot(1, "Existing", "", ""),
+                    CustomerSnapshot(2, "Imported", "", ""),
+                ),
+                packages=(),
+                routes=(),
+            ),
+        )
+        gateway = MagicMock()
+        gateway.build_snapshot.return_value = previous_snapshot
+        persistence = MagicMock()
+        persistence.read.return_value = ("/abs/state.json", imported_snapshot)
+        occurred_at = datetime(2025, 1, 1, 12, 0)
+        use_case = LoadWorldStateUseCase(
+            gateway,
+            persistence,
+            manager_authz(),
+            clock=lambda: occurred_at,
+        )
+
+        use_case.execute("state.json")
+
+        event = use_case.pending_events[0]
+        self.assertIsInstance(event, WorldStateImported)
+        assert isinstance(event, WorldStateImported)
+        self.assertEqual(event.previous_entity_counts.customers, 1)
+        self.assertEqual(event.new_entity_counts.customers, 2)
+        self.assertEqual(event.occurred_at, occurred_at)
+        self.assertEqual(
+            gateway.method_calls,
+            [call.build_snapshot(), call.apply_snapshot(imported_snapshot)],
+        )
 
     def test_execute_raises_when_apply_fails(self) -> None:
         snapshot = WorldStateSnapshot(
@@ -116,6 +165,7 @@ class LoadWorldStateUseCaseTests(unittest.TestCase):
         self.assertEqual(corruption_detected.snapshot_path, "state.json")
         self.assertIs(corruption_detected.reason, WorldStateCorruptionReason.MALFORMED_JSON)
         self.assertEqual(corruption_detected.occurred_at, occurred_at)
+        gateway.build_snapshot.assert_not_called()
         gateway.apply_snapshot.assert_not_called()
 
     def test_execute_records_corruption_events_when_apply_snapshot_is_corrupt(self) -> None:
@@ -169,6 +219,7 @@ class LoadWorldStateUseCaseTests(unittest.TestCase):
 
         self.assertIn("World state snapshot path is required.", str(ctx.exception))
         persistence.read.assert_not_called()
+        gateway.build_snapshot.assert_not_called()
         gateway.apply_snapshot.assert_not_called()
 
     def test_execute_wraps_invalid_persistence_path(self) -> None:
@@ -181,6 +232,7 @@ class LoadWorldStateUseCaseTests(unittest.TestCase):
             use_case.execute("bad")
 
         self.assertIn("Invalid snapshot path.", str(ctx.exception))
+        gateway.build_snapshot.assert_not_called()
         gateway.apply_snapshot.assert_not_called()
 
     def test_execute_wraps_read_os_error(self) -> None:
@@ -193,4 +245,5 @@ class LoadWorldStateUseCaseTests(unittest.TestCase):
             use_case.execute("state.json")
 
         self.assertIn("Could not read world state snapshot.", str(ctx.exception))
+        gateway.build_snapshot.assert_not_called()
         gateway.apply_snapshot.assert_not_called()

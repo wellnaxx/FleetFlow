@@ -445,6 +445,7 @@ def map_event_to_audit_descriptor(event: Event) -> AuditDescriptor:
                 resource_id=None,
                 action=AuditAction.SEEDED,
                 payload_json={
+                    "seeded_truck_ids": list(event.seeded_truck_ids),
                     "truck_count": event.truck_count,
                     "backend": event.backend,
                 },
@@ -479,7 +480,8 @@ def map_event_to_audit_descriptor(event: Event) -> AuditDescriptor:
                 payload_json={
                     "snapshot_path": event.snapshot_path,
                     "schema_version": event.schema_version,
-                    "entity_counts": _entity_counts_payload(event.entity_counts),
+                    "previous_entity_counts": _entity_counts_payload(event.previous_entity_counts),
+                    "new_entity_counts": _entity_counts_payload(event.new_entity_counts),
                 },
             )
         case WorldStateImportFailed():
@@ -522,7 +524,8 @@ def map_event_to_audit_descriptor(event: Event) -> AuditDescriptor:
                 payload_json={
                     "snapshot_path": event.snapshot_path,
                     "schema_version": event.schema_version,
-                    "entity_counts": _entity_counts_payload(event.entity_counts),
+                    "previous_entity_counts": _entity_counts_payload(event.previous_entity_counts),
+                    "new_entity_counts": _entity_counts_payload(event.new_entity_counts),
                 },
             )
         case WorldStateStartupRestored():
@@ -533,7 +536,8 @@ def map_event_to_audit_descriptor(event: Event) -> AuditDescriptor:
                 payload_json={
                     "snapshot_path": event.snapshot_path,
                     "schema_version": event.schema_version,
-                    "entity_counts": _entity_counts_payload(event.entity_counts),
+                    "previous_entity_counts": _entity_counts_payload(event.previous_entity_counts),
+                    "new_entity_counts": _entity_counts_payload(event.new_entity_counts),
                 },
             )
         case WorldStateStartupRestoreSkipped():

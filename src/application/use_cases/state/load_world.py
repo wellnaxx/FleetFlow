@@ -76,7 +76,6 @@ class LoadWorldStateUseCase(AuthorizedUseCase[str], ApplicationEventRecorderMixi
             WorldStatePersistenceError: If the snapshot cannot be read or applied.
         """
         occurred_at = self._clock()
-
         try:
             stripped_path = validate_world_state_path(path)
         except ValidationError:
@@ -110,11 +109,20 @@ class LoadWorldStateUseCase(AuthorizedUseCase[str], ApplicationEventRecorderMixi
             raise
 
         logger.debug(
-            "Read world-state snapshot with %d customers, %d packages, %d routes, and %d trucks.",
+            "Read new world-state snapshot with %d customers, %d packages, %d routes, and %d trucks.",
             len(snapshot.world.customers),
             len(snapshot.world.packages),
             len(snapshot.world.routes),
             len(snapshot.world.trucks),
+        )
+
+        previous_snapshot = self._world_state_gateway.build_snapshot()
+        logger.debug(
+            "Read current world-state runtime with %d customers, %d packages, %d routes, and %d trucks.",
+            len(previous_snapshot.world.customers),
+            len(previous_snapshot.world.packages),
+            len(previous_snapshot.world.routes),
+            len(previous_snapshot.world.trucks),
         )
 
         try:
@@ -140,7 +148,13 @@ class LoadWorldStateUseCase(AuthorizedUseCase[str], ApplicationEventRecorderMixi
             WorldStateImported(
                 snapshot_path=abs_path,
                 schema_version=snapshot.schema_version,
-                entity_counts=WorldStateEntityCounts(
+                previous_entity_counts=WorldStateEntityCounts(
+                    customers=len(previous_snapshot.world.customers),
+                    packages=len(previous_snapshot.world.packages),
+                    routes=len(previous_snapshot.world.routes),
+                    trucks=len(previous_snapshot.world.trucks),
+                ),
+                new_entity_counts=WorldStateEntityCounts(
                     customers=len(snapshot.world.customers),
                     packages=len(snapshot.world.packages),
                     routes=len(snapshot.world.routes),
