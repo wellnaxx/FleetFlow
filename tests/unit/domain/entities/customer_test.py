@@ -42,6 +42,10 @@ class Customer_Should(unittest.TestCase):
         if not isinstance(event, CustomerCreated):
             self.fail(f"Expected CustomerCreated, got {type(event).__name__}.")
         self.assertEqual(event.customer_id, 17)
+        self.assertEqual(event.event_version, 1)
+        self.assertFalse(hasattr(event, "name"))
+        self.assertFalse(hasattr(event, "email"))
+        self.assertFalse(hasattr(event, "phone_number"))
         self.assertEqual(event.occurred_at, occurred_at)
 
     def test_direct_construction_does_not_record_creation_event(self) -> None:
