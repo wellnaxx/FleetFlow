@@ -45,7 +45,9 @@ from src.application.value_objects.world_state_entity_counts import WorldStateEn
 from src.domain.enums.auth import Permission, Role
 from src.domain.enums.item_status import ItemStatus
 from src.domain.enums.package_detachment_reasons import PackageDetachmentReason
+from src.domain.enums.route_status import RouteStatus
 from src.domain.enums.truck_release_reasons import TruckReleaseReason
+from src.domain.enums.truck_status import TruckStatus
 from src.domain.events.customer_events import CustomerCreated
 from src.domain.events.package_events import PackageCreated, PackageDelivered, PackagePickedUp, PackageRemoved
 from src.domain.events.route_events import (
@@ -146,6 +148,8 @@ class AuditDescriptorMapperTests(unittest.TestCase):
                     route_id=30,
                     locations=(LocationCode("SYD"), LocationCode("MEL")),
                     departure_time=NOW,
+                    initial_status=RouteStatus.SCHEDULED,
+                    expected_completion_time=LATER,
                     occurred_at=NOW,
                 ),
                 AuditResourceType.ROUTE,
@@ -155,8 +159,12 @@ class AuditDescriptorMapperTests(unittest.TestCase):
             (
                 RouteScheduled(
                     route_id=30,
-                    departure_time=NOW,
-                    expected_completion_time=LATER,
+                    previous_status=RouteStatus.PLANNED,
+                    new_status=RouteStatus.SCHEDULED,
+                    previous_departure_time=None,
+                    new_departure_time=NOW,
+                    previous_expected_completion_time=None,
+                    new_expected_completion_time=LATER,
                     occurred_at=NOW,
                 ),
                 AuditResourceType.ROUTE,
@@ -164,15 +172,29 @@ class AuditDescriptorMapperTests(unittest.TestCase):
                 AuditAction.SCHEDULED,
             ),
             (
-                PackageAssignedToRoute(route_id=30, package_id=20, expected_arrival=LATER, occurred_at=NOW),
+                PackageAssignedToRoute(
+                    package_id=20,
+                    previous_route_id=None,
+                    new_route_id=30,
+                    previous_expected_arrival=None,
+                    new_expected_arrival=LATER,
+                    occurred_at=NOW,
+                ),
                 AuditResourceType.ROUTE,
                 "30",
                 AuditAction.ASSIGNED_TO_ROUTE,
             ),
             (
                 PackageDetachedFromRoute(
-                    route_id=30,
                     package_id=20,
+                    previous_route_id=30,
+                    new_route_id=None,
+                    previous_status=ItemStatus.IN_PROGRESS,
+                    new_status=ItemStatus.TODO,
+                    previous_location=LocationCode("SYD"),
+                    new_location=LocationCode("SYD"),
+                    previous_expected_arrival=LATER,
+                    new_expected_arrival=None,
                     reason=PackageDetachmentReason.ROUTE_REMOVED,
                     occurred_at=NOW,
                 ),
@@ -181,16 +203,37 @@ class AuditDescriptorMapperTests(unittest.TestCase):
                 AuditAction.DETACHED_FROM_ROUTE,
             ),
             (
-                TruckAssignedToRoute(route_id=30, truck_id=40, occurred_at=NOW),
+                TruckAssignedToRoute(
+                    truck_id=40,
+                    previous_route_id=None,
+                    new_route_id=30,
+                    previous_status=TruckStatus.FREE,
+                    new_status=TruckStatus.ON_THE_WAY,
+                    previous_location=LocationCode("SYD"),
+                    new_location=LocationCode("SYD"),
+                    previous_busy_from=None,
+                    new_busy_from=NOW,
+                    previous_busy_until=None,
+                    new_busy_until=LATER,
+                    occurred_at=NOW,
+                ),
                 AuditResourceType.ROUTE,
                 "30",
                 AuditAction.ASSIGNED_TO_TRUCK,
             ),
             (
                 TruckReleasedFromRoute(
-                    route_id=30,
                     truck_id=40,
-                    release_location=LocationCode("MEL"),
+                    previous_route_id=30,
+                    new_route_id=None,
+                    previous_status=TruckStatus.ON_THE_WAY,
+                    new_status=TruckStatus.FREE,
+                    previous_location=LocationCode("SYD"),
+                    new_location=LocationCode("MEL"),
+                    previous_busy_from=NOW,
+                    new_busy_from=None,
+                    previous_busy_until=LATER,
+                    new_busy_until=None,
                     reason=TruckReleaseReason.ROUTE_COMPLETED,
                     occurred_at=NOW,
                 ),
@@ -199,19 +242,40 @@ class AuditDescriptorMapperTests(unittest.TestCase):
                 AuditAction.RELEASED_TRUCK,
             ),
             (
-                RouteStarted(route_id=30, occurred_at=NOW),
+                RouteStarted(
+                    route_id=30,
+                    previous_status=RouteStatus.SCHEDULED,
+                    new_status=RouteStatus.IN_PROGRESS,
+                    occurred_at=NOW,
+                ),
                 AuditResourceType.ROUTE,
                 "30",
                 AuditAction.STARTED,
             ),
             (
-                RouteCompleted(route_id=30, occurred_at=NOW),
+                RouteCompleted(
+                    route_id=30,
+                    previous_status=RouteStatus.IN_PROGRESS,
+                    new_status=RouteStatus.COMPLETED,
+                    departure_time=NOW,
+                    expected_completion_time=LATER,
+                    occurred_at=LATER,
+                ),
                 AuditResourceType.ROUTE,
                 "30",
                 AuditAction.COMPLETED,
             ),
             (
-                RouteRemoved(route_id=30, detached_package_ids=(20,), released_truck_id=40, occurred_at=NOW),
+                RouteRemoved(
+                    route_id=30,
+                    previous_status=RouteStatus.PLANNED,
+                    previous_locations=(LocationCode("SYD"), LocationCode("MEL")),
+                    previous_departure_time=None,
+                    previous_expected_completion_time=None,
+                    detached_package_ids=(20,),
+                    released_truck_id=40,
+                    occurred_at=NOW,
+                ),
                 AuditResourceType.ROUTE,
                 "30",
                 AuditAction.REMOVED,

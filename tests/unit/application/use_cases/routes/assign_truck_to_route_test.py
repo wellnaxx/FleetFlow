@@ -227,6 +227,7 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         fixed_now = datetime(2025, 10, 12, 6, 0)
         route = DeliveryRoute("SYD", "MEL", route_id=22)
         truck = Truck(11, TruckModel.SCANIA, 42000, 8000)
+        truck.current_location = "SYD"
         error = RuntimeError("write failed")
 
         self.mock_routes.get_by_id.return_value = route
@@ -245,6 +246,7 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         self.assertEqual(truck.status, TruckStatus.FREE)
         self.assertIsNone(truck.busy_from)
         self.assertIsNone(truck.busy_until)
+        self.assertEqual(truck.current_location, "SYD")
         self.assertEqual(route.pending_events, ())
 
     def test_raises_when_route_already_has_a_truck(self) -> None:

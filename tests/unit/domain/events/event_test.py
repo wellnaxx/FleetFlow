@@ -5,6 +5,7 @@ from dataclasses import FrozenInstanceError
 from datetime import UTC, datetime
 from uuid import UUID
 
+from src.domain.enums.route_status import RouteStatus
 from src.domain.events.base import DomainEvent
 from src.domain.events.customer_events import CustomerCreated
 from src.domain.events.route_events import RouteCompleted
@@ -14,7 +15,7 @@ class DomainEventShould(unittest.TestCase):
     def test_use_explicit_occurrence_time_and_generated_metadata(self) -> None:
         occurred_at = datetime(2026, 6, 7, 12, 30)
 
-        event = RouteCompleted(route_id=17, occurred_at=occurred_at)
+        event = _route_completed(occurred_at)
 
         self.assertIsInstance(event, DomainEvent)
         self.assertEqual(event.route_id, 17)
@@ -25,8 +26,8 @@ class DomainEventShould(unittest.TestCase):
     def test_receive_unique_ids(self) -> None:
         occurred_at = datetime(2026, 6, 7, 12, 30)
 
-        first = RouteCompleted(route_id=17, occurred_at=occurred_at)
-        second = RouteCompleted(route_id=17, occurred_at=occurred_at)
+        first = _route_completed(occurred_at)
+        second = _route_completed(occurred_at)
 
         self.assertNotEqual(first.event_id, second.event_id)
 
@@ -47,10 +48,7 @@ class DomainEventShould(unittest.TestCase):
         self.assertEqual(event.recorded_at, recorded_at)
 
     def test_be_immutable(self) -> None:
-        event = RouteCompleted(
-            route_id=17,
-            occurred_at=datetime(2026, 6, 7, 12, 30),
-        )
+        event = _route_completed(datetime(2026, 6, 7, 12, 30))
 
         with self.assertRaises(FrozenInstanceError):
             event.route_id = 18  # type: ignore[reportAttributeAccessIssue]
@@ -58,3 +56,20 @@ class DomainEventShould(unittest.TestCase):
     def test_require_keyword_only_fields(self) -> None:
         with self.assertRaises(TypeError):
             RouteCompleted(17, datetime(2026, 6, 7, 12, 30))  # type: ignore[misc]
+
+    def test_expose_concrete_event_contract_version(self) -> None:
+        event = _route_completed(datetime(2026, 6, 7, 12, 30))
+
+        self.assertEqual(event.event_version, 2)
+
+
+def _route_completed(occurred_at: datetime) -> RouteCompleted:
+    """Build a valid enriched route-completion event for metadata tests."""
+    return RouteCompleted(
+        route_id=17,
+        previous_status=RouteStatus.IN_PROGRESS,
+        new_status=RouteStatus.COMPLETED,
+        departure_time=datetime(2026, 6, 7, 8, 0),
+        expected_completion_time=occurred_at,
+        occurred_at=occurred_at,
+    )

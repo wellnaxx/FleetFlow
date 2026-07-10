@@ -11,6 +11,7 @@ from src.application.use_cases.routes.assign_truck_to_route import (
 )
 from src.application.use_cases.routes.create_route import CreateRouteUseCase
 from src.application.use_cases.routes.remove_route import RemoveRouteUseCase
+from src.domain.enums.truck_status import TruckStatus
 from src.domain.value_objects.location_code import LocationCode
 from tests.unit.application.use_cases.authz_helpers import manager_authz
 
@@ -27,12 +28,18 @@ class _FakeTruck:
         self.current_location = LocationCode(current_location)
         self.in_transit_to: LocationCode | None = None
         self.route: Any = None
+        self.status = TruckStatus.FREE
+        self.busy_from: datetime | None = None
+        self.busy_until: datetime | None = None
 
     def is_free(self) -> bool:
         return self.route is None
 
     def assign(self, route: Any) -> bool:
         self.route = route
+        self.status = TruckStatus.ON_THE_WAY
+        self.busy_from = route.departure_time
+        self.busy_until = route.eta_final
         self.current_location = LocationCode(route.start_location)
         return True
 
@@ -45,6 +52,9 @@ class _FakeTruck:
     def release(self, now: datetime | None = None, force: bool = False) -> bool:
         released = self.route is not None
         self.route = None
+        self.status = TruckStatus.FREE
+        self.busy_from = None
+        self.busy_until = None
         self.in_transit_to = None
         return released
 

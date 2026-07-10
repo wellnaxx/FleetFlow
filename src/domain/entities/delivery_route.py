@@ -188,6 +188,8 @@ class DeliveryRoute(DomainEventRecorderMixin):
                 route_id=route.route_id,
                 locations=tuple(route.locations),
                 departure_time=route.departure_time,
+                initial_status=route.status,
+                expected_completion_time=route.eta_final,
                 occurred_at=occurred_at or datetime.now(),
             )
         )
@@ -206,10 +208,13 @@ class DeliveryRoute(DomainEventRecorderMixin):
         if self.status is not RouteStatus.SCHEDULED:
             raise DomainConflictError(f"Route {self.route_id} cannot start from status {self.status.value}.")
 
+        previous_status = self.status
         self.status = RouteStatus.IN_PROGRESS
         self._record_event(
             RouteStarted(
                 route_id=self.route_id,
+                previous_status=previous_status,
+                new_status=self.status,
                 occurred_at=occurred_at,
             )
         )
@@ -229,10 +234,23 @@ class DeliveryRoute(DomainEventRecorderMixin):
         if self.status not in (RouteStatus.SCHEDULED, RouteStatus.IN_PROGRESS):
             raise DomainConflictError(f"Route {self.route_id} cannot complete from status {self.status.value}.")
 
+        if not self.departure_time:
+            raise DomainConflictError(f"Route {self.route_id} cannot complete without a departure time.")
+
+        if not self.eta_final:
+            raise DomainConflictError(
+                f"Route {self.route_id} cannot complete without an expected completion time."
+            )
+
+        previous_status = self.status
         self.status = RouteStatus.COMPLETED
         self._record_event(
             RouteCompleted(
                 route_id=self.route_id,
+                previous_status=previous_status,
+                new_status=self.status,
+                departure_time=self.departure_time,
+                expected_completion_time=self.eta_final,
                 occurred_at=occurred_at,
             )
         )
@@ -250,6 +268,10 @@ class DeliveryRoute(DomainEventRecorderMixin):
         self._record_event(
             RouteRemoved(
                 route_id=self.route_id,
+                previous_status=self.status,
+                previous_locations=tuple(self.locations),
+                previous_departure_time=self.departure_time,
+                previous_expected_completion_time=self.eta_final,
                 detached_package_ids=detached_package_ids,
                 released_truck_id=released_truck_id,
                 occurred_at=occurred_at,
@@ -312,6 +334,9 @@ class DeliveryRoute(DomainEventRecorderMixin):
         if self.departure_time is not None:
             raise DomainConflictError(f"Route {self.route_id} is already scheduled.")
 
+        previous_status = self.status
+        previous_departure_time = self.departure_time
+        previous_expected_completion_time = self.eta_final
         self._departure_time = departure_time
         self._build_schedule()
         self.status = RouteStatus.SCHEDULED
@@ -323,8 +348,12 @@ class DeliveryRoute(DomainEventRecorderMixin):
         self._record_event(
             RouteScheduled(
                 route_id=self.route_id,
-                departure_time=departure_time,
-                expected_completion_time=expected_completion_time,
+                previous_status=previous_status,
+                new_status=self.status,
+                previous_departure_time=previous_departure_time,
+                new_departure_time=departure_time,
+                previous_expected_completion_time=previous_expected_completion_time,
+                new_expected_completion_time=expected_completion_time,
                 occurred_at=occurred_at,
             )
         )
@@ -508,14 +537,18 @@ class DeliveryRoute(DomainEventRecorderMixin):
             return
 
         self._packages.append(package)
+        previous_route_id = package.route.route_id if package.route is not None else None
+        previous_expected_arrival = package.expected_arrival
         package.route = self
         self._update_expected_arrival(package)
 
         self._record_event(
             PackageAssignedToRoute(
-                route_id=self.route_id,
                 package_id=package.package_id,
-                expected_arrival=package.expected_arrival,
+                previous_route_id=previous_route_id,
+                new_route_id=self.route_id,
+                previous_expected_arrival=previous_expected_arrival,
+                new_expected_arrival=package.expected_arrival,
                 occurred_at=occurred_at,
             )
         )
@@ -532,17 +565,35 @@ class DeliveryRoute(DomainEventRecorderMixin):
 
         Raises:
             EntityNotFoundError: If the package is not assigned to this route.
+            DomainConflictError: if the package is assigned to this route but has no route reference.
         """
         for i, existing in enumerate(self._packages):
             if existing.package_id == package.package_id:
+                route = existing.route
+                if route is None:
+                    raise DomainConflictError(
+                        f"Package {existing.package_id} is present in route {self.route_id}'s "
+                        "package list but has no route reference."
+                    )
                 self._packages.pop(i)
-                if package.route is self:
-                    package.reset_assignment_state()
+                previous_route_id = route.route_id
+                previous_status = existing.status
+                previous_location = existing.current_location
+                previous_expected_arrival = existing.expected_arrival
+
+                existing.reset_assignment_state()
 
                 self._record_event(
                     PackageDetachedFromRoute(
-                        route_id=self.route_id,
                         package_id=existing.package_id,
+                        previous_route_id=previous_route_id,
+                        new_route_id=None,
+                        previous_status=previous_status,
+                        new_status=existing.status,
+                        previous_location=previous_location,
+                        new_location=existing.current_location,
+                        previous_expected_arrival=previous_expected_arrival,
+                        new_expected_arrival=existing.expected_arrival,
                         reason=reason,
                         occurred_at=occurred_at,
                     )
@@ -560,7 +611,8 @@ class DeliveryRoute(DomainEventRecorderMixin):
             occurred_at: Business time of the assignment, used for event timestamping.
 
         Raises:
-            DomainConflictError: If a truck is already assigned to this route.
+            DomainConflictError: If either the route or truck is already assigned,
+                or the truck has no known current location.
         """
         if self.truck is not None:
             raise DomainConflictError(
@@ -570,13 +622,29 @@ class DeliveryRoute(DomainEventRecorderMixin):
         if not truck.is_free() or truck.route is not None:
             raise DomainConflictError(f"Truck {truck.vehicle_id} is already assigned to a route.")
 
+        previous_status = truck.status
+        previous_location = truck.current_location
+        if previous_location is None:
+            raise DomainConflictError(f"Truck {truck.vehicle_id} has no current location.")
+        previous_busy_from = truck.busy_from
+        previous_busy_until = truck.busy_until
         truck.assign(self)
 
         self.truck = truck
+
         self._record_event(
             TruckAssignedToRoute(
-                route_id=self.route_id,
                 truck_id=truck.vehicle_id,
+                previous_route_id=None,
+                new_route_id=self.route_id,
+                previous_status=previous_status,
+                new_status=truck.status,
+                previous_location=previous_location,
+                new_location=previous_location,
+                previous_busy_from=previous_busy_from,
+                new_busy_from=truck.busy_from,
+                previous_busy_until=previous_busy_until,
+                new_busy_until=truck.busy_until,
                 occurred_at=occurred_at,
             )
         )
@@ -601,7 +669,9 @@ class DeliveryRoute(DomainEventRecorderMixin):
             True when a truck was released, false otherwise.
 
         Raises:
-            RuntimeError: If released truck has no current location.
+            DomainConflictError: If the route and truck assignment is inconsistent
+                or the assigned truck has no known current location.
+            RuntimeError: If a successful release does not produce a current location.
         """
         truck = self.truck
         if truck is None:
@@ -609,9 +679,15 @@ class DeliveryRoute(DomainEventRecorderMixin):
 
         truck_id = truck.vehicle_id
         truck_snapshot = truck.snapshot_state()
+        if truck_snapshot.route is None:
+            raise DomainConflictError(f"Truck {truck_id} cannot be released if not assigned to a route first.")
+        if truck_snapshot.current_location is None:
+            raise DomainConflictError(f"Truck {truck_id} has no current location.")
+
         released = truck.release(now=now, force=force)
         if not released:
             return False
+
 
         release_location = truck.current_location
         if release_location is None:
@@ -621,9 +697,17 @@ class DeliveryRoute(DomainEventRecorderMixin):
         self.truck = None
         self._record_event(
             TruckReleasedFromRoute(
-                route_id=self.route_id,
                 truck_id=truck_id,
-                release_location=release_location,
+                previous_route_id=truck_snapshot.route.route_id,
+                new_route_id=truck.route.route_id if truck.route is not None else None,
+                previous_status=truck_snapshot.status,
+                new_status=truck.status,
+                previous_location=truck_snapshot.current_location,
+                new_location=release_location,
+                previous_busy_from=truck_snapshot.busy_from,
+                new_busy_from=truck.busy_from,
+                previous_busy_until=truck_snapshot.busy_until,
+                new_busy_until=truck.busy_until,
                 reason=reason,
                 occurred_at=occurred_at,
             )

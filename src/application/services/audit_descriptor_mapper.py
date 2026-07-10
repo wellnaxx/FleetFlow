@@ -161,6 +161,10 @@ def map_event_to_audit_descriptor(event: Event) -> AuditDescriptor:
                     "departure_time": event.departure_time.isoformat()
                     if event.departure_time is not None
                     else None,
+                    "initial_status": event.initial_status.value,
+                    "expected_completion_time": event.expected_completion_time.isoformat()
+                    if event.expected_completion_time is not None
+                    else None,
                 },
             )
         case RouteScheduled():
@@ -170,53 +174,109 @@ def map_event_to_audit_descriptor(event: Event) -> AuditDescriptor:
                 action=AuditAction.SCHEDULED,
                 payload_json={
                     "route_id": str(event.route_id),
-                    "departure_time": event.departure_time.isoformat(),
-                    "expected_completion_time": event.expected_completion_time.isoformat(),
+                    "previous_status": event.previous_status.value,
+                    "new_status": event.new_status.value,
+                    "previous_departure_time": event.previous_departure_time.isoformat()
+                    if event.previous_departure_time is not None
+                    else None,
+                    "new_departure_time": event.new_departure_time.isoformat(),
+                    "previous_expected_completion_time": event.previous_expected_completion_time.isoformat()
+                    if event.previous_expected_completion_time is not None
+                    else None,
+                    "new_expected_completion_time": event.new_expected_completion_time.isoformat(),
                 },
             )
         case PackageAssignedToRoute():
             return AuditDescriptor(
                 resource_type=AuditResourceType.ROUTE,
-                resource_id=str(event.route_id),
+                resource_id=str(event.new_route_id),
                 action=AuditAction.ASSIGNED_TO_ROUTE,
                 payload_json={
-                    "route_id": str(event.route_id),
                     "package_id": str(event.package_id),
-                    "expected_arrival": event.expected_arrival.isoformat()
-                    if event.expected_arrival is not None
+                    "previous_route_id": _optional_id(event.previous_route_id),
+                    "new_route_id": _optional_id(event.new_route_id),
+                    "previous_expected_arrival": event.previous_expected_arrival.isoformat()
+                    if event.previous_expected_arrival is not None
+                    else None,
+                    "new_expected_arrival": event.new_expected_arrival.isoformat()
+                    if event.new_expected_arrival is not None
                     else None,
                 },
             )
         case PackageDetachedFromRoute():
             return AuditDescriptor(
                 resource_type=AuditResourceType.ROUTE,
-                resource_id=str(event.route_id),
+                resource_id=str(event.previous_route_id),
                 action=AuditAction.DETACHED_FROM_ROUTE,
                 payload_json={
-                    "route_id": str(event.route_id),
                     "package_id": str(event.package_id),
+                    "previous_route_id": _optional_id(event.previous_route_id),
+                    "new_route_id": _optional_id(event.new_route_id),
+                    "previous_status": event.previous_status.value,
+                    "new_status": event.new_status.value,
+                    "previous_location": str(event.previous_location),
+                    "new_location": str(event.new_location),
+                    "previous_expected_arrival": event.previous_expected_arrival.isoformat()
+                    if event.previous_expected_arrival is not None
+                    else None,
+                    "new_expected_arrival": event.new_expected_arrival.isoformat()
+                    if event.new_expected_arrival is not None
+                    else None,
                     "reason": event.reason.value,
                 },
             )
         case TruckAssignedToRoute():
             return AuditDescriptor(
                 resource_type=AuditResourceType.ROUTE,
-                resource_id=str(event.route_id),
+                resource_id=str(event.new_route_id),
                 action=AuditAction.ASSIGNED_TO_TRUCK,
                 payload_json={
-                    "route_id": str(event.route_id),
                     "truck_id": str(event.truck_id),
+                    "previous_route_id": _optional_id(event.previous_route_id),
+                    "new_route_id": _optional_id(event.new_route_id),
+                    "previous_status": event.previous_status.value,
+                    "new_status": event.new_status.value,
+                    "previous_location": str(event.previous_location),
+                    "new_location": str(event.new_location),
+                    "previous_busy_from": event.previous_busy_from.isoformat()
+                    if event.previous_busy_from is not None
+                    else None,
+                    "new_busy_from": event.new_busy_from.isoformat()
+                    if event.new_busy_from is not None
+                    else None,
+                    "previous_busy_until": event.previous_busy_until.isoformat()
+                    if event.previous_busy_until is not None
+                    else None,
+                    "new_busy_until": event.new_busy_until.isoformat()
+                    if event.new_busy_until is not None
+                    else None,
                 },
             )
         case TruckReleasedFromRoute():
             return AuditDescriptor(
                 resource_type=AuditResourceType.ROUTE,
-                resource_id=str(event.route_id),
+                resource_id=str(event.previous_route_id),
                 action=AuditAction.RELEASED_TRUCK,
                 payload_json={
-                    "route_id": str(event.route_id),
                     "truck_id": str(event.truck_id),
-                    "release_location": str(event.release_location),
+                    "previous_route_id": _optional_id(event.previous_route_id),
+                    "new_route_id": _optional_id(event.new_route_id),
+                    "previous_status": event.previous_status.value,
+                    "new_status": event.new_status.value,
+                    "previous_location": str(event.previous_location),
+                    "new_location": str(event.new_location),
+                    "previous_busy_from": event.previous_busy_from.isoformat()
+                    if event.previous_busy_from is not None
+                    else None,
+                    "new_busy_from": event.new_busy_from.isoformat()
+                    if event.new_busy_from is not None
+                    else None,
+                    "previous_busy_until": event.previous_busy_until.isoformat()
+                    if event.previous_busy_until is not None
+                    else None,
+                    "new_busy_until": event.new_busy_until.isoformat()
+                    if event.new_busy_until is not None
+                    else None,
                     "reason": event.reason.value,
                 },
             )
@@ -228,6 +288,8 @@ def map_event_to_audit_descriptor(event: Event) -> AuditDescriptor:
                 payload_json={
                     "route_id": str(event.route_id),
                     "start_time": event.occurred_at.isoformat(),
+                    "previous_status": event.previous_status.value,
+                    "new_status": event.new_status.value,
                 },
             )
         case RouteCompleted():
@@ -237,6 +299,10 @@ def map_event_to_audit_descriptor(event: Event) -> AuditDescriptor:
                 action=AuditAction.COMPLETED,
                 payload_json={
                     "route_id": str(event.route_id),
+                    "previous_status": event.previous_status.value,
+                    "new_status": event.new_status.value,
+                    "departure_time": event.departure_time.isoformat(),
+                    "expected_completion_time": event.expected_completion_time.isoformat(),
                     "completion_time": event.occurred_at.isoformat(),
                 },
             )
@@ -247,6 +313,11 @@ def map_event_to_audit_descriptor(event: Event) -> AuditDescriptor:
                 action=AuditAction.REMOVED,
                 payload_json={
                     "route_id": str(event.route_id),
+                    "previous_status": event.previous_status.value,
+                    "previous_locations": [str(location) for location in event.previous_locations],
+                    "previous_expected_completion_time": event.previous_expected_completion_time.isoformat()
+                    if event.previous_expected_completion_time is not None
+                    else None,
                     "detached_package_ids": [str(package_id) for package_id in event.detached_package_ids],
                     "released_truck_id": _optional_id(event.released_truck_id),
                 },

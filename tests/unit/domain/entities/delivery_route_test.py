@@ -9,6 +9,7 @@ from src.domain.enums.package_detachment_reasons import PackageDetachmentReason
 from src.domain.enums.route_status import RouteStatus
 from src.domain.enums.truck_model import TruckModel
 from src.domain.enums.truck_release_reasons import TruckReleaseReason
+from src.domain.enums.truck_status import TruckStatus
 from src.domain.events.route_events import (
     PackageAssignedToRoute,
     PackageDetachedFromRoute,
@@ -164,8 +165,12 @@ class DeliveryRoute_Should(unittest.TestCase):
         self.assertIsInstance(event, RouteScheduled)
         assert isinstance(event, RouteScheduled)
         self.assertEqual(event.route_id, 1)
-        self.assertEqual(event.departure_time, base)
-        self.assertEqual(event.expected_completion_time, route.eta_final)
+        self.assertEqual(event.previous_status, RouteStatus.PLANNED)
+        self.assertEqual(event.new_status, RouteStatus.SCHEDULED)
+        self.assertIsNone(event.previous_departure_time)
+        self.assertEqual(event.new_departure_time, base)
+        self.assertIsNone(event.previous_expected_completion_time)
+        self.assertEqual(event.new_expected_completion_time, route.eta_final)
         self.assertEqual(event.occurred_at, EVENT_TIME)
 
     def test_mark_started_updates_status_and_records_event(self, *_: object) -> None:
@@ -489,9 +494,14 @@ class DeliveryRoute_Should(unittest.TestCase):
         event = route.pending_events[0]
         self.assertIsInstance(event, PackageAssignedToRoute)
         assert isinstance(event, PackageAssignedToRoute)
-        self.assertEqual(event.route_id, 7)
         self.assertEqual(event.package_id, 11)
-        self.assertEqual(event.expected_arrival, route.arrival_time_at(LocationCode("CCC")))
+        self.assertIsNone(event.previous_route_id)
+        self.assertEqual(event.new_route_id, 7)
+        self.assertIsNone(event.previous_expected_arrival)
+        self.assertEqual(
+            event.new_expected_arrival,
+            route.arrival_time_at(LocationCode("CCC")),
+        )
         self.assertEqual(event.occurred_at, occurred_at)
 
     def test_rejected_package_assignment_records_no_event(self, *_: object) -> None:
@@ -533,8 +543,15 @@ class DeliveryRoute_Should(unittest.TestCase):
         event = route.pending_events[0]
         self.assertIsInstance(event, PackageDetachedFromRoute)
         assert isinstance(event, PackageDetachedFromRoute)
-        self.assertEqual(event.route_id, 1)
         self.assertEqual(event.package_id, 1)
+        self.assertEqual(event.previous_route_id, 1)
+        self.assertIsNone(event.new_route_id)
+        self.assertEqual(event.previous_status, ItemStatus.IN_PROGRESS)
+        self.assertEqual(event.new_status, ItemStatus.TODO)
+        self.assertEqual(event.previous_location, LocationCode("BBB"))
+        self.assertEqual(event.new_location, package.start_location)
+        self.assertIsNotNone(event.previous_expected_arrival)
+        self.assertIsNone(event.new_expected_arrival)
         self.assertEqual(event.reason, PackageDetachmentReason.PACKAGE_REMOVED)
         self.assertEqual(event.occurred_at, EVENT_TIME)
 
@@ -596,6 +613,7 @@ class DeliveryRoute_Should(unittest.TestCase):
     def test_release_truck_releases_and_clears_route_truck(self, *_: object) -> None:
         route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), route_id=1)
         truck = Truck(1, TruckModel.SCANIA, 42000, 8000)
+        truck.current_location = LocationCode("AAA")
         route.assign_truck(truck, occurred_at=EVENT_TIME)
         route.clear_events()
 
@@ -612,9 +630,13 @@ class DeliveryRoute_Should(unittest.TestCase):
         event = route.pending_events[0]
         self.assertIsInstance(event, TruckReleasedFromRoute)
         assert isinstance(event, TruckReleasedFromRoute)
-        self.assertEqual(event.route_id, 1)
         self.assertEqual(event.truck_id, 1)
-        self.assertEqual(event.release_location, LocationCode("BBB"))
+        self.assertEqual(event.previous_route_id, 1)
+        self.assertIsNone(event.new_route_id)
+        self.assertEqual(event.previous_status, TruckStatus.ON_THE_WAY)
+        self.assertEqual(event.new_status, TruckStatus.FREE)
+        self.assertEqual(event.previous_location, LocationCode("AAA"))
+        self.assertEqual(event.new_location, LocationCode("BBB"))
         self.assertEqual(event.reason, TruckReleaseReason.ROUTE_REMOVED)
         self.assertEqual(event.occurred_at, EVENT_TIME)
 
@@ -634,6 +656,7 @@ class DeliveryRoute_Should(unittest.TestCase):
     def test_release_truck_returns_false_when_truck_reports_no_release(self, *_: object) -> None:
         route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), route_id=1)
         truck = Truck(1, TruckModel.SCANIA, 42000, 8000)
+        truck.current_location = LocationCode("AAA")
         route.assign_truck(truck, occurred_at=EVENT_TIME)
         route.clear_events()
 
@@ -656,6 +679,7 @@ class DeliveryRoute_Should(unittest.TestCase):
     def test_release_truck_restores_truck_when_released_location_is_missing(self, *_: object) -> None:
         route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), route_id=1)
         truck = Truck(1, TruckModel.SCANIA, 42000, 8000)
+        truck.current_location = LocationCode("AAA")
         route.assign_truck(truck, occurred_at=EVENT_TIME)
         route.clear_events()
 
@@ -682,6 +706,7 @@ class DeliveryRoute_Should(unittest.TestCase):
     def test_assign_truck_records_assignment_event(self, *_: object) -> None:
         route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), route_id=1)
         truck = Truck(10, TruckModel.SCANIA, 42000, 8000)
+        truck.current_location = LocationCode("AAA")
 
         route.assign_truck(truck, occurred_at=EVENT_TIME)
 
@@ -691,14 +716,32 @@ class DeliveryRoute_Should(unittest.TestCase):
         event = route.pending_events[0]
         self.assertIsInstance(event, TruckAssignedToRoute)
         assert isinstance(event, TruckAssignedToRoute)
-        self.assertEqual(event.route_id, 1)
         self.assertEqual(event.truck_id, 10)
+        self.assertIsNone(event.previous_route_id)
+        self.assertEqual(event.new_route_id, 1)
+        self.assertEqual(event.previous_status, TruckStatus.FREE)
+        self.assertEqual(event.new_status, TruckStatus.ON_THE_WAY)
+        self.assertEqual(event.previous_location, LocationCode("AAA"))
+        self.assertEqual(event.new_location, LocationCode("AAA"))
         self.assertEqual(event.occurred_at, EVENT_TIME)
+
+    def test_assign_truck_rejects_unknown_current_location(self, *_: object) -> None:
+        route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), route_id=1)
+        truck = Truck(10, TruckModel.SCANIA, 42000, 8000)
+
+        with self.assertRaisesRegex(DomainConflictError, "has no current location"):
+            route.assign_truck(truck, occurred_at=EVENT_TIME)
+
+        self.assertIsNone(route.truck)
+        self.assertIsNone(truck.route)
+        self.assertEqual(truck.status, TruckStatus.FREE)
+        self.assertEqual(route.pending_events, ())
 
     def test_assign_truck_rejects_truck_assigned_to_another_route(self, *_: object) -> None:
         route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), route_id=1)
         other_route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), route_id=2)
         truck = Truck(10, TruckModel.SCANIA, 42000, 8000)
+        truck.current_location = LocationCode("AAA")
         other_route.assign_truck(truck, occurred_at=EVENT_TIME)
 
         with self.assertRaises(DomainConflictError):
@@ -717,6 +760,7 @@ class DeliveryRoute_Should(unittest.TestCase):
             route_id=1,
         )
         truck = Truck(10, TruckModel.SCANIA, 42000, 8000)
+        truck.current_location = LocationCode("AAA")
         route.assign_truck(truck, occurred_at=EVENT_TIME)
         route.clear_events()
 
