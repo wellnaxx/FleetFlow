@@ -24,7 +24,7 @@ FleetFlow currently supports:
 - Typed domain, application, and repository errors for expected validation, not-found, conflict, authentication, and persistence failures.
 - Global FastAPI exception handlers that map expected application/domain failures to stable, sanitized HTTP responses.
 - Immutable domain and application event types with per-entity/use-case pending-event recording, event checkpoints for rollback, context-local envelope metadata, synchronous in-process dispatch, and structured event logging.
-- Audit-log foundation with normalized audit descriptors, audit record/query models, a subscribed audit event handler, in-memory and PostgreSQL audit repositories, and PostgreSQL audit table migration/schema support.
+- Browsable audit log with normalized descriptors, versioned event payloads, subscribed persistence handlers, in-memory and PostgreSQL repositories, and actor-scoped CLI/HTTP queries.
 - Role-based authorization around CLI commands and application use cases.
 - Password hashing with PBKDF2-HMAC and strict persisted password-hash validation.
 - Configurable application logging to stdout and optional rotating log files, including HTTP request duration/status logging.
@@ -159,8 +159,8 @@ Expected domain failures use typed exceptions. Validation problems, missing doma
 FleetFlow has an in-process event pipeline for business facts and application workflows.
 
 - Domain entities record pending events for customer, package, and route lifecycle changes, including creation, assignment, detachment, pickup, delivery, scheduling, truck assignment/release, route start/completion, and removal.
-- Event-aware use cases record authentication, authorization-denial, heartbeat, world-state import/export, and world-state corruption events.
-- Events are immutable and share an event id, business `occurred_at` timestamp, and UTC `recorded_at` timestamp.
+- Event-aware use cases record authentication, authorization denial, heartbeat, world-state import/export, and world-state corruption events. Authorization denials retain the attempted operation, target resource, target id, and missing permissions.
+- Events are immutable and share an event id, positive per-event contract version, business `occurred_at` timestamp, and UTC `recorded_at` timestamp. Audit records preserve the version used to serialize each event.
 - Event checkpoints allow pending events to be rolled back with failed in-memory mutations.
 - `EventContext`, `EventActor`, and `EventEnvelope` provide correlation, source, actor, and causation metadata through `ContextVar`-local workflow context.
 - CLI commands and HTTP router handlers bind event context before draining pending events. CLI heartbeat and autosave events are drained under the surrounding CLI command context.
@@ -169,7 +169,7 @@ FleetFlow has an in-process event pipeline for business facts and application wo
 - `StructuredEventLoggingHandler` is subscribed to all event types and writes event metadata to the configured application logger.
 - `AuditDescriptor` and `map_event_to_audit_descriptor()` translate concrete event types into normalized audit resource/action fields and JSON-safe payloads.
 - `AuditEventHandler` combines an event envelope with its audit descriptor and persists an `AuditRecordDraft` through `AuditRepositoryPort`.
-- In-memory and PostgreSQL audit repositories implement the audit repository contract, including idempotency by event id, filtering, stable ordering, pagination, and page-total queries.
+- In-memory and PostgreSQL audit repositories implement the audit repository contract, including idempotency by event id, filtering, stable ordering, pagination, and page-total queries. The CLI and HTTP API expose those queries with manager-wide and employee self-only authorization.
 
 Events are currently dispatched synchronously in process after workflow persistence completes. The runtime subscription graph wires structured event logging and audit persistence for every known event type. Handler failures are not isolated: an audit repository failure propagates as event-publication failure. FleetFlow does not yet include a transactional outbox, so event handling is still not resilient to process crashes between business-state commit and handler execution.
 
@@ -261,7 +261,7 @@ When `PERSISTENCE_BACKEND=postgres`, package, route, truck, customer, user, auth
 
 The PostgreSQL schema also includes `audit_records` plus indexes for event idempotency, resource history, actor history, event type, action, source, occurrence time, creation time, and correlation id. Audit timestamps intentionally distinguish app-local business time (`occurred_at`) from UTC system timestamps (`recorded_at` and `created_at`).
 
-Audit records are currently written by the in-process event subscription graph. The audit query model and repository filtering/pagination support exist, but audit browsing is not yet exposed through CLI commands or HTTP endpoints.
+Audit records are written by the in-process event subscription graph and can be browsed through the `viewauditlogs` CLI command or the HTTP audit endpoint. Managers with `AUDIT_VIEW` can query the full history; employees are restricted to records attributed to their own actor identity.
 
 ## Authentication and Authorization
 
@@ -271,6 +271,8 @@ FleetFlow has two roles:
 - `EMPLOYEE`
 
 Managers have full access. Employees can perform day-to-day logistics operations but do not have unrestricted administrative/state-management access.
+
+Denied authorization decisions are recorded as application events with normalized operation and target metadata. Actor identity remains envelope context, avoiding duplication inside the event payload.
 
 On first startup, if no `admin` user exists in the active user repository, FleetFlow creates the initial manager interactively. In memory mode this checks the configured JSON user store. In PostgreSQL mode this checks the PostgreSQL users table. It prompts for a password and confirmation:
 
@@ -685,7 +687,7 @@ This would allow the current use cases to act as command handlers without rewrit
 
 ### HTTP API expansion
 
-The current FastAPI adapter covers authentication, customer listing, package workflows, route workflows, truck listing, and world-state import/export. Remaining HTTP work includes exposing audit-log browsing, hardening the API surface, response contracts, and integration coverage.
+The current FastAPI adapter covers authentication, customer listing, package workflows, route workflows, truck listing, world-state import/export, and actor-scoped audit-log browsing. Remaining HTTP work is general hardening, broader integration coverage, and further response-contract consistency.
 
 ### PostgreSQL persistence adapter
 
@@ -697,7 +699,7 @@ Remaining work includes operational migration tooling, stronger integration cove
 
 FleetFlow already defines and records pending domain and application events for important actions such as package assignment, route scheduling, truck dispatch/release, package delivery, authentication, authorization denial, heartbeat advancement, and world-state import/export. Event envelopes and context metadata are available for correlation and actor attribution, and the in-process dispatcher currently publishes those envelopes to structured logging and audit handlers.
 
-The audit-log model, descriptor mapper, audit handler, repository port, in-memory repository, PostgreSQL repository, SQL queries, PostgreSQL schema/migration, and composition wiring now exist. The active audit repository is selected with the configured persistence backend and shared between the event handler and container. The current failure policy is strict: audit handler/repository failures propagate to the publisher. Remaining audit work is the read surface: finish and wire audit-query use cases, then expose them through CLI/HTTP with manager-wide access and employee self-audit filtering.
+The audit-log model, descriptor mapper, audit handler, repository port, in-memory repository, PostgreSQL repository, SQL queries, schema migrations, composition wiring, query use case, CLI command, and HTTP endpoint are implemented. The active repository follows the configured persistence backend. Manager-wide and employee self-only filtering is enforced in the application use case. The current failure policy is strict: audit handler or repository failures propagate to the publisher.
 
 A transactional outbox can follow after the synchronous audit read/write path is stable. External brokers such as Kafka or Redis Streams would only make sense later if the project needed higher-volume event processing or cross-service integration.
 
