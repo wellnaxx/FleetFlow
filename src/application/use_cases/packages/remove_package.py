@@ -64,6 +64,7 @@ class RemovePackageUseCase(AuthorizedUseCase[RemovePackageResult]):
         customer = package.customer
 
         package_snapshot = package.snapshot_state()
+        previous_location = package.current_location
         package_event_checkpoint = package.event_checkpoint()
         route_event_checkpoint = route.event_checkpoint() if route is not None else None
         occurred_at = self._clock()
@@ -71,7 +72,13 @@ class RemovePackageUseCase(AuthorizedUseCase[RemovePackageResult]):
         try:
             self._detach_from_route(package, occurred_at=occurred_at)
             self._remove_from_customer(package)
-            package.record_removal(route_id=package_snapshot.route_id, occurred_at=occurred_at)
+            package.record_removal(
+                previous_route_id=package_snapshot.route_id,
+                previous_status=package_snapshot.status,
+                previous_location=previous_location,
+                previous_expected_arrival=package_snapshot.expected_arrival,
+                occurred_at=occurred_at,
+            )
 
             with self._unit_of_work as uow:
                 uow.packages.remove(package_id)

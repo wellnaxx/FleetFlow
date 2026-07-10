@@ -109,7 +109,8 @@ class RemovePackageUseCase_Should(unittest.TestCase):
         assert isinstance(event, PackageRemoved)
         self.assertEqual(event.package_id, 42)
         self.assertEqual(event.customer_id, 1)
-        self.assertEqual(event.route_id, 7)
+        self.assertEqual(event.previous_route_id, 7)
+        self.assertEqual(event.previous_location, LocationCode("SYD"))
         self.assertEqual(event.occurred_at, self.now)
 
     def test_propagates_customer_unlink_error(self) -> None:

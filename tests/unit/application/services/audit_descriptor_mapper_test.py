@@ -43,6 +43,7 @@ from src.application.events.world_state_events import (
 from src.application.services.audit_descriptor_mapper import map_event_to_audit_descriptor
 from src.application.value_objects.world_state_entity_counts import WorldStateEntityCounts
 from src.domain.enums.auth import Permission, Role
+from src.domain.enums.item_status import ItemStatus
 from src.domain.enums.package_detachment_reasons import PackageDetachmentReason
 from src.domain.enums.truck_release_reasons import TruckReleaseReason
 from src.domain.events.customer_events import CustomerCreated
@@ -84,6 +85,9 @@ class AuditDescriptorMapperTests(unittest.TestCase):
                     start_location=LocationCode("SYD"),
                     end_location=LocationCode("MEL"),
                     weight=12.5,
+                    initial_status=ItemStatus.TODO,
+                    initial_location=LocationCode("SYD"),
+                    expected_arrival=None,
                     occurred_at=NOW,
                 ),
                 AuditResourceType.PACKAGE,
@@ -91,7 +95,18 @@ class AuditDescriptorMapperTests(unittest.TestCase):
                 AuditAction.CREATED,
             ),
             (
-                PackageRemoved(package_id=20, customer_id=10, route_id=None, occurred_at=NOW),
+                PackageRemoved(
+                    package_id=20,
+                    customer_id=10,
+                    previous_route_id=None,
+                    previous_status=ItemStatus.TODO,
+                    previous_location=LocationCode("SYD"),
+                    start_location=LocationCode("SYD"),
+                    end_location=LocationCode("MEL"),
+                    weight=12.5,
+                    previous_expected_arrival=None,
+                    occurred_at=NOW,
+                ),
                 AuditResourceType.PACKAGE,
                 "20",
                 AuditAction.REMOVED,
@@ -100,7 +115,11 @@ class AuditDescriptorMapperTests(unittest.TestCase):
                 PackagePickedUp(
                     package_id=20,
                     route_id=30,
-                    pickup_location=LocationCode("SYD"),
+                    previous_status=ItemStatus.TODO,
+                    new_status=ItemStatus.IN_PROGRESS,
+                    previous_location=LocationCode("SYD"),
+                    new_location=LocationCode("SYD"),
+                    scheduled_arrival=LATER,
                     occurred_at=NOW,
                 ),
                 AuditResourceType.PACKAGE,
@@ -111,7 +130,11 @@ class AuditDescriptorMapperTests(unittest.TestCase):
                 PackageDelivered(
                     package_id=20,
                     route_id=30,
-                    delivery_location=LocationCode("MEL"),
+                    previous_status=ItemStatus.IN_PROGRESS,
+                    new_status=ItemStatus.DONE,
+                    previous_location=LocationCode("SYD"),
+                    new_location=LocationCode("MEL"),
+                    scheduled_arrival=LATER,
                     occurred_at=NOW,
                 ),
                 AuditResourceType.PACKAGE,

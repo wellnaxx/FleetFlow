@@ -88,6 +88,11 @@ def map_event_to_audit_descriptor(event: Event) -> AuditDescriptor:
                     "start_location": str(event.start_location),
                     "end_location": str(event.end_location),
                     "weight": event.weight,
+                    "initial_status": event.initial_status.value,
+                    "initial_location": str(event.initial_location),
+                    "expected_arrival": event.expected_arrival.isoformat()
+                    if event.expected_arrival is not None
+                    else None,
                 },
             )
         case PackageRemoved():
@@ -98,7 +103,17 @@ def map_event_to_audit_descriptor(event: Event) -> AuditDescriptor:
                 payload_json={
                     "package_id": str(event.package_id),
                     "customer_id": str(event.customer_id),
-                    "route_id": str(event.route_id) if event.route_id is not None else None,
+                    "previous_route_id": str(event.previous_route_id)
+                    if event.previous_route_id is not None
+                    else None,
+                    "previous_status": event.previous_status.value,
+                    "previous_location": str(event.previous_location),
+                    "start_location": str(event.start_location),
+                    "end_location": str(event.end_location),
+                    "weight": event.weight,
+                    "previous_expected_arrival": event.previous_expected_arrival.isoformat()
+                    if event.previous_expected_arrival is not None
+                    else None,
                 },
             )
         case PackagePickedUp():
@@ -109,7 +124,13 @@ def map_event_to_audit_descriptor(event: Event) -> AuditDescriptor:
                 payload_json={
                     "package_id": str(event.package_id),
                     "route_id": str(event.route_id),
-                    "pickup_location": str(event.pickup_location),
+                    "previous_status": event.previous_status.value,
+                    "new_status": event.new_status.value,
+                    "previous_location": str(event.previous_location),
+                    "new_location": str(event.new_location),
+                    "scheduled_arrival": event.scheduled_arrival.isoformat()
+                    if event.scheduled_arrival is not None
+                    else None,
                 },
             )
         case PackageDelivered():
@@ -120,7 +141,13 @@ def map_event_to_audit_descriptor(event: Event) -> AuditDescriptor:
                 payload_json={
                     "package_id": str(event.package_id),
                     "route_id": str(event.route_id),
-                    "delivery_location": str(event.delivery_location),
+                    "previous_status": event.previous_status.value,
+                    "new_status": event.new_status.value,
+                    "previous_location": str(event.previous_location),
+                    "new_location": str(event.new_location),
+                    "scheduled_arrival": event.scheduled_arrival.isoformat()
+                    if event.scheduled_arrival is not None
+                    else None,
                 },
             )
         case RouteCreated():

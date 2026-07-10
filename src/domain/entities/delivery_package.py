@@ -166,6 +166,9 @@ class DeliveryPackage(DomainEventRecorderMixin):
                 start_location=package.start_location,
                 end_location=package.end_location,
                 weight=weight,
+                initial_status=package.status,
+                initial_location=package.current_location,
+                expected_arrival=package.expected_arrival,
                 occurred_at=occurred_at or datetime.now(),
             )
         )
@@ -189,6 +192,8 @@ class DeliveryPackage(DomainEventRecorderMixin):
                 f"Cannot mark package {self.package_id} as picked up because its status is {self.status.value}."
             )
 
+        previous_status = self.status
+        previous_location = self.current_location
         self.status = ItemStatus.IN_PROGRESS
         self.current_location = self.start_location
 
@@ -196,7 +201,11 @@ class DeliveryPackage(DomainEventRecorderMixin):
             PackagePickedUp(
                 package_id=self.package_id,
                 route_id=route_id,
-                pickup_location=self.start_location,
+                previous_status=previous_status,
+                new_status=self.status,
+                previous_location=previous_location,
+                new_location=self.current_location,
+                scheduled_arrival=self.expected_arrival,
                 occurred_at=occurred_at,
             )
         )
@@ -218,29 +227,53 @@ class DeliveryPackage(DomainEventRecorderMixin):
                 f"Cannot mark package {self.package_id} as delivered because its status is {self.status.value}."
             )
 
+        previous_status = self.status
+        previous_location = self.current_location
         self.status = ItemStatus.DONE
         self.current_location = self.end_location
+
         self._record_event(
             PackageDelivered(
                 package_id=self.package_id,
                 route_id=route_id,
-                delivery_location=self.end_location,
+                previous_status=previous_status,
+                new_status=self.status,
+                previous_location=previous_location,
+                new_location=self.current_location,
+                scheduled_arrival=self.expected_arrival,
                 occurred_at=occurred_at,
             )
         )
 
-    def record_removal(self, *, route_id: int | None, occurred_at: datetime) -> None:
+    def record_removal(
+        self,
+        *,
+        previous_route_id: int | None,
+        previous_status: ItemStatus,
+        previous_location: LocationCode,
+        previous_expected_arrival: datetime | None,
+        occurred_at: datetime,
+    ) -> None:
         """Record that this package was removed from the system.
 
         Args:
-            route_id: Identifier of the route the package was linked to before removal, if any.
+            previous_route_id: Identifier of the route linked before removal, if any.
+            previous_status: Package status before removal-related detachment.
+            previous_location: Effective package location before removal.
+            previous_expected_arrival: Expected arrival before removal, if scheduled.
             occurred_at: Business time at which removal occurred.
         """
         self._record_event(
             PackageRemoved(
                 package_id=self.package_id,
                 customer_id=self.customer.customer_id,
-                route_id=route_id,
+                previous_route_id=previous_route_id,
+                previous_status=previous_status,
+                previous_location=previous_location,
+                start_location=self.start_location,
+                end_location=self.end_location,
+                weight=self.weight,
+                previous_expected_arrival=previous_expected_arrival,
                 occurred_at=occurred_at,
             )
         )
