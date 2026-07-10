@@ -70,6 +70,7 @@ class InMemoryAuditRepository:
             audit_id=self._next_id,
             created_at=self._clock(),
             event_id=draft.event_id,
+            event_version=draft.event_version,
             event_type=draft.event_type,
             occurred_at=draft.occurred_at,
             recorded_at=draft.recorded_at,

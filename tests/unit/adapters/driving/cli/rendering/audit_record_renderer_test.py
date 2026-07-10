@@ -25,6 +25,7 @@ class AuditRecordRendererShould(unittest.TestCase):
         output = render_audit_record(record)
 
         self.assertIn("Audit ID: 1", output)
+        self.assertIn("Event version: 2", output)
         self.assertIn("Event type: PackageCreated", output)
         self.assertIn("Occurred at: 2026-01-01 12:00:00", output)
         self.assertIn("Recorded at: 2026-01-01 12:00:01", output)
@@ -65,6 +66,7 @@ def make_audit_record(
     """Build a valid audit record for renderer tests."""
     return AuditRecord(
         event_id=UUID("11111111-1111-1111-1111-111111111111"),
+        event_version=2,
         event_type="PackageCreated",
         occurred_at=datetime(2026, 1, 1, 12, 0, 0, 123),
         recorded_at=datetime(2026, 1, 1, 12, 0, 1, 456),

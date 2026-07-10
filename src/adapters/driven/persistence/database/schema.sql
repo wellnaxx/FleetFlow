@@ -277,6 +277,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone_non_empty
 CREATE TABLE IF NOT EXISTS public.audit_records (
     audit_id        INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     event_id        UUID NOT NULL,
+    event_version   INT NOT NULL DEFAULT 1,
     event_type      VARCHAR(50) NOT NULL,
     occurred_at     TIMESTAMP NOT NULL,
     recorded_at     TIMESTAMPTZ NOT NULL,

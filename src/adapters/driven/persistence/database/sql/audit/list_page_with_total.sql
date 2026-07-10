@@ -2,6 +2,7 @@ WITH page AS (
     SELECT
         audit_id,
         event_id,
+        event_version,
         event_type,
         occurred_at,
         recorded_at,
@@ -29,6 +30,7 @@ totals AS (
 SELECT
     page.audit_id,
     page.event_id,
+    page.event_version,
     page.event_type,
     page.occurred_at,
     page.recorded_at,

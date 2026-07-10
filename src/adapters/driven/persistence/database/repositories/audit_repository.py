@@ -37,6 +37,7 @@ class PostgresAuditRepository(AuditRepositoryPort):
             QUERIES.audit.add,
             (
                 draft.event_id,
+                draft.event_version,
                 draft.event_type,
                 draft.occurred_at,
                 draft.recorded_at,

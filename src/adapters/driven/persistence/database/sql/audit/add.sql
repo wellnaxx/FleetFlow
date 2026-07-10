@@ -1,5 +1,6 @@
 INSERT INTO public.audit_records (
     event_id,
+    event_version,
     event_type,
     occurred_at,
     recorded_at,
@@ -14,5 +15,5 @@ INSERT INTO public.audit_records (
     action,
     payload_json
 )
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 ON CONFLICT (event_id) DO NOTHING;

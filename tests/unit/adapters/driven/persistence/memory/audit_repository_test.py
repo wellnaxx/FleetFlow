@@ -40,6 +40,7 @@ class InMemoryAuditRepositoryTests(unittest.TestCase):
         self.assertEqual(record.audit_id, 1)
         self.assertEqual(record.created_at, CREATED_AT)
         self.assertEqual(record.event_id, event_id)
+        self.assertEqual(record.event_version, 2)
         self.assertEqual(record.event_type, "PackageCreated")
         self.assertEqual(record.occurred_at, OCCURRED_AT)
         self.assertEqual(record.recorded_at, RECORDED_AT)
@@ -219,6 +220,7 @@ def _draft(
 ) -> AuditRecordDraft:
     return AuditRecordDraft(
         event_id=event_id,
+        event_version=2,
         event_type=event_type,
         occurred_at=occurred_at,
         recorded_at=recorded_at,

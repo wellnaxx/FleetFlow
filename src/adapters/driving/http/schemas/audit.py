@@ -17,6 +17,7 @@ class AuditRecordResponse(BaseModel):
 
     audit_id: PositiveInt
     event_id: UUID4
+    event_version: PositiveInt
     event_type: str
     occurred_at: datetime
     recorded_at: datetime
@@ -45,6 +46,7 @@ class AuditRecordResponse(BaseModel):
         return cls(
             audit_id=record.audit_id,
             event_id=record.event_id,
+            event_version=record.event_version,
             event_type=record.event_type,
             occurred_at=record.occurred_at,
             recorded_at=record.recorded_at,

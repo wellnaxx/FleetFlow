@@ -17,6 +17,7 @@ def render_audit_record(audit_record: AuditRecord) -> str:
     return "\n".join([
         f"Audit ID: {audit_record.audit_id}",
         f"Event ID: {audit_record.event_id}",
+        f"Event version: {audit_record.event_version}",
         f"Event type: {audit_record.event_type}",
         f"Occurred at: {audit_record.occurred_at.replace(microsecond=0).isoformat(' ')}",
         f"Recorded at: {audit_record.recorded_at.replace(microsecond=0).isoformat(' ')}",

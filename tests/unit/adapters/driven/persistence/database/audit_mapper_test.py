@@ -27,6 +27,7 @@ class AuditMapperTests(unittest.TestCase):
             {
                 "audit_id": 1,
                 "event_id": event_id,
+                "event_version": 2,
                 "event_type": "PackageCreated",
                 "occurred_at": OCCURRED_AT,
                 "recorded_at": RECORDED_AT,
@@ -46,6 +47,7 @@ class AuditMapperTests(unittest.TestCase):
 
         self.assertEqual(record.audit_id, 1)
         self.assertEqual(record.event_id, event_id)
+        self.assertEqual(record.event_version, 2)
         self.assertEqual(record.envelope_id, envelope_id)
         self.assertEqual(record.correlation_id, correlation_id)
         self.assertEqual(record.causation_id, causation_id)
@@ -58,6 +60,12 @@ class AuditMapperTests(unittest.TestCase):
         row = _row(actor_user_id=True)
 
         with self.assertRaisesRegex(TypeError, "actor_user_id: expected int or None"):
+            map_audit_record(row)
+
+    def test_map_audit_record_rejects_bool_event_version(self) -> None:
+        row = _row(event_version=True)
+
+        with self.assertRaisesRegex(TypeError, "event_version: expected int"):
             map_audit_record(row)
 
     def test_map_audit_record_rejects_invalid_enum_value(self) -> None:
@@ -77,6 +85,7 @@ def _row(**overrides: object) -> dict[str, object]:
     row: dict[str, object] = {
         "audit_id": 1,
         "event_id": uuid4(),
+        "event_version": 2,
         "event_type": "PackageCreated",
         "occurred_at": OCCURRED_AT,
         "recorded_at": RECORDED_AT,

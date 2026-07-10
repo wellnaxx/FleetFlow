@@ -67,6 +67,7 @@ class AuditRouterShould(unittest.TestCase):
         self.assertEqual(body["limit"], 1)
         self.assertEqual(body["offset"], 2)
         self.assertEqual(body["items"][0]["audit_id"], 1)
+        self.assertEqual(body["items"][0]["event_version"], 2)
         self.assertEqual(body["items"][0]["event_type"], "PackageCreated")
         self.assertEqual(body["items"][0]["resource_type"], "package")
         self.assertEqual(body["items"][0]["action"], "created")
@@ -116,6 +117,7 @@ def make_audit_record() -> AuditRecord:
     """Build a valid audit record for HTTP response tests."""
     return AuditRecord(
         event_id=uuid4(),
+        event_version=2,
         event_type="PackageCreated",
         occurred_at=datetime(2026, 1, 1, 12, 0),
         recorded_at=datetime(2026, 1, 1, 12, 0, 1),

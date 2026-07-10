@@ -39,6 +39,7 @@ class AuditEventHandler[E: Event](EventHandler[E]):
         audit_descriptor = map_event_to_audit_descriptor(envelope.event)
         draft = AuditRecordDraft(
             event_id=envelope.event.event_id,
+            event_version=envelope.event.event_version,
             event_type=type(envelope.event).__name__,
             occurred_at=envelope.event.occurred_at,
             recorded_at=envelope.event.recorded_at,

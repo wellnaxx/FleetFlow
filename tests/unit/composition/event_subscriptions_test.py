@@ -12,6 +12,7 @@ from src.application.eventing.envelope import EventEnvelope
 from src.application.models.audit_log_query import AuditLogFilter
 from src.application.models.audit_record import AuditRecord, AuditRecordDraft
 from src.composition.event_subscriptions import build_eventing_components
+from src.domain.enums.item_status import ItemStatus
 from src.domain.events.package_events import PackageCreated
 from src.domain.value_objects.location_code import LocationCode
 
@@ -57,6 +58,9 @@ class EventSubscriptionsTests(unittest.TestCase):
             start_location=LocationCode("SYD"),
             end_location=LocationCode("MEL"),
             weight=12.5,
+            initial_status=ItemStatus.TODO,
+            initial_location=LocationCode("SYD"),
+            expected_arrival=None,
             occurred_at=NOW,
         )
 
@@ -71,6 +75,7 @@ class EventSubscriptionsTests(unittest.TestCase):
         self.assertEqual(len(repository.drafts), 1)
         draft = repository.drafts[0]
         self.assertEqual(draft.event_type, "PackageCreated")
+        self.assertEqual(draft.event_version, 2)
         self.assertEqual(draft.resource_type, AuditResourceType.PACKAGE)
         self.assertEqual(draft.resource_id, "20")
         self.assertEqual(draft.action, AuditAction.CREATED)
@@ -88,6 +93,9 @@ class EventSubscriptionsTests(unittest.TestCase):
                         start_location=LocationCode("SYD"),
                         end_location=LocationCode("MEL"),
                         weight=12.5,
+                        initial_status=ItemStatus.TODO,
+                        initial_location=LocationCode("SYD"),
+                        expected_arrival=None,
                         occurred_at=NOW,
                     ),
                     source=EventSource.HTTP,

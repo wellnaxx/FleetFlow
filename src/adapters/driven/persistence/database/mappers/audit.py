@@ -18,6 +18,7 @@ class AuditRow(TypedDict):
 
     audit_id: int
     event_id: UUID
+    event_version: int
     event_type: str
     occurred_at: datetime
     recorded_at: datetime
@@ -53,6 +54,7 @@ def map_audit_record(row: RowDict) -> AuditRecord:
     return AuditRecord(
         audit_id=typed["audit_id"],
         event_id=typed["event_id"],
+        event_version=typed["event_version"],
         event_type=typed["event_type"],
         occurred_at=typed["occurred_at"],
         recorded_at=typed["recorded_at"],
@@ -77,9 +79,22 @@ def _as_audit_row(row: RowDict) -> AuditRow:
     table stores normalized text values. This helper validates raw types,
     converts those strings back into application enums, and validates JSONB
     payload shape before constructing the typed row.
+
+    Args:
+        row: Raw dictionary returned by the database executor.
+
+    Returns:
+        Typed audit row containing validated values and parsed enums.
+
+    Raises:
+        KeyError: If a required audit column is absent.
+        TypeError: If a column has an incompatible runtime type or invalid
+            JSON payload shape.
+        ValueError: If a persisted enum value is unknown.
     """
     audit_id = row["audit_id"]
     event_id = row["event_id"]
+    event_version = row["event_version"]
     event_type = row["event_type"]
     occurred_at = row["occurred_at"]
     recorded_at = row["recorded_at"]
@@ -101,6 +116,9 @@ def _as_audit_row(row: RowDict) -> AuditRow:
     if not isinstance(event_id, UUID):
         raise TypeError(f"event_id: expected UUID, got {type(event_id).__name__}")
     
+    if not isinstance(event_version, int) or isinstance(event_version, bool):
+        raise TypeError(f"event_version: expected int, got {type(event_version).__name__}")
+
     if not isinstance(event_type, str):
         raise TypeError(f"event_type: expected str, got {type(event_type).__name__}")
     
@@ -145,6 +163,7 @@ def _as_audit_row(row: RowDict) -> AuditRow:
     return AuditRow(
         audit_id=audit_id,
         event_id=event_id,
+        event_version=event_version,
         event_type=event_type,
         occurred_at=occurred_at,
         recorded_at=recorded_at,

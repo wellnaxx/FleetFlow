@@ -55,6 +55,11 @@ class AuditRecordDraftShould(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises((TypeError, ValueError)):
                 AuditRecordDraft(**make_draft_kwargs(actor_user_id=cast(Any, value)))
 
+    def test_reject_invalid_event_version(self) -> None:
+        for value in (0, -1, True, "2"):
+            with self.subTest(value=value), self.assertRaises((TypeError, ValueError)):
+                AuditRecordDraft(**make_draft_kwargs(event_version=cast(Any, value)))
+
     def test_reject_empty_string_fields(self) -> None:
         for field_name in ("event_type", "actor_username", "resource_id"):
             with self.subTest(field_name=field_name), self.assertRaises(ValueError):
@@ -117,6 +122,7 @@ def make_draft_kwargs(**overrides: object) -> dict[str, Any]:
     """Return valid audit-record construction kwargs with optional overrides."""
     kwargs: dict[str, Any] = {
         "event_id": UUID("11111111-1111-1111-1111-111111111111"),
+        "event_version": 2,
         "event_type": "PackageCreated",
         "occurred_at": datetime(2026, 1, 1, 12, 0),
         "recorded_at": datetime(2026, 1, 1, 12, 0, 1),

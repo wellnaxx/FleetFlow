@@ -35,6 +35,8 @@ class AuditRecordDraft:
 
     Attributes:
         event_id: Unique id of the original domain or application event.
+        event_version: Positive version of the concrete event's serialized
+            contract at the time the audit record was produced.
         event_type: Concrete event class name, e.g. ``PackageCreated``.
         occurred_at: Business timestamp carried by the event.
         recorded_at: Timestamp when FleetFlow recorded the event.
@@ -52,6 +54,7 @@ class AuditRecordDraft:
     """
 
     event_id: UUID
+    event_version: int
     event_type: str
     occurred_at: datetime
     recorded_at: datetime
@@ -67,8 +70,16 @@ class AuditRecordDraft:
     payload_json: JSONObject
 
     def __post_init__(self) -> None:
-        """Validate and normalize audit draft fields."""
+        """Validate and normalize audit draft fields.
+
+        Raises:
+            TypeError: If a field has an incompatible runtime type or the
+                payload contains a non-JSON value.
+            ValueError: If a positive integer, non-empty string, enum, or JSON
+                number invariant is violated.
+        """
         require_uuid(self.event_id, "event_id")
+        require_positive_int(self.event_version, "event_version")
         object.__setattr__(self, "event_type", require_str(self.event_type, "event_type"))
         require_datetime(self.occurred_at, "occurred_at")
         require_datetime(self.recorded_at, "recorded_at")
@@ -101,7 +112,13 @@ class AuditRecord(AuditRecordDraft):
     created_at: datetime
 
     def __post_init__(self) -> None:
-        """Validate draft fields and persisted audit metadata."""
+        """Validate draft fields and persisted audit metadata.
+
+        Raises:
+            TypeError: If draft fields or persisted timestamps have invalid
+                runtime types.
+            ValueError: If draft invariants fail or ``audit_id`` is not positive.
+        """
         super().__post_init__()
         require_positive_int(self.audit_id, "audit_id")
         require_datetime(self.created_at, "created_at")

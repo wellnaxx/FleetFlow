@@ -12,6 +12,7 @@ from src.application.event_handlers.audit_event_handler import AuditEventHandler
 from src.application.eventing.envelope import EventActor, EventEnvelope
 from src.application.models.audit_log_query import AuditLogFilter
 from src.application.models.audit_record import AuditRecord, AuditRecordDraft
+from src.domain.enums.item_status import ItemStatus
 from src.domain.events.package_events import PackageCreated
 from src.domain.value_objects.location_code import LocationCode
 from src.shared.event import Event
@@ -55,6 +56,9 @@ class AuditEventHandlerTests(unittest.TestCase):
             start_location=LocationCode("SYD"),
             end_location=LocationCode("MEL"),
             weight=12.5,
+            initial_status=ItemStatus.TODO,
+            initial_location=LocationCode("SYD"),
+            expected_arrival=None,
             occurred_at=NOW,
         )
         correlation_id = uuid4()
@@ -75,6 +79,7 @@ class AuditEventHandlerTests(unittest.TestCase):
         self.assertEqual(len(repository.drafts), 1)
         draft = repository.drafts[0]
         self.assertEqual(draft.event_id, event.event_id)
+        self.assertEqual(draft.event_version, 2)
         self.assertEqual(draft.event_type, "PackageCreated")
         self.assertEqual(draft.occurred_at, event.occurred_at)
         self.assertEqual(draft.recorded_at, event.recorded_at)
@@ -95,6 +100,9 @@ class AuditEventHandlerTests(unittest.TestCase):
                 "start_location": "SYD",
                 "end_location": "MEL",
                 "weight": 12.5,
+                "initial_status": ItemStatus.TODO.value,
+                "initial_location": "SYD",
+                "expected_arrival": None,
             },
         )
 
@@ -108,9 +116,12 @@ class AuditEventHandlerTests(unittest.TestCase):
                     package_id=20,
                     customer_id=10,
                     start_location=LocationCode("SYD"),
-                    end_location=LocationCode("MEL"),
-                    weight=12.5,
-                    occurred_at=NOW,
+                end_location=LocationCode("MEL"),
+                weight=12.5,
+                initial_status=ItemStatus.TODO,
+                initial_location=LocationCode("SYD"),
+                expected_arrival=None,
+                occurred_at=NOW,
                 ),
                 source=EventSource.HEARTBEAT,
                 correlation_id=uuid4(),

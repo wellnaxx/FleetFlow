@@ -1,6 +1,7 @@
 SELECT
     audit_id,
     event_id,
+    event_version,
     event_type,
     occurred_at,
     recorded_at,

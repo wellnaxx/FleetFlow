@@ -45,6 +45,7 @@ class PostgresAuditRepositoryTests(unittest.TestCase):
             QUERIES.audit.add,
             (
                 draft.event_id,
+                2,
                 "PackageCreated",
                 OCCURRED_AT,
                 RECORDED_AT,
@@ -165,6 +166,7 @@ class PostgresAuditRepositoryTests(unittest.TestCase):
 def _draft() -> AuditRecordDraft:
     return AuditRecordDraft(
         event_id=uuid4(),
+        event_version=2,
         event_type="PackageCreated",
         occurred_at=OCCURRED_AT,
         recorded_at=RECORDED_AT,
