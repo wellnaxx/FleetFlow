@@ -4,10 +4,11 @@ import logging
 from collections.abc import Callable
 from datetime import datetime
 
+from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.enums.user_password_change_rejection_reasons import UserPasswordChangeRejectionReason
 from src.application.enums.user_password_reset_rejection_reasons import UserPasswordResetRejectionReason
 from src.application.events.auth_events import (
-    AuthorizationDenied,
     UserPasswordChanged,
     UserPasswordChangeRejected,
     UserPasswordReset,
@@ -26,7 +27,7 @@ from src.application.exceptions.password_errors import (
     PasswordUnchangedError,
 )
 from src.application.services.auth_service import AuthService
-from src.application.services.authorization_service import AuthorizationService
+from src.application.services.authorization_service import AuthorizationService, record_authorization_denied
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.application.use_cases.base.event_mixin import ApplicationEventRecorderMixin
 from src.domain.enums.auth import Permission
@@ -102,13 +103,13 @@ class ChangePasswordUseCase(AuthorizedUseCase[None], ApplicationEventRecorderMix
             try:
                 self._require_admin()
             except PermissionError:
-                self._record_event(
-                    AuthorizationDenied(
-                        user_id=self._current_user_id(),
-                        username=target_username,
-                        required_permissions=(Permission.ADMIN_USER,),
-                        occurred_at=occurred_at,
-                    )
+                record_authorization_denied(
+                    self,
+                    required_permissions=(Permission.ADMIN_USER,),
+                    operation=AuthorizationOperation.USER_RESET_PASSWORD,
+                    target_resource_type=AuditResourceType.USER,
+                    target_resource_id=self._target_user_id(target_username),
+                    occurred_at=occurred_at,
                 )
                 raise
             try:
@@ -133,24 +134,24 @@ class ChangePasswordUseCase(AuthorizedUseCase[None], ApplicationEventRecorderMix
         try:
             self._require_authenticated()
         except PermissionError:
-            self._record_event(
-                AuthorizationDenied(
-                    user_id=None,
-                    username=target_username,
-                    required_permissions=(Permission.AUTHENTICATED,),
-                    occurred_at=occurred_at,
-                )
+            record_authorization_denied(
+                self,
+                required_permissions=(Permission.AUTHENTICATED,),
+                operation=AuthorizationOperation.USER_CHANGE_PASSWORD,
+                target_resource_type=AuditResourceType.USER,
+                target_resource_id=self._target_user_id(target_username),
+                occurred_at=occurred_at,
             )
             raise
 
         if not self._is_current_user(target_username) and not self.authz.has(Permission.ADMIN_USER):
-            self._record_event(
-                AuthorizationDenied(
-                    user_id=self._current_user_id(),
-                    username=target_username,
-                    required_permissions=(Permission.ADMIN_USER,),
-                    occurred_at=occurred_at,
-                )
+            record_authorization_denied(
+                self,
+                required_permissions=(Permission.ADMIN_USER,),
+                operation=AuthorizationOperation.USER_CHANGE_PASSWORD,
+                target_resource_type=AuditResourceType.USER,
+                target_resource_id=self._target_user_id(target_username),
+                occurred_at=occurred_at,
             )
             raise PermissionError("Cannot change another user's password.")
 
@@ -197,13 +198,13 @@ class ChangePasswordUseCase(AuthorizedUseCase[None], ApplicationEventRecorderMix
         try:
             self._require_authenticated()
         except PermissionError:
-            self._record_event(
-                AuthorizationDenied(
-                    user_id=None,
-                    username=username,
-                    required_permissions=(Permission.AUTHENTICATED,),
-                    occurred_at=occurred_at,
-                )
+            record_authorization_denied(
+                self,
+                required_permissions=(Permission.AUTHENTICATED,),
+                operation=AuthorizationOperation.USER_CHANGE_PASSWORD,
+                target_resource_type=AuditResourceType.USER,
+                target_resource_id=self._current_user_id(),
+                occurred_at=occurred_at,
             )
             raise
 
@@ -225,13 +226,13 @@ class ChangePasswordUseCase(AuthorizedUseCase[None], ApplicationEventRecorderMix
             raise
 
         if not self._is_current_user(current_username):
-            self._record_event(
-                AuthorizationDenied(
-                    user_id=self._current_user_id(),
-                    username=current_username,
-                    required_permissions=(Permission.AUTHENTICATED,),
-                    occurred_at=occurred_at,
-                )
+            record_authorization_denied(
+                self,
+                required_permissions=(Permission.ADMIN_USER,),
+                operation=AuthorizationOperation.USER_CHANGE_PASSWORD,
+                target_resource_type=AuditResourceType.USER,
+                target_resource_id=self._current_user_id(),
+                occurred_at=occurred_at,
             )
             raise PermissionError("Username does not match authenticated user.")
 
@@ -273,6 +274,10 @@ class ChangePasswordUseCase(AuthorizedUseCase[None], ApplicationEventRecorderMix
         """Return the authenticated principal user id, if any."""
         current_user = self.authz.current_user
         return current_user.user_id if current_user is not None else None
+
+    def _target_user_id(self, username: str) -> int | None:
+        """Return the canonical id when the target is the current user."""
+        return self._current_user_id() if self._is_current_user(username) else None
 
     def _require_authenticated(self) -> None:
         if self.authz.current_user is None:

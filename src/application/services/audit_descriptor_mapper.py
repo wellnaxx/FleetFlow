@@ -430,12 +430,11 @@ def map_event_to_audit_descriptor(event: Event) -> AuditDescriptor:
             )
         case AuthorizationDenied():
             return AuditDescriptor(
-                resource_type=AuditResourceType.AUTHORIZATION,
-                resource_id=_optional_id(event.user_id),
+                resource_type=event.target_resource_type,
+                resource_id=event.target_resource_id,
                 action=AuditAction.AUTHORIZATION_DENIED,
                 payload_json={
-                    "user_id": _optional_id(event.user_id),
-                    "username": event.username,
+                    "attempted_operation": event.attempted_operation.value,
                     "required_permissions": [permission.name for permission in event.required_permissions],
                 },
             )

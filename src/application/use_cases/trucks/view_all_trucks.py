@@ -1,5 +1,7 @@
 """Use case for listing fleet trucks."""
 
+from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.entities.truck import Truck
@@ -20,7 +22,12 @@ class ViewAllTrucksUseCase(AuthorizedUseCase[list[Truck]]):
         super().__init__(authz)
         self._vehicles = vehicles
 
-    @requires(Permission.TRUCK_VIEW)
+    @requires(
+        Permission.TRUCK_VIEW,
+        operation=AuthorizationOperation.TRUCK_LIST,
+        target_resource_type=AuditResourceType.TRUCK,
+        target_resource_id_resolver=None,
+    )
     def execute(self) -> list[Truck]:
         """Return the current fleet listing.
 

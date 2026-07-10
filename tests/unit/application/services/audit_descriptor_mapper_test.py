@@ -5,6 +5,7 @@ from datetime import datetime
 
 from src.application.enums.audit_actions import AuditAction
 from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.enums.token_revocation_reasons import TokenRevocationReason
 from src.application.enums.user_login_rejection_reasons import UserLoginRejectionReason
 from src.application.enums.user_password_change_rejection_reasons import UserPasswordChangeRejectionReason
@@ -367,13 +368,14 @@ class AuditDescriptorMapperTests(unittest.TestCase):
             ),
             (
                 AuthorizationDenied(
-                    user_id=1,
-                    username="manager",
+                    attempted_operation=AuthorizationOperation.ROUTE_REMOVE,
+                    target_resource_type=AuditResourceType.ROUTE,
+                    target_resource_id="30",
                     required_permissions=(Permission.ADMIN_USER,),
                     occurred_at=NOW,
                 ),
-                AuditResourceType.AUTHORIZATION,
-                "1",
+                AuditResourceType.ROUTE,
+                "30",
                 AuditAction.AUTHORIZATION_DENIED,
             ),
             (
@@ -623,14 +625,15 @@ class AuditDescriptorMapperTests(unittest.TestCase):
     def test_serializes_authorization_denied_permissions_by_name(self) -> None:
         descriptor = map_event_to_audit_descriptor(
             AuthorizationDenied(
-                user_id=None,
-                username=None,
+                attempted_operation=AuthorizationOperation.WORLD_STATE_IMPORT,
+                target_resource_type=AuditResourceType.WORLD_STATE,
+                target_resource_id=None,
                 required_permissions=(Permission.ADMIN_USER, Permission.APP_LOAD_STATE),
                 occurred_at=NOW,
             )
         )
 
-        self.assertEqual(descriptor.resource_type, AuditResourceType.AUTHORIZATION)
+        self.assertEqual(descriptor.resource_type, AuditResourceType.WORLD_STATE)
         self.assertIsNone(descriptor.resource_id)
         self.assertEqual(descriptor.payload_json["required_permissions"], ["ADMIN_USER", "APP_LOAD_STATE"])
 

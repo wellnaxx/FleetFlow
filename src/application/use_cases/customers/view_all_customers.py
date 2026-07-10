@@ -1,5 +1,7 @@
 """Use case for listing customers."""
 
+from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.application.use_cases.pagination import (
@@ -25,7 +27,12 @@ class ViewAllCustomersUseCase(AuthorizedUseCase[PageResult[Customer]]):
         super().__init__(authz)
         self._customers = customers
 
-    @requires(Permission.CUSTOMER_VIEW)
+    @requires(
+        Permission.CUSTOMER_VIEW,
+        operation=AuthorizationOperation.CUSTOMER_LIST,
+        target_resource_type=AuditResourceType.CUSTOMER,
+        target_resource_id_resolver=None,
+    )
     def execute(self, query: PageQuery = PageQuery()) -> PageResult[Customer]:
         """Return all persisted customers.
 

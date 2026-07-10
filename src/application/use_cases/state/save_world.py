@@ -1,9 +1,13 @@
 """Use case for saving runtime world state to persistence."""
 
-import logging
-from collections.abc import Callable
-from datetime import datetime
+from __future__ import annotations
 
+import logging
+from datetime import datetime
+from typing import TYPE_CHECKING
+
+from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.enums.world_state_failure_reasons import WorldStateFailureReason
 from src.application.events.world_state_events import WorldStateExported, WorldStateExportFailed
 from src.application.exceptions.application_errors import ValidationError
@@ -14,10 +18,19 @@ from src.application.use_cases.base.event_mixin import ApplicationEventRecorderM
 from src.application.use_cases.state.path_validation import validate_world_state_path
 from src.application.value_objects.world_state_entity_counts import WorldStateEntityCounts
 from src.domain.enums.auth import Permission
-from src.ports.output.world_state_gateway import WorldStateGatewayPort
-from src.ports.output.world_state_persistence import WorldStatePersistencePort
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from src.ports.output.world_state_gateway import WorldStateGatewayPort
+    from src.ports.output.world_state_persistence import WorldStatePersistencePort
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_path_target_id(_self: SaveWorldStateUseCase, path: str) -> str | None:
+    """Resolve the audit target resource id for a world state export attempt."""
+    return path.strip() or None
 
 
 class SaveWorldStateUseCase(AuthorizedUseCase[str], ApplicationEventRecorderMixin):
@@ -46,7 +59,12 @@ class SaveWorldStateUseCase(AuthorizedUseCase[str], ApplicationEventRecorderMixi
 
         self._pending_events = []
 
-    @requires(Permission.APP_SAVE_STATE)
+    @requires(
+        Permission.APP_SAVE_STATE,
+        operation=AuthorizationOperation.WORLD_STATE_EXPORT,
+        target_resource_type=AuditResourceType.WORLD_STATE,
+        target_resource_id_resolver=_resolve_path_target_id,
+    )
     def execute(self, path: str) -> str:
         """Build a snapshot and write it to persistence.
 

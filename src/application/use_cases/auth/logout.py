@@ -4,10 +4,12 @@ import logging
 from collections.abc import Callable
 from datetime import datetime
 
+from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.enums.token_revocation_reasons import TokenRevocationReason
-from src.application.events.auth_events import AuthorizationDenied, UserSessionEnded, UserTokensRevoked
+from src.application.events.auth_events import UserSessionEnded, UserTokensRevoked
 from src.application.services.auth_service import AuthService
-from src.application.services.authorization_service import AuthorizationService
+from src.application.services.authorization_service import AuthorizationService, record_authorization_denied
 from src.application.use_cases.base.base_use_case import BaseUseCase
 from src.application.use_cases.base.event_mixin import ApplicationEventRecorderMixin
 from src.domain.enums.auth import Permission
@@ -52,25 +54,25 @@ class LogoutUseCase(BaseUseCase[None], ApplicationEventRecorderMixin):
 
         current_user = self._authz.current_user
         if current_user is None:
-            self._record_event(
-                AuthorizationDenied(
-                    user_id=None,
-                    username=None,
-                    required_permissions=(Permission.AUTHENTICATED,),
-                    occurred_at=occurred_at,
-                )
+            record_authorization_denied(
+                self,
+                required_permissions=(Permission.AUTHENTICATED,),
+                operation=AuthorizationOperation.SESSION_END,
+                target_resource_type=AuditResourceType.USER,
+                target_resource_id=None,
+                occurred_at=occurred_at,
             )
             raise PermissionError("Unauthenticated")
 
         username = current_user.username
         if not username.strip():
-            self._record_event(
-                AuthorizationDenied(
-                    user_id=current_user.user_id,
-                    username=username,
-                    required_permissions=(Permission.AUTHENTICATED,),
-                    occurred_at=occurred_at,
-                )
+            record_authorization_denied(
+                self,
+                required_permissions=(Permission.AUTHENTICATED,),
+                operation=AuthorizationOperation.SESSION_END,
+                target_resource_type=AuditResourceType.USER,
+                target_resource_id=current_user.user_id,
+                occurred_at=occurred_at,
             )
             raise PermissionError("Authenticated user has no username.")
 

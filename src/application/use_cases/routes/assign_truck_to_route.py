@@ -6,6 +6,8 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.exceptions.application_errors import ConflictError, NotFoundError
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
@@ -22,6 +24,16 @@ if TYPE_CHECKING:
     from src.ports.output.route_repository import RouteRepositoryPort
     from src.ports.output.unit_of_work import UnitOfWorkPort
     from src.ports.output.vehicle_manager import VehicleManagerPort
+
+
+def _resolve_route_target_id(
+    _self: AssignTruckToRouteUseCase,
+    truck_id: int,  # noqa: ARG001
+    route_id: int,
+    now: datetime,  # noqa: ARG001
+) -> int:
+    """Resolve the audit target resource id for a truck-to-route assignment attempt."""
+    return route_id
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,7 +85,12 @@ class AssignTruckToRouteUseCase(AuthorizedUseCase[AssignTruckToRouteResult]):
         self._vehicle_manager = vehicle_manager
         self._unit_of_work = unit_of_work
 
-    @requires(Permission.ROUTE_ASSIGN_TRUCK)
+    @requires(
+        Permission.ROUTE_ASSIGN_TRUCK,
+        operation=AuthorizationOperation.ROUTE_ASSIGN_TRUCK,
+        target_resource_type=AuditResourceType.ROUTE,
+        target_resource_id_resolver=_resolve_route_target_id,
+    )
     def execute(self, truck_id: int, route_id: int, now: datetime) -> AssignTruckToRouteResult:
         """Assign a truck to a route.
 

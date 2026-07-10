@@ -3,9 +3,15 @@ from datetime import datetime
 from typing import Any
 from unittest.mock import patch
 
+from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.events.auth_events import AuthorizationDenied
 from src.application.models.current_user_principal import CurrentUserPrincipal
-from src.application.services.authorization_service import AuthorizationService, requires, requires_all
+from src.application.services.authorization_service import (
+    AuthorizationService,
+    requires,
+    requires_all,
+)
 from src.application.use_cases.base.event_mixin import ApplicationEventRecorderMixin
 from src.domain.enums.auth import Permission, Role
 
@@ -24,6 +30,16 @@ def _user(role: Role) -> CurrentUserPrincipal:
 EMPTY_ROLE_PERMISSIONS: dict[Role, set[Permission]] = {}
 MANAGER_CAN_CREATE_PACKAGES: dict[Role, set[Permission]] = {Role.MANAGER: {Permission.PACKAGE_CREATE}}
 MANAGER_NO_PERMISSIONS: dict[Role, set[Permission]] = {Role.MANAGER: set()}
+
+
+def _resolve_route_revision(
+    _target: Any,
+    route_id: int,
+    *,
+    revision: int = 0,
+) -> str:
+    """Build a deterministic target id from decorated method arguments."""
+    return f"{route_id}:{revision}"
 
 
 class Authz_Should(unittest.TestCase):
@@ -52,7 +68,12 @@ class Authz_Should(unittest.TestCase):
             def __init__(self) -> None:
                 self.authz = AuthorizationService(_user(Role.MANAGER))
 
-            @requires(Permission.ROUTE_REMOVE)
+            @requires(
+                Permission.ROUTE_REMOVE,
+                operation=AuthorizationOperation.ROUTE_REMOVE,
+                target_resource_type=AuditResourceType.ROUTE,
+                target_resource_id_resolver=None,
+            )
             def do_work(self, a: Any, b: int = 0, *, k: Any = None) -> str:
                 calls["args"] = (a, b, k)
                 return "ok"
@@ -70,7 +91,12 @@ class Authz_Should(unittest.TestCase):
             def __init__(self) -> None:
                 self.authz = AuthorizationService(None)
 
-            @requires(Permission.PACKAGE_CREATE)
+            @requires(
+                Permission.PACKAGE_CREATE,
+                operation=AuthorizationOperation.PACKAGE_CREATE,
+                target_resource_type=AuditResourceType.PACKAGE,
+                target_resource_id_resolver=None,
+            )
             def action(self) -> str:  # pragma: no cover - name only used for metadata
                 return "x"
 
@@ -82,7 +108,12 @@ class Authz_Should(unittest.TestCase):
             def __init__(self) -> None:
                 self.authz = AuthorizationService(_user(Role.MANAGER))
 
-            @requires(Permission.PACKAGE_CREATE)
+            @requires(
+                Permission.PACKAGE_CREATE,
+                operation=AuthorizationOperation.PACKAGE_CREATE,
+                target_resource_type=AuditResourceType.PACKAGE,
+                target_resource_id_resolver=None,
+            )
             def action(self) -> str:
                 return "x"
 
@@ -102,7 +133,12 @@ class Authz_Should(unittest.TestCase):
                 self._clock = lambda: occurred_at
                 self._pending_events = []
 
-            @requires(Permission.PACKAGE_CREATE)
+            @requires(
+                Permission.PACKAGE_CREATE,
+                operation=AuthorizationOperation.PACKAGE_CREATE,
+                target_resource_type=AuditResourceType.PACKAGE,
+                target_resource_id_resolver=None,
+            )
             def action(self) -> str:
                 return "x"
 
@@ -114,8 +150,9 @@ class Authz_Should(unittest.TestCase):
         event = target.pending_events[0]
         self.assertIsInstance(event, AuthorizationDenied)
         assert isinstance(event, AuthorizationDenied)
-        self.assertIsNone(event.user_id)
-        self.assertIsNone(event.username)
+        self.assertIs(event.attempted_operation, AuthorizationOperation.PACKAGE_CREATE)
+        self.assertIs(event.target_resource_type, AuditResourceType.PACKAGE)
+        self.assertIsNone(event.target_resource_id)
         self.assertEqual(event.required_permissions, (Permission.PACKAGE_CREATE,))
         self.assertEqual(event.occurred_at, occurred_at)
 
@@ -128,7 +165,12 @@ class Authz_Should(unittest.TestCase):
                 self._clock = lambda: occurred_at
                 self._pending_events = []
 
-            @requires(Permission.PACKAGE_CREATE)
+            @requires(
+                Permission.PACKAGE_CREATE,
+                operation=AuthorizationOperation.PACKAGE_CREATE,
+                target_resource_type=AuditResourceType.PACKAGE,
+                target_resource_id_resolver=None,
+            )
             def action(self) -> str:
                 return "x"
 
@@ -143,10 +185,40 @@ class Authz_Should(unittest.TestCase):
         event = target.pending_events[0]
         self.assertIsInstance(event, AuthorizationDenied)
         assert isinstance(event, AuthorizationDenied)
-        self.assertEqual(event.user_id, 1)
-        self.assertEqual(event.username, "test.user")
+        self.assertIs(event.attempted_operation, AuthorizationOperation.PACKAGE_CREATE)
+        self.assertIs(event.target_resource_type, AuditResourceType.PACKAGE)
+        self.assertIsNone(event.target_resource_id)
         self.assertEqual(event.required_permissions, (Permission.PACKAGE_CREATE,))
         self.assertEqual(event.occurred_at, occurred_at)
+
+    def test_requires_resolves_and_normalizes_denied_target_id(self) -> None:
+        class Target(ApplicationEventRecorderMixin):
+            def __init__(self) -> None:
+                self.authz = AuthorizationService(_user(Role.MANAGER))
+                self._pending_events = []
+
+            @requires(
+                Permission.ROUTE_REMOVE,
+                operation=AuthorizationOperation.ROUTE_REMOVE,
+                target_resource_type=AuditResourceType.ROUTE,
+                target_resource_id_resolver=_resolve_route_revision,
+            )
+            def action(self, route_id: int, *, revision: int = 0) -> None:
+                raise AssertionError(f"Denied action unexpectedly ran for {route_id}:{revision}.")
+
+        target = Target()
+
+        with (
+            patch("src.application.services.authorization_service.ROLE_PERMISSIONS", MANAGER_NO_PERMISSIONS),
+            self.assertRaisesRegex(PermissionError, "Missing permission: ROUTE_REMOVE"),
+        ):
+            target.action(42, revision=3)
+
+        event = target.pending_events[0]
+        assert isinstance(event, AuthorizationDenied)
+        self.assertIs(event.attempted_operation, AuthorizationOperation.ROUTE_REMOVE)
+        self.assertIs(event.target_resource_type, AuditResourceType.ROUTE)
+        self.assertEqual(event.target_resource_id, "42:3")
 
     def test_requires_all_allows_when_all_present(self) -> None:
         needed = {Permission.PACKAGE_CREATE, Permission.ROUTE_REMOVE}
@@ -155,7 +227,13 @@ class Authz_Should(unittest.TestCase):
             def __init__(self) -> None:
                 self.authz = AuthorizationService(_user(Role.MANAGER))
 
-            @requires_all(Permission.PACKAGE_CREATE, Permission.ROUTE_REMOVE)
+            @requires_all(
+                Permission.PACKAGE_CREATE,
+                Permission.ROUTE_REMOVE,
+                operation=AuthorizationOperation.PACKAGE_CREATE,
+                target_resource_type=AuditResourceType.PACKAGE,
+                target_resource_id_resolver=None,
+            )
             def go(self) -> int:
                 return 42
 
@@ -169,7 +247,13 @@ class Authz_Should(unittest.TestCase):
             def __init__(self) -> None:
                 self.authz = AuthorizationService(None)
 
-            @requires_all(Permission.PACKAGE_CREATE, Permission.ROUTE_REMOVE)
+            @requires_all(
+                Permission.PACKAGE_CREATE,
+                Permission.ROUTE_REMOVE,
+                operation=AuthorizationOperation.PACKAGE_CREATE,
+                target_resource_type=AuditResourceType.PACKAGE,
+                target_resource_id_resolver=None,
+            )
             def go(self) -> int:
                 return 1
 
@@ -181,7 +265,13 @@ class Authz_Should(unittest.TestCase):
             def __init__(self) -> None:
                 self.authz = AuthorizationService(_user(Role.MANAGER))
 
-            @requires_all(Permission.PACKAGE_CREATE, Permission.ROUTE_REMOVE)
+            @requires_all(
+                Permission.PACKAGE_CREATE,
+                Permission.ROUTE_REMOVE,
+                operation=AuthorizationOperation.PACKAGE_CREATE,
+                target_resource_type=AuditResourceType.PACKAGE,
+                target_resource_id_resolver=None,
+            )
             def go(self) -> int:
                 return 1
 
@@ -204,7 +294,13 @@ class Authz_Should(unittest.TestCase):
                 self._clock = lambda: occurred_at
                 self._pending_events = []
 
-            @requires_all(Permission.PACKAGE_CREATE, Permission.ROUTE_REMOVE)
+            @requires_all(
+                Permission.PACKAGE_CREATE,
+                Permission.ROUTE_REMOVE,
+                operation=AuthorizationOperation.PACKAGE_CREATE,
+                target_resource_type=AuditResourceType.PACKAGE,
+                target_resource_id_resolver=None,
+            )
             def go(self) -> int:
                 return 1
 
@@ -222,8 +318,9 @@ class Authz_Should(unittest.TestCase):
         event = target.pending_events[0]
         self.assertIsInstance(event, AuthorizationDenied)
         assert isinstance(event, AuthorizationDenied)
-        self.assertEqual(event.user_id, 1)
-        self.assertEqual(event.username, "test.user")
+        self.assertIs(event.attempted_operation, AuthorizationOperation.PACKAGE_CREATE)
+        self.assertIs(event.target_resource_type, AuditResourceType.PACKAGE)
+        self.assertIsNone(event.target_resource_id)
         self.assertEqual(event.required_permissions, (Permission.ROUTE_REMOVE,))
         self.assertEqual(event.occurred_at, occurred_at)
 
@@ -236,7 +333,13 @@ class Authz_Should(unittest.TestCase):
                 self._clock = lambda: occurred_at
                 self._pending_events = []
 
-            @requires_all(Permission.PACKAGE_CREATE, Permission.ROUTE_REMOVE)
+            @requires_all(
+                Permission.PACKAGE_CREATE,
+                Permission.ROUTE_REMOVE,
+                operation=AuthorizationOperation.PACKAGE_CREATE,
+                target_resource_type=AuditResourceType.PACKAGE,
+                target_resource_id_resolver=None,
+            )
             def go(self) -> int:
                 return 1
 
@@ -248,10 +351,43 @@ class Authz_Should(unittest.TestCase):
         event = target.pending_events[0]
         self.assertIsInstance(event, AuthorizationDenied)
         assert isinstance(event, AuthorizationDenied)
-        self.assertIsNone(event.user_id)
-        self.assertIsNone(event.username)
+        self.assertIs(event.attempted_operation, AuthorizationOperation.PACKAGE_CREATE)
+        self.assertIs(event.target_resource_type, AuditResourceType.PACKAGE)
+        self.assertIsNone(event.target_resource_id)
         self.assertEqual(
             event.required_permissions,
             (Permission.PACKAGE_CREATE, Permission.ROUTE_REMOVE),
         )
         self.assertEqual(event.occurred_at, occurred_at)
+
+    def test_requires_all_resolves_target_and_records_only_missing_permissions(self) -> None:
+        class Target(ApplicationEventRecorderMixin):
+            def __init__(self) -> None:
+                self.authz = AuthorizationService(_user(Role.MANAGER))
+                self._pending_events = []
+
+            @requires_all(
+                Permission.PACKAGE_CREATE,
+                Permission.ROUTE_REMOVE,
+                operation=AuthorizationOperation.ROUTE_REMOVE,
+                target_resource_type=AuditResourceType.ROUTE,
+                target_resource_id_resolver=_resolve_route_revision,
+            )
+            def action(self, route_id: int, *, revision: int = 0) -> None:
+                raise AssertionError(f"Denied action unexpectedly ran for {route_id}:{revision}.")
+
+        target = Target()
+
+        with (
+            patch(
+                "src.application.services.authorization_service.ROLE_PERMISSIONS",
+                MANAGER_CAN_CREATE_PACKAGES,
+            ),
+            self.assertRaisesRegex(PermissionError, "Missing permissions: ROUTE_REMOVE"),
+        ):
+            target.action(7, revision=2)
+
+        event = target.pending_events[0]
+        assert isinstance(event, AuthorizationDenied)
+        self.assertEqual(event.target_resource_id, "7:2")
+        self.assertEqual(event.required_permissions, (Permission.ROUTE_REMOVE,))

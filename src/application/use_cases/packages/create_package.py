@@ -2,6 +2,8 @@
 
 import logging
 
+from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.application.services.customer_service import CustomerService
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
@@ -30,7 +32,12 @@ class CreatePackageUseCase(AuthorizedUseCase[DeliveryPackage]):
         self._customers = customers
         self._packages = packages
 
-    @requires(Permission.PACKAGE_CREATE)
+    @requires(
+        Permission.PACKAGE_CREATE,
+        operation=AuthorizationOperation.PACKAGE_CREATE,
+        target_resource_type=AuditResourceType.PACKAGE,
+        target_resource_id_resolver=None,
+    )
     def execute(
         self, start: str, end: str, weight: float, name: str, email: str = "", phone: str = ""
     ) -> DeliveryPackage:

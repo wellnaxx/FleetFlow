@@ -1,12 +1,28 @@
 """Use case for finding trucks suitable for a route."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.exceptions.application_errors import NotFoundError
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.entities.truck import Truck
 from src.domain.enums.auth import Permission
-from src.ports.output.route_repository import RouteRepositoryPort
-from src.ports.output.vehicle_manager import VehicleManagerPort
+
+if TYPE_CHECKING:
+    from src.ports.output.route_repository import RouteRepositoryPort
+    from src.ports.output.vehicle_manager import VehicleManagerPort
+
+
+def _resolve_route_target_id(
+    _self: FindSuitableTrucksForRouteUseCase,
+    route_id: int,
+) -> str | None:
+    """Resolve the audit target resource id for a finding suitable trucks for a route attempt."""
+    return str(route_id)
 
 
 class FindSuitableTrucksForRouteUseCase(AuthorizedUseCase[list[Truck]]):
@@ -26,7 +42,12 @@ class FindSuitableTrucksForRouteUseCase(AuthorizedUseCase[list[Truck]]):
         self._routes = routes
         self._vehicles = vehicles
 
-    @requires(Permission.ROUTE_FIND_TRUCK_FOR)
+    @requires(
+        Permission.ROUTE_FIND_TRUCK_FOR,
+        operation=AuthorizationOperation.ROUTE_FIND_SUITABLE_TRUCKS,
+        target_resource_type=AuditResourceType.ROUTE,
+        target_resource_id_resolver=_resolve_route_target_id,
+    )
     def execute(self, route_id: int) -> list[Truck]:
         """Return trucks that are currently suitable for a route.
 

@@ -12,6 +12,7 @@ class AuditResourceType(StrEnum):
     event.
     """
 
+    AUDIT_LOG = "audit_log"
     CUSTOMER = "customer"
     PACKAGE = "package"
     ROUTE = "route"

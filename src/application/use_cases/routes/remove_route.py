@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.exceptions.application_errors import NotFoundError
 from src.application.services.authorization_service import AuthorizationService, requires_all
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
@@ -25,6 +27,14 @@ if TYPE_CHECKING:
     from src.domain.entities.truck import Truck, TruckStateSnapshot
     from src.ports.output.route_repository import RouteRepositoryPort
     from src.ports.output.unit_of_work import UnitOfWorkPort
+
+
+def _resolve_route_target_id(
+    _self: RemoveRouteUseCase,
+    route_id: int,
+) -> str | None:
+    """Resolve the audit target resource id for a route-removal attempt."""
+    return str(route_id)
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,7 +70,13 @@ class RemoveRouteUseCase(AuthorizedUseCase[DeliveryRoute]):
         self._unit_of_work = unit_of_work
         self._clock = clock
 
-    @requires_all(Permission.ROUTE_REMOVE, Permission.ROUTE_VIEW)
+    @requires_all(
+        Permission.ROUTE_REMOVE,
+        Permission.ROUTE_VIEW,
+        operation=AuthorizationOperation.ROUTE_REMOVE,
+        target_resource_type=AuditResourceType.ROUTE,
+        target_resource_id_resolver=_resolve_route_target_id,
+    )
     def execute(self, route_id: int) -> DeliveryRoute:
         """Remove a route by id.
 

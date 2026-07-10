@@ -1,5 +1,7 @@
 """Use case for listing unassigned packages."""
 
+from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.application.use_cases.pagination import (
@@ -25,7 +27,12 @@ class ViewUnassignedPackagesUseCase(AuthorizedUseCase[PageResult[DeliveryPackage
         super().__init__(authz)
         self._packages = packages
 
-    @requires(Permission.PACKAGE_VIEW_UNASSIGNED)
+    @requires(
+        Permission.PACKAGE_VIEW_UNASSIGNED,
+        operation=AuthorizationOperation.PACKAGE_LIST_UNASSIGNED,
+        target_resource_type=AuditResourceType.PACKAGE,
+        target_resource_id_resolver=None,
+    )
     def execute(self, query: PageQuery = PageQuery()) -> PageResult[DeliveryPackage]:
         """Return all packages that are currently unassigned.
 
@@ -41,9 +48,7 @@ class ViewUnassignedPackagesUseCase(AuthorizedUseCase[PageResult[DeliveryPackage
         return execute_page_query(
             query=query,
             list_all=self._packages.list_unassigned,
-            list_page=lambda limit, offset: self._packages.list_unassigned_page(
-                limit=limit, offset=offset
-            ),
+            list_page=lambda limit, offset: self._packages.list_unassigned_page(limit=limit, offset=offset),
             list_page_with_total=lambda limit, offset: self._packages.list_unassigned_page_with_total(
                 limit=limit, offset=offset
             ),

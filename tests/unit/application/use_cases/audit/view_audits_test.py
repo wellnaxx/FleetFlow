@@ -8,6 +8,7 @@ from uuid import UUID
 
 from src.application.enums.audit_actions import AuditAction
 from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.enums.event_sources import EventSource
 from src.application.events.auth_events import AuthorizationDenied
 from src.application.exceptions.application_errors import ValidationError
@@ -104,8 +105,9 @@ class ViewAuditLogsUseCaseShould(unittest.TestCase):
 
         self.assertEqual(repo.list_all_calls, [])
         event = only_authorization_denied_event(use_case)
-        self.assertEqual(event.user_id, 2)
-        self.assertEqual(event.username, "employee")
+        self.assertIs(event.attempted_operation, AuthorizationOperation.AUDIT_LOG_VIEW)
+        self.assertIs(event.target_resource_type, AuditResourceType.USER)
+        self.assertEqual(event.target_resource_id, "99")
         self.assertEqual(event.required_permissions, (Permission.AUDIT_VIEW,))
         self.assertEqual(event.occurred_at, FIXED_NOW)
 
@@ -119,8 +121,9 @@ class ViewAuditLogsUseCaseShould(unittest.TestCase):
 
         self.assertEqual(repo.list_all_calls, [])
         event = only_authorization_denied_event(use_case)
-        self.assertEqual(event.user_id, 2)
-        self.assertEqual(event.username, "employee")
+        self.assertIs(event.attempted_operation, AuthorizationOperation.AUDIT_LOG_VIEW)
+        self.assertIs(event.target_resource_type, AuditResourceType.USER)
+        self.assertEqual(event.target_resource_id, "manager")
         self.assertEqual(event.required_permissions, (Permission.AUDIT_VIEW,))
 
     def test_reject_unauthenticated_query(self) -> None:
@@ -132,8 +135,9 @@ class ViewAuditLogsUseCaseShould(unittest.TestCase):
 
         self.assertEqual(repo.list_all_calls, [])
         event = only_authorization_denied_event(use_case)
-        self.assertIsNone(event.user_id)
-        self.assertIsNone(event.username)
+        self.assertIs(event.attempted_operation, AuthorizationOperation.AUDIT_LOG_VIEW)
+        self.assertIs(event.target_resource_type, AuditResourceType.AUDIT_LOG)
+        self.assertIsNone(event.target_resource_id)
         self.assertEqual(event.required_permissions, (Permission.AUDIT_VIEW,))
 
     def test_reject_invalid_pagination_before_repository_query(self) -> None:
@@ -216,6 +220,7 @@ def make_audit_record(
     """Build a valid audit record for use-case tests."""
     return AuditRecord(
         event_id=UUID(f"11111111-1111-1111-1111-{audit_id:012d}"),
+        event_version=2,
         event_type="PackageCreated",
         occurred_at=datetime(2026, 1, 1, 12, 0),
         recorded_at=datetime(2026, 1, 1, 12, 0, 1),

@@ -1,10 +1,14 @@
 """Use case for assigning one or more packages to a route."""
 
+from __future__ import annotations
+
 import logging
-from collections.abc import Callable
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from src.adapters.driven.persistence.database.errors import DatabaseError
+from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.exceptions.application_errors import NotFoundError
 from src.application.results.assign_packages_to_route_result import (
     AssignPackagesToRouteResult,
@@ -13,14 +17,27 @@ from src.application.results.assign_packages_to_route_result import (
 )
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
-from src.domain.entities.delivery_package import DeliveryPackage
-from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.enums.auth import Permission
 from src.domain.exceptions import DomainConflictError, DomainValidationError
-from src.ports.output.package_repository import PackageRepositoryPort
-from src.ports.output.route_repository import RouteRepositoryPort
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from src.domain.entities.delivery_package import DeliveryPackage
+    from src.domain.entities.delivery_route import DeliveryRoute
+    from src.ports.output.package_repository import PackageRepositoryPort
+    from src.ports.output.route_repository import RouteRepositoryPort
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_route_target_id(
+    _self: AssignPackagesToRouteUseCase,
+    route_id: int,
+    package_ids: list[int],  # noqa: ARG001
+) -> int | None:
+    """Resolve the audit target resource id for a package-assignment-to-route attempt."""
+    return route_id
 
 
 class AssignPackagesToRouteUseCase(AuthorizedUseCase[AssignPackagesToRouteResult]):
@@ -46,7 +63,12 @@ class AssignPackagesToRouteUseCase(AuthorizedUseCase[AssignPackagesToRouteResult
         self._packages = packages
         self._clock = clock
 
-    @requires(Permission.ROUTE_ASSIGN_PACKAGE)
+    @requires(
+        Permission.ROUTE_ASSIGN_PACKAGE,
+        operation=AuthorizationOperation.ROUTE_ASSIGN_PACKAGES,
+        target_resource_type=AuditResourceType.ROUTE,
+        target_resource_id_resolver=_resolve_route_target_id,
+    )
     def execute(self, route_id: int, package_ids: list[int]) -> AssignPackagesToRouteResult:
         """Assign packages to the requested route.
 
@@ -122,9 +144,7 @@ class AssignPackagesToRouteUseCase(AuthorizedUseCase[AssignPackagesToRouteResult
             return None
 
         if package.route is None:
-            message = (
-                f"Package {package.package_id} has route_id {package.route_id} but route is not hydrated."
-            )
+            message = f"Package {package.package_id} has route_id {package.route_id} but route is not hydrated."
         else:
             message = f"Package {package.package_id} is already on route {package.route_id}."
 

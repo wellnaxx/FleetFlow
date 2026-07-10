@@ -1,20 +1,36 @@
 """Use case for finding routes that can carry a package."""
 
-from collections.abc import Callable
-from datetime import datetime
+from __future__ import annotations
 
+from datetime import datetime
+from typing import TYPE_CHECKING
+
+from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.exceptions.application_errors import NotFoundError
 from src.application.results.find_suitable_packages_for_route_result import SuitableRouteForPackage
 from src.application.services.authorization_service import AuthorizationService, requires_all
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.enums.auth import Permission
 from src.domain.exceptions import DomainConflictError, DomainValidationError
-from src.ports.output.package_repository import PackageRepositoryPort
-from src.ports.output.route_repository import RouteRepositoryPort
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from src.ports.output.package_repository import PackageRepositoryPort
+    from src.ports.output.route_repository import RouteRepositoryPort
 
 
 def _sort_key(item: SuitableRouteForPackage) -> tuple[bool, datetime]:
     return (item.eta is None, item.eta or datetime.max)
+
+
+def _resolve_package_target_id(
+    _self: FindSuitableRoutesForPackageUseCase,
+    package_id: int,
+) -> int | None:
+    """Resolve the audit target resource id for a find-suitable-routes-for-package attempt."""
+    return package_id
 
 
 class FindSuitableRoutesForPackageUseCase(AuthorizedUseCase[list[SuitableRouteForPackage]]):
@@ -40,7 +56,14 @@ class FindSuitableRoutesForPackageUseCase(AuthorizedUseCase[list[SuitableRouteFo
         self._packages = packages
         self._clock = clock
 
-    @requires_all(Permission.PACKAGE_FIND_ROUTE_FOR, Permission.PACKAGE_VIEW, Permission.ROUTE_VIEW)
+    @requires_all(
+        Permission.PACKAGE_FIND_ROUTE_FOR,
+        Permission.PACKAGE_VIEW,
+        Permission.ROUTE_VIEW,
+        operation=AuthorizationOperation.PACKAGE_FIND_SUITABLE_ROUTES,
+        target_resource_type=AuditResourceType.PACKAGE,
+        target_resource_id_resolver=_resolve_package_target_id,
+    )
     def execute(self, package_id: int) -> list[SuitableRouteForPackage]:
         """Return suitable routes for a package ordered by ETA.
 

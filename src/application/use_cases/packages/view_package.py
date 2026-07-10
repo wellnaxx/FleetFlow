@@ -1,11 +1,27 @@
 """Use case for viewing one package."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.exceptions.application_errors import NotFoundError
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.enums.auth import Permission
-from src.ports.output.package_repository import PackageRepositoryPort
+
+if TYPE_CHECKING:
+    from src.ports.output.package_repository import PackageRepositoryPort
+
+
+def _resolve_package_target_id(
+    _self: ViewPackageUseCase,
+    package_id: int,
+) -> int | None:
+    """Resolve the audit target resource id for a package view attempt."""
+    return package_id
 
 
 class ViewPackageUseCase(AuthorizedUseCase[DeliveryPackage]):
@@ -21,7 +37,12 @@ class ViewPackageUseCase(AuthorizedUseCase[DeliveryPackage]):
         super().__init__(authz)
         self._packages = packages
 
-    @requires(Permission.PACKAGE_VIEW)
+    @requires(
+        Permission.PACKAGE_VIEW,
+        operation=AuthorizationOperation.PACKAGE_VIEW,
+        target_resource_type=AuditResourceType.PACKAGE,
+        target_resource_id_resolver=_resolve_package_target_id,
+    )
     def execute(self, package_id: int) -> DeliveryPackage:
         """Return one package by id.
 

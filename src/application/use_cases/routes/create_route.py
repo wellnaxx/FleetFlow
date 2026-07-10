@@ -4,6 +4,8 @@ import logging
 from collections.abc import Sequence
 from datetime import datetime
 
+from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.entities.delivery_route import DeliveryRoute
@@ -26,7 +28,12 @@ class CreateRouteUseCase(AuthorizedUseCase[DeliveryRoute]):
         super().__init__(authz)
         self._routes = routes
 
-    @requires(Permission.ROUTE_CREATE)
+    @requires(
+        Permission.ROUTE_CREATE,
+        operation=AuthorizationOperation.ROUTE_CREATE,
+        target_resource_type=AuditResourceType.ROUTE,
+        target_resource_id_resolver=None,
+    )
     def execute(self, locations: Sequence[str], departure_time: datetime | None) -> DeliveryRoute:
         """Create and persist a delivery route.
 

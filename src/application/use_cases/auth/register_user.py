@@ -1,9 +1,13 @@
 """Use case for registering a new user."""
 
-import logging
-from collections.abc import Callable
-from datetime import datetime
+from __future__ import annotations
 
+import logging
+from datetime import datetime
+from typing import TYPE_CHECKING
+
+from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.events.auth_events import UserRegistered, UserRegistrationRejected
 from src.application.exceptions.password_errors import (
     RegistrationInvalidUsernameError,
@@ -12,13 +16,30 @@ from src.application.exceptions.password_errors import (
     RegistrationUsernameAlreadyExistsError,
 )
 from src.application.models.user_record import UserRecord
-from src.application.services.auth_service import AuthService
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.application.use_cases.base.event_mixin import ApplicationEventRecorderMixin
 from src.domain.enums.auth import Permission, Role
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from src.application.services.auth_service import AuthService
+
 logger = logging.getLogger(__name__)
+
+
+def _username_resource_id(
+    _self: RegisterUserUseCase,
+    username: str,
+    role: Role,  # noqa: ARG001
+    name: str,  # noqa: ARG001
+    email: str,  # noqa: ARG001
+    phone_number: str,  # noqa: ARG001
+    password: str,  # noqa: ARG001
+) -> str | None:
+    """Resolve the audit target resource id for a registration attempt."""
+    return username.strip().lower() or None
 
 
 class RegisterUserUseCase(AuthorizedUseCase[UserRecord], ApplicationEventRecorderMixin):
@@ -43,7 +64,12 @@ class RegisterUserUseCase(AuthorizedUseCase[UserRecord], ApplicationEventRecorde
 
         self._pending_events = []
 
-    @requires(Permission.ADMIN_USER)
+    @requires(
+        Permission.ADMIN_USER,
+        operation=AuthorizationOperation.USER_REGISTER,
+        target_resource_type=AuditResourceType.USER,
+        target_resource_id_resolver=_username_resource_id,
+    )
     def execute(
         self,
         username: str,

@@ -1,5 +1,7 @@
 """Use case for listing all packages."""
 
+from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.application.use_cases.pagination import (
@@ -25,7 +27,12 @@ class ViewAllPackagesUseCase(AuthorizedUseCase[PageResult[DeliveryPackage]]):
         super().__init__(authz)
         self._packages = packages
 
-    @requires(Permission.PACKAGE_VIEW_ALL)
+    @requires(
+        Permission.PACKAGE_VIEW_ALL,
+        operation=AuthorizationOperation.PACKAGE_LIST,
+        target_resource_type=AuditResourceType.PACKAGE,
+        target_resource_id_resolver=None,
+    )
     def execute(self, query: PageQuery = PageQuery()) -> PageResult[DeliveryPackage]:
         """Return all persisted packages.
 

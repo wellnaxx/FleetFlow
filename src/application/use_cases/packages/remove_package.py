@@ -1,21 +1,37 @@
 """Use case for removing a package from runtime state."""
 
-import logging
-from collections.abc import Callable
-from datetime import datetime
+from __future__ import annotations
 
+import logging
+from datetime import datetime
+from typing import TYPE_CHECKING
+
+from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.exceptions.application_errors import NotFoundError
 from src.application.results.remove_package_result import RemovePackageResult
 from src.application.services.authorization_service import AuthorizationService, requires_all
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
-from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.enums.auth import Permission
 from src.domain.enums.package_detachment_reasons import PackageDetachmentReason
 from src.domain.exceptions import DomainConflictError, EntityNotFoundError
-from src.ports.output.package_repository import PackageRepositoryPort
-from src.ports.output.unit_of_work import UnitOfWorkPort
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from src.domain.entities.delivery_package import DeliveryPackage
+    from src.ports.output.package_repository import PackageRepositoryPort
+    from src.ports.output.unit_of_work import UnitOfWorkPort
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_package_target_id(
+    _self: RemovePackageUseCase,
+    package_id: int,
+) -> int | None:
+    """Resolve the audit target resource id for a package-removal attempt."""
+    return package_id
 
 
 class RemovePackageUseCase(AuthorizedUseCase[RemovePackageResult]):
@@ -41,7 +57,13 @@ class RemovePackageUseCase(AuthorizedUseCase[RemovePackageResult]):
         self._unit_of_work = unit_of_work
         self._clock = clock
 
-    @requires_all(Permission.PACKAGE_REMOVE, Permission.PACKAGE_VIEW)
+    @requires_all(
+        Permission.PACKAGE_REMOVE,
+        Permission.PACKAGE_VIEW,
+        operation=AuthorizationOperation.PACKAGE_REMOVE,
+        target_resource_type=AuditResourceType.PACKAGE,
+        target_resource_id_resolver=_resolve_package_target_id,
+    )
     def execute(self, package_id: int) -> RemovePackageResult:
         """Remove a package by id.
 

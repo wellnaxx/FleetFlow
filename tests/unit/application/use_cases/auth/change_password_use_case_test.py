@@ -2,6 +2,8 @@ import unittest
 from datetime import datetime
 from unittest.mock import MagicMock
 
+from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.events.auth_events import AuthorizationDenied, UserPasswordChanged, UserPasswordReset
 from src.application.exceptions.application_errors import ValidationError
 from src.application.models.user_record import UserRecord
@@ -69,6 +71,27 @@ class ChangePasswordUseCase_Should(unittest.TestCase):
 
         self.assertIn("another user's password", str(ctx.exception))
         auth.change_password.assert_not_called()
+        event = use_case.pending_events[0]
+        self.assertIsInstance(event, AuthorizationDenied)
+        assert isinstance(event, AuthorizationDenied)
+        self.assertIs(event.attempted_operation, AuthorizationOperation.USER_CHANGE_PASSWORD)
+        self.assertIs(event.target_resource_type, AuditResourceType.USER)
+        self.assertIsNone(event.target_resource_id)
+
+    def test_reset_denial_uses_current_user_id_for_self_target(self) -> None:
+        auth = MagicMock()
+        use_case = ChangePasswordUseCase(auth, employee_authz())
+
+        with self.assertRaises(PermissionError):
+            use_case.execute("employee", "NewSecret123")
+
+        auth.reset_password.assert_not_called()
+        event = use_case.pending_events[0]
+        self.assertIsInstance(event, AuthorizationDenied)
+        assert isinstance(event, AuthorizationDenied)
+        self.assertIs(event.attempted_operation, AuthorizationOperation.USER_RESET_PASSWORD)
+        self.assertIs(event.target_resource_type, AuditResourceType.USER)
+        self.assertEqual(event.target_resource_id, "2")
 
     def test_current_user_branch_uses_authenticated_principal_username(self) -> None:
         auth = MagicMock()
@@ -103,7 +126,9 @@ class ChangePasswordUseCase_Should(unittest.TestCase):
         event = use_case.pending_events[0]
         self.assertIsInstance(event, AuthorizationDenied)
         assert isinstance(event, AuthorizationDenied)
-        self.assertIsNone(event.user_id)
+        self.assertIs(event.attempted_operation, AuthorizationOperation.USER_CHANGE_PASSWORD)
+        self.assertIs(event.target_resource_type, AuditResourceType.USER)
+        self.assertIsNone(event.target_resource_id)
         self.assertEqual(event.required_permissions, (Permission.AUTHENTICATED,))
 
     def test_rejects_blank_target_username(self) -> None:

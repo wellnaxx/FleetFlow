@@ -1,5 +1,5 @@
-from src.application.services.authorization_service import AuthorizationService
 from src.application.models.current_user_principal import CurrentUserPrincipal
+from src.application.services.authorization_service import AuthorizationService
 from src.domain.enums.auth import Role
 
 

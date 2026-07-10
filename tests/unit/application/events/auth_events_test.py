@@ -4,6 +4,8 @@ import unittest
 from dataclasses import fields
 from datetime import datetime
 
+from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.enums.token_revocation_reasons import TokenRevocationReason
 from src.application.events.auth_events import (
     AuthorizationDenied,
@@ -88,8 +90,9 @@ class AuthEventShould(unittest.TestCase):
 
     def test_authorization_denial_supports_multiple_required_permissions(self) -> None:
         event = AuthorizationDenied(
-            user_id=7,
-            username="dispatcher",
+            attempted_operation=AuthorizationOperation.ROUTE_REMOVE,
+            target_resource_type=AuditResourceType.ROUTE,
+            target_resource_id="42",
             required_permissions=(
                 Permission.ROUTE_REMOVE,
                 Permission.ROUTE_VIEW,
@@ -104,3 +107,6 @@ class AuthEventShould(unittest.TestCase):
                 Permission.ROUTE_VIEW,
             ),
         )
+        self.assertIs(event.attempted_operation, AuthorizationOperation.ROUTE_REMOVE)
+        self.assertIs(event.target_resource_type, AuditResourceType.ROUTE)
+        self.assertEqual(event.target_resource_id, "42")

@@ -2,6 +2,8 @@ import unittest
 from datetime import datetime
 from unittest.mock import MagicMock
 
+from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.enums.token_revocation_reasons import TokenRevocationReason
 from src.application.events.auth_events import AuthorizationDenied, UserSessionEnded, UserTokensRevoked
 from src.application.models.current_user_principal import CurrentUserPrincipal
@@ -80,8 +82,9 @@ class LogoutUseCase_Should(unittest.TestCase):
         event = use_case.pending_events[0]
         self.assertIsInstance(event, AuthorizationDenied)
         assert isinstance(event, AuthorizationDenied)
-        self.assertIsNone(event.user_id)
-        self.assertIsNone(event.username)
+        self.assertIs(event.attempted_operation, AuthorizationOperation.SESSION_END)
+        self.assertIs(event.target_resource_type, AuditResourceType.USER)
+        self.assertIsNone(event.target_resource_id)
         self.assertEqual(event.required_permissions, (Permission.AUTHENTICATED,))
         self.assertEqual(event.occurred_at, occurred_at)
 
@@ -106,7 +109,8 @@ class LogoutUseCase_Should(unittest.TestCase):
         event = use_case.pending_events[0]
         self.assertIsInstance(event, AuthorizationDenied)
         assert isinstance(event, AuthorizationDenied)
-        self.assertEqual(event.user_id, 7)
-        self.assertEqual(event.username, "   ")
+        self.assertIs(event.attempted_operation, AuthorizationOperation.SESSION_END)
+        self.assertIs(event.target_resource_type, AuditResourceType.USER)
+        self.assertEqual(event.target_resource_id, "7")
         self.assertEqual(event.required_permissions, (Permission.AUTHENTICATED,))
         self.assertEqual(event.occurred_at, occurred_at)

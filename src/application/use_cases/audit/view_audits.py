@@ -4,10 +4,11 @@ from collections.abc import Callable
 from dataclasses import replace
 from datetime import datetime
 
-from src.application.events.auth_events import AuthorizationDenied
+from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.models.audit_log_query import AuditLogQuery
 from src.application.models.audit_record import AuditRecord
-from src.application.services.authorization_service import AuthorizationService
+from src.application.services.authorization_service import AuthorizationService, record_authorization_denied
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.application.use_cases.base.event_mixin import ApplicationEventRecorderMixin
 from src.application.use_cases.pagination import PageResult, execute_page_query
@@ -61,10 +62,13 @@ class ViewAuditLogsUseCase(AuthorizedUseCase[PageResult[AuditRecord]], Applicati
         user = self.authz.current_user
 
         if user is None:
-            self._record_authorization_denied(
-                user_id=None,
-                username=None,
-                permissions=(Permission.AUDIT_VIEW,),
+            record_authorization_denied(
+                self,
+                (Permission.AUDIT_VIEW,),
+                operation=AuthorizationOperation.AUDIT_LOG_VIEW,
+                target_resource_type=AuditResourceType.AUDIT_LOG,
+                target_resource_id=None,
+                occurred_at=self._clock(),
             )
             raise PermissionError("Unauthenticated")
 
@@ -72,18 +76,24 @@ class ViewAuditLogsUseCase(AuthorizedUseCase[PageResult[AuditRecord]], Applicati
             return self._execute_query(query)
 
         if query.filters.actor_user_id is not None and query.filters.actor_user_id != user.user_id:
-            self._record_authorization_denied(
-                user_id=user.user_id,
-                username=user.username,
-                permissions=(Permission.AUDIT_VIEW,),
+            record_authorization_denied(
+                self,
+                (Permission.AUDIT_VIEW,),
+                operation=AuthorizationOperation.AUDIT_LOG_VIEW,
+                target_resource_type=AuditResourceType.USER,
+                target_resource_id=query.filters.actor_user_id,
+                occurred_at=self._clock(),
             )
             raise PermissionError("Cannot view audit logs for other users")
 
         if query.filters.actor_username is not None and query.filters.actor_username != user.username:
-            self._record_authorization_denied(
-                user_id=user.user_id,
-                username=user.username,
-                permissions=(Permission.AUDIT_VIEW,),
+            record_authorization_denied(
+                self,
+                (Permission.AUDIT_VIEW,),
+                operation=AuthorizationOperation.AUDIT_LOG_VIEW,
+                target_resource_type=AuditResourceType.USER,
+                target_resource_id=query.filters.actor_username,
+                occurred_at=self._clock(),
             )
             raise PermissionError("Cannot view audit logs for other users")
 
@@ -118,26 +128,4 @@ class ViewAuditLogsUseCase(AuthorizedUseCase[PageResult[AuditRecord]], Applicati
                 limit,
                 offset,
             ),
-        )
-
-    def _record_authorization_denied(
-        self,
-        user_id: int | None,
-        username: str | None,
-        permissions: tuple[Permission, ...],
-    ) -> None:
-        """Record an authorization denial for later event publication.
-
-        Args:
-            user_id: Authenticated actor id, or ``None`` when unauthenticated.
-            username: Authenticated actor username, or ``None`` when unknown.
-            permissions: Permissions required by the denied operation.
-        """
-        self._record_event(
-            AuthorizationDenied(
-                user_id=user_id,
-                username=username,
-                required_permissions=permissions,
-                occurred_at=self._clock(),
-            )
         )

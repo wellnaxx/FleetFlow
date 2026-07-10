@@ -1,7 +1,10 @@
 """Application events describing authentication and user-management workflows."""
 
 from dataclasses import dataclass
+from typing import ClassVar
 
+from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.enums.token_revocation_reasons import TokenRevocationReason
 from src.application.enums.user_login_rejection_reasons import UserLoginRejectionReason
 from src.application.enums.user_password_change_rejection_reasons import UserPasswordChangeRejectionReason
@@ -99,8 +102,22 @@ class UserTokensRevoked(ApplicationEvent):
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class AuthorizationDenied(ApplicationEvent):
-    """Event recorded when an authorization decision denies an operation."""
+    """Event recorded when an authorization decision denies an operation.
 
-    user_id: int | None
-    username: str | None
+    Actor identity is intentionally excluded because it belongs to the event
+    envelope. This payload describes what was attempted and why it was denied.
+
+    Attributes:
+        attempted_operation: Stable application workflow that was attempted.
+        target_resource_type: Normalized family of the targeted resource.
+        target_resource_id: Target identifier normalized as text, when known.
+        required_permissions: Permissions absent from the authorization
+            decision, or all required permissions for an unauthenticated actor.
+    """
+
+    event_version: ClassVar[int] = 2
+
+    attempted_operation: AuthorizationOperation
+    target_resource_type: AuditResourceType
+    target_resource_id: str | None
     required_permissions: tuple[Permission, ...]
