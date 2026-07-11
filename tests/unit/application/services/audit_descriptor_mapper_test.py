@@ -6,6 +6,8 @@ from datetime import datetime
 from src.application.enums.audit_actions import AuditAction
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.authorization_operations import AuthorizationOperation
+from src.application.enums.package_reconciliation_reasons import PackageReconciliationReason
+from src.application.enums.route_reconciliation_reasons import RouteReconciliationReason
 from src.application.enums.token_revocation_reasons import TokenRevocationReason
 from src.application.enums.user_login_rejection_reasons import UserLoginRejectionReason
 from src.application.enums.user_password_change_rejection_reasons import UserPasswordChangeRejectionReason
@@ -27,6 +29,12 @@ from src.application.events.auth_events import (
     UserSessionEnded,
     UserTokensRevoked,
 )
+from src.application.events.reconciliation_events import (
+    PackageStateReconciled,
+    RouteStateReconciled,
+    TruckPositionReconciled,
+    TruckRouteReferenceReconciled,
+)
 from src.application.events.startup_events import FleetSeeded
 from src.application.events.world_state_events import (
     WorldStateAdvanced,
@@ -43,6 +51,7 @@ from src.application.events.world_state_events import (
 )
 from src.application.services.audit_descriptor_mapper import map_event_to_audit_descriptor
 from src.application.value_objects.world_state_entity_counts import WorldStateEntityCounts
+from src.domain.entities.delivery_route import RoutePositionKind
 from src.domain.enums.auth import Permission, Role
 from src.domain.enums.item_status import ItemStatus
 from src.domain.enums.package_detachment_reasons import PackageDetachmentReason
@@ -500,11 +509,71 @@ class AuditDescriptorMapperTests(unittest.TestCase):
                     packages_updated=2,
                     trucks_moved=3,
                     trucks_released=4,
+                    trucks_reconciled=5,
                     occurred_at=NOW,
                 ),
                 AuditResourceType.WORLD_STATE,
                 None,
                 AuditAction.ADVANCED,
+            ),
+            (
+                RouteStateReconciled(
+                    route_id=30,
+                    previous_status=RouteStatus.IN_PROGRESS,
+                    new_status=RouteStatus.SCHEDULED,
+                    departure_time=LATER,
+                    expected_completion_time=None,
+                    reason=RouteReconciliationReason.MISSING_EXPECTED_COMPLETION_TIME,
+                    occurred_at=NOW,
+                ),
+                AuditResourceType.ROUTE,
+                "30",
+                AuditAction.RECONCILED,
+            ),
+            (
+                PackageStateReconciled(
+                    package_id=20,
+                    route_id=30,
+                    previous_status=ItemStatus.DONE,
+                    new_status=ItemStatus.IN_PROGRESS,
+                    previous_location=LocationCode("MEL"),
+                    new_location=LocationCode("SYD"),
+                    previous_expected_arrival=None,
+                    new_expected_arrival=LATER,
+                    scheduled_pickup_time=NOW,
+                    scheduled_delivery_time=LATER,
+                    reasons=(PackageReconciliationReason.LIFECYCLE_STATE_INCONSISTENT,),
+                    occurred_at=NOW,
+                ),
+                AuditResourceType.PACKAGE,
+                "20",
+                AuditAction.RECONCILED,
+            ),
+            (
+                TruckPositionReconciled(
+                    truck_id=40,
+                    route_id=30,
+                    previous_location=None,
+                    new_location=LocationCode("SYD"),
+                    previous_in_transit_to=None,
+                    new_in_transit_to=LocationCode("MEL"),
+                    position_kind=RoutePositionKind.IN_TRANSIT,
+                    occurred_at=NOW,
+                ),
+                AuditResourceType.TRUCK,
+                "40",
+                AuditAction.RECONCILED,
+            ),
+            (
+                TruckRouteReferenceReconciled(
+                    truck_id=40,
+                    previous_route_id=None,
+                    new_route_id=30,
+                    occurred_at=NOW,
+                ),
+                AuditResourceType.TRUCK,
+                "40",
+                AuditAction.RECONCILED,
             ),
         )
 
@@ -651,6 +720,54 @@ class AuditDescriptorMapperTests(unittest.TestCase):
             descriptor.payload_json["entity_counts"],
             {"customers": 1, "packages": 2, "routes": 3, "trucks": 4},
         )
+
+    def test_serializes_package_reconciliation_reasons_by_value(self) -> None:
+        descriptor = map_event_to_audit_descriptor(
+            PackageStateReconciled(
+                package_id=20,
+                route_id=None,
+                previous_status=ItemStatus.DONE,
+                new_status=ItemStatus.TODO,
+                previous_location=LocationCode("MEL"),
+                new_location=LocationCode("SYD"),
+                previous_expected_arrival=LATER,
+                new_expected_arrival=None,
+                scheduled_pickup_time=None,
+                scheduled_delivery_time=None,
+                reasons=(
+                    PackageReconciliationReason.ROUTE_UNSCHEDULED,
+                    PackageReconciliationReason.EXPECTED_ARRIVAL_RECALCULATED,
+                ),
+                occurred_at=NOW,
+            )
+        )
+
+        self.assertEqual(descriptor.payload_json["package_id"], "20")
+        self.assertIsNone(descriptor.payload_json["route_id"])
+        self.assertEqual(
+            descriptor.payload_json["reasons"],
+            ["route_unscheduled", "expected_arrival_recalculated"],
+        )
+
+    def test_preserves_null_truck_reconciliation_positions(self) -> None:
+        descriptor = map_event_to_audit_descriptor(
+            TruckPositionReconciled(
+                truck_id=40,
+                route_id=None,
+                previous_location=None,
+                new_location=None,
+                previous_in_transit_to=None,
+                new_in_transit_to=None,
+                position_kind=RoutePositionKind.UNSCHEDULED,
+                occurred_at=NOW,
+            )
+        )
+
+        self.assertIsNone(descriptor.payload_json["route_id"])
+        self.assertIsNone(descriptor.payload_json["previous_location"])
+        self.assertIsNone(descriptor.payload_json["new_location"])
+        self.assertIsNone(descriptor.payload_json["previous_in_transit_to"])
+        self.assertIsNone(descriptor.payload_json["new_in_transit_to"])
 
     def test_unsupported_event_type_raises_value_error(self) -> None:
         with self.assertRaisesRegex(ValueError, "Unsupported event type: Event"):

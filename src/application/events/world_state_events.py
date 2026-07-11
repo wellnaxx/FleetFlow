@@ -105,9 +105,20 @@ class WorldStateStartupRestoreFailed(ApplicationEvent):
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class WorldStateAdvanced(ApplicationEvent):
-    """Event recorded when the heartbeat advances world state."""
+    """Event recorded when the heartbeat advances world state.
+
+    Attributes:
+        routes_updated: Number of routes whose runtime state changed.
+        packages_updated: Number of packages whose runtime state changed.
+        trucks_moved: Number of trucks whose schedule-derived position changed.
+        trucks_released: Number of trucks released from completed routes.
+        trucks_reconciled: Number of truck route references directly repaired.
+    """
+
+    event_version: ClassVar[int] = 2
 
     routes_updated: int
     packages_updated: int
     trucks_moved: int
     trucks_released: int
+    trucks_reconciled: int

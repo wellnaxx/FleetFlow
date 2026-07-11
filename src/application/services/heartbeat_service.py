@@ -40,7 +40,14 @@ class HeartbeatService:
                 the current wall-clock time.
 
         Returns:
-            Summary of route, package, and truck changes.
+            Summary of route, package, and truck changes and reconciliation
+            events produced by direct repairs.
+
+        Raises:
+            Exception: Propagates batch-level reconciliation or persistence
+                failures after restoring entity state and pending domain-event
+                checkpoints. Per-route reconciliation failures are isolated and
+                reported by the reconciliation service.
         """
         routes = self._routes.list_all()
 
@@ -73,7 +80,12 @@ class HeartbeatService:
                 for package in summary.mutated_packages:
                     uow.packages.update_state(package)
 
-                for truck in {*summary.mutated_trucks_moved, *summary.mutated_trucks_released}:
+                changed_trucks = {
+                    *summary.mutated_trucks_moved,
+                    *summary.mutated_trucks_released,
+                    *summary.mutated_trucks_reconciled,
+                }
+                for truck in changed_trucks:
                     uow.trucks.update_state(truck)
 
                 uow.commit()

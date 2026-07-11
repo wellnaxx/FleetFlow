@@ -8,11 +8,14 @@ from uuid import uuid4
 from src.application.enums.audit_actions import AuditAction
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.event_sources import EventSource
+from src.application.enums.route_reconciliation_reasons import RouteReconciliationReason
 from src.application.eventing.envelope import EventEnvelope
+from src.application.events.reconciliation_events import RouteStateReconciled
 from src.application.models.audit_log_query import AuditLogFilter
 from src.application.models.audit_record import AuditRecord, AuditRecordDraft
 from src.composition.event_subscriptions import build_eventing_components
 from src.domain.enums.item_status import ItemStatus
+from src.domain.enums.route_status import RouteStatus
 from src.domain.events.package_events import PackageCreated
 from src.domain.value_objects.location_code import LocationCode
 
@@ -104,6 +107,33 @@ class EventSubscriptionsTests(unittest.TestCase):
             )
 
         self.assertEqual(repository.drafts, [])
+
+    def test_reconciliation_event_is_subscribed_to_audit_handler(self) -> None:
+        repository = _AuditRepositorySpy()
+        eventing = build_eventing_components(repository)
+
+        eventing.publisher.publish(
+            EventEnvelope(
+                event=RouteStateReconciled(
+                    route_id=30,
+                    previous_status=RouteStatus.IN_PROGRESS,
+                    new_status=RouteStatus.PLANNED,
+                    departure_time=None,
+                    expected_completion_time=None,
+                    reason=RouteReconciliationReason.MISSING_DEPARTURE_TIME,
+                    occurred_at=NOW,
+                ),
+                source=EventSource.HEARTBEAT,
+                correlation_id=uuid4(),
+            )
+        )
+
+        self.assertEqual(len(repository.drafts), 1)
+        draft = repository.drafts[0]
+        self.assertEqual(draft.event_type, "RouteStateReconciled")
+        self.assertEqual(draft.resource_type, AuditResourceType.ROUTE)
+        self.assertEqual(draft.resource_id, "30")
+        self.assertEqual(draft.action, AuditAction.RECONCILED)
 
 
 if __name__ == "__main__":

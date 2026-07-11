@@ -282,9 +282,10 @@ class EngineTests(unittest.TestCase):
         cmd.autosaves_state = False
         cmd.execute.return_value = "ok"
         factory.create.return_value = cmd
+        package_recorder = MagicMock()
         advance.execute.return_value = HeartbeatSummary(
             mutated_routes=(),
-            mutated_packages=(MagicMock(),),
+            mutated_packages=(package_recorder,),
             mutated_trucks_moved=(),
             mutated_trucks_released=(),
         )
@@ -296,7 +297,7 @@ class EngineTests(unittest.TestCase):
         save_world.execute.assert_called_once_with("state.json")
         event_collector: MagicMock = engine._event_collector  # pyright: ignore[reportPrivateUsage, reportAssignmentType]
         self.assertEqual(event_collector.drain.call_count, 2)
-        event_collector.drain.assert_any_call((advance,))
+        event_collector.drain.assert_any_call((package_recorder, advance))
         event_collector.drain.assert_any_call((save_world,))
         mock_print.assert_called_once_with("ok")
 

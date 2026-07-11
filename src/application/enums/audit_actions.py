@@ -26,6 +26,7 @@ class AuditAction(StrEnum):
 
     PICKED_UP = "picked_up"
     DELIVERED = "delivered"
+    RECONCILED = "reconciled"
 
     # Authentication and user-management actions.
     REGISTERED = "registered"

@@ -1,8 +1,16 @@
 import unittest
 from datetime import datetime
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import patch
 
+from src.application.enums.package_reconciliation_reasons import PackageReconciliationReason
+from src.application.enums.route_reconciliation_reasons import RouteReconciliationReason
+from src.application.events.reconciliation_events import (
+    PackageStateReconciled,
+    RouteStateReconciled,
+    TruckPositionReconciled,
+)
 from src.application.services.world_state_reconciliation_service import WorldStateReconciliationService
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
@@ -148,7 +156,7 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
         self.assertEqual(pickup_event.occurred_at, pickup_time)
         self.assertEqual(delivery_event.occurred_at, delivery_time)
 
-    def test_reconcile_routes_repairs_done_package_during_active_window_without_event(self) -> None:
+    def test_reconcile_routes_repairs_done_package_and_emits_one_reconciliation_event(self) -> None:
         customer = self.make_customer()
         package = DeliveryPackage(
             package_id=1,
@@ -186,6 +194,17 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
         self.assertEqual(package.status, ItemStatus.IN_PROGRESS)
         self.assertEqual(package.current_location, LocationCode("B"))
         self.assertEqual(package.pending_events, ())
+        self.assertEqual(len(summary.reconciliation_events), 1)
+        event = cast(PackageStateReconciled, summary.reconciliation_events[0])
+        self.assertIsInstance(event, PackageStateReconciled)
+        self.assertEqual(
+            event.reasons,
+            (
+                PackageReconciliationReason.LIFECYCLE_STATE_INCONSISTENT,
+                PackageReconciliationReason.ROUTE_PROGRESS_ADVANCED,
+                PackageReconciliationReason.EXPECTED_ARRIVAL_RECALCULATED,
+            ),
+        )
 
     def test_reconcile_routes_does_not_count_unchanged_package(self) -> None:
         customer = self.make_customer()
@@ -340,6 +359,78 @@ class WorldStateReconciliationServiceTests(unittest.TestCase):
         self.assertEqual(summary.trucks_released, 0)
         self.assertEqual(truck.current_location, LocationCode("A"))
         self.assertTrue(summary.state_changed)
+        self.assertTrue(
+            any(isinstance(event, TruckPositionReconciled) for event in summary.reconciliation_events)
+        )
+
+    def test_reconcile_routes_emits_event_for_direct_route_status_repair(self) -> None:
+        route = DeliveryRoute(
+            LocationCode("A"),
+            LocationCode("B"),
+            route_id=1,
+        )
+        route.status = RouteStatus.IN_PROGRESS
+
+        summary = self.reconciler.reconcile_routes(
+            routes=[route],
+            now=datetime(2025, 1, 1, 9, 0),
+            update_trucks=False,
+        )
+
+        self.assertEqual(route.status, RouteStatus.PLANNED)
+        self.assertEqual(len(summary.reconciliation_events), 1)
+        event = cast(RouteStateReconciled, summary.reconciliation_events[0])
+        self.assertIsInstance(event, RouteStateReconciled)
+        self.assertIs(event.reason, RouteReconciliationReason.MISSING_DEPARTURE_TIME)
+
+    def test_reconcile_routes_restores_failed_route_and_continues_with_healthy_route(self) -> None:
+        conflicting_route = DeliveryRoute(
+            LocationCode("A"),
+            LocationCode("B"),
+            departure_time=datetime(2025, 1, 1, 10, 0),
+            route_id=1,
+        )
+        corrupted_route = DeliveryRoute(
+            LocationCode("A"),
+            LocationCode("B"),
+            route_id=2,
+        )
+        healthy_route = DeliveryRoute(
+            LocationCode("A"),
+            LocationCode("B"),
+            route_id=3,
+        )
+        truck = Truck(
+            vehicle_id=1001,
+            name=TruckModel.SCANIA,
+            capacity=42000,
+            max_range=8000,
+        )
+        truck.assign(conflicting_route)
+        corrupted_route.truck = truck
+        corrupted_route.status = RouteStatus.IN_PROGRESS
+        healthy_route.status = RouteStatus.IN_PROGRESS
+        corrupted_event_checkpoint = corrupted_route.event_checkpoint()
+
+        with self.assertLogs(
+            "src.application.services.world_state_reconciliation_service",
+            level="ERROR",
+        ) as logs:
+            summary = self.reconciler.reconcile_routes(
+                routes=[corrupted_route, healthy_route],
+                now=datetime(2025, 1, 1, 9, 0),
+                update_trucks=True,
+            )
+
+        self.assertEqual(corrupted_route.status, RouteStatus.IN_PROGRESS)
+        self.assertEqual(corrupted_route.event_checkpoint(), corrupted_event_checkpoint)
+        self.assertIs(corrupted_route.truck, truck)
+        self.assertIs(truck.route, conflicting_route)
+        self.assertEqual(healthy_route.status, RouteStatus.PLANNED)
+        self.assertEqual(summary.mutated_routes, (healthy_route,))
+        self.assertEqual(len(summary.reconciliation_events), 1)
+        self.assertIsInstance(summary.reconciliation_events[0], RouteStateReconciled)
+        self.assertIn("Failed to reconcile route 2", logs.output[0])
 
     def test_reconcile_routes_counts_expected_arrival_only_update_as_one_package(self) -> None:
         customer = self.make_customer()

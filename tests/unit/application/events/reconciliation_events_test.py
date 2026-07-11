@@ -49,24 +49,21 @@ class ReconciliationEventShould(unittest.TestCase):
             with self.subTest(reasons=reasons), self.assertRaises(ValueError):
                 _package_event(reasons)
 
-    def test_reject_empty_or_duplicate_route_reasons(self) -> None:
-        for reasons in (
-            (),
-            (
-                RouteReconciliationReason.BEFORE_SCHEDULED_DEPARTURE,
-                RouteReconciliationReason.BEFORE_SCHEDULED_DEPARTURE,
-            ),
-        ):
-            with self.subTest(reasons=reasons), self.assertRaises(ValueError):
-                RouteStateReconciled(
-                    route_id=3,
-                    previous_status=RouteStatus.IN_PROGRESS,
-                    new_status=RouteStatus.SCHEDULED,
-                    departure_time=datetime(2026, 7, 10, 14, 0),
-                    expected_completion_time=datetime(2026, 7, 10, 18, 0),
-                    reasons=reasons,
-                    occurred_at=datetime(2026, 7, 10, 12, 0),
-                )
+    def test_accept_route_reconciliation_reason(self) -> None:
+        event = RouteStateReconciled(
+            route_id=3,
+            previous_status=RouteStatus.IN_PROGRESS,
+            new_status=RouteStatus.SCHEDULED,
+            departure_time=datetime(2026, 7, 10, 14, 0),
+            expected_completion_time=datetime(2026, 7, 10, 18, 0),
+            reason=RouteReconciliationReason.BEFORE_SCHEDULED_DEPARTURE,
+            occurred_at=datetime(2026, 7, 10, 12, 0),
+        )
+
+        self.assertIs(
+            event.reason,
+            RouteReconciliationReason.BEFORE_SCHEDULED_DEPARTURE,
+        )
 
 
 def _package_event(

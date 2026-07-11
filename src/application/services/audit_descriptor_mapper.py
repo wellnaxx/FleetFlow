@@ -21,6 +21,12 @@ from src.application.events.auth_events import (
     UserSessionEnded,
     UserTokensRevoked,
 )
+from src.application.events.reconciliation_events import (
+    PackageStateReconciled,
+    RouteStateReconciled,
+    TruckPositionReconciled,
+    TruckRouteReferenceReconciled,
+)
 from src.application.events.startup_events import FleetSeeded
 from src.application.events.world_state_events import (
     WorldStateAdvanced,
@@ -569,6 +575,78 @@ def map_event_to_audit_descriptor(event: Event) -> AuditDescriptor:
                     "packages_updated": event.packages_updated,
                     "trucks_moved": event.trucks_moved,
                     "trucks_released": event.trucks_released,
+                    "trucks_reconciled": event.trucks_reconciled,
+                },
+            )
+        case RouteStateReconciled():
+            return AuditDescriptor(
+                resource_type=AuditResourceType.ROUTE,
+                resource_id=str(event.route_id),
+                action=AuditAction.RECONCILED,
+                payload_json={
+                    "route_id": str(event.route_id),
+                    "previous_status": event.previous_status.value,
+                    "new_status": event.new_status.value,
+                    "departure_time": event.departure_time.isoformat()
+                    if event.departure_time
+                    else None,
+                    "expected_completion_time": event.expected_completion_time.isoformat()
+                    if event.expected_completion_time
+                    else None,
+                    "reason": event.reason.value,
+                },
+            )
+        case PackageStateReconciled():
+            return AuditDescriptor(
+                resource_type=AuditResourceType.PACKAGE,
+                resource_id=str(event.package_id),
+                action=AuditAction.RECONCILED,
+                payload_json={
+                    "package_id": str(event.package_id),
+                    "route_id": _optional_id(event.route_id),
+                    "previous_status": event.previous_status.value,
+                    "new_status": event.new_status.value,
+                    "previous_location": str(event.previous_location),
+                    "new_location": str(event.new_location),
+                    "previous_expected_arrival": event.previous_expected_arrival.isoformat()
+                    if event.previous_expected_arrival is not None
+                    else None,
+                    "new_expected_arrival": event.new_expected_arrival.isoformat()
+                    if event.new_expected_arrival is not None
+                    else None,
+                    "scheduled_pickup_time": event.scheduled_pickup_time.isoformat()
+                    if event.scheduled_pickup_time is not None
+                    else None,
+                    "scheduled_delivery_time": event.scheduled_delivery_time.isoformat()
+                    if event.scheduled_delivery_time is not None
+                    else None,
+                    "reasons": [reason.value for reason in event.reasons],
+                },
+            )
+        case TruckPositionReconciled():
+            return AuditDescriptor(
+                resource_type=AuditResourceType.TRUCK,
+                resource_id=str(event.truck_id),
+                action=AuditAction.RECONCILED,
+                payload_json={
+                    "truck_id": str(event.truck_id),
+                    "route_id": _optional_id(event.route_id),
+                    "previous_location": _optional_str(event.previous_location),
+                    "new_location": _optional_str(event.new_location),
+                    "previous_in_transit_to": _optional_str(event.previous_in_transit_to),
+                    "new_in_transit_to": _optional_str(event.new_in_transit_to),
+                    "position_kind": event.position_kind.value,
+                },
+            )
+        case TruckRouteReferenceReconciled():
+            return AuditDescriptor(
+                resource_type=AuditResourceType.TRUCK,
+                resource_id=str(event.truck_id),
+                action=AuditAction.RECONCILED,
+                payload_json={
+                    "truck_id": str(event.truck_id),
+                    "previous_route_id": _optional_id(event.previous_route_id),
+                    "new_route_id": str(event.new_route_id),
                 },
             )
         case _:
@@ -576,12 +654,38 @@ def map_event_to_audit_descriptor(event: Event) -> AuditDescriptor:
 
 
 def _optional_id(value: object | None) -> str | None:
-    """Serialize an optional event identifier for JSON payload storage."""
+    """Serialize an optional event identifier for JSON payload storage.
+
+    Args:
+        value: Identifier value, or ``None`` when no resource is associated.
+
+    Returns:
+        String representation of the identifier, or ``None``.
+    """
+    return str(value) if value is not None else None
+
+
+def _optional_str(value: object | None) -> str | None:
+    """Serialize an optional value without converting ``None`` to text.
+
+    Args:
+        value: Value to serialize, or ``None``.
+
+    Returns:
+        String representation of the value, or ``None``.
+    """
     return str(value) if value is not None else None
 
 
 def _entity_counts_payload(entity_counts: WorldStateEntityCounts) -> JSONObject:
-    """Serialize world-state entity counts into a JSON payload object."""
+    """Serialize world-state entity counts into a JSON payload object.
+
+    Args:
+        entity_counts: Validated counts for each persisted entity family.
+
+    Returns:
+        JSON object containing customer, package, route, and truck counts.
+    """
     return {
         "customers": entity_counts.customers,
         "packages": entity_counts.packages,

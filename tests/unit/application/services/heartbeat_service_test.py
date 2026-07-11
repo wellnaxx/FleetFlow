@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from typing import NamedTuple
 from unittest.mock import MagicMock
 
+from src.application.events.reconciliation_events import TruckRouteReferenceReconciled
 from src.application.services.heartbeat_service import HeartbeatService
 from src.application.services.world_state_reconciliation_service import WorldStateReconciliationService
 from src.domain.enums.item_status import ItemStatus
@@ -23,7 +24,8 @@ class _FakeTruckSnapshot(NamedTuple):
 
 
 class _FakeTruck:
-    def __init__(self, current_location: str = "BASE") -> None:
+    def __init__(self, current_location: str = "BASE", vehicle_id: int = 1) -> None:
+        self.vehicle_id = vehicle_id
         self.current_location = current_location
         self.in_transit_to: str | None = None
         self.route: _FakeRoute | None = None
@@ -77,7 +79,8 @@ class _FakePackageSnapshot(NamedTuple):
 
 
 class _FakePackage:
-    def __init__(self, start: str, end: str) -> None:
+    def __init__(self, start: str, end: str, package_id: int = 1) -> None:
+        self.package_id = package_id
         self.start_location = start
         self.end_location = end
         self.current_location = start
@@ -132,7 +135,9 @@ class _FakeRoute:
         departure_time: datetime | None,
         eta_final: datetime | None,
         packages: list[_FakePackage] | None = None,
+        route_id: int = 1,
     ) -> None:
+        self.route_id = route_id
         self.locations = locations
         self.start_location = locations[0]
         self.end_location = locations[-1]
@@ -358,6 +363,79 @@ class HeartbeatServiceTests(unittest.TestCase):
         unit_of_work.routes.update_state.assert_not_called()
         unit_of_work.packages.update_state.assert_called_once_with(package)
         unit_of_work.trucks.update_state.assert_not_called()
+        unit_of_work.commit.assert_called_once_with()
+
+    def test_advance_persists_repaired_truck_route_reference(self) -> None:
+        route = _FakeRoute(
+            locations=["S1", "E1"],
+            departure_time=None,
+            eta_final=None,
+        )
+        route.status = RouteStatus.PLANNED
+        truck = _FakeTruck(current_location="S1")
+        route.truck = truck
+        truck.route = None
+
+        route_repo = MagicMock()
+        route_repo.list_all.return_value = [route]
+        unit_of_work = _unit_of_work_mock()
+        service = HeartbeatService(route_repo, WorldStateReconciliationService(), unit_of_work)
+
+        summary = service.advance(now=datetime(2025, 1, 1, 8, 0))
+
+        self.assertIs(truck.route, route)
+        self.assertEqual(summary.trucks_reconciled, 1)
+        self.assertTrue(summary.state_changed)
+        self.assertEqual(len(summary.reconciliation_events), 1)
+        self.assertIsInstance(
+            summary.reconciliation_events[0],
+            TruckRouteReferenceReconciled,
+        )
+        unit_of_work.trucks.update_state.assert_called_once_with(truck)
+        unit_of_work.commit.assert_called_once_with()
+
+    def test_advance_persists_healthy_route_when_another_route_fails_reconciliation(self) -> None:
+        base = datetime(2025, 1, 1, 8, 0)
+        conflicting_route = _FakeRoute(
+            locations=["S1", "E1"],
+            departure_time=base,
+            eta_final=base + timedelta(hours=1),
+            route_id=1,
+        )
+        corrupted_route = _FakeRoute(
+            locations=["S2", "E2"],
+            departure_time=None,
+            eta_final=None,
+            route_id=2,
+        )
+        healthy_route = _FakeRoute(
+            locations=["S3", "E3"],
+            departure_time=None,
+            eta_final=None,
+            route_id=3,
+        )
+        truck = _FakeTruck(vehicle_id=1001)
+        truck.route = conflicting_route
+        corrupted_route.truck = truck
+        corrupted_route.status = RouteStatus.IN_PROGRESS
+        healthy_route.status = RouteStatus.IN_PROGRESS
+        route_repo = MagicMock()
+        route_repo.list_all.return_value = [corrupted_route, healthy_route]
+        unit_of_work = _unit_of_work_mock()
+        service = HeartbeatService(route_repo, WorldStateReconciliationService(), unit_of_work)
+
+        with self.assertLogs(
+            "src.application.services.world_state_reconciliation_service",
+            level="ERROR",
+        ):
+            summary = service.advance(now=base)
+
+        self.assertEqual(corrupted_route.status, RouteStatus.IN_PROGRESS)
+        self.assertIs(corrupted_route.truck, truck)
+        self.assertIs(truck.route, conflicting_route)
+        self.assertEqual(healthy_route.status, RouteStatus.PLANNED)
+        self.assertEqual(summary.mutated_routes, (healthy_route,))
+        unit_of_work.routes.update_state.assert_called_once_with(healthy_route)
         unit_of_work.commit.assert_called_once_with()
 
     def test_advance_skips_unit_of_work_when_reconciliation_changes_nothing(self) -> None:

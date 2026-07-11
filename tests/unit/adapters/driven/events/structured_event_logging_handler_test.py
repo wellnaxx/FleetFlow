@@ -45,6 +45,7 @@ class StructuredEventLoggingHandlerShould(unittest.TestCase):
         self.assertIn("Event published:", log_line)
         self.assertIn("event_type=LoggedEvent", log_line)
         self.assertIn("event_id=11111111-1111-1111-1111-111111111111", log_line)
+        self.assertIn("event_version=1", log_line)
         self.assertIn("occurred_at=2026-06-25T12:00:00", log_line)
         self.assertIn("recorded_at=2026-06-25T12:00:01+00:00", log_line)
         self.assertIn("envelope_id=44444444-4444-4444-4444-444444444444", log_line)

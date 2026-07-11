@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class AdvanceWorldStateUseCase(BaseUseCase[HeartbeatSummary], ApplicationEventRecorderMixin):
-    """Advance runtime world state and record a heartbeat event when it changes."""
+    """Advance world state and record reconciliation and heartbeat events."""
 
     def __init__(
         self,
@@ -35,11 +35,15 @@ class AdvanceWorldStateUseCase(BaseUseCase[HeartbeatSummary], ApplicationEventRe
             now: Optional clock override for deterministic execution.
 
         Returns:
-            A summary of the changes applied during the heartbeat, including
-            whether any state was mutated at all. A ``WorldStateAdvanced``
-            event is recorded only when the heartbeat changes runtime state.
+            Summary of persisted reconciliation changes. Direct reconciliation
+            events from the summary are recorded first, followed by one
+            ``WorldStateAdvanced`` event when any state changed.
         """
         summary = self._heartbeat_service.advance(now=now)
+
+        for event in summary.reconciliation_events:
+            self._record_event(event)
+
         if summary.state_changed:
             self._record_event(
                 WorldStateAdvanced(
@@ -48,15 +52,18 @@ class AdvanceWorldStateUseCase(BaseUseCase[HeartbeatSummary], ApplicationEventRe
                     packages_updated=summary.packages_updated,
                     trucks_moved=summary.trucks_moved,
                     trucks_released=summary.trucks_released,
+                    trucks_reconciled=summary.trucks_reconciled,
                 )
             )
 
             logger.info(
-                "Advanced world state: routes=%d, packages=%d, trucks_moved=%d, trucks_released=%d.",
+                "Advanced world state: routes=%d, packages=%d, trucks_moved=%d, "
+                "trucks_released=%d, trucks_reconciled=%d.",
                 summary.routes_updated,
                 summary.packages_updated,
                 summary.trucks_moved,
                 summary.trucks_released,
+                summary.trucks_reconciled,
             )
         else:
             logger.debug("Advanced world state with no state changes.")

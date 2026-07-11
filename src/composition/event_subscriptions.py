@@ -19,6 +19,12 @@ from src.application.events.auth_events import (
     UserSessionEnded,
     UserTokensRevoked,
 )
+from src.application.events.reconciliation_events import (
+    PackageStateReconciled,
+    RouteStateReconciled,
+    TruckPositionReconciled,
+    TruckRouteReferenceReconciled,
+)
 from src.application.events.startup_events import FleetSeeded
 from src.application.events.world_state_events import (
     WorldStateAdvanced,
@@ -93,6 +99,10 @@ EVENT_TYPES = (
     WorldStateStartupRestoreSkipped,
     WorldStateStartupRestoreFailed,
     WorldStateAdvanced,
+    RouteStateReconciled,
+    PackageStateReconciled,
+    TruckPositionReconciled,
+    TruckRouteReferenceReconciled,
 )
 
 
