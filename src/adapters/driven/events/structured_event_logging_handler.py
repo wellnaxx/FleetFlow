@@ -27,11 +27,12 @@ class StructuredEventLoggingHandler(EventHandler[Event]):
         actor = envelope.actor
 
         logger.info(
-            "Event published: event_type=%s event_id=%s occurred_at=%s recorded_at=%s "
+            "Event published: event_type=%s event_id=%s event_version=%s occurred_at=%s recorded_at=%s "
             "envelope_id=%s correlation_id=%s causation_id=%s source=%s "
             "actor_user_id=%s actor_username=%s",
             type(event).__name__,
             event.event_id,
+            event.event_version,
             event.occurred_at.isoformat(),
             event.recorded_at.isoformat(),
             envelope.envelope_id,
