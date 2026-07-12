@@ -14,6 +14,7 @@ class FindSuitableRoutesForPackage_Should(unittest.TestCase):
         cmd = FindSuitableRoutesForPackage.__new__(FindSuitableRoutesForPackage)
         cmd._params = tuple(params)  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._event_collector = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
     def test_execute_propagates_permission_errors_from_use_case(self) -> None:
@@ -25,6 +26,7 @@ class FindSuitableRoutesForPackage_Should(unittest.TestCase):
 
         self.assertIn("PACKAGE_FIND_ROUTE_FOR", str(ctx.exception))
         cmd._use_case.execute.assert_called_once_with(77)  # type: ignore[reportUnknownMemberType]
+        cmd._event_collector.drain.assert_called_once_with((cmd._use_case,))  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.find_suitable_routes_for_package.validate_params_exact")
     @patch("src.adapters.driving.cli.commands.find_suitable_routes_for_package.try_parse_int")
@@ -54,6 +56,7 @@ class FindSuitableRoutesForPackage_Should(unittest.TestCase):
         mock_validate.assert_called_once_with(("77",), 1)
         mock_parse.assert_called_once_with("77", "package_id")
         cmd._use_case.execute.assert_called_once_with(77)  # type: ignore[reportUnknownMemberType]
+        cmd._event_collector.drain.assert_called_once_with((cmd._use_case,))  # type: ignore[reportUnknownMemberType]
 
         lines = result.splitlines()
         self.assertEqual(len(lines), 2)

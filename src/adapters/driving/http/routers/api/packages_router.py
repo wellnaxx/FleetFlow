@@ -163,12 +163,14 @@ def find_suitable_routes_for_package(
     use_case: Annotated[
         FindSuitableRoutesForPackageUseCase, Depends(get_find_suitable_routes_for_package_use_case)
     ],
+    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
 ) -> list[PackageSuitableRouteResponse]:
     """Return routes that can currently carry the requested package.
 
     Args:
         package_id: Identifier of the package to place on a route.
         use_case: Use case for finding suitable routes, injected by FastAPI.
+        event_collector: Collector used to publish authorization events.
 
     Returns:
         Routes that can accept the requested package.
@@ -179,7 +181,11 @@ def find_suitable_routes_for_package(
             * 404 - Package not found.
             * 500 - Database operation failure.
     """
-    results = use_case.execute(package_id=package_id)
+    results = execute_and_drain_events(
+        recorder=use_case,
+        event_collector=event_collector,
+        action=lambda: use_case.execute(package_id=package_id),
+    )
     return [PackageSuitableRouteResponse.from_match(result) for result in results]
 
 
