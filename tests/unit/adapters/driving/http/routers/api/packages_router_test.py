@@ -212,6 +212,7 @@ class PackagesRouterShould(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["package_id"], 4)
         use_case.execute.assert_called_once_with(package_id=4)
+        self.event_collector.drain.assert_called_once_with((use_case,))
 
     def test_get_package_returns_not_found_for_missing_package(self) -> None:
         use_case = MagicMock()
@@ -222,6 +223,7 @@ class PackagesRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["detail"], "Package with ID 4 not found")
+        self.event_collector.drain.assert_called_once_with((use_case,))
 
     def test_find_suitable_routes_for_package_returns_route_options(self) -> None:
         use_case = MagicMock()

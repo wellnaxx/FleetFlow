@@ -53,6 +53,9 @@ _CONTAINER_COMMANDS: dict[str, CommandBuilder] = {
         container.package_cases.create,
         container.event_collector,
     ),
+    "viewpackage": lambda container, params: ViewPackage(
+        params, container.package_cases.view, container.event_collector
+    ),
     "viewallpackages": lambda container, params: ViewAllPackages(
         params, container.package_cases.view_all, container.event_collector
     ),

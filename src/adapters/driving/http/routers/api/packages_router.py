@@ -151,6 +151,7 @@ def get_package(
     Args:
         package_id: The ID of the package to retrieve.
         use_case: The use case for viewing a specific package, injected by FastAPI.
+        event_collector: Collector used to publish authorization events.
 
     Returns:
         A response model representing the requested package.
@@ -161,7 +162,11 @@ def get_package(
             * 404 - Package not found.
             * 500 - Database operation failure.
     """
-    package = use_case.execute(package_id=package_id)
+    package = execute_and_drain_events(
+        recorder=use_case,
+        event_collector=event_collector,
+        action=lambda: use_case.execute(package_id=package_id),
+    )
     return PackageResponse.from_package(package)
 
 
