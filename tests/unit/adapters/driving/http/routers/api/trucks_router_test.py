@@ -19,6 +19,10 @@ class TrucksRouterShould(unittest.TestCase):
         self.app = FastAPI()
         self.app.include_router(trucks_router)
         register_exception_handlers(self.app)
+        self.event_collector = MagicMock()
+        self.app.dependency_overrides[trucks_router_module.get_event_collector] = (
+            lambda: self.event_collector
+        )
         self.client = TestClient(self.app)
 
     def tearDown(self) -> None:
@@ -52,6 +56,7 @@ class TrucksRouterShould(unittest.TestCase):
             ],
         )
         use_case.execute.assert_called_once_with()
+        self.event_collector.drain.assert_called_once_with((use_case,))
 
     def test_list_trucks_returns_empty_list(self) -> None:
         use_case = MagicMock()
@@ -102,6 +107,7 @@ class TrucksRouterShould(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"], "Missing permission: TRUCK_VIEW")
         use_case.execute.assert_called_once_with()
+        self.event_collector.drain.assert_called_once_with((use_case,))
 
     def test_list_trucks_returns_generic_error_for_database_failure(self) -> None:
         use_case = MagicMock()
@@ -113,3 +119,4 @@ class TrucksRouterShould(unittest.TestCase):
         self.assertEqual(response.status_code, 500)
         self.assertEqual(response.json()["detail"], "Database operation failed.")
         use_case.execute.assert_called_once_with()
+        self.event_collector.drain.assert_called_once_with((use_case,))
