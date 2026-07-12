@@ -131,6 +131,7 @@ class PackagesRouterShould(unittest.TestCase):
         self.assertEqual(response.json()["limit"], 1)
         self.assertEqual(response.json()["offset"], 2)
         use_case.execute.assert_called_once_with(PageQuery(limit=1, offset=2, include_total=True))
+        self.event_collector.drain.assert_called_once_with((use_case,))
 
     def test_list_packages_preserves_unpaginated_limit(self) -> None:
         use_case = MagicMock()
@@ -159,6 +160,7 @@ class PackagesRouterShould(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"], "Missing permission: PACKAGE_VIEW_ALL")
         use_case.execute.assert_called_once_with(PageQuery(limit=50, offset=0, include_total=False))
+        self.event_collector.drain.assert_called_once_with((use_case,))
 
     def test_list_unassigned_packages_returns_page_without_total_by_default(self) -> None:
         use_case = MagicMock()
