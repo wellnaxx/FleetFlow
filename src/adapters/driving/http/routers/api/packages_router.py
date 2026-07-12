@@ -200,7 +200,8 @@ def delete_package(
     Args:
         package_id: The ID of the package to delete.
         use_case: The use case for removing a package, injected by FastAPI.
-        event_collector: Collector used to publish package, customer, and route events.
+        event_collector: Collector used to publish authorization plus package,
+            customer, and route events.
 
     Returns:
         None
@@ -213,7 +214,11 @@ def delete_package(
             * 500 - Database operation failure.
     """
     try:
-        result = use_case.execute(package_id=package_id)
+        result = execute_and_drain_events(
+            recorder=use_case,
+            event_collector=event_collector,
+            action=lambda: use_case.execute(package_id=package_id),
+        )
     except (DomainConflictError, EntityNotFoundError) as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     else:

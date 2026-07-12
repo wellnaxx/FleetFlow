@@ -1,8 +1,14 @@
 import unittest
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from typing import cast
+from unittest.mock import MagicMock, call, patch
 
 from src.adapters.driving.cli.commands.remove_package import RemovePackage
+
+
+def _collector_mock(command: RemovePackage) -> MagicMock:
+    """Return the command's injected collector as its test-double type."""
+    return cast(MagicMock, command._event_collector)  # pyright: ignore[reportPrivateUsage]
 
 
 class TestRemovePackage_Should(unittest.TestCase):
@@ -83,7 +89,10 @@ class TestRemovePackage_Should(unittest.TestCase):
         mock_validate.assert_called_once_with(["42"], 1)
         mock_try_parse.assert_called_once_with("42", "package_id")
         cmd._use_case.execute.assert_called_once_with(42)  # type: ignore[reportUnknownMemberType]
-        cmd._event_collector.drain.assert_called_once_with((package, customer, route))  # type: ignore[reportUnknownMemberType]
+        self.assertEqual(
+            _collector_mock(cmd).drain.call_args_list,
+            [call((cmd._use_case,)), call((package, customer, route))],  # pyright: ignore[reportPrivateUsage]
+        )
 
     @patch("src.adapters.driving.cli.commands.remove_package.validate_params_exact")
     @patch("src.adapters.driving.cli.commands.remove_package.try_parse_int")
@@ -108,7 +117,10 @@ class TestRemovePackage_Should(unittest.TestCase):
         mock_validate.assert_called_once_with(["42"], 1)
         mock_try_parse.assert_called_once_with("42", "package_id")
         cmd._use_case.execute.assert_called_once_with(42)  # type: ignore[reportUnknownMemberType]
-        cmd._event_collector.drain.assert_called_once_with((package, customer))  # type: ignore[reportUnknownMemberType]
+        self.assertEqual(
+            _collector_mock(cmd).drain.call_args_list,
+            [call((cmd._use_case,)), call((package, customer))],  # pyright: ignore[reportPrivateUsage]
+        )
 
     @patch("src.adapters.driving.cli.commands.remove_package.validate_params_exact")
     @patch("src.adapters.driving.cli.commands.remove_package.try_parse_int")

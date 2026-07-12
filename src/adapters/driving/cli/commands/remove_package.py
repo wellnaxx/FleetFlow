@@ -30,7 +30,10 @@ class RemovePackage(EventDrainingCommand[RemovePackageUseCase]):
         """
         validate_params_exact(self._params, 1)
         package_id = try_parse_int(self._params[0], "package_id")
-        result = self._use_case.execute(package_id)
+        result = self._run_and_drain(
+            self._use_case,
+            lambda: self._use_case.execute(package_id),
+        )
 
         self._event_collector.drain(
             (result.package, result.customer)

@@ -294,7 +294,10 @@ class PackagesRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 204)
         use_case.execute.assert_called_once_with(package_id=4)
-        event_collector.drain.assert_called_once_with((package, package.customer, route))
+        self.assertEqual(
+            event_collector.drain.call_args_list,
+            [call((use_case,)), call((package, package.customer, route))],
+        )
 
     def test_delete_package_without_route_drains_package_and_customer_only(self) -> None:
         use_case = MagicMock()
@@ -312,7 +315,10 @@ class PackagesRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 204)
         use_case.execute.assert_called_once_with(package_id=4)
-        event_collector.drain.assert_called_once_with((package, package.customer))
+        self.assertEqual(
+            event_collector.drain.call_args_list,
+            [call((use_case,)), call((package, package.customer))],
+        )
 
     def test_delete_package_returns_not_found_for_missing_package(self) -> None:
         use_case = MagicMock()
@@ -323,6 +329,7 @@ class PackagesRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["detail"], "Package with ID 4 not found")
+        self.event_collector.drain.assert_called_once_with((use_case,))
 
     def test_delete_package_returns_forbidden_for_permission_error(self) -> None:
         use_case = MagicMock()
@@ -333,6 +340,7 @@ class PackagesRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"], "Missing permission: PACKAGE_REMOVE")
+        self.event_collector.drain.assert_called_once_with((use_case,))
 
     def _package(self, *, package_id: int = 1, with_route: bool = False) -> DeliveryPackage:
         package = DeliveryPackage(
