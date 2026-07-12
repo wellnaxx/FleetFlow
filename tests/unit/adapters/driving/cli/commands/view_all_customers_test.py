@@ -13,6 +13,7 @@ class ViewAllCustomers_Should(unittest.TestCase):
         cmd = ViewAllCustomers.__new__(ViewAllCustomers)
         cmd._params = params or []  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._event_collector = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
     def test_execute_propagates_permission_errors_from_use_case(self) -> None:

@@ -18,6 +18,10 @@ class CustomersRouterShould(unittest.TestCase):
         self.app = FastAPI()
         self.app.include_router(customers_router)
         register_exception_handlers(self.app)
+        self.event_collector = MagicMock()
+        self.app.dependency_overrides[customers_router_module.get_event_collector] = (
+            lambda: self.event_collector
+        )
         self.client = TestClient(self.app)
 
     def tearDown(self) -> None:
@@ -70,6 +74,7 @@ class CustomersRouterShould(unittest.TestCase):
             },
         )
         use_case.execute.assert_called_once_with(PageQuery(limit=50, offset=0, include_total=False))
+        self.event_collector.drain.assert_called_once_with((use_case,))
 
     def test_list_customers_passes_pagination_params(self) -> None:
         use_case = MagicMock()
@@ -170,6 +175,7 @@ class CustomersRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["detail"], "Offset cannot be used without a limit.")
+        self.event_collector.drain.assert_called_once_with((use_case,))
 
     def test_list_customers_returns_forbidden_for_permission_error(self) -> None:
         use_case = MagicMock()
@@ -183,6 +189,7 @@ class CustomersRouterShould(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"], "Missing permission: CUSTOMER_VIEW")
         use_case.execute.assert_called_once_with(PageQuery(limit=50, offset=0, include_total=False))
+        self.event_collector.drain.assert_called_once_with((use_case,))
 
     def _customer(
         self,

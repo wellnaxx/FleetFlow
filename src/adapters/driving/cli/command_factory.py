@@ -59,9 +59,9 @@ _CONTAINER_COMMANDS: dict[str, CommandBuilder] = {
         params, container.package_cases.remove, container.event_collector
     ),
     "viewunassignedpackages": lambda container, params: ViewUnassignedPackages(
-        params, container.package_cases.view_unassigned
+    "viewallcustomers": lambda container, params: ViewAllCustomers(
+        params, container.customer_cases.view_all, container.event_collector
     ),
-    "viewallcustomers": lambda container, params: ViewAllCustomers(params, container.customer_cases.view_all),
     "createroute": lambda container, params: CreateRoute(
         params, container.route_cases.create, container.event_collector
     ),
