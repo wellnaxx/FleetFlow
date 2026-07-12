@@ -114,11 +114,13 @@ def list_routes(
 @routes_router.get("/in-progress", status_code=status.HTTP_200_OK)
 def list_in_progress_routes(
     use_case: Annotated[ViewRoutesInProgressUseCase, Depends(get_view_routes_in_progress_use_case)],
+    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
 ) -> list[RouteInProgressResponse]:
     """List routes that are currently at a stop or in transit.
 
     Args:
         use_case: Use case for listing active routes, injected by FastAPI.
+        event_collector: Collector used to publish authorization events.
 
     Returns:
         Active route details with computed position information.
@@ -130,7 +132,11 @@ def list_in_progress_routes(
     """
     # Domain route timing currently uses naive local datetimes.
     now = datetime.now()
-    active_routes = use_case.execute(now=now)
+    active_routes = execute_and_drain_events(
+        recorder=use_case,
+        event_collector=event_collector,
+        action=lambda: use_case.execute(now=now),
+    )
     try:
         return [
             RouteInProgressResponse.from_route_position(route, position)

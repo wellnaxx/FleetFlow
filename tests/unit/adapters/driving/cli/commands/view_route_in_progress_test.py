@@ -11,6 +11,7 @@ class ViewRoutesInProgress_Should(unittest.TestCase):
         cmd = ViewRoutesInProgress.__new__(ViewRoutesInProgress)
         cmd._params = ()  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._event_collector = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
     def _mk_route(self) -> MagicMock:

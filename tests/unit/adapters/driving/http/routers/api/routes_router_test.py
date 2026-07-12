@@ -198,6 +198,7 @@ class RoutesRouterShould(unittest.TestCase):
         self.assertEqual(response.json()[0]["position_kind"], "AT_STOP")
         self.assertEqual(response.json()[0]["current_location"], "SYD")
         use_case.execute.assert_called_once_with(now=ANY)
+        self.event_collector.drain.assert_called_once_with((use_case,))
 
     def test_list_in_progress_routes_returns_forbidden_for_permission_error(self) -> None:
         use_case = MagicMock()
@@ -210,6 +211,7 @@ class RoutesRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"], "Missing permission: ROUTE_VIEW_IN_PROGRESS")
+        self.event_collector.drain.assert_called_once_with((use_case,))
 
     def test_get_route_returns_route_response(self) -> None:
         use_case = MagicMock()
