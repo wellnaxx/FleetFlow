@@ -10,6 +10,7 @@ class FindSuitableTrucksForRoute_Tests(unittest.TestCase):
         cmd = FindSuitableTrucksForRoute.__new__(FindSuitableTrucksForRoute)
         cmd._params = tuple(params)  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._event_collector = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
     def test_execute_propagates_permission_errors_from_use_case(self) -> None:
@@ -21,6 +22,7 @@ class FindSuitableTrucksForRoute_Tests(unittest.TestCase):
 
         self.assertIn("ROUTE_FIND_TRUCK_FOR", str(ctx.exception))
         cmd._use_case.execute.assert_called_once_with(15)  # type: ignore[reportUnknownMemberType]
+        cmd._event_collector.drain.assert_called_once_with((cmd._use_case,))  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.find_suitable_trucks_for_route.validate_params_exact")
     @patch("src.adapters.driving.cli.commands.find_suitable_trucks_for_route.try_parse_int")
@@ -39,6 +41,7 @@ class FindSuitableTrucksForRoute_Tests(unittest.TestCase):
         mock_validate.assert_called_once_with(("15",), 1)
         mock_parse.assert_called_once_with("15", "route_id")
         cmd._use_case.execute.assert_called_once_with(15)  # type: ignore[reportUnknownMemberType]
+        cmd._event_collector.drain.assert_called_once_with((cmd._use_case,))  # type: ignore[reportUnknownMemberType]
 
         lines = out.splitlines()
         self.assertEqual(lines[0], "ID | Name   | Capacity | Max Range | Current Location")
@@ -73,6 +76,7 @@ class FindSuitableTrucksForRoute_Tests(unittest.TestCase):
         mock_validate.assert_called_once_with(("77",), 1)
         mock_parse.assert_called_once_with("77", "route_id")
         cmd._use_case.execute.assert_called_once_with(77)  # type: ignore[reportUnknownMemberType]
+        cmd._event_collector.drain.assert_called_once_with((cmd._use_case,))  # type: ignore[reportUnknownMemberType]
 
     @patch("src.adapters.driving.cli.commands.find_suitable_trucks_for_route.validate_params_exact")
     @patch("src.adapters.driving.cli.commands.find_suitable_trucks_for_route.try_parse_int")
@@ -116,3 +120,4 @@ class FindSuitableTrucksForRoute_Tests(unittest.TestCase):
 
         self.assertIn("db failure", str(ctx.exception))
         cmd._use_case.execute.assert_called_once_with(5)  # type: ignore[reportUnknownMemberType]
+        cmd._event_collector.drain.assert_called_once_with((cmd._use_case,))  # type: ignore[reportUnknownMemberType]

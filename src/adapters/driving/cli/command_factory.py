@@ -80,7 +80,7 @@ _CONTAINER_COMMANDS: dict[str, CommandBuilder] = {
         params, container.route_cases.assign_packages, container.event_collector
     ),
     "findsuitabletrucksforroute": lambda container, params: FindSuitableTrucksForRoute(
-        params, container.route_cases.find_suitable_trucks
+        params, container.route_cases.find_suitable_trucks, container.event_collector
     ),
     "findsuitableroutesforpackage": lambda container, params: FindSuitableRoutesForPackage(
         params, container.route_cases.find_suitable_routes, container.event_collector

@@ -264,12 +264,14 @@ def find_suitable_trucks_for_route(
     use_case: Annotated[
         FindSuitableTrucksForRouteUseCase, Depends(get_find_suitable_trucks_for_route_use_case)
     ],
+    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
 ) -> list[TruckResponse]:
     """Return trucks that can currently serve the requested route.
 
     Args:
         route_id: Identifier of the route to evaluate.
         use_case: Use case for finding suitable trucks, injected by FastAPI.
+        event_collector: Collector used to publish authorization events.
 
     Returns:
         Trucks suitable for the requested route.
@@ -280,5 +282,9 @@ def find_suitable_trucks_for_route(
             * 404 - Route not found.
             * 500 - Database operation failure.
     """
-    trucks = use_case.execute(route_id=route_id)
+    trucks = execute_and_drain_events(
+        recorder=use_case,
+        event_collector=event_collector,
+        action=lambda: use_case.execute(route_id=route_id),
+    )
     return [TruckResponse.from_truck(truck) for truck in trucks]
