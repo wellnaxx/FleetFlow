@@ -3,7 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from src.adapters.driving.http.dependencies.eventing import get_event_collector
+from src.adapters.driving.http.dependencies.eventing import execute_and_drain_events, get_event_collector
 from src.adapters.driving.http.dependencies.use_cases import (
     get_assign_packages_to_route_use_case,
     get_assign_truck_to_route_use_case,
@@ -192,7 +192,8 @@ def assign_packages_to_route(
         route_id: Identifier of the route receiving packages.
         request: Package identifiers to assign.
         use_case: Use case for assigning packages to a route, injected by FastAPI.
-        event_collector: Collector used to publish route package-assignment events.
+        event_collector: Collector used to publish use-case authorization events
+            and route package-assignment events.
 
     Returns:
         Per-package assignment successes and errors.
@@ -203,7 +204,11 @@ def assign_packages_to_route(
             * 404 - Route not found.
             * 500 - Database operation failure.
     """
-    result = use_case.execute(route_id=route_id, package_ids=request.package_ids)
+    result = execute_and_drain_events(
+        recorder=use_case,
+        event_collector=event_collector,
+        action=lambda: use_case.execute(route_id=route_id, package_ids=request.package_ids),
+    )
 
     if result.successes:
         event_collector.drain((result.successes[0].route,))

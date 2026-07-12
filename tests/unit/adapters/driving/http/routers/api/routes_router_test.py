@@ -28,6 +28,10 @@ class RoutesRouterShould(unittest.TestCase):
         self.app = FastAPI()
         self.app.include_router(routes_router)
         register_exception_handlers(self.app)
+        self.event_collector = MagicMock()
+        self.app.dependency_overrides[routes_router_module.get_event_collector] = (
+            lambda: self.event_collector
+        )
         self.client = TestClient(self.app)
 
     def tearDown(self) -> None:
@@ -292,9 +296,12 @@ class RoutesRouterShould(unittest.TestCase):
         self.assertEqual(payload["successes"][0]["route"]["package_ids"], [])
         self.assertEqual(payload["errors"][0]["message"], "Package 2 not found.")
         use_case.execute.assert_called_once_with(route_id=71, package_ids=[1, 2])
-        event_collector.drain.assert_called_once_with((route,))
+        self.assertEqual(
+            event_collector.drain.call_args_list,
+            [call((use_case,)), call((route,))],
+        )
 
-    def test_assign_packages_to_route_with_only_errors_does_not_drain_events(self) -> None:
+    def test_assign_packages_to_route_with_only_errors_drains_only_use_case(self) -> None:
         use_case = MagicMock()
         event_collector = MagicMock()
         use_case.execute.return_value = AssignPackagesToRouteResult(
@@ -312,31 +319,37 @@ class RoutesRouterShould(unittest.TestCase):
         self.assertEqual(response.json()["successes"], [])
         self.assertEqual(response.json()["errors"][0]["message"], "Package 2 not found.")
         use_case.execute.assert_called_once_with(route_id=71, package_ids=[2])
-        event_collector.drain.assert_not_called()
+        event_collector.drain.assert_called_once_with((use_case,))
 
     def test_assign_packages_to_route_returns_not_found_for_missing_route(self) -> None:
         use_case = MagicMock()
+        event_collector = MagicMock()
         use_case.execute.side_effect = NotFoundError("Route with ID 71 not found.")
         self.app.dependency_overrides[routes_router_module.get_assign_packages_to_route_use_case] = lambda: (
             use_case
         )
+        self.app.dependency_overrides[routes_router_module.get_event_collector] = lambda: event_collector
 
         response = self.client.patch("/routes/71/packages", json={"package_ids": [1]})
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["detail"], "Route with ID 71 not found.")
+        event_collector.drain.assert_called_once_with((use_case,))
 
     def test_assign_packages_to_route_returns_forbidden_for_permission_error(self) -> None:
         use_case = MagicMock()
+        event_collector = MagicMock()
         use_case.execute.side_effect = PermissionError("Missing permission: ROUTE_ASSIGN_PACKAGE")
         self.app.dependency_overrides[routes_router_module.get_assign_packages_to_route_use_case] = lambda: (
             use_case
         )
+        self.app.dependency_overrides[routes_router_module.get_event_collector] = lambda: event_collector
 
         response = self.client.patch("/routes/71/packages", json={"package_ids": [1]})
 
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"], "Missing permission: ROUTE_ASSIGN_PACKAGE")
+        event_collector.drain.assert_called_once_with((use_case,))
 
     def test_assign_packages_to_route_rejects_empty_package_list(self) -> None:
         use_case = MagicMock()
