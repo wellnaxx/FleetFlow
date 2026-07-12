@@ -116,6 +116,7 @@ def list_packages(
 @packages_router.get("/unassigned", status_code=status.HTTP_200_OK)
 def list_unassigned_packages(
     use_case: Annotated[ViewUnassignedPackagesUseCase, Depends(get_view_unassigned_packages_use_case)],
+    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
     include_total: bool = False,
@@ -124,6 +125,7 @@ def list_unassigned_packages(
 
     Args:
         use_case: Use case for listing unassigned packages, injected by FastAPI.
+        event_collector: Collector used to publish authorization events.
         limit: Maximum number of packages to return.
         offset: Number of packages to skip.
         include_total: Whether to include the total package count.
@@ -137,7 +139,13 @@ def list_unassigned_packages(
             * 403 - Insufficient permissions.
             * 500 - Database operation failure.
     """
-    result = use_case.execute(PageQuery(limit=limit, offset=offset, include_total=include_total))
+    result = execute_and_drain_events(
+        recorder=use_case,
+        event_collector=event_collector,
+        action=lambda: use_case.execute(
+            PageQuery(limit=limit, offset=offset, include_total=include_total)
+        ),
+    )
     return PackagePageResponse.from_page(result)
 
 
@@ -145,6 +153,7 @@ def list_unassigned_packages(
 def get_package(
     package_id: int,
     use_case: Annotated[ViewPackageUseCase, Depends(get_view_package_use_case)],
+    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
 ) -> PackageResponse:
     """Get a specific package by its ID.
 

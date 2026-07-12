@@ -139,8 +139,7 @@ def list_in_progress_routes(
     )
     try:
         return [
-            RouteInProgressResponse.from_route_position(route, position)
-            for route, position in active_routes
+            RouteInProgressResponse.from_route_position(route, position) for route, position in active_routes
         ]
     except RuntimeError as exc:
         raise HTTPException(

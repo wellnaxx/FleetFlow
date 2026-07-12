@@ -63,6 +63,8 @@ _CONTAINER_COMMANDS: dict[str, CommandBuilder] = {
         params, container.package_cases.remove, container.event_collector
     ),
     "viewunassignedpackages": lambda container, params: ViewUnassignedPackages(
+        params, container.package_cases.view_unassigned, container.event_collector
+    ),
     "viewallcustomers": lambda container, params: ViewAllCustomers(
         params, container.customer_cases.view_all, container.event_collector
     ),
@@ -96,7 +98,6 @@ _CONTAINER_COMMANDS: dict[str, CommandBuilder] = {
     "viewalltrucks": lambda container, params: ViewAllTrucks(
         params, container.truck_cases.view_all, container.event_collector
     ),
-    "viewalltrucks": lambda container, params: ViewAllTrucks(params, container.truck_cases.view_all),
     "viewauditlogs": lambda container, params: ViewAuditLogs(
         params, container.audit_use_cases.view_audit_logs, container.event_collector
     ),

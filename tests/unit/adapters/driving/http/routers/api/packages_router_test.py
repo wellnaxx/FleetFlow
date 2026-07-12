@@ -1,6 +1,6 @@
 import unittest
 from datetime import datetime
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -182,6 +182,7 @@ class PackagesRouterShould(unittest.TestCase):
         self.assertEqual(response.json()["limit"], 1)
         self.assertEqual(response.json()["offset"], 2)
         use_case.execute.assert_called_once_with(PageQuery(limit=1, offset=2, include_total=False))
+        self.event_collector.drain.assert_called_once_with((use_case,))
 
     def test_list_packages_rejects_invalid_pagination_params(self) -> None:
         use_case = MagicMock()

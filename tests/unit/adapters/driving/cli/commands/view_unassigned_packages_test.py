@@ -13,6 +13,7 @@ class ViewUnassignedPackages_Should(unittest.TestCase):
         cmd = ViewUnassignedPackages.__new__(ViewUnassignedPackages)
         cmd._params = params or []  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._event_collector = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
     def test_execute_propagates_permission_errors_from_use_case(self) -> None:
@@ -24,6 +25,7 @@ class ViewUnassignedPackages_Should(unittest.TestCase):
 
         self.assertIn("PACKAGE_VIEW_UNASSIGNED", str(ctx.exception))
         cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
+        cmd._event_collector.drain.assert_called_once_with((cmd._use_case,))  # type: ignore[reportUnknownMemberType]
 
     def test_no_packages_returns_friendly_message(self) -> None:
         cmd = self.make_cmd()
@@ -69,6 +71,7 @@ class ViewUnassignedPackages_Should(unittest.TestCase):
 
         self.assertIn("db down", str(ctx.exception))
         cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
+        cmd._event_collector.drain.assert_called_once_with((cmd._use_case,))  # type: ignore[reportUnknownMemberType]
 
     def test_ignores_params_if_present(self) -> None:
         cmd = self.make_cmd(params=["ignored", "also-ignored"])
