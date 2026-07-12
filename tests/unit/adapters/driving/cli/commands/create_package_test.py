@@ -1,12 +1,23 @@
 import unittest
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from typing import cast
+from unittest.mock import MagicMock, call, patch
 
 from src.adapters.driving.cli.commands.create_package import CreatePackage
 
 
 def _parse_float(value: str, _field_name: str = "value") -> float:
     return float(value)
+
+
+def _collector_mock(command: CreatePackage) -> MagicMock:
+    """Return the command's injected collector as its test-double type."""
+    return cast(MagicMock, command._event_collector)  # pyright: ignore[reportPrivateUsage]
+
+
+def _use_case_mock(command: CreatePackage) -> MagicMock:
+    """Return the command's injected use case as its test-double type."""
+    return cast(MagicMock, command._use_case)  # pyright: ignore[reportPrivateUsage]
 
 
 class CreatePackage_Tests(unittest.TestCase):
@@ -36,6 +47,7 @@ class CreatePackage_Tests(unittest.TestCase):
             email="",
             phone="",
         )
+        _collector_mock(cmd).drain.assert_called_once_with((_use_case_mock(cmd),))
 
     @patch("src.adapters.driving.cli.commands.create_package.validate_params_count")
     @patch("src.adapters.driving.cli.commands.create_package.try_parse_float")
@@ -63,7 +75,10 @@ class CreatePackage_Tests(unittest.TestCase):
             phone="",
         )
         self.assertEqual(result, "Package 123 was created for customer Alice (ID: 55) successfully.")
-        cmd._event_collector.drain.assert_called_once_with((pkg, pkg.customer))  # type: ignore[reportUnknownMemberType]
+        self.assertEqual(
+            _collector_mock(cmd).drain.call_args_list,
+            [call((_use_case_mock(cmd),)), call((pkg, pkg.customer))],
+        )
 
     @patch("src.adapters.driving.cli.commands.create_package.validate_params_count")
     @patch("src.adapters.driving.cli.commands.create_package.try_parse_float")
@@ -91,7 +106,10 @@ class CreatePackage_Tests(unittest.TestCase):
             phone="0412345678",
         )
         self.assertEqual(result, "Package 999 was created for customer Bob (ID: 1) successfully.")
-        cmd._event_collector.drain.assert_called_once_with((pkg, pkg.customer))  # type: ignore[reportUnknownMemberType]
+        self.assertEqual(
+            _collector_mock(cmd).drain.call_args_list,
+            [call((_use_case_mock(cmd),)), call((pkg, pkg.customer))],
+        )
 
     @patch("src.adapters.driving.cli.commands.create_package.validate_params_count")
     @patch("src.adapters.driving.cli.commands.create_package.try_parse_float")
@@ -108,6 +126,7 @@ class CreatePackage_Tests(unittest.TestCase):
 
         self.assertIn("not a number", str(ctx.exception))
         cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
+        _collector_mock(cmd).drain.assert_not_called()
 
     @patch("src.adapters.driving.cli.commands.create_package.validate_params_count")
     @patch("src.adapters.driving.cli.commands.create_package.try_parse_float")
@@ -132,6 +151,25 @@ class CreatePackage_Tests(unittest.TestCase):
             email="",
             phone="",
         )
+        _collector_mock(cmd).drain.assert_called_once_with((_use_case_mock(cmd),))
+
+    @patch("src.adapters.driving.cli.commands.create_package.validate_params_count")
+    @patch("src.adapters.driving.cli.commands.create_package.try_parse_float")
+    def test_use_case_event_publication_failure_prevents_entity_drain(
+        self,
+        mock_parse_float: MagicMock,
+        mock_validate: MagicMock,
+    ) -> None:
+        mock_parse_float.return_value = 2.5
+        cmd = self.make_cmd(["A1", "B2", "2.5", "Alice"])
+        package = SimpleNamespace(package_id=1, customer=SimpleNamespace(customer_id=2))
+        cmd._use_case.execute.return_value = package  # type: ignore[reportAttributeAccessIssue]
+        _collector_mock(cmd).drain.side_effect = RuntimeError("publisher failed")
+
+        with self.assertRaisesRegex(RuntimeError, "publisher failed"):
+            cmd.execute()
+
+        _collector_mock(cmd).drain.assert_called_once_with((_use_case_mock(cmd),))
 
     @patch("src.adapters.driving.cli.commands.create_package.validate_params_count")
     @patch("src.adapters.driving.cli.commands.create_package.try_parse_float")

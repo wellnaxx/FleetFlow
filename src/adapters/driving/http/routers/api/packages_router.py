@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from src.adapters.driving.http.dependencies.eventing import get_event_collector
+from src.adapters.driving.http.dependencies.eventing import execute_and_drain_events, get_event_collector
 from src.adapters.driving.http.dependencies.use_cases import (
     get_create_package_use_case,
     get_find_suitable_routes_for_package_use_case,
@@ -44,7 +44,8 @@ def create_package(
     Args:
         request: The package creation request data.
         use_case: The use case for creating a package, injected by FastAPI.
-        event_collector: Collector used to publish package and customer events.
+        event_collector: Collector used to publish use-case authorization events
+            and package/customer domain events.
 
     Returns:
         A response model representing the newly created package.
@@ -57,13 +58,17 @@ def create_package(
             * 500 - Database operation failure.
     """
     try:
-        package = use_case.execute(
-            start=request.start_location,
-            end=request.end_location,
-            weight=request.weight,
-            name=request.customer_name,
-            email=request.customer_email or "",
-            phone=request.customer_phone_number or "",
+        package = execute_and_drain_events(
+            recorder=use_case,
+            event_collector=event_collector,
+            action=lambda: use_case.execute(
+                start=request.start_location,
+                end=request.end_location,
+                weight=request.weight,
+                name=request.customer_name,
+                email=request.customer_email or "",
+                phone=request.customer_phone_number or "",
+            ),
         )
     except (ConflictError, DomainConflictError, EntityNotFoundError) as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc

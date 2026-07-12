@@ -25,6 +25,10 @@ class PackagesRouterShould(unittest.TestCase):
         self.app = FastAPI()
         self.app.include_router(packages_router)
         register_exception_handlers(self.app)
+        self.event_collector = MagicMock()
+        self.app.dependency_overrides[packages_router_module.get_event_collector] = (
+            lambda: self.event_collector
+        )
         self.client = TestClient(self.app)
 
     def tearDown(self) -> None:
@@ -61,12 +65,17 @@ class PackagesRouterShould(unittest.TestCase):
             email="",
             phone="",
         )
-        event_collector.drain.assert_called_once_with((package, package.customer))
+        self.assertEqual(
+            event_collector.drain.call_args_list,
+            [call((use_case,)), call((package, package.customer))],
+        )
 
     def test_create_package_returns_bad_request_for_invalid_input(self) -> None:
         use_case = MagicMock()
+        event_collector = MagicMock()
         use_case.execute.side_effect = DomainValidationError("Invalid start location: BAD")
         self.app.dependency_overrides[packages_router_module.get_create_package_use_case] = lambda: use_case
+        self.app.dependency_overrides[packages_router_module.get_event_collector] = lambda: event_collector
 
         response = self.client.post(
             "/packages",
@@ -80,11 +89,14 @@ class PackagesRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["detail"], "Invalid start location: BAD")
+        event_collector.drain.assert_called_once_with((use_case,))
 
     def test_create_package_returns_forbidden_for_permission_error(self) -> None:
         use_case = MagicMock()
+        event_collector = MagicMock()
         use_case.execute.side_effect = PermissionError("Missing permission: PACKAGE_CREATE")
         self.app.dependency_overrides[packages_router_module.get_create_package_use_case] = lambda: use_case
+        self.app.dependency_overrides[packages_router_module.get_event_collector] = lambda: event_collector
 
         response = self.client.post(
             "/packages",
@@ -98,6 +110,7 @@ class PackagesRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"], "Missing permission: PACKAGE_CREATE")
+        event_collector.drain.assert_called_once_with((use_case,))
 
     def test_list_packages_returns_paginated_package_responses(self) -> None:
         use_case = MagicMock()

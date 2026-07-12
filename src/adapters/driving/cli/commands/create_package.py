@@ -6,7 +6,7 @@ from src.application.use_cases.packages.create_package import CreatePackageUseCa
 
 
 class CreatePackage(EventDrainingCommand[CreatePackageUseCase]):
-    """Create a package from CLI parameters."""
+    """Create a package and publish use-case and entity events."""
 
     mutates_state = True
     autosaves_state = True
@@ -20,6 +20,8 @@ class CreatePackage(EventDrainingCommand[CreatePackageUseCase]):
         Raises:
             PermissionError: If the caller lacks package creation permission.
             ValueError: If parameter validation or package creation fails.
+            Exception: Propagates event-publication failures after successful
+                use-case execution.
         """
         validate_params_count(self._params, 4, 6)
 
@@ -30,13 +32,16 @@ class CreatePackage(EventDrainingCommand[CreatePackageUseCase]):
         email = self._params[4] if len(self._params) > 4 else ""
         phone = self._params[5] if len(self._params) > 5 else ""
 
-        package = self._use_case.execute(
-            start=start,
-            end=end,
-            weight=weight,
-            name=name,
-            email=email,
-            phone=phone,
+        package = self._run_and_drain(
+            self._use_case,
+            lambda: self._use_case.execute(
+                start=start,
+                end=end,
+                weight=weight,
+                name=name,
+                email=email,
+                phone=phone,
+            ),
         )
 
         self._event_collector.drain((package, package.customer))
