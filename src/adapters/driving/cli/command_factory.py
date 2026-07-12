@@ -66,8 +66,9 @@ _CONTAINER_COMMANDS: dict[str, CommandBuilder] = {
     "createroute": lambda container, params: CreateRoute(
         params, container.route_cases.create, container.event_collector
     ),
-    "viewroute": lambda container, params: ViewRoute(params, container.route_cases.view),
-    "viewallroutes": lambda container, params: ViewAllRoutes(params, container.route_cases.view_all),
+    "viewallroutes": lambda container, params: ViewAllRoutes(
+        params, container.route_cases.view_all, container.event_collector
+    ),
     "viewroutesinprogress": lambda container, params: ViewRoutesInProgress(
         params, container.route_cases.view_in_progress
     ),

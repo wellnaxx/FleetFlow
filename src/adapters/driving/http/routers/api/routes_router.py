@@ -86,6 +86,7 @@ def list_routes(
 
     Args:
         use_case: Use case for listing routes, injected by FastAPI.
+        event_collector: Collector used to publish authorization events.
         limit: Maximum number of routes to return.
         offset: Number of routes to skip.
         include_total: Whether to include the total route count.
@@ -99,7 +100,13 @@ def list_routes(
             * 403 - Insufficient permissions.
             * 500 - Database operation failure.
     """
-    result = use_case.execute(PageQuery(limit=limit, offset=offset, include_total=include_total))
+    result = execute_and_drain_events(
+        recorder=use_case,
+        event_collector=event_collector,
+        action=lambda: use_case.execute(
+            PageQuery(limit=limit, offset=offset, include_total=include_total)
+        ),
+    )
     return RoutePageResponse.from_page(result)
 
 

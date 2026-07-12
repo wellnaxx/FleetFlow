@@ -56,6 +56,7 @@ class RoutesRouterShould(unittest.TestCase):
         self.assertEqual(response.json()["offset"], 2)
         self.assertEqual(response.json()["items"][0]["route_id"], 21)
         use_case.execute.assert_called_once_with(PageQuery(limit=1, offset=2, include_total=False))
+        self.event_collector.drain.assert_called_once_with((use_case,))
 
     def test_list_routes_includes_total_when_requested(self) -> None:
         use_case = MagicMock()
@@ -105,6 +106,7 @@ class RoutesRouterShould(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"], "Missing permission: ROUTE_VIEW_ALL")
         use_case.execute.assert_called_once_with(PageQuery(limit=50, offset=0, include_total=False))
+        self.event_collector.drain.assert_called_once_with((use_case,))
 
     def test_list_routes_rejects_invalid_pagination_params(self) -> None:
         use_case = MagicMock()
