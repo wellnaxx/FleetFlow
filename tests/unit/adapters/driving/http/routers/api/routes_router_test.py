@@ -221,6 +221,7 @@ class RoutesRouterShould(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["route_id"], 51)
         use_case.execute.assert_called_once_with(route_id=51)
+        self.event_collector.drain.assert_called_once_with((use_case,))
 
     def test_get_route_returns_not_found_for_missing_route(self) -> None:
         use_case = MagicMock()
@@ -231,6 +232,7 @@ class RoutesRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["detail"], "Route with ID 51 not found")
+        self.event_collector.drain.assert_called_once_with((use_case,))
 
     def test_get_route_returns_forbidden_for_permission_error(self) -> None:
         use_case = MagicMock()
@@ -241,6 +243,7 @@ class RoutesRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"], "Missing permission: ROUTE_VIEW")
+        self.event_collector.drain.assert_called_once_with((use_case,))
 
     def test_delete_route_removes_route(self) -> None:
         use_case = MagicMock()

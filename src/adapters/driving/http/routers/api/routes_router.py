@@ -78,6 +78,7 @@ def create_route(
 @routes_router.get("/", status_code=status.HTTP_200_OK)
 def list_routes(
     use_case: Annotated[ViewAllRoutesUseCase, Depends(get_view_all_routes_use_case)],
+    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
     include_total: bool = False,
@@ -144,13 +145,16 @@ def list_in_progress_routes(
 
 @routes_router.get("/{route_id}", status_code=status.HTTP_200_OK)
 def get_route(
-    route_id: int, use_case: Annotated[ViewRouteUseCase, Depends(get_view_route_use_case)]
+    route_id: int,
+    use_case: Annotated[ViewRouteUseCase, Depends(get_view_route_use_case)],
+    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
 ) -> RouteResponse:
     """Return one delivery route by id.
 
     Args:
         route_id: Identifier of the route to retrieve.
         use_case: Use case for retrieving one route, injected by FastAPI.
+        event_collector: Collector used to publish authorization events.
 
     Returns:
         Route details for the requested route.
@@ -161,7 +165,11 @@ def get_route(
             * 404 - Route not found.
             * 500 - Database operation failure.
     """
-    route = use_case.execute(route_id=route_id)
+    route = execute_and_drain_events(
+        recorder=use_case,
+        event_collector=event_collector,
+        action=lambda: use_case.execute(route_id=route_id),
+    )
     return RouteResponse.from_route(route)
 
 

@@ -9,6 +9,7 @@ class ViewRoute_Should(unittest.TestCase):
         cmd = ViewRoute.__new__(ViewRoute)
         cmd._params = tuple(params)  # type: ignore[reportAttributeAccessIssue]
         cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
+        cmd._event_collector = MagicMock()  # type: ignore[reportAttributeAccessIssue]
         return cmd
 
     def test_execute_propagates_permission_errors_from_use_case(self) -> None:
