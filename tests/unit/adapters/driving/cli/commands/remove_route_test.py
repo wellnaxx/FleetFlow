@@ -1,7 +1,13 @@
 import unittest
-from unittest.mock import MagicMock, patch
+from typing import cast
+from unittest.mock import MagicMock, call, patch
 
 from src.adapters.driving.cli.commands.remove_route import RemoveRoute
+
+
+def _collector_mock(command: RemoveRoute) -> MagicMock:
+    """Return the command's injected collector as its test-double type."""
+    return cast(MagicMock, command._event_collector)  # pyright: ignore[reportPrivateUsage]
 
 
 class TestRemoveRoute_Should(unittest.TestCase):
@@ -78,7 +84,10 @@ class TestRemoveRoute_Should(unittest.TestCase):
         mock_validate.assert_called_once_with(("42",), 1)
         mock_parse.assert_called_once_with("42", "route_id")
         cmd._use_case.execute.assert_called_once_with(42)  # type: ignore[reportUnknownMemberType]
-        cmd._event_collector.drain.assert_called_once_with((route,))  # type: ignore[reportUnknownMemberType]
+        self.assertEqual(
+            _collector_mock(cmd).drain.call_args_list,
+            [call((cmd._use_case,)), call((route,))],  # pyright: ignore[reportPrivateUsage]
+        )
 
     @patch("src.adapters.driving.cli.commands.remove_route.validate_params_exact")
     @patch("src.adapters.driving.cli.commands.remove_route.try_parse_int")

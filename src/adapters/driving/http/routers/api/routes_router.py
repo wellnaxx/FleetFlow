@@ -169,7 +169,8 @@ def delete_route(
     Args:
         route_id: Identifier of the route to remove.
         use_case: Use case for removing one route, injected by FastAPI.
-        event_collector: Collector used to publish route removal events.
+        event_collector: Collector used to publish authorization and route
+            removal events.
 
     Returns:
         None.
@@ -180,7 +181,11 @@ def delete_route(
             * 404 - Route not found.
             * 500 - Database operation failure.
     """
-    route = use_case.execute(route_id=route_id)
+    route = execute_and_drain_events(
+        recorder=use_case,
+        event_collector=event_collector,
+        action=lambda: use_case.execute(route_id=route_id),
+    )
     event_collector.drain((route,))
 
 

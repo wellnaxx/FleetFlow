@@ -23,7 +23,10 @@ class RemoveRoute(EventDrainingCommand[RemoveRouteUseCase]):
         """
         validate_params_exact(self._params, 1)
         route_id = try_parse_int(self._params[0], "route_id")
-        route = self._use_case.execute(route_id)
+        route = self._run_and_drain(
+            self._use_case,
+            lambda: self._use_case.execute(route_id),
+        )
 
         self._event_collector.drain((route,))
         return f"Route {route_id} removed."
