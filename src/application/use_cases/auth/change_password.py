@@ -29,13 +29,12 @@ from src.application.exceptions.password_errors import (
 from src.application.services.auth_service import AuthService
 from src.application.services.authorization_service import AuthorizationService, record_authorization_denied
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
-from src.application.use_cases.base.event_mixin import ApplicationEventRecorderMixin
 from src.domain.enums.auth import Permission
 
 logger = logging.getLogger(__name__)
 
 
-class ChangePasswordUseCase(AuthorizedUseCase[None], ApplicationEventRecorderMixin):
+class ChangePasswordUseCase(AuthorizedUseCase[None]):
     """Coordinate authenticated password changes and admin password resets."""
 
     def __init__(
@@ -54,8 +53,6 @@ class ChangePasswordUseCase(AuthorizedUseCase[None], ApplicationEventRecorderMix
         super().__init__(authz)
         self._auth = auth
         self._clock = clock
-
-        self._pending_events = []
 
     def execute(self, username: str, new_password: str, old_password: str | None = None) -> None:
         """Change a password, optionally verifying the old password first.

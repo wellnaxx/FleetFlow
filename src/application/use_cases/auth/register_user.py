@@ -18,7 +18,6 @@ from src.application.exceptions.password_errors import (
 from src.application.models.user_record import UserRecord
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
-from src.application.use_cases.base.event_mixin import ApplicationEventRecorderMixin
 from src.domain.enums.auth import Permission, Role
 
 if TYPE_CHECKING:
@@ -42,7 +41,7 @@ def _username_resource_id(
     return username.strip().lower() or None
 
 
-class RegisterUserUseCase(AuthorizedUseCase[UserRecord], ApplicationEventRecorderMixin):
+class RegisterUserUseCase(AuthorizedUseCase[UserRecord]):
     """Register a new user through the auth service."""
 
     def __init__(
@@ -61,8 +60,6 @@ class RegisterUserUseCase(AuthorizedUseCase[UserRecord], ApplicationEventRecorde
         super().__init__(authz)
         self._auth = auth
         self._clock = clock
-
-        self._pending_events = []
 
     @requires(
         Permission.ADMIN_USER,

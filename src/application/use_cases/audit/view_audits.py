@@ -10,13 +10,12 @@ from src.application.models.audit_log_query import AuditLogQuery
 from src.application.models.audit_record import AuditRecord
 from src.application.services.authorization_service import AuthorizationService, record_authorization_denied
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
-from src.application.use_cases.base.event_mixin import ApplicationEventRecorderMixin
 from src.application.use_cases.pagination import PageResult, execute_page_query
 from src.domain.enums.auth import Permission
 from src.ports.output.audit_repository import AuditRepositoryPort
 
 
-class ViewAuditLogsUseCase(AuthorizedUseCase[PageResult[AuditRecord]], ApplicationEventRecorderMixin):
+class ViewAuditLogsUseCase(AuthorizedUseCase[PageResult[AuditRecord]]):
     """Return audit records visible to the current principal.
 
     Managers with ``AUDIT_VIEW`` may query the full audit log with caller
@@ -41,8 +40,6 @@ class ViewAuditLogsUseCase(AuthorizedUseCase[PageResult[AuditRecord]], Applicati
         super().__init__(authz)
         self._audit_log_repository = audit_log_repository
         self._clock = clock
-
-        self._pending_events = []
 
     def execute(self, query: AuditLogQuery) -> PageResult[AuditRecord]:
         """Execute an authorized audit-log query.

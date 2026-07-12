@@ -24,7 +24,6 @@ from src.application.exceptions.world_state_errors import (
 )
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
-from src.application.use_cases.base.event_mixin import ApplicationEventRecorderMixin
 from src.application.use_cases.state.path_validation import validate_world_state_path
 from src.application.value_objects.world_state_entity_counts import WorldStateEntityCounts
 from src.domain.enums.auth import Permission
@@ -44,7 +43,7 @@ def _resolve_path_target_id(_self: LoadWorldStateUseCase, path: str) -> str | No
     return path.strip() or None
 
 
-class LoadWorldStateUseCase(AuthorizedUseCase[str], ApplicationEventRecorderMixin):
+class LoadWorldStateUseCase(AuthorizedUseCase[str]):
     """Load persisted world state into the active runtime."""
 
     def __init__(
@@ -68,7 +67,6 @@ class LoadWorldStateUseCase(AuthorizedUseCase[str], ApplicationEventRecorderMixi
 
         self._clock = clock
 
-        self._pending_events = []
 
     @requires(
         Permission.APP_LOAD_STATE,

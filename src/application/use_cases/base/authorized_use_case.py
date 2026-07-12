@@ -1,17 +1,29 @@
+"""Base contract for permission-protected, event-aware use cases."""
+
 from src.application.services.authorization_service import AuthorizationService
 from src.application.use_cases.base.base_use_case import BaseUseCase
+from src.application.use_cases.base.event_mixin import ApplicationEventRecorderMixin
 
 
-class AuthorizedUseCase[T](BaseUseCase[T]):
-    """Base for use cases that enforce permissions through @requires or @requires_all.
+class AuthorizedUseCase[T](BaseUseCase[T], ApplicationEventRecorderMixin):
+    """Base for permission-protected use cases that record application events.
 
-    Subclasses must call super().__init__(authz).
+    Permission decorators record ``AuthorizationDenied`` on the use-case
+    instance. Driving adapters must therefore drain authorized use cases after
+    successful and failed execution. Subclasses must call ``super().__init__``
+    with their authorization service.
     """
 
     def __init__(self, authz: AuthorizationService) -> None:
+        """Initialize authorization state and an empty pending-event buffer.
+
+        Args:
+            authz: Authorization service containing the current principal.
+        """
         self._authz = authz
+        self._pending_events = []
 
     @property
     def authz(self) -> AuthorizationService:
-        """Authorization service used by permission decorators."""
+        """Return the authorization service used by permission decorators."""
         return self._authz
