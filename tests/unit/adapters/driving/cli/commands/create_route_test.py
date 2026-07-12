@@ -1,9 +1,20 @@
 import unittest
 from datetime import datetime
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from typing import cast
+from unittest.mock import MagicMock, call, patch
 
 from src.adapters.driving.cli.commands.create_route import CreateRoute
+
+
+def _collector_mock(command: CreateRoute) -> MagicMock:
+    """Return the command's injected collector as its test-double type."""
+    return cast(MagicMock, command._event_collector)  # pyright: ignore[reportPrivateUsage]
+
+
+def _use_case_mock(command: CreateRoute) -> MagicMock:
+    """Return the command's injected use case as its test-double type."""
+    return cast(MagicMock, command._use_case)  # pyright: ignore[reportPrivateUsage]
 
 
 class CreateRoute_Should(unittest.TestCase):
@@ -26,6 +37,7 @@ class CreateRoute_Should(unittest.TestCase):
 
         self.assertIn("ROUTE_CREATE", str(ctx.exception))
         cmd._use_case.execute.assert_called_once_with(["SYD", "MEL"], None)  # type: ignore[reportUnknownMemberType]
+        _collector_mock(cmd).drain.assert_called_once_with((_use_case_mock(cmd),))
 
     @patch("src.adapters.driving.cli.commands.create_route.parse_departure_from_tail")
     @patch("src.adapters.driving.cli.commands.create_route.validate_params_count")
@@ -46,7 +58,10 @@ class CreateRoute_Should(unittest.TestCase):
             result,
             "Route 42 created: SYD -> MEL -> ADL | Departure: (unscheduled) | Distance: 1365 km",
         )
-        cmd._event_collector.drain.assert_called_once_with((route,))  # type: ignore[reportUnknownMemberType]
+        self.assertEqual(
+            _collector_mock(cmd).drain.call_args_list,
+            [call((_use_case_mock(cmd),)), call((route,))],
+        )
 
     @patch("src.adapters.driving.cli.commands.create_route.parse_departure_from_tail")
     @patch("src.adapters.driving.cli.commands.create_route.validate_params_count")
@@ -68,7 +83,10 @@ class CreateRoute_Should(unittest.TestCase):
             result,
             "Route 7 created: SYD -> MEL | Departure: 2025-10-12 06:00 | Distance: 878 km",
         )
-        cmd._event_collector.drain.assert_called_once_with((route,))  # type: ignore[reportUnknownMemberType]
+        self.assertEqual(
+            _collector_mock(cmd).drain.call_args_list,
+            [call((_use_case_mock(cmd),)), call((route,))],
+        )
 
     @patch("src.adapters.driving.cli.commands.create_route.parse_departure_from_tail")
     @patch("src.adapters.driving.cli.commands.create_route.validate_params_count")
@@ -99,6 +117,7 @@ class CreateRoute_Should(unittest.TestCase):
         self.assertIn("need at least 2", str(ctx.exception))
         mock_parse.assert_not_called()
         cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
+        _collector_mock(cmd).drain.assert_not_called()
 
     @patch("src.adapters.driving.cli.commands.create_route.parse_departure_from_tail")
     @patch("src.adapters.driving.cli.commands.create_route.validate_params_count")
@@ -130,3 +149,22 @@ class CreateRoute_Should(unittest.TestCase):
 
         self.assertIn("db failure", str(ctx.exception))
         cmd._use_case.execute.assert_called_once_with(["SYD", "MEL"], None)  # type: ignore[reportUnknownMemberType]
+        _collector_mock(cmd).drain.assert_called_once_with((_use_case_mock(cmd),))
+
+    @patch("src.adapters.driving.cli.commands.create_route.parse_departure_from_tail")
+    @patch("src.adapters.driving.cli.commands.create_route.validate_params_count")
+    def test_use_case_event_publication_failure_prevents_route_drain(
+        self,
+        mock_validate: MagicMock,
+        mock_parse: MagicMock,
+    ) -> None:
+        mock_parse.return_value = (["SYD", "MEL"], None)
+        cmd = self.make_cmd(["SYD", "MEL"])
+        route = SimpleNamespace(route_id=1, total_distance_km=100)
+        cmd._use_case.execute.return_value = route  # type: ignore[reportAttributeAccessIssue]
+        _collector_mock(cmd).drain.side_effect = RuntimeError("publisher failed")
+
+        with self.assertRaisesRegex(RuntimeError, "publisher failed"):
+            cmd.execute()
+
+        _collector_mock(cmd).drain.assert_called_once_with((_use_case_mock(cmd),))

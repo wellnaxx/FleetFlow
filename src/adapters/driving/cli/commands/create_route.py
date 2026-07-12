@@ -10,7 +10,7 @@ from src.domain.value_objects.location_code import LocationCode
 
 
 class CreateRoute(EventDrainingCommand[CreateRouteUseCase]):
-    """Create a route from location tokens and an optional departure time.
+    """Create a route and publish use-case and route events.
 
     Usage:
         createroute <LOC1> <LOC2> [LOC3 ...] [YYYY-MM-DD HH:MM]
@@ -34,11 +34,16 @@ class CreateRoute(EventDrainingCommand[CreateRouteUseCase]):
         Raises:
             PermissionError: If the caller lacks route creation permission.
             ValueError: If parameter validation or route creation fails.
+            Exception: Propagates event-publication failures after successful
+                use-case execution.
         """
         validate_params_count(self._params, 2)
         loc_tokens, departure = parse_departure_from_tail(list(self._params))
         locations = [LocationCode(token) for token in loc_tokens]
-        route = self._use_case.execute(locations, departure)
+        route = self._run_and_drain(
+            self._use_case,
+            lambda: self._use_case.execute(locations, departure),
+        )
 
         self._event_collector.drain((route,))
 

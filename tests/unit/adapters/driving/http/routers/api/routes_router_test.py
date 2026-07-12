@@ -141,12 +141,17 @@ class RoutesRouterShould(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()["route_id"], 31)
         use_case.execute.assert_called_once_with(locations=["SYD", "MEL"], departure_time=None)
-        event_collector.drain.assert_called_once_with((route,))
+        self.assertEqual(
+            event_collector.drain.call_args_list,
+            [call((use_case,)), call((route,))],
+        )
 
     def test_create_route_returns_bad_request_for_invalid_route(self) -> None:
         use_case = MagicMock()
+        event_collector = MagicMock()
         use_case.execute.side_effect = DomainValidationError("Invalid location code: BAD.")
         self.app.dependency_overrides[routes_router_module.get_create_route_use_case] = lambda: use_case
+        self.app.dependency_overrides[routes_router_module.get_event_collector] = lambda: event_collector
 
         response = self.client.post(
             "/routes/",
@@ -155,11 +160,14 @@ class RoutesRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["detail"], "Invalid location code: BAD.")
+        event_collector.drain.assert_called_once_with((use_case,))
 
     def test_create_route_returns_forbidden_for_permission_error(self) -> None:
         use_case = MagicMock()
+        event_collector = MagicMock()
         use_case.execute.side_effect = PermissionError("Missing permission: ROUTE_CREATE")
         self.app.dependency_overrides[routes_router_module.get_create_route_use_case] = lambda: use_case
+        self.app.dependency_overrides[routes_router_module.get_event_collector] = lambda: event_collector
 
         response = self.client.post(
             "/routes/",
@@ -168,6 +176,7 @@ class RoutesRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"], "Missing permission: ROUTE_CREATE")
+        event_collector.drain.assert_called_once_with((use_case,))
 
     def test_list_in_progress_routes_returns_position_responses(self) -> None:
         use_case = MagicMock()

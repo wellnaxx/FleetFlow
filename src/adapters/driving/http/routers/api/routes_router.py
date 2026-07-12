@@ -50,7 +50,8 @@ def create_route(
     Args:
         request: The request body containing route creation details.
         use_case: Use case for creating a route, injected by FastAPI.
-        event_collector: Collector used to publish route creation events.
+        event_collector: Collector used to publish use-case authorization events
+            and route creation events.
 
     Returns:
         The created route details.
@@ -61,9 +62,13 @@ def create_route(
             * 403 - Insufficient permissions.
             * 500 - Database operation failure.
     """
-    route = use_case.execute(
-        locations=request.locations,
-        departure_time=request.departure_time,
+    route = execute_and_drain_events(
+        recorder=use_case,
+        event_collector=event_collector,
+        action=lambda: use_case.execute(
+            locations=request.locations,
+            departure_time=request.departure_time,
+        ),
     )
 
     event_collector.drain((route,))
