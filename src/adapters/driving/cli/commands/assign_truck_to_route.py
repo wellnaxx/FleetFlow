@@ -8,7 +8,7 @@ from src.application.use_cases.routes.assign_truck_to_route import AssignTruckTo
 
 
 class AssignTruckToRoute(EventDrainingCommand[AssignTruckToRouteUseCase]):
-    """Assign a truck to a route, scheduling unscheduled routes at command time."""
+    """Assign a truck and publish use-case and route events."""
 
     mutates_state = True
     autosaves_state = True
@@ -22,6 +22,8 @@ class AssignTruckToRoute(EventDrainingCommand[AssignTruckToRouteUseCase]):
         Raises:
             PermissionError: If the caller lacks truck-assignment permission.
             ValueError: If parameters are invalid or assignment fails.
+            Exception: Propagates event-publication failures after successful
+                use-case execution.
         """
         validate_params_exact(self._params, 2)
 
@@ -29,7 +31,10 @@ class AssignTruckToRoute(EventDrainingCommand[AssignTruckToRouteUseCase]):
         route_id = try_parse_int(self._params[1], "route_id")
         now = datetime.now()
 
-        result = self._use_case.execute(truck_id, route_id, now)
+        result = self._run_and_drain(
+            self._use_case,
+            lambda: self._use_case.execute(truck_id, route_id, now),
+        )
 
         self._event_collector.drain((result.route,))
 

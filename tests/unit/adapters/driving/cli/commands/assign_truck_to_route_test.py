@@ -1,8 +1,19 @@
 import unittest
 from datetime import datetime
+from typing import cast
 from unittest.mock import MagicMock, call, patch
 
 from src.adapters.driving.cli.commands.assign_truck_to_route import AssignTruckToRoute
+
+
+def _collector_mock(command: AssignTruckToRoute) -> MagicMock:
+    """Return the command's injected collector as its test-double type."""
+    return cast(MagicMock, command._event_collector)  # pyright: ignore[reportPrivateUsage]
+
+
+def _use_case_mock(command: AssignTruckToRoute) -> MagicMock:
+    """Return the command's injected use case as its test-double type."""
+    return cast(MagicMock, command._use_case)  # pyright: ignore[reportPrivateUsage]
 
 
 class AssignTruckToRoute_Should(unittest.TestCase):
@@ -28,6 +39,7 @@ class AssignTruckToRoute_Should(unittest.TestCase):
 
         self.assertIn("ROUTE_ASSIGN_TRUCK", str(ctx.exception))
         cmd._use_case.execute.assert_called_once_with(11, 22, fixed_now)  # type: ignore[reportUnknownMemberType]
+        _collector_mock(cmd).drain.assert_called_once_with((_use_case_mock(cmd),))
 
     @patch("src.adapters.driving.cli.commands.assign_truck_to_route.datetime")
     @patch("src.adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
@@ -51,7 +63,10 @@ class AssignTruckToRoute_Should(unittest.TestCase):
         mock_validate.assert_called_once_with(("11", "22"), 2)
         self.assertEqual(mock_parse.call_args_list, [call("11", "truck_id"), call("22", "route_id")])
         cmd._use_case.execute.assert_called_once_with(11, 22, fixed_now)  # type: ignore[reportUnknownMemberType]
-        cmd._event_collector.drain.assert_called_once_with((route,))  # type: ignore[reportUnknownMemberType]
+        self.assertEqual(
+            _collector_mock(cmd).drain.call_args_list,
+            [call((_use_case_mock(cmd),)), call((route,))],
+        )
         self.assertEqual(result, "Assigned truck 11 to route 22.")
 
     @patch("src.adapters.driving.cli.commands.assign_truck_to_route.datetime")
@@ -73,7 +88,10 @@ class AssignTruckToRoute_Should(unittest.TestCase):
         result = cmd.execute()
 
         self.assertEqual(result, "Assigned truck 5 to route 999.")
-        cmd._event_collector.drain.assert_called_once_with((route,))  # type: ignore[reportUnknownMemberType]
+        self.assertEqual(
+            _collector_mock(cmd).drain.call_args_list,
+            [call((_use_case_mock(cmd),)), call((route,))],
+        )
 
     @patch("src.adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
     def test_execute_raises_when_param_count_invalid(self, mock_validate: MagicMock) -> None:
@@ -143,6 +161,29 @@ class AssignTruckToRoute_Should(unittest.TestCase):
 
         self.assertIn("precondition failed", str(ctx.exception))
         cmd._use_case.execute.assert_called_once_with(3, 4, fixed_now)  # type: ignore[reportUnknownMemberType]
+        _collector_mock(cmd).drain.assert_called_once_with((_use_case_mock(cmd),))
+
+    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.datetime")
+    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
+    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.try_parse_int")
+    def test_execute_propagates_use_case_event_publication_failure_before_route_drain(
+        self,
+        mock_parse: MagicMock,
+        mock_validate: MagicMock,
+        mock_dt: MagicMock,
+    ) -> None:
+        fixed_now = datetime(2025, 10, 12, 6, 0)
+        mock_dt.now.return_value = fixed_now
+        mock_parse.side_effect = [11, 22]
+        cmd = self.make_cmd(["11", "22"])
+        route = MagicMock()
+        cmd._use_case.execute.return_value = MagicMock(route_id=22, route=route)  # type: ignore[reportAttributeAccessIssue]
+        _collector_mock(cmd).drain.side_effect = RuntimeError("publisher failed")
+
+        with self.assertRaisesRegex(RuntimeError, "publisher failed"):
+            cmd.execute()
+
+        _collector_mock(cmd).drain.assert_called_once_with((_use_case_mock(cmd),))
 
     @patch("src.adapters.driving.cli.commands.assign_truck_to_route.datetime")
     @patch("src.adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
@@ -164,7 +205,10 @@ class AssignTruckToRoute_Should(unittest.TestCase):
 
         self.assertEqual(mock_parse.call_args_list, [call("10", "truck_id"), call("20", "route_id")])
         cmd._use_case.execute.assert_called_once()  # type: ignore[reportUnknownMemberType]
-        cmd._event_collector.drain.assert_called_once_with((route,))  # type: ignore[reportUnknownMemberType]
+        self.assertEqual(
+            _collector_mock(cmd).drain.call_args_list,
+            [call((_use_case_mock(cmd),)), call((route,))],
+        )
 
     @patch("src.adapters.driving.cli.commands.assign_truck_to_route.datetime")
     @patch("src.adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
@@ -185,4 +229,7 @@ class AssignTruckToRoute_Should(unittest.TestCase):
         _ = cmd.execute()
 
         mock_validate.assert_called_once_with(("1", "2"), 2)
-        cmd._event_collector.drain.assert_called_once_with((route,))  # type: ignore[reportUnknownMemberType]
+        self.assertEqual(
+            _collector_mock(cmd).drain.call_args_list,
+            [call((_use_case_mock(cmd),)), call((route,))],
+        )

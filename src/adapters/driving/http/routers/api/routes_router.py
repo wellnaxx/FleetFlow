@@ -229,7 +229,8 @@ def assign_truck_to_route(
         route_id: Identifier of the route receiving a truck.
         request: Truck identifier to assign.
         use_case: Use case for assigning a truck to a route, injected by FastAPI.
-        event_collector: Collector used to publish truck-assignment events.
+        event_collector: Collector used to publish use-case authorization events
+            and route truck-assignment events.
 
     Returns:
         Route and truck identifiers for the successful assignment.
@@ -243,7 +244,11 @@ def assign_truck_to_route(
     """
     # Domain route timing currently uses naive local datetimes.
     now = datetime.now()
-    result = use_case.execute(truck_id=request.truck_id, route_id=route_id, now=now)
+    result = execute_and_drain_events(
+        recorder=use_case,
+        event_collector=event_collector,
+        action=lambda: use_case.execute(truck_id=request.truck_id, route_id=route_id, now=now),
+    )
     event_collector.drain((result.route,))
     return AssignTruckToRouteResponse.from_result(result)
 
