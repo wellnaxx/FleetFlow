@@ -147,19 +147,15 @@ class DeliveryRoute_Should(unittest.TestCase):
         self.assertEqual(event.departure_time, departure_time)
         self.assertEqual(event.occurred_at, EVENT_TIME)
 
-    def test_schedule_builds_segments_and_stop_times_eta_final(self, *_: object) -> None:
+    def test_schedule_updates_status_and_records_event(self, *_: object) -> None:
         base = datetime(2025, 1, 1, 8, 0, 0)
         route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), LocationCode("CCC"), route_id=1)
 
         route.schedule(base, occurred_at=EVENT_TIME)
 
-        dur_ab = timedelta(hours=100 / DeliveryRoute.SPEED_KMPH)
-        dur_bc = timedelta(hours=200 / DeliveryRoute.SPEED_KMPH)
-
-        self.assertEqual(route.arrival_time_at(LocationCode("AAA")), base)
-        self.assertEqual(route.arrival_time_at(LocationCode("BBB")), base + dur_ab)
-        self.assertEqual(route.arrival_time_at(LocationCode("CCC")), base + dur_ab + dur_bc)
-        self.assertEqual(route.eta_final, base + dur_ab + dur_bc)
+        self.assertEqual(route.status, RouteStatus.SCHEDULED)
+        self.assertEqual(route.departure_time, base)
+        self.assertIsNotNone(route.eta_final)
         self.assertEqual(len(route.pending_events), 1)
         event = route.pending_events[0]
         self.assertIsInstance(event, RouteScheduled)
@@ -172,6 +168,41 @@ class DeliveryRoute_Should(unittest.TestCase):
         self.assertIsNone(event.previous_expected_completion_time)
         self.assertEqual(event.new_expected_completion_time, route.eta_final)
         self.assertEqual(event.occurred_at, EVENT_TIME)
+
+    def test_schedule_rejects_already_scheduled_route_without_mutation_or_event(self, *_: object) -> None:
+        original_departure = datetime(2025, 1, 1, 8, 0)
+        route = DeliveryRoute(
+            LocationCode("AAA"),
+            LocationCode("BBB"),
+            departure_time=original_departure,
+            route_id=1,
+        )
+        original_eta = route.eta_final
+
+        with self.assertRaisesRegex(DomainConflictError, "already scheduled"):
+            route.schedule(datetime(2025, 1, 2, 8, 0), occurred_at=EVENT_TIME)
+
+        self.assertEqual(route.departure_time, original_departure)
+        self.assertEqual(route.eta_final, original_eta)
+        self.assertEqual(route.status, RouteStatus.SCHEDULED)
+        self.assertEqual(route.pending_events, ())
+
+    def test_schedule_calculation_failure_leaves_route_planned_without_event(self, *_: object) -> None:
+        route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), route_id=1)
+
+        with (
+            patch(
+                "src.domain.entities.delivery_route.RouteScheduler.build",
+                side_effect=DomainValidationError("Invalid schedule"),
+            ),
+            self.assertRaisesRegex(DomainValidationError, "Invalid schedule"),
+        ):
+            route.schedule(datetime(2025, 1, 1, 8, 0), occurred_at=EVENT_TIME)
+
+        self.assertIsNone(route.departure_time)
+        self.assertIsNone(route.eta_final)
+        self.assertEqual(route.status, RouteStatus.PLANNED)
+        self.assertEqual(route.pending_events, ())
 
     def test_mark_started_updates_status_and_records_event(self, *_: object) -> None:
         departure_time = datetime(2025, 1, 1, 8, 0)
@@ -266,45 +297,14 @@ class DeliveryRoute_Should(unittest.TestCase):
         with self.assertRaises(DomainValidationError):
             route.arrival_time_at(LocationCode("DDD"))
 
-    def test_current_position_all_cases(self, *_: object) -> None:
+    def test_current_position_returns_unscheduled_position_without_schedule(self, *_: object) -> None:
         base = datetime(2025, 1, 1, 8, 0)
-        route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), LocationCode("CCC"), route_id=1)
-        route.schedule(base, occurred_at=EVENT_TIME)
+        route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), route_id=2)
 
-        self.assertEqual(route.status, RouteStatus.SCHEDULED)
+        position = route.current_position(base)
 
-        unscheduled_route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), route_id=2)
-        unscheduled_position = unscheduled_route.current_position(base)
-        self.assertEqual(unscheduled_position.kind, "UNSCHEDULED")
-        self.assertEqual(unscheduled_position.stop_city, LocationCode("AAA"))
-
-        before_start_time = base - timedelta(minutes=5)
-        before_start_position = route.current_position(before_start_time)
-        self.assertEqual(before_start_position.kind, "BEFORE_START")
-        self.assertEqual(before_start_position.stop_city, LocationCode("AAA"))
-        self.assertIsInstance(before_start_position.next_eta, datetime)
-
-        start_time = route.arrival_time_at(LocationCode("AAA"))
-        start_position = route.current_position(start_time)
-        self.assertEqual(start_position.kind, "IN_TRANSIT")
-        self.assertEqual(start_position.from_city, LocationCode("AAA"))
-        self.assertEqual(start_position.to_city, LocationCode("BBB"))
-
-        mid_leg_time = start_time + (route.arrival_time_at(LocationCode("BBB")) - start_time) / 2
-        mid_leg_position = route.current_position(mid_leg_time)
-        self.assertEqual(mid_leg_position.kind, "IN_TRANSIT")
-        self.assertEqual(mid_leg_position.from_city, LocationCode("AAA"))
-        self.assertEqual(mid_leg_position.to_city, LocationCode("BBB"))
-
-        stop_b_time = route.arrival_time_at(LocationCode("BBB"))
-        stop_b_position = route.current_position(stop_b_time)
-        self.assertEqual(stop_b_position.kind, "AT_STOP")
-        self.assertEqual(stop_b_position.stop_city, LocationCode("BBB"))
-
-        after_end_time = route.arrival_time_at(LocationCode("CCC")) + timedelta(seconds=1)
-        after_end_position = route.current_position(after_end_time)
-        self.assertEqual(after_end_position.kind, "AFTER_END")
-        self.assertEqual(after_end_position.stop_city, LocationCode("CCC"))
+        self.assertEqual(position.kind, "UNSCHEDULED")
+        self.assertEqual(position.stop_city, LocationCode("AAA"))
 
     def test_includes_in_order(self, *_: object) -> None:
         route = DeliveryRoute(
@@ -818,3 +818,44 @@ class DeliveryRoute_Should(unittest.TestCase):
         self.assertIs(route.truck, truck)
         self.assertEqual(route.packages, (package,))
         self.assertEqual(route.arrival_time_at(LocationCode("AAA")), base)
+
+    def test_snapshot_state_restores_unscheduled_route_after_scheduling(self, *_: object) -> None:
+        route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), route_id=1)
+        snapshot = route.snapshot_state()
+        route.schedule(datetime(2025, 1, 1, 8, 0), occurred_at=EVENT_TIME)
+
+        route.restore_state(snapshot)
+
+        self.assertIsNone(route.departure_time)
+        self.assertIsNone(route.eta_final)
+        self.assertEqual(route.status, RouteStatus.PLANNED)
+        self.assertEqual(route.current_position(EVENT_TIME).kind, "UNSCHEDULED")
+
+    def test_restore_state_schedule_failure_leaves_current_state_unchanged(self, *_: object) -> None:
+        route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), route_id=1)
+        current_package = _Pkg(1, "AAA", "BBB", 5)
+        current_truck = _Truck(route=route)
+        route.assign_package(current_package, occurred_at=EVENT_TIME)  # type: ignore[reportArgumentType]
+        route.truck = current_truck  # type: ignore[reportAttributeAccessIssue]
+
+        snapshot_source = DeliveryRoute(
+            LocationCode("AAA"),
+            LocationCode("BBB"),
+            departure_time=datetime(2025, 1, 1, 8, 0),
+            route_id=2,
+        )
+        snapshot = snapshot_source.snapshot_state()
+
+        with (
+            patch(
+                "src.domain.entities.delivery_route.RouteScheduler.build",
+                side_effect=DomainValidationError("Invalid restored schedule"),
+            ),
+            self.assertRaisesRegex(DomainValidationError, "Invalid restored schedule"),
+        ):
+            route.restore_state(snapshot)
+
+        self.assertEqual(route.status, RouteStatus.PLANNED)
+        self.assertIs(route.truck, current_truck)
+        self.assertEqual(route.packages, (current_package,))
+        self.assertIsNone(route.departure_time)

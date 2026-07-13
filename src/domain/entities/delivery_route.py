@@ -1,10 +1,9 @@
-"""Delivery route entity, schedule calculations, and assignment rules."""
+"""Delivery route aggregate, lifecycle transitions, and assignment rules."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from enum import StrEnum
+from datetime import datetime
 from itertools import pairwise
 from typing import TYPE_CHECKING
 
@@ -23,7 +22,9 @@ from src.domain.events.route_events import (
 )
 from src.domain.exceptions import DomainConflictError, DomainValidationError, EntityNotFoundError
 from src.domain.services.map import Map
+from src.domain.services.route_scheduler import RouteScheduler
 from src.domain.value_objects.location_code import LocationCode
+from src.domain.value_objects.route_schedule import RoutePosition, RoutePositionKind
 
 if TYPE_CHECKING:
     from src.domain.entities.delivery_package import DeliveryPackage
@@ -31,37 +32,7 @@ if TYPE_CHECKING:
     from src.domain.enums.package_detachment_reasons import PackageDetachmentReason
     from src.domain.enums.truck_release_reasons import TruckReleaseReason
     from src.domain.events.base import DomainEvent
-
-
-class RoutePositionKind(StrEnum):
-    """Operational route position categories."""
-
-    UNSCHEDULED = "UNSCHEDULED"
-    BEFORE_START = "BEFORE_START"
-    AT_STOP = "AT_STOP"
-    IN_TRANSIT = "IN_TRANSIT"
-    AFTER_END = "AFTER_END"
-
-
-@dataclass(frozen=True, slots=True)
-class RoutePosition:
-    """Current operational position of a scheduled route."""
-
-    kind: RoutePositionKind
-    from_city: LocationCode | None = None
-    to_city: LocationCode | None = None
-    stop_city: LocationCode | None = None
-    next_eta: datetime | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class RouteSegment:
-    """Travel segment between two adjacent route stops."""
-
-    start: LocationCode
-    end: LocationCode
-    distance_km: int
-    duration: timedelta
+    from src.domain.value_objects.route_schedule import RouteSchedule
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,7 +48,7 @@ class RouteStateSnapshot:
 class DeliveryRoute(DomainEventRecorderMixin):
     """Route aggregate for packages and an optional assigned truck."""
 
-    SPEED_KMPH: int = 87
+    SPEED_KMPH: int = RouteScheduler.DEFAULT_SPEED_KMPH
 
     def __init__(
         self,
@@ -95,21 +66,26 @@ class DeliveryRoute(DomainEventRecorderMixin):
         Raises:
             DomainValidationError: If fewer than two locations are supplied, any location is
                 unknown, or a location is repeated.
+            EntityNotFoundError: If a departure time is supplied and no map distance exists
+                between adjacent route locations.
         """
         self._locations = self._normalize_locations(locations)
-        self._departure_time: datetime | None = departure_time
         self.route_id = route_id
 
         self.truck: Truck | None = None
         self._packages: list[DeliveryPackage] = []
         self.status: RouteStatus = RouteStatus.SCHEDULED if departure_time is not None else RouteStatus.PLANNED
 
-        self._segments: list[RouteSegment] = []
-        self._stop_times: dict[LocationCode, datetime] = {}
+        self._schedule: RouteSchedule | None = (
+            RouteScheduler.build(
+                locations=tuple(self._locations),
+                departure_time=departure_time,
+                speed_kmph=self.SPEED_KMPH,
+            )
+            if departure_time is not None
+            else None
+        )
         self._pos_index: dict[LocationCode, int] = {city: i for i, city in enumerate(self._locations)}
-
-        if self._departure_time is not None:
-            self._build_schedule()
 
         self._pending_events: list[DomainEvent] = []
 
@@ -132,7 +108,7 @@ class DeliveryRoute(DomainEventRecorderMixin):
     @property
     def departure_time(self) -> datetime | None:
         """Scheduled departure time, or None while the route is planned."""
-        return self._departure_time
+        return self._schedule.departure_time if self._schedule is not None else None
 
     @property
     def locations(self) -> list[LocationCode]:
@@ -180,6 +156,8 @@ class DeliveryRoute(DomainEventRecorderMixin):
         Raises:
             DomainValidationError: If fewer than two locations are supplied, any location is
                 unknown, or a location is repeated.
+            EntityNotFoundError: If a departure time is supplied and no map distance exists
+                between adjacent route locations.
         """
         route = cls(*locations, departure_time=departure_time, route_id=route_id)
 
@@ -285,7 +263,7 @@ class DeliveryRoute(DomainEventRecorderMixin):
             Snapshot that can be passed to `restore_state`.
         """
         return RouteStateSnapshot(
-            departure_time=self._departure_time,
+            departure_time=self.departure_time,
             status=self.status,
             truck=self.truck,
             packages=tuple(self._packages),
@@ -297,28 +275,34 @@ class DeliveryRoute(DomainEventRecorderMixin):
         Args:
             snapshot: State captured by `snapshot_state`.
         """
-        self._departure_time = snapshot.departure_time
+        restored_schedule = (
+            RouteScheduler.build(
+                locations=tuple(self._locations),
+                departure_time=snapshot.departure_time,
+                speed_kmph=self.SPEED_KMPH,
+            )
+            if snapshot.departure_time is not None
+            else None
+        )
+
+        self._schedule = restored_schedule
         self.status = snapshot.status
         self.truck = snapshot.truck
         self._packages = list(snapshot.packages)
-        self._segments.clear()
-        self._stop_times.clear()
-
-        if self._departure_time is not None:
-            self._build_schedule()
 
     @property
     def total_distance_km(self) -> int:
         """Total travel distance in kilometres."""
-        if self._segments:
-            return int(sum(segment.distance_km for segment in self._segments))
-
-        return int(sum(Map.get_distance(start, end) for start, end in pairwise(self._locations)))
+        return (
+            self._schedule.total_distance_km
+            if self._schedule is not None
+            else int(sum(Map.get_distance(start, end) for start, end in pairwise(self._locations)))
+        )
 
     @property
     def eta_final(self) -> datetime | None:
         """Expected arrival time at the final stop, if scheduled."""
-        return self._stop_times.get(self.end_location)
+        return self._schedule.eta_final if self._schedule is not None else None
 
     def schedule(self, departure_time: datetime, *, occurred_at: datetime) -> None:
         """Schedule the route, rebuild stop timing information, and record a `RouteScheduled` event.
@@ -329,21 +313,24 @@ class DeliveryRoute(DomainEventRecorderMixin):
 
         Raises:
             DomainConflictError: If route is already scheduled.
-            RuntimeError: If a scheduled route has no expected completion time.
+            DomainValidationError: If a valid schedule cannot be calculated.
+            EntityNotFoundError: If no map distance exists between adjacent locations.
         """
-        if self.departure_time is not None:
+        if self._schedule is not None:
             raise DomainConflictError(f"Route {self.route_id} is already scheduled.")
 
         previous_status = self.status
         previous_departure_time = self.departure_time
         previous_expected_completion_time = self.eta_final
-        self._departure_time = departure_time
-        self._build_schedule()
+        new_schedule = RouteScheduler.build(
+            locations=tuple(self._locations),
+            departure_time=departure_time,
+            speed_kmph=self.SPEED_KMPH,
+        )
+        self._schedule = new_schedule
         self.status = RouteStatus.SCHEDULED
 
-        expected_completion_time = self.eta_final
-        if expected_completion_time is None:
-            raise RuntimeError("Scheduled route has no expected completion time.")
+        expected_completion_time = new_schedule.eta_final
 
         self._record_event(
             RouteScheduled(
@@ -358,23 +345,6 @@ class DeliveryRoute(DomainEventRecorderMixin):
             )
         )
 
-    def _build_schedule(self) -> None:
-        if self._departure_time is None:
-            raise DomainConflictError("Cannot build schedule without a departure time.")
-
-        self._segments.clear()
-        self._stop_times.clear()
-
-        current_time = self._departure_time
-        self._stop_times[self.start_location] = current_time
-
-        for start, end in pairwise(self._locations):
-            distance_km = Map.get_distance(start, end)
-            duration = timedelta(hours=distance_km / DeliveryRoute.SPEED_KMPH)
-            self._segments.append(RouteSegment(start, end, distance_km, duration))
-            current_time += duration
-            self._stop_times[end] = current_time
-
     def arrival_time_at(self, city: str | LocationCode) -> datetime:
         """Return the scheduled arrival time for a route city.
 
@@ -388,12 +358,13 @@ class DeliveryRoute(DomainEventRecorderMixin):
             DomainConflictError: If the route is unscheduled.
             DomainValidationError: If the city is not on the route path.
         """
-        if self._departure_time is None:
-            raise DomainConflictError("Route not scheduled yet (no departure time).")
+        if self._schedule is None:
+            raise DomainConflictError("Route not scheduled yet.")
         city = LocationCode(city)
-        if city not in self._stop_times:
-            raise DomainValidationError(f"City {city} is not on route {self.route_id}.")
-        return self._stop_times[city]
+        try:
+            return self._schedule.arrival_time_at(city)
+        except DomainValidationError:
+            raise DomainValidationError(f"City {city} is not on route {self.route_id}.") from None
 
     def current_position(self, now: datetime | None = None) -> RoutePosition:
         """Return a snapshot of the route's current position.
@@ -405,77 +376,10 @@ class DeliveryRoute(DomainEventRecorderMixin):
         Returns:
             Position descriptor for the route at the requested time.
         """
-        if self._departure_time is None:
+        if self._schedule is None:
             return RoutePosition(kind=RoutePositionKind.UNSCHEDULED, stop_city=self.start_location)
 
-        now = now or datetime.now()
-        first_city = self.start_location
-        first_departure = self._stop_times[first_city]
-
-        if now < first_departure:
-            return RoutePosition(
-                kind=RoutePositionKind.BEFORE_START, stop_city=first_city, next_eta=first_departure
-            )
-
-        for segment in self._segments:
-            position = self._position_on_segment(segment, now, first_city)
-            if position is not None:
-                return position
-
-        return self._position_after_segments(now, first_departure)
-
-    def _position_on_segment(
-        self,
-        segment: RouteSegment,
-        now: datetime,
-        first_city: LocationCode,
-    ) -> RoutePosition | None:
-        start_time = self._stop_times[segment.start]
-        end_time = self._stop_times[segment.end]
-
-        if now == start_time:
-            return RoutePosition(
-                kind=(
-                    RoutePositionKind.IN_TRANSIT if segment.start == first_city else RoutePositionKind.AT_STOP
-                ),
-                from_city=segment.start,
-                to_city=segment.end,
-                next_eta=end_time,
-            )
-
-        if now == end_time:
-            return RoutePosition(
-                kind=RoutePositionKind.AT_STOP,
-                stop_city=segment.end,
-                next_eta=self._next_stop_eta(segment.end),
-            )
-
-        if start_time < now < end_time:
-            return RoutePosition(
-                kind=RoutePositionKind.IN_TRANSIT,
-                from_city=segment.start,
-                to_city=segment.end,
-                next_eta=end_time,
-            )
-
-        return None
-
-    def _next_stop_eta(self, city: LocationCode) -> datetime | None:
-        next_index = self._pos_index[city] + 1
-        if next_index >= len(self._locations):
-            return None
-        return self._stop_times.get(self._locations[next_index])
-
-    def _position_after_segments(self, now: datetime, first_departure: datetime) -> RoutePosition:
-        return (
-            RoutePosition(kind=RoutePositionKind.AFTER_END, stop_city=self.end_location)
-            if now >= self._stop_times[self.end_location]
-            else RoutePosition(
-                kind=RoutePositionKind.AT_STOP,
-                stop_city=self.start_location,
-                next_eta=first_departure,
-            )
-        )
+        return self._schedule.position_at(now or datetime.now())
 
     def includes_in_order(self, start: str | LocationCode, end: str | LocationCode) -> bool:
         """Return whether the route visits start before end.
@@ -688,7 +592,6 @@ class DeliveryRoute(DomainEventRecorderMixin):
         if not released:
             return False
 
-
         release_location = truck.current_location
         if release_location is None:
             truck.restore_state(truck_snapshot)
@@ -768,7 +671,7 @@ class DeliveryRoute(DomainEventRecorderMixin):
         return None
 
     def _validate_pickup_not_passed(self, package: DeliveryPackage, now: datetime | None) -> str | None:
-        if now is None or self._departure_time is None:
+        if now is None or self._schedule is None:
             return None
 
         pickup_index = self._pos_index[package.start_location]
@@ -820,8 +723,8 @@ class DeliveryRoute(DomainEventRecorderMixin):
         return None
 
     def _update_expected_arrival(self, package: DeliveryPackage) -> None:
-        if self._departure_time and package.end_location in self._stop_times:
-            package.expected_arrival = self.arrival_time_at(package.end_location)
+        if self._schedule is not None:
+            package.expected_arrival = self._schedule.arrival_time_at(package.end_location)
 
     def restore_package_link(self, package: DeliveryPackage, *, refresh_expected_arrival: bool = True) -> None:
         """Restore a package-route link while rebuilding candidate snapshot state.
