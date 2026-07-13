@@ -6,104 +6,12 @@ from src.adapters.driven.events.in_process_dispatcher import InProcessEventDispa
 from src.adapters.driven.events.structured_event_logging_handler import StructuredEventLoggingHandler
 from src.application.event_handlers.audit_event_handler import AuditEventHandler
 from src.application.eventing.collector import EventCollector
-from src.application.events.auth_events import (
-    AuthorizationDenied,
-    UserAuthenticated,
-    UserLoginRejected,
-    UserPasswordChanged,
-    UserPasswordChangeRejected,
-    UserPasswordReset,
-    UserPasswordResetRejected,
-    UserRegistered,
-    UserRegistrationRejected,
-    UserSessionEnded,
-    UserTokensRevoked,
-)
-from src.application.events.reconciliation_events import (
-    PackageStateReconciled,
-    RouteStateReconciled,
-    TruckPositionReconciled,
-    TruckRouteReferenceReconciled,
-)
-from src.application.events.startup_events import FleetSeeded
-from src.application.events.world_state_events import (
-    WorldStateAdvanced,
-    WorldStateCorruptionDetected,
-    WorldStateExported,
-    WorldStateExportFailed,
-    WorldStateImported,
-    WorldStateImportFailed,
-    WorldStateRuntimeSwapped,
-    WorldStateSnapshotQuarantined,
-    WorldStateStartupRestored,
-    WorldStateStartupRestoreFailed,
-    WorldStateStartupRestoreSkipped,
-)
-from src.domain.events.customer_events import CustomerCreated
-from src.domain.events.package_events import (
-    PackageCreated,
-    PackageDelivered,
-    PackagePickedUp,
-    PackageRemoved,
-)
-from src.domain.events.route_events import (
-    PackageAssignedToRoute,
-    PackageDetachedFromRoute,
-    RouteCompleted,
-    RouteCreated,
-    RouteRemoved,
-    RouteScheduled,
-    RouteStarted,
-    TruckAssignedToRoute,
-    TruckReleasedFromRoute,
-)
+from src.application.services.audit_mapping.mapper import AuditDescriptorMapper
+from src.application.services.audit_mapping.registry import build_audit_descriptor_mapper
+from src.composition.event_catalog import PUBLISHED_EVENT_TYPES
 from src.ports.output.audit_repository import AuditRepositoryPort
 from src.ports.output.event_publisher import EventPublisherPort
 from src.shared.event import Event
-
-EVENT_TYPES = (
-    CustomerCreated,
-    PackageCreated,
-    PackageRemoved,
-    PackagePickedUp,
-    PackageDelivered,
-    RouteCreated,
-    RouteScheduled,
-    PackageAssignedToRoute,
-    PackageDetachedFromRoute,
-    TruckAssignedToRoute,
-    TruckReleasedFromRoute,
-    RouteStarted,
-    RouteCompleted,
-    RouteRemoved,
-    UserRegistered,
-    UserRegistrationRejected,
-    UserPasswordChanged,
-    UserPasswordChangeRejected,
-    UserPasswordReset,
-    UserPasswordResetRejected,
-    UserAuthenticated,
-    UserLoginRejected,
-    UserSessionEnded,
-    UserTokensRevoked,
-    AuthorizationDenied,
-    FleetSeeded,
-    WorldStateExported,
-    WorldStateExportFailed,
-    WorldStateImported,
-    WorldStateImportFailed,
-    WorldStateCorruptionDetected,
-    WorldStateSnapshotQuarantined,
-    WorldStateRuntimeSwapped,
-    WorldStateStartupRestored,
-    WorldStateStartupRestoreSkipped,
-    WorldStateStartupRestoreFailed,
-    WorldStateAdvanced,
-    RouteStateReconciled,
-    PackageStateReconciled,
-    TruckPositionReconciled,
-    TruckRouteReferenceReconciled,
-)
 
 
 class EventingComponents(NamedTuple):
@@ -127,8 +35,9 @@ def build_eventing_components(audit_repository: AuditRepositoryPort) -> Eventing
             every auditable event type.
 
     Returns:
-        Eventing infrastructure with structured logging and audit persistence
-        handlers subscribed to all currently defined event types.
+        Eventing infrastructure with structured logging subscribed to all
+        published event types and audit persistence subscribed to auditable
+        event types.
 
     Failure policy:
         Publishing through the returned dispatcher propagates handler failures.
@@ -137,9 +46,10 @@ def build_eventing_components(audit_repository: AuditRepositoryPort) -> Eventing
     """
     dispatcher = InProcessEventDispatcher()
     logging_handler = StructuredEventLoggingHandler()
-    audit_handler = AuditEventHandler[Event](audit_repository)
+    descriptor_mapper = build_audit_descriptor_mapper()
+    audit_handler = AuditEventHandler[Event](audit_repository, descriptor_mapper)
 
-    register_event_subscriptions(dispatcher, logging_handler, audit_handler)
+    register_event_subscriptions(dispatcher, logging_handler, audit_handler, descriptor_mapper)
 
     return EventingComponents(
         publisher=dispatcher,
@@ -151,6 +61,7 @@ def register_event_subscriptions(
     dispatcher: InProcessEventDispatcher,
     logging_handler: StructuredEventLoggingHandler,
     audit_handler: AuditEventHandler[Event],
+    descriptor_mapper: AuditDescriptorMapper,
 ) -> None:
     """Register concrete event handlers with the dispatcher.
 
@@ -163,9 +74,13 @@ def register_event_subscriptions(
         dispatcher: In-process dispatcher that owns subscription state.
         logging_handler: Observability handler subscribed to every event type
             so event publication can be seen in configured application logs.
-        audit_handler: Audit handler subscribed to every event type
-            so event publication is persisted as normalized audit records.
+        audit_handler: Audit handler subscribed to every mapped event type so
+            auditable publication is persisted as normalized audit records.
+        descriptor_mapper: Mapper whose registered event types define the
+            auditable subscription set independently of logging coverage.
     """
-    for event_type in EVENT_TYPES:
-        dispatcher.subscribe(event_type, audit_handler)
+    for event_type in PUBLISHED_EVENT_TYPES:
         dispatcher.subscribe(event_type, logging_handler)
+
+    for event_type in descriptor_mapper.event_types:
+        dispatcher.subscribe(event_type, audit_handler)

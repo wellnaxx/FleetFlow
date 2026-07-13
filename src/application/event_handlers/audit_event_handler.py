@@ -3,7 +3,7 @@
 from src.application.eventing.envelope import EventEnvelope
 from src.application.eventing.handler import EventHandler
 from src.application.models.audit_record import AuditRecordDraft
-from src.application.services.audit_descriptor_mapper import map_event_to_audit_descriptor
+from src.application.services.audit_mapping.mapper import AuditDescriptorMapper
 from src.ports.output.audit_repository import AuditRepositoryPort
 from src.shared.event import Event
 
@@ -16,13 +16,19 @@ class AuditEventHandler[E: Event](EventHandler[E]):
     universal event and workflow metadata comes from the envelope.
     """
 
-    def __init__(self, audit_repository: AuditRepositoryPort) -> None:
-        """Initialize the handler with its audit repository port.
+    def __init__(
+        self,
+        audit_repository: AuditRepositoryPort,
+        descriptor_mapper: AuditDescriptorMapper,
+    ) -> None:
+        """Initialize the handler with audit persistence and mapping services.
 
         Args:
             audit_repository: Output port used to persist audit drafts.
+            descriptor_mapper: Exact-type mapper for event-specific audit data.
         """
         self._audit_repository = audit_repository
+        self._descriptor_mapper = descriptor_mapper
 
     def handle(self, envelope: EventEnvelope[E]) -> None:
         """Persist one audit record for the supplied event envelope.
@@ -36,7 +42,7 @@ class AuditEventHandler[E: Event](EventHandler[E]):
         Repository failures are intentionally not caught. The dispatcher and
         collector treat audit persistence failure as event publication failure.
         """
-        audit_descriptor = map_event_to_audit_descriptor(envelope.event)
+        audit_descriptor = self._descriptor_mapper.map(envelope.event)
         draft = AuditRecordDraft(
             event_id=envelope.event.event_id,
             event_version=envelope.event.event_version,

@@ -49,7 +49,7 @@ from src.application.events.world_state_events import (
     WorldStateStartupRestoreFailed,
     WorldStateStartupRestoreSkipped,
 )
-from src.application.services.audit_descriptor_mapper import map_event_to_audit_descriptor
+from src.application.services.audit_mapping import build_audit_descriptor_mapper
 from src.application.value_objects.world_state_entity_counts import WorldStateEntityCounts
 from src.domain.entities.delivery_route import RoutePositionKind
 from src.domain.enums.auth import Permission, Role
@@ -78,6 +78,7 @@ NOW = datetime(2025, 1, 1, 12, 0)
 LATER = datetime(2025, 1, 1, 18, 0)
 COUNTS = WorldStateEntityCounts(customers=1, packages=2, routes=3, trucks=4)
 PREVIOUS_COUNTS = WorldStateEntityCounts(customers=0, packages=1, routes=2, trucks=3)
+MAPPER = build_audit_descriptor_mapper()
 
 
 class AuditDescriptorMapperTests(unittest.TestCase):
@@ -579,7 +580,7 @@ class AuditDescriptorMapperTests(unittest.TestCase):
 
         for event, resource_type, resource_id, action in cases:
             with self.subTest(event=type(event).__name__):
-                descriptor = map_event_to_audit_descriptor(event)
+                descriptor = MAPPER.map(event)
                 self.assertEqual(descriptor.resource_type, resource_type)
                 self.assertEqual(descriptor.resource_id, resource_id)
                 self.assertEqual(descriptor.action, action)
@@ -590,7 +591,7 @@ class AuditDescriptorMapperTests(unittest.TestCase):
                         self.assertTrue(value is None or isinstance(value, str))
 
     def test_serializes_customer_created_without_contact_pii(self) -> None:
-        descriptor = map_event_to_audit_descriptor(
+        descriptor = MAPPER.map(
             CustomerCreated(
                 customer_id=10,
                 occurred_at=NOW,
@@ -600,7 +601,7 @@ class AuditDescriptorMapperTests(unittest.TestCase):
         self.assertEqual(descriptor.payload_json, {"customer_id": "10"})
 
     def test_serializes_package_created_payload(self) -> None:
-        descriptor = map_event_to_audit_descriptor(
+        descriptor = MAPPER.map(
             PackageCreated(
                 package_id=20,
                 customer_id=10,
@@ -629,7 +630,7 @@ class AuditDescriptorMapperTests(unittest.TestCase):
         )
 
     def test_serializes_route_removed_nullable_truck_id(self) -> None:
-        descriptor = map_event_to_audit_descriptor(
+        descriptor = MAPPER.map(
             RouteRemoved(
                 route_id=30,
                 previous_status=RouteStatus.PLANNED,
@@ -646,7 +647,7 @@ class AuditDescriptorMapperTests(unittest.TestCase):
         self.assertIsNone(descriptor.payload_json["released_truck_id"])
 
     def test_serializes_route_transition_ids_as_optional_strings(self) -> None:
-        assigned = map_event_to_audit_descriptor(
+        assigned = MAPPER.map(
             PackageAssignedToRoute(
                 package_id=20,
                 previous_route_id=None,
@@ -656,7 +657,7 @@ class AuditDescriptorMapperTests(unittest.TestCase):
                 occurred_at=NOW,
             )
         )
-        detached = map_event_to_audit_descriptor(
+        detached = MAPPER.map(
             PackageDetachedFromRoute(
                 package_id=20,
                 previous_route_id=30,
@@ -678,7 +679,7 @@ class AuditDescriptorMapperTests(unittest.TestCase):
         self.assertIsNone(detached.payload_json["new_route_id"])
 
     def test_serializes_route_completed_expected_completion_time(self) -> None:
-        descriptor = map_event_to_audit_descriptor(
+        descriptor = MAPPER.map(
             RouteCompleted(
                 route_id=30,
                 previous_status=RouteStatus.IN_PROGRESS,
@@ -692,7 +693,7 @@ class AuditDescriptorMapperTests(unittest.TestCase):
         self.assertEqual(descriptor.payload_json["expected_completion_time"], LATER.isoformat())
 
     def test_serializes_authorization_denied_permissions_by_name(self) -> None:
-        descriptor = map_event_to_audit_descriptor(
+        descriptor = MAPPER.map(
             AuthorizationDenied(
                 attempted_operation=AuthorizationOperation.WORLD_STATE_IMPORT,
                 target_resource_type=AuditResourceType.WORLD_STATE,
@@ -707,7 +708,7 @@ class AuditDescriptorMapperTests(unittest.TestCase):
         self.assertEqual(descriptor.payload_json["required_permissions"], ["ADMIN_USER", "APP_LOAD_STATE"])
 
     def test_serializes_world_state_entity_counts(self) -> None:
-        descriptor = map_event_to_audit_descriptor(
+        descriptor = MAPPER.map(
             WorldStateExported(
                 snapshot_path="data/world.json",
                 schema_version=2,
@@ -722,7 +723,7 @@ class AuditDescriptorMapperTests(unittest.TestCase):
         )
 
     def test_serializes_package_reconciliation_reasons_by_value(self) -> None:
-        descriptor = map_event_to_audit_descriptor(
+        descriptor = MAPPER.map(
             PackageStateReconciled(
                 package_id=20,
                 route_id=None,
@@ -750,7 +751,7 @@ class AuditDescriptorMapperTests(unittest.TestCase):
         )
 
     def test_preserves_null_truck_reconciliation_positions(self) -> None:
-        descriptor = map_event_to_audit_descriptor(
+        descriptor = MAPPER.map(
             TruckPositionReconciled(
                 truck_id=40,
                 route_id=None,
@@ -771,7 +772,7 @@ class AuditDescriptorMapperTests(unittest.TestCase):
 
     def test_unsupported_event_type_raises_value_error(self) -> None:
         with self.assertRaisesRegex(ValueError, "Unsupported event type: Event"):
-            map_event_to_audit_descriptor(Event(occurred_at=NOW))
+            MAPPER.map(Event(occurred_at=NOW))
 
 
 if __name__ == "__main__":

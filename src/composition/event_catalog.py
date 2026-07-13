@@ -1,0 +1,93 @@
+"""Exhaustive catalog of concrete event types published by the application."""
+
+from src.application.events.auth_events import (
+    AuthorizationDenied,
+    UserAuthenticated,
+    UserLoginRejected,
+    UserPasswordChanged,
+    UserPasswordChangeRejected,
+    UserPasswordReset,
+    UserPasswordResetRejected,
+    UserRegistered,
+    UserRegistrationRejected,
+    UserSessionEnded,
+    UserTokensRevoked,
+)
+from src.application.events.reconciliation_events import (
+    PackageStateReconciled,
+    RouteStateReconciled,
+    TruckPositionReconciled,
+    TruckRouteReferenceReconciled,
+)
+from src.application.events.startup_events import FleetSeeded
+from src.application.events.world_state_events import (
+    WorldStateAdvanced,
+    WorldStateCorruptionDetected,
+    WorldStateExported,
+    WorldStateExportFailed,
+    WorldStateImported,
+    WorldStateImportFailed,
+    WorldStateRuntimeSwapped,
+    WorldStateSnapshotQuarantined,
+    WorldStateStartupRestored,
+    WorldStateStartupRestoreFailed,
+    WorldStateStartupRestoreSkipped,
+)
+from src.domain.events.customer_events import CustomerCreated
+from src.domain.events.package_events import PackageCreated, PackageDelivered, PackagePickedUp, PackageRemoved
+from src.domain.events.route_events import (
+    PackageAssignedToRoute,
+    PackageDetachedFromRoute,
+    RouteCompleted,
+    RouteCreated,
+    RouteRemoved,
+    RouteScheduled,
+    RouteStarted,
+    TruckAssignedToRoute,
+    TruckReleasedFromRoute,
+)
+from src.shared.event import Event
+
+PUBLISHED_EVENT_TYPES: tuple[type[Event], ...] = (
+    CustomerCreated,
+    PackageCreated,
+    PackageRemoved,
+    PackagePickedUp,
+    PackageDelivered,
+    RouteCreated,
+    RouteScheduled,
+    PackageAssignedToRoute,
+    PackageDetachedFromRoute,
+    TruckAssignedToRoute,
+    TruckReleasedFromRoute,
+    RouteStarted,
+    RouteCompleted,
+    RouteRemoved,
+    UserRegistered,
+    UserRegistrationRejected,
+    UserPasswordChanged,
+    UserPasswordChangeRejected,
+    UserPasswordReset,
+    UserPasswordResetRejected,
+    UserAuthenticated,
+    UserLoginRejected,
+    UserSessionEnded,
+    UserTokensRevoked,
+    AuthorizationDenied,
+    FleetSeeded,
+    WorldStateExported,
+    WorldStateExportFailed,
+    WorldStateImported,
+    WorldStateImportFailed,
+    WorldStateCorruptionDetected,
+    WorldStateSnapshotQuarantined,
+    WorldStateRuntimeSwapped,
+    WorldStateStartupRestored,
+    WorldStateStartupRestoreSkipped,
+    WorldStateStartupRestoreFailed,
+    WorldStateAdvanced,
+    RouteStateReconciled,
+    PackageStateReconciled,
+    TruckPositionReconciled,
+    TruckRouteReferenceReconciled,
+)

@@ -12,6 +12,7 @@ from src.application.event_handlers.audit_event_handler import AuditEventHandler
 from src.application.eventing.envelope import EventActor, EventEnvelope
 from src.application.models.audit_log_query import AuditLogFilter
 from src.application.models.audit_record import AuditRecord, AuditRecordDraft
+from src.application.services.audit_mapping.registry import build_audit_descriptor_mapper
 from src.domain.enums.item_status import ItemStatus
 from src.domain.events.package_events import PackageCreated
 from src.domain.value_objects.location_code import LocationCode
@@ -49,7 +50,7 @@ class AuditEventHandlerTests(unittest.TestCase):
 
     def test_handle_persists_audit_draft_from_envelope_and_descriptor(self) -> None:
         repository = _AuditRepositorySpy()
-        handler = AuditEventHandler[PackageCreated](repository)
+        handler = AuditEventHandler[PackageCreated](repository, build_audit_descriptor_mapper())
         event = PackageCreated(
             package_id=20,
             customer_id=10,
@@ -108,7 +109,7 @@ class AuditEventHandlerTests(unittest.TestCase):
 
     def test_handle_persists_none_actor_fields_when_envelope_has_no_actor(self) -> None:
         repository = _AuditRepositorySpy()
-        handler = AuditEventHandler[PackageCreated](repository)
+        handler = AuditEventHandler[PackageCreated](repository, build_audit_descriptor_mapper())
 
         handler.handle(
             EventEnvelope(
@@ -134,7 +135,7 @@ class AuditEventHandlerTests(unittest.TestCase):
 
     def test_handle_does_not_persist_when_event_type_is_unsupported(self) -> None:
         repository = _AuditRepositorySpy()
-        handler = AuditEventHandler[Event](repository)
+        handler = AuditEventHandler[Event](repository, build_audit_descriptor_mapper())
 
         with self.assertRaisesRegex(ValueError, "Unsupported event type: Event"):
             handler.handle(

@@ -5,19 +5,25 @@ from collections.abc import Sequence
 from datetime import datetime
 from uuid import uuid4
 
+from src.adapters.driven.events.in_process_dispatcher import InProcessEventDispatcher
+from src.adapters.driven.events.structured_event_logging_handler import StructuredEventLoggingHandler
 from src.application.enums.audit_actions import AuditAction
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.event_sources import EventSource
 from src.application.enums.route_reconciliation_reasons import RouteReconciliationReason
+from src.application.event_handlers.audit_event_handler import AuditEventHandler
 from src.application.eventing.envelope import EventEnvelope
 from src.application.events.reconciliation_events import RouteStateReconciled
 from src.application.models.audit_log_query import AuditLogFilter
 from src.application.models.audit_record import AuditRecord, AuditRecordDraft
-from src.composition.event_subscriptions import build_eventing_components
+from src.application.services.audit_mapping.mapper import AuditDescriptorMapper
+from src.application.services.audit_mapping.packages import PACKAGE_AUDIT_MAPPINGS
+from src.composition.event_subscriptions import build_eventing_components, register_event_subscriptions
 from src.domain.enums.item_status import ItemStatus
 from src.domain.enums.route_status import RouteStatus
 from src.domain.events.package_events import PackageCreated
 from src.domain.value_objects.location_code import LocationCode
+from src.shared.event import Event
 
 NOW = datetime(2025, 1, 1, 12, 0)
 
@@ -134,6 +140,42 @@ class EventSubscriptionsTests(unittest.TestCase):
         self.assertEqual(draft.resource_type, AuditResourceType.ROUTE)
         self.assertEqual(draft.resource_id, "30")
         self.assertEqual(draft.action, AuditAction.RECONCILED)
+
+    def test_logging_subscription_does_not_depend_on_audit_mapping_coverage(self) -> None:
+        repository = _AuditRepositorySpy()
+        dispatcher = InProcessEventDispatcher()
+        logging_handler = StructuredEventLoggingHandler()
+        descriptor_mapper = AuditDescriptorMapper(PACKAGE_AUDIT_MAPPINGS)
+        audit_handler = AuditEventHandler[Event](repository, descriptor_mapper)
+        register_event_subscriptions(
+            dispatcher,
+            logging_handler,
+            audit_handler,
+            descriptor_mapper,
+        )
+
+        with self.assertLogs(
+            "src.adapters.driven.events.structured_event_logging_handler",
+            level="INFO",
+        ) as captured:
+            dispatcher.publish(
+                EventEnvelope(
+                    event=RouteStateReconciled(
+                        route_id=30,
+                        previous_status=RouteStatus.IN_PROGRESS,
+                        new_status=RouteStatus.PLANNED,
+                        departure_time=None,
+                        expected_completion_time=None,
+                        reason=RouteReconciliationReason.MISSING_DEPARTURE_TIME,
+                        occurred_at=NOW,
+                    ),
+                    source=EventSource.HEARTBEAT,
+                    correlation_id=uuid4(),
+                )
+            )
+
+        self.assertIn("event_type=RouteStateReconciled", captured.output[0])
+        self.assertEqual(repository.drafts, [])
 
 
 if __name__ == "__main__":
