@@ -801,7 +801,11 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
         route = DeliveryRoute(
             LocationCode("A"), LocationCode("B"), departure_time=datetime(2025, 1, 1, 9, 0, 0), route_id=1
         )
-        route.assign_package(package, occurred_at=datetime(2025, 1, 1, 8, 0))
+        route.assign_package(
+            package,
+            now=datetime(2025, 1, 1, 8, 0),
+            occurred_at=datetime(2025, 1, 1, 8, 0),
+        )
         self.route_repo.add(route)
 
         truck = self.vehicle_manager.find_by_id(1001)
@@ -957,7 +961,11 @@ class WorldStateSnapshotServiceTests(unittest.TestCase):
             departure_time=datetime(2025, 1, 1, 9, 0, 0),
             route_id=1,
         )
-        existing_route.assign_package(existing_package, occurred_at=datetime(2025, 1, 1, 8, 0))
+        existing_route.assign_package(
+            existing_package,
+            now=datetime(2025, 1, 1, 8, 0),
+            occurred_at=datetime(2025, 1, 1, 8, 0),
+        )
         self.route_repo.add(existing_route)
 
         truck = self.vehicle_manager.find_by_id(1001)

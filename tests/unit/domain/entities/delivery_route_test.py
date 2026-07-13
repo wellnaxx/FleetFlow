@@ -94,11 +94,6 @@ class _Truck:
 @patch("src.domain.entities.delivery_route.Map.get_locations", return_value=LOCATIONS)
 @patch("src.domain.entities.delivery_route.Map.get_distance", side_effect=get_dist)
 class DeliveryRoute_Should(unittest.TestCase):
-    def assert_error_contains(self, expected: str, error: str | None) -> None:
-        self.assertIsNotNone(error)
-        assert error is not None
-        self.assertIn(expected, error)
-
     def test_init_validates_locations_and_sets_id_or_uses_provided(self, *_: object) -> None:
         route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), route_id=123)
 
@@ -321,147 +316,31 @@ class DeliveryRoute_Should(unittest.TestCase):
         self.assertFalse(route.includes_in_order(LocationCode("AAA"), LocationCode("AAA")))
         self.assertFalse(route.includes_in_order(LocationCode("AAA"), LocationCode("ZZZ")))
 
-    def test_can_accept_package_checks_inclusion_capacity_and_range(self, *_: object) -> None:
-        base = datetime(2025, 1, 1, 7, 0)
-        route = DeliveryRoute(
-            LocationCode("AAA"),
-            LocationCode("BBB"),
-            LocationCode("CCC"),
-            LocationCode("DDD"),
-            route_id=1,
-        )
-        route.schedule(base, occurred_at=EVENT_TIME)
-
-        route.truck = _Truck(
-            vehicle_id=10,
-            capacity=50,
-            max_range=500,
-            current_location=LocationCode("AAA"),
-        )  # type: ignore[reportAttributeAccessIssue]
-
-        self.assert_error_contains(
-            "does not include start/end",
-            route.can_accept_package(_Pkg(1, "AAA", "ZZZ", 10)),  # type: ignore[reportArgumentType]
-        )
-
-        self.assert_error_contains(
-            "does not pass from CCC to BBB in order",
-            route.can_accept_package(_Pkg(2, "CCC", "BBB", 10)),  # type: ignore[reportArgumentType]
-        )
-
-        self.assert_error_contains(
-            "capacity exceeded",
-            route.can_accept_package(_Pkg(3, "AAA", "BBB", 60)),  # type: ignore[reportArgumentType]
-        )
-
-        assert route.truck is not None
-        route.truck.capacity = 1000
-        self.assert_error_contains(
-            "lacks range for 600 km",
-            route.can_accept_package(_Pkg(4, "AAA", "CCC", 1)),  # type: ignore[reportArgumentType]
-        )
-
-        route.truck.max_range = 1000
-        self.assertIsNone(route.can_accept_package(_Pkg(5, "AAA", "CCC", 10)))  # type: ignore[reportArgumentType]
-
-    def test_capacity_uses_maximum_segment_load_not_total_route_weight(self, *_: object) -> None:
-        route = DeliveryRoute(
-            LocationCode("AAA"),
-            LocationCode("BBB"),
-            LocationCode("CCC"),
-            LocationCode("DDD"),
-            route_id=1,
-        )
-        route.truck = _Truck(
-            vehicle_id=10,
-            capacity=50,
-            max_range=1000,
-            current_location=LocationCode("AAA"),
-        )  # type: ignore[reportAttributeAccessIssue]
-
-        route.assign_package(
-            _Pkg(1, "AAA", "BBB", 40),  # type: ignore[reportArgumentType]
-            occurred_at=EVENT_TIME,
-        )
-        route.assign_package(
-            _Pkg(2, "BBB", "CCC", 40),  # type: ignore[reportArgumentType]
-            occurred_at=EVENT_TIME,
-        )
-
-        self.assertEqual(route.total_assigned_weight(), 80)
-        self.assertEqual(route.maximum_segment_load(), 40)
-        self.assertIsNone(route.can_accept_package(_Pkg(3, "CCC", "DDD", 40)))  # type: ignore[reportArgumentType]
-
-    def test_capacity_rejects_overloaded_route_segment(self, *_: object) -> None:
-        route = DeliveryRoute(
-            LocationCode("AAA"),
-            LocationCode("BBB"),
-            LocationCode("CCC"),
-            LocationCode("DDD"),
-            route_id=1,
-        )
-        route.truck = _Truck(
-            vehicle_id=10,
-            capacity=50,
-            max_range=1000,
-            current_location=LocationCode("AAA"),
-        )  # type: ignore[reportAttributeAccessIssue]
-
-        route.assign_package(
-            _Pkg(1, "AAA", "CCC", 30),  # type: ignore[reportArgumentType]
-            occurred_at=EVENT_TIME,
-        )
-
-        error = route.can_accept_package(_Pkg(2, "BBB", "DDD", 30))  # type: ignore[reportArgumentType]
-
-        self.assert_error_contains("capacity exceeded", error)
-        self.assert_error_contains("segment load 60", error)
-
-    def test_can_accept_package_allows_before_pickup_and_blocks_after_pickup(self, *_: object) -> None:
-        base = datetime(2025, 1, 1, 8, 0)
-        route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), LocationCode("CCC"), route_id=1)
-        route.schedule(base, occurred_at=EVENT_TIME)
-
-        start_package = _Pkg(1, "AAA", "CCC", 5)
-        mid_package = _Pkg(2, "BBB", "CCC", 5)
-
-        self.assertIsNone(
-            route.can_accept_package(start_package, now=base - timedelta(seconds=1))  # type: ignore[reportArgumentType]
-        )
-        self.assert_error_contains(
-            "already passed pickup location AAA",
-            route.can_accept_package(start_package, now=base),  # type: ignore[reportArgumentType]
-        )
-
-        stop_b_time = route.arrival_time_at(LocationCode("BBB"))
-        self.assertIsNone(route.can_accept_package(mid_package, now=stop_b_time))  # type: ignore[reportArgumentType]
-        self.assert_error_contains(
-            "already passed pickup location BBB",
-            route.can_accept_package(mid_package, now=stop_b_time + timedelta(seconds=1)),  # type: ignore[reportArgumentType]
-        )
-
-    def test_can_accept_package_unscheduled_route_ignores_pickup_passed_rule(self, *_: object) -> None:
-        route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), LocationCode("CCC"), route_id=1)
-        package = _Pkg(1, "BBB", "CCC", 5)
-
-        self.assertIsNone(
-            route.can_accept_package(package, now=datetime(2025, 1, 1, 8, 0))  # type: ignore[reportArgumentType]
-        )
-
     def test_assign_package_sets_links_and_expected_arrival_when_scheduled(self, *_: object) -> None:
         base = datetime(2025, 1, 1, 6, 0)
         route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), LocationCode("CCC"), route_id=1)
         route.schedule(base, occurred_at=EVENT_TIME)
         package = _Pkg(1, "AAA", "CCC", 5)
 
-        route.assign_package(package, occurred_at=EVENT_TIME)  # type: ignore[reportArgumentType]
+        route.assign_package(
+            package,  # type: ignore[reportArgumentType]
+            now=base - timedelta(seconds=1),
+            occurred_at=EVENT_TIME,
+        )
 
         self.assertIs(package.route, route)
         self.assertIn(package, route.packages)
         self.assertIsInstance(package.expected_arrival, datetime)
 
-        route.assign_package(package, occurred_at=EVENT_TIME)  # type: ignore[reportArgumentType]
+        checkpoint = route.event_checkpoint()
+        with patch(
+            "src.domain.entities.delivery_route.PackageAssignmentPolicy.evaluate",
+            side_effect=AssertionError("Policy should not evaluate an idempotent reassignment."),
+        ):
+            route.assign_package(package, occurred_at=EVENT_TIME)  # type: ignore[reportArgumentType]
+
         self.assertEqual(len(route.packages), 1)
+        self.assertEqual(route.event_checkpoint(), checkpoint)
 
     def test_assign_package_unscheduled_sets_no_eta(self, *_: object) -> None:
         route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), route_id=1)
@@ -520,8 +399,13 @@ class DeliveryRoute_Should(unittest.TestCase):
         package.status = ItemStatus.IN_PROGRESS
         package.current_location = LocationCode("BBB")
 
-        route.schedule(datetime(2025, 1, 1, 6, 0), occurred_at=EVENT_TIME)
-        route.assign_package(package, occurred_at=EVENT_TIME)  # type: ignore[reportArgumentType]
+        departure_time = datetime(2025, 1, 1, 6, 0)
+        route.schedule(departure_time, occurred_at=EVENT_TIME)
+        route.assign_package(
+            package,  # type: ignore[reportArgumentType]
+            now=departure_time - timedelta(seconds=1),
+            occurred_at=EVENT_TIME,
+        )
         route.clear_events()
 
         self.assertIs(package.route, route)
@@ -800,7 +684,11 @@ class DeliveryRoute_Should(unittest.TestCase):
         package = _Pkg(1, "AAA", "CCC", 5)
         truck = _Truck(route=route)
         route.schedule(base, occurred_at=EVENT_TIME)
-        route.assign_package(package, occurred_at=EVENT_TIME)  # type: ignore[reportArgumentType]
+        route.assign_package(
+            package,  # type: ignore[reportArgumentType]
+            now=EVENT_TIME,
+            occurred_at=EVENT_TIME,
+        )
         route.truck = truck  # type: ignore[reportAttributeAccessIssue]
         snapshot = route.snapshot_state()
 

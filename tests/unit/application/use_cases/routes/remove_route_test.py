@@ -204,7 +204,11 @@ class RemoveRouteUseCase_Should(unittest.TestCase):
         route = DeliveryRoute("SYD", "MEL", departure_time=datetime(2026, 5, 2, 9, 0), route_id=42)
         truck = Truck(1001, TruckModel.SCANIA, 42000, 8000)
         truck.current_location = "SYD"
-        route.assign_package(package, occurred_at=datetime(2026, 5, 2, 8, 0))
+        route.assign_package(
+            package,
+            now=datetime(2026, 5, 2, 8, 0),
+            occurred_at=datetime(2026, 5, 2, 8, 0),
+        )
         route.truck = truck
         truck.assign(route)
         error = RuntimeError("delete failed")

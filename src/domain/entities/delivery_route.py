@@ -22,6 +22,7 @@ from src.domain.events.route_events import (
 )
 from src.domain.exceptions import DomainConflictError, DomainValidationError, EntityNotFoundError
 from src.domain.services.map import Map
+from src.domain.services.package_assignment_policy import PackageAssignmentPolicy
 from src.domain.services.route_scheduler import RouteScheduler
 from src.domain.value_objects.location_code import LocationCode
 from src.domain.value_objects.route_schedule import RoutePosition, RoutePositionKind
@@ -410,16 +411,8 @@ class DeliveryRoute(DomainEventRecorderMixin):
             None when the package is acceptable, otherwise a human-readable
             rejection reason.
         """
-        if error := self._validate_package_route_compatibility(package):
-            return error
-
-        if error := self._validate_pickup_not_passed(package, now):
-            return error
-
-        if error := self._validate_truck_constraints(extra_package=package):
-            return error
-
-        return None
+        decision = PackageAssignmentPolicy.evaluate(route=self, package=package, now=now)
+        return decision.message
 
     def assign_package(
         self, package: DeliveryPackage, now: datetime | None = None, *, occurred_at: datetime
@@ -434,11 +427,11 @@ class DeliveryRoute(DomainEventRecorderMixin):
         Raises:
             DomainConflictError: If the package is incompatible with the route.
         """
-        if error := self.can_accept_package(package, now=now):
-            raise DomainConflictError(error)
-
         if self._has_package(package):
             return
+
+        if error := self.can_accept_package(package, now=now):
+            raise DomainConflictError(error)
 
         self._packages.append(package)
         previous_route_id = package.route.route_id if package.route is not None else None
@@ -636,91 +629,11 @@ class DeliveryRoute(DomainEventRecorderMixin):
         Returns:
             Maximum carried weight across all adjacent route segments.
         """
-        if len(self._locations) < 2:
-            return 0.0
-
-        segment_loads = [0.0] * (len(self._locations) - 1)
-        packages = [*self._packages]
-        if extra_package is not None:
-            packages.append(extra_package)
-
-        for package in packages:
-            start_index = self._pos_index.get(package.start_location)
-            end_index = self._pos_index.get(package.end_location)
-            if start_index is None or end_index is None or start_index >= end_index:
-                continue
-
-            for segment_index in range(start_index, end_index):
-                segment_loads[segment_index] += package.weight
-
-        return max(segment_loads, default=0.0)
-
-    def _validate_package_route_compatibility(self, package: DeliveryPackage) -> str | None:
-        if package.start_location not in self._pos_index or package.end_location not in self._pos_index:
-            return (
-                f"Route {self.route_id} does not include start/end of "
-                f"package {package.package_id} ({package.start_location} -> {package.end_location})."
-            )
-
-        if not self.includes_in_order(package.start_location, package.end_location):
-            return (
-                f"Route {self.route_id} does not pass from {package.start_location} "
-                f"to {package.end_location} in order for package {package.package_id}."
-            )
-
-        return None
-
-    def _validate_pickup_not_passed(self, package: DeliveryPackage, now: datetime | None) -> str | None:
-        if now is None or self._schedule is None:
-            return None
-
-        pickup_index = self._pos_index[package.start_location]
-        position = self.current_position(now)
-
-        if position.kind in {RoutePositionKind.UNSCHEDULED, RoutePositionKind.BEFORE_START}:
-            return None
-
-        if position.kind == RoutePositionKind.AT_STOP:
-            stop_city = position.stop_city
-            if stop_city and self._pos_index[stop_city] > pickup_index:
-                return self._pickup_passed_error(package)
-            return None
-
-        if position.kind == RoutePositionKind.IN_TRANSIT:
-            from_city = position.from_city
-            if from_city and self._pos_index[from_city] >= pickup_index:
-                return self._pickup_passed_error(package)
-            return None
-
-        if position.kind == RoutePositionKind.AFTER_END:
-            return self._pickup_passed_error(package)
-
-        return None
-
-    def _pickup_passed_error(self, package: DeliveryPackage) -> str:
-        return (
-            f"Route {self.route_id} has already passed pickup location "
-            f"{package.start_location} for package {package.package_id}."
+        return PackageAssignmentPolicy.maximum_segment_load(
+            locations=tuple(self._locations),
+            packages=self.packages,
+            extra_package=extra_package,
         )
-
-    def _validate_truck_constraints(self, extra_package: DeliveryPackage) -> str | None:
-        if self.truck is None:
-            return None
-
-        max_segment_load = self.maximum_segment_load(extra_package=extra_package)
-        if max_segment_load > self.truck.capacity:
-            return (
-                f"Truck {self.truck.vehicle_id} capacity exceeded: "
-                f"segment load {max_segment_load}kg > {self.truck.capacity}kg."
-            )
-
-        if self.truck.max_range < self.total_distance_km:
-            return (
-                f"Truck {self.truck.vehicle_id} lacks range for {self.total_distance_km} km "
-                f"(range: {self.truck.max_range} km)."
-            )
-
-        return None
 
     def _update_expected_arrival(self, package: DeliveryPackage) -> None:
         if self._schedule is not None:
