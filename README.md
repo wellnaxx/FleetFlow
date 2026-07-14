@@ -67,16 +67,17 @@ FleetFlow/
 |   |   |-- models/               # persisted/query models such as UserRecord, AuditRecord, AuditLogQuery
 |   |   |-- results/              # use-case/service result objects
 |   |   |-- services/             # auth, authorization, heartbeat, reconciliation, snapshot services
+|   |   |   |-- audit_mapping/    # typed event-to-audit registry and mappings grouped by event family
 |   |   |   `-- validators/       # focused world-state schema, identity, reference, truck, and compatibility validators
 |   |   `-- use_cases/            # auth, package, route, truck, customer, and state workflows
-|   |-- composition/              # dependency container / composition root
+|   |-- composition/              # dependency container, event catalog, subscriptions, and composition root
 |   |-- domain/
 |   |   |-- entities/             # customers, packages, routes, trucks, users
 |   |   |-- enums/                # roles, permissions, item/route/truck statuses
 |   |   |-- events/               # immutable domain event definitions
 |   |   |-- exceptions.py         # typed domain validation, not-found, and conflict errors
-|   |   |-- services/             # Map and VehicleManager domain services
-|   |   `-- value_objects/        # ContactInfo, LocationCode
+|   |   |-- services/             # map, vehicle, route scheduling, and package assignment policies
+|   |   `-- value_objects/        # contact/location values, route schedules, and assignment decisions
 |   |-- ports/
 |   |   |-- input/                # reserved for future input-port abstractions
 |   |   `-- output/               # repository, audit, persistence, runtime, event publisher, and vehicle ports
@@ -128,8 +129,12 @@ FleetFlow models:
 - `User`, `Employee`, and `Manager`
 - `ContactInfo`
 - `LocationCode`
+- `RouteSchedule`, `RouteSegment`, `ScheduledStop`, and `RoutePosition`
+- `PackageAssignmentDecision`
 - `Map`
 - `VehicleManager`
+- `RouteScheduler`
+- `PackageAssignmentPolicy`
 
 Supported hub codes are:
 
@@ -145,8 +150,12 @@ FleetFlow enforces the main logistics invariants in the domain and application l
 
 - Routes must contain at least two unique supported locations.
 - Packages can only be assigned to routes that contain their start and end locations in the correct order.
-- Scheduled routes compute stop arrival times and final ETA from map distances and route speed.
-- Package assignment updates package-route links and expected arrival when possible.
+- `RouteScheduler` builds an immutable `RouteSchedule` containing ordered segments, stop times, final ETA,
+  total distance, and indexed arrival/position lookups.
+- `PackageAssignmentPolicy` returns a structured acceptance or rejection decision for route compatibility,
+  pickup progress, truck range, and maximum segment load.
+- Package assignment updates package-route links and expected arrival when possible, while reassignment to the
+  same route remains idempotent.
 - Removing a package from a route clears its active assignment state.
 - Truck assignment checks current location, route range, availability window, and carrying capacity.
 - Carrying capacity is checked by maximum segment load rather than total assigned package weight.
@@ -166,12 +175,13 @@ FleetFlow has an in-process event pipeline for business facts and application wo
 - CLI commands and HTTP router handlers bind event context before draining pending events. CLI heartbeat and autosave events are drained under the surrounding CLI command context.
 - `EventCollector` captures pending events from use cases and entities, wraps them with the current context, publishes them, and clears recorders only after the publisher accepts the batch.
 - `InProcessEventDispatcher` routes envelopes by exact event type to subscribed handlers.
-- `StructuredEventLoggingHandler` is subscribed to all event types and writes event metadata to the configured application logger.
-- `AuditDescriptor` and `map_event_to_audit_descriptor()` translate concrete event types into normalized audit resource/action fields and JSON-safe payloads.
-- `AuditEventHandler` combines an event envelope with its audit descriptor and persists an `AuditRecordDraft` through `AuditRepositoryPort`.
+- `PUBLISHED_EVENT_TYPES` is the exhaustive composition-level event catalog used to subscribe structured logging independently of audit coverage.
+- `StructuredEventLoggingHandler` is subscribed to every cataloged event type and writes event metadata to the configured application logger.
+- `AuditDescriptorMapper` performs exact-type lookup through an immutable typed registry. Explicit descriptor factories are grouped by auth, customer, package, route, startup, world-state, and reconciliation event families.
+- `AuditEventHandler` receives that mapper through composition, combines an event envelope with its normalized descriptor, and persists an `AuditRecordDraft` through `AuditRepositoryPort`.
 - In-memory and PostgreSQL audit repositories implement the audit repository contract, including idempotency by event id, filtering, stable ordering, pagination, and page-total queries. The CLI and HTTP API expose those queries with manager-wide and employee self-only authorization.
 
-Events are currently dispatched synchronously in process after workflow persistence completes. The runtime subscription graph wires structured event logging and audit persistence for every known event type. Handler failures are not isolated: an audit repository failure propagates as event-publication failure. FleetFlow does not yet include a transactional outbox, so event handling is still not resilient to process crashes between business-state commit and handler execution.
+Events are currently dispatched synchronously in process after workflow persistence completes. The runtime subscription graph wires structured logging from the independent published-event catalog and audit persistence from registered audit mappings. Handler failures are not isolated: an audit repository failure propagates as event-publication failure. FleetFlow does not yet include a transactional outbox, so event handling is still not resilient to process crashes between business-state commit and handler execution.
 
 ## World-State Persistence
 
@@ -306,6 +316,24 @@ Global HTTP exception handlers map those errors to stable status codes and safe 
 
 - Python 3.13
 
+### Optional virtual environment
+
+Create and activate a virtual environment before installing the project.
+
+Windows PowerShell:
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+```
+
+macOS / Linux:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+```
+
 Install the project runtime dependencies before running the CLI or API:
 
 ```bash
@@ -386,24 +414,6 @@ python cli_main.py
 PYTHONPATH=. python cli_main.py
 ```
 
-### Optional virtual environment
-
-Windows PowerShell:
-
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-python cli_main.py
-```
-
-macOS / Linux:
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-python cli_main.py
-```
-
 ### HTTP API
 
 Run the API locally with:
@@ -437,6 +447,7 @@ The main menu exposes:
 - Trucks
 - Customers
 - State
+- Audit Logs
 - Command mode via `cmd`
 - Login
 - Logout
@@ -471,6 +482,7 @@ The command registry currently supports:
 - `changepassword`
 - `save`
 - `load`
+- `viewauditlogs`
 
 Examples:
 
@@ -490,6 +502,7 @@ viewallroutes
 viewroutesinprogress
 viewalltrucks
 viewallcustomers
+viewauditlogs --limit 50 --total
 save state.json
 load state.json
 login admin
@@ -529,6 +542,7 @@ The FastAPI adapter currently exposes:
 - `GET /api/trucks/`
 - `POST /api/state/save`
 - `POST /api/state/load`
+- `GET /api/audit/`
 
 Login uses OAuth2-style form data with content type `application/x-www-form-urlencoded`; it does not accept a JSON login body:
 
@@ -579,6 +593,19 @@ Routes in progress intentionally remain unpaginated because the result is bounde
 GET /api/routes/in-progress
 ```
 
+Audit-log browsing supports pagination plus exact resource, action, actor, source, and event-type filters,
+along with inclusive occurrence and creation-time bounds:
+
+```text
+GET /api/audit/?limit=50&offset=0
+GET /api/audit/?limit=50&offset=0&include_total=true
+GET /api/audit/?resource_type=package&resource_id=4&action=created
+GET /api/audit/?actor_user_id=2&source=HTTP&occurred_from=2025-01-01T00:00:00
+```
+
+Managers with `AUDIT_VIEW` may browse all matching records. Employees are restricted by the application use
+case to records attributed to their own user id and username.
+
 World-state endpoints act as JSON snapshot export/import operations. With the in-memory backend they save/load runtime state; with the PostgreSQL backend they export/import the database-backed world graph through the same snapshot format:
 
 ```text
@@ -588,11 +615,12 @@ POST /api/state/load
 
 Common HTTP error mappings are:
 
-- `400 Bad Request` for invalid request/use-case input.
+- `400 Bad Request` for application or domain validation failures.
 - `401 Unauthorized` for invalid, expired, revoked, or malformed tokens and invalid login credentials.
 - `403 Forbidden` for missing permissions.
 - `404 Not Found` for requested resources that do not exist.
 - `409 Conflict` for duplicate usernames or inconsistent domain state.
+- `422 Unprocessable Entity` for FastAPI request-body, form-field, path, and query-parameter validation.
 - `500 Internal Server Error` for persistence failures, reported with generic details.
 
 ## Autosave and Heartbeat
@@ -699,9 +727,9 @@ Remaining work includes operational migration tooling, stronger integration cove
 
 FleetFlow already defines and records pending domain and application events for important actions such as package assignment, route scheduling, truck dispatch/release, package delivery, authentication, authorization denial, heartbeat advancement, and world-state import/export. Event envelopes and context metadata are available for correlation and actor attribution, and the in-process dispatcher currently publishes those envelopes to structured logging and audit handlers.
 
-The audit-log model, descriptor mapper, audit handler, repository port, in-memory repository, PostgreSQL repository, SQL queries, schema migrations, composition wiring, query use case, CLI command, and HTTP endpoint are implemented. The active repository follows the configured persistence backend. Manager-wide and employee self-only filtering is enforced in the application use case. The current failure policy is strict: audit handler or repository failures propagate to the publisher.
+The audit-log model, typed exact-event descriptor registry, family-specific descriptor factories, audit handler, repository port, in-memory repository, PostgreSQL repository, SQL queries, schema migrations, composition wiring, query use case, CLI command, and HTTP endpoint are implemented. Logging subscriptions are driven by an independent exhaustive event catalog, while audit subscriptions are driven by registered mappings. The active repository follows the configured persistence backend. Manager-wide and employee self-only filtering is enforced in the application use case. The current failure policy is strict: audit handler or repository failures propagate to the publisher.
 
-A transactional outbox can follow after the synchronous audit read/write path is stable. External brokers such as Kafka or Redis Streams would only make sense later if the project needed higher-volume event processing or cross-service integration.
+The next eventing reliability step is to unify mutating persistence under explicit unit-of-work boundaries, separate event capture from publication, and add live PostgreSQL transaction coverage. A transactional outbox can then persist versioned event envelopes in the same transaction as business state before asynchronous dispatch. External brokers such as Kafka or Redis Streams would only make sense later if the project needed higher-volume event processing or cross-service integration.
 
 ### Background jobs
 
