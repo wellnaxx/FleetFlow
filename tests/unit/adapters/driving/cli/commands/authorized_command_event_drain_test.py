@@ -57,7 +57,6 @@ class AuthorizedCommandEventDrainShould(unittest.TestCase):
 
     def test_drain_single_entity_view_use_cases_after_success(self) -> None:
         package = MagicMock()
-        package.info.return_value = "package"
         route = MagicMock()
         cases = (
             (ViewPackage, ("1",), package),
@@ -71,9 +70,15 @@ class AuthorizedCommandEventDrainShould(unittest.TestCase):
                 use_case.execute.return_value = result
                 command = command_type(params, use_case, collector)
 
-                with patch(
-                    "src.adapters.driving.cli.commands.view_route.render_route_info",
-                    return_value="route",
+                with (
+                    patch(
+                        "src.adapters.driving.cli.commands.view_package.render_package_info",
+                        return_value="package",
+                    ),
+                    patch(
+                        "src.adapters.driving.cli.commands.view_route.render_route_info",
+                        return_value="route",
+                    ),
                 ):
                     command.execute()
 

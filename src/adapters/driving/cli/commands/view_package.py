@@ -2,6 +2,7 @@
 
 from src.adapters.driving.cli.commands.base_command.event_draining_command import EventDrainingCommand
 from src.adapters.driving.cli.commands.validation_helpers import try_parse_int, validate_params_exact
+from src.adapters.driving.cli.rendering.package_info_renderer import render_package_info
 from src.application.use_cases.packages.view_package import ViewPackageUseCase
 
 
@@ -24,4 +25,4 @@ class ViewPackage(EventDrainingCommand[ViewPackageUseCase]):
             self._use_case,
             lambda: self._use_case.execute(package_id),
         )
-        return package.info()
+        return render_package_info(package)

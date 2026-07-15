@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call, patch
 
 from src.adapters.driving.cli.commands.view_unassigned_packages import ViewUnassignedPackages
 from src.application.use_cases.pagination import PageResult
@@ -36,15 +36,14 @@ class ViewUnassignedPackages_Should(unittest.TestCase):
         cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
         self.assertEqual(out, "No unassigned packages.")
 
-    def test_formats_multiple_packages_separated_by_blank_line(self) -> None:
+    @patch("src.adapters.driving.cli.commands.view_unassigned_packages.render_package_info")
+    def test_formats_multiple_packages_separated_by_blank_line(self, mock_render: MagicMock) -> None:
         cmd = self.make_cmd()
 
         p1 = MagicMock()
         p2 = MagicMock()
         p3 = MagicMock()
-        p1.info.return_value = "PKG#1 info"
-        p2.info.return_value = "PKG#2 info"
-        p3.info.return_value = "PKG#3 info"
+        mock_render.side_effect = ["PKG#1 info", "PKG#2 info", "PKG#3 info"]
 
         cmd._use_case.execute.return_value = PageResult(  # type: ignore[reportAttributeAccessIssue]
             items=(p1, p2, p3),
@@ -56,9 +55,7 @@ class ViewUnassignedPackages_Should(unittest.TestCase):
         out = cmd.execute()
 
         cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
-        p1.info.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
-        p2.info.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
-        p3.info.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
+        self.assertEqual(mock_render.call_args_list, [call(p1), call(p2), call(p3)])
 
         self.assertEqual(out, "PKG#1 info\n\nPKG#2 info\n\nPKG#3 info")
 

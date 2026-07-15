@@ -231,11 +231,3 @@ class TestDeliveryPackage_Should(unittest.TestCase):
 
         self.assertIsNone(package.route)
         self.assertEqual(package.route_id, 21)
-
-    def test_info_displays_partially_hydrated_route_id(self):
-        customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
-        package = DeliveryPackage(LocationCode("SYD"), LocationCode("BRI"), 500, customer, 1, route_id=21)
-
-        info = package.info()
-
-        self.assertIn("Assigned route: 21", info)

@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call, patch
 
 from src.adapters.driving.cli.commands.view_all_packages import ViewAllPackages
 from src.application.use_cases.pagination import PageResult
@@ -32,14 +32,13 @@ class TestViewAllPackages_Should(unittest.TestCase):
         self.assertEqual(result, "No packages.")
         cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
 
-    def test_with_multiple_packages(self) -> None:
+    @patch("src.adapters.driving.cli.commands.view_all_packages.render_package_info")
+    def test_with_multiple_packages(self, mock_render: MagicMock) -> None:
         cmd = self.make_cmd()
 
         mock_package1 = MagicMock()
-        mock_package1.info.return_value = "Package 1 Info"
-
         mock_package2 = MagicMock()
-        mock_package2.info.return_value = "Package 2 Info"
+        mock_render.side_effect = ["Package 1 Info", "Package 2 Info"]
 
         cmd._use_case.execute.return_value = PageResult(  # type: ignore[reportAttributeAccessIssue]
             items=(mock_package1, mock_package2),
@@ -52,5 +51,4 @@ class TestViewAllPackages_Should(unittest.TestCase):
 
         self.assertEqual(result, "Package 1 Info\n\nPackage 2 Info")
         cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
-        mock_package1.info.assert_called_once_with()
-        mock_package2.info.assert_called_once_with()
+        self.assertEqual(mock_render.call_args_list, [call(mock_package1), call(mock_package2)])

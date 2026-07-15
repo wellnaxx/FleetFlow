@@ -24,8 +24,10 @@ class TestViewPackage_Should(unittest.TestCase):
 
     @patch("src.adapters.driving.cli.commands.view_package.validate_params_exact")
     @patch("src.adapters.driving.cli.commands.view_package.try_parse_int")
+    @patch("src.adapters.driving.cli.commands.view_package.render_package_info")
     def test_successful_execution(
         self,
+        mock_render: MagicMock,
         mock_try_parse: MagicMock,
         mock_validate: MagicMock,
     ) -> None:
@@ -33,7 +35,7 @@ class TestViewPackage_Should(unittest.TestCase):
         mock_try_parse.return_value = 123
 
         mock_package = MagicMock()
-        mock_package.info.return_value = "Package 123 details"
+        mock_render.return_value = "Package 123 details"
         cmd._use_case.execute.return_value = mock_package  # type: ignore[reportAttributeAccessIssue]
 
         result = cmd.execute()
@@ -41,6 +43,7 @@ class TestViewPackage_Should(unittest.TestCase):
         mock_validate.assert_called_once_with(["123"], 1)
         mock_try_parse.assert_called_once_with("123", "package_id")
         cmd._use_case.execute.assert_called_once_with(123)  # type: ignore[reportUnknownMemberType]
+        mock_render.assert_called_once_with(mock_package)
         self.assertEqual(result, "Package 123 details")
 
     @patch("src.adapters.driving.cli.commands.view_package.validate_params_exact")

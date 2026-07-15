@@ -316,25 +316,3 @@ class DeliveryPackage(DomainEventRecorderMixin):
         self.expected_arrival = None
         self.status = ItemStatus.TODO
         self.current_location = self.start_location
-
-    def info(self) -> str:
-        """Return a human-readable description of the package.
-
-        Returns:
-            Multi-line package summary for CLI display.
-        """
-        contact_info = (
-            f"{self.customer.name} ({self.customer.contact.display_email()}, "
-            f"{self.customer.contact.display_phone()})"
-        )
-        route_str = self.route_id if self.route_id else "Not assigned"
-        arrival_str = (
-            self.expected_arrival.strftime("%Y-%m-%d %H:%M") if self.expected_arrival else "Not assigned"
-        )
-        return (
-            f"Package {self.package_id}: "
-            f"{self.start_location} -> {self.end_location}, {self.weight:.1f}kg\n"
-            f"Customer: {contact_info}\n"
-            f"Assigned route: {route_str}\n"
-            f"Expected arrival: {arrival_str}"
-        )
