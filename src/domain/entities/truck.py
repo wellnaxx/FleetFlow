@@ -152,18 +152,3 @@ class Truck:
         self.busy_from = None
         self.busy_until = None
         return True
-
-    def info(self) -> str:
-        """Return a human-readable truck summary.
-
-        Returns:
-            Multi-line truck summary for CLI display.
-        """
-        return (
-            f"Vehicle ID: {self.vehicle_id}\n"
-            f"Name: {self.name}\n"
-            f"Capacity: {self.capacity}\n"
-            f"Max range: {self.max_range}\n"
-            f"Status: {self.status}\n"
-            f"Location: {self.current_location or 'Unknown'}"
-        )

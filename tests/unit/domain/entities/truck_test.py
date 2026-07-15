@@ -210,28 +210,5 @@ class TestTruck_Should(unittest.TestCase):
         self.assertEqual(self.truck.busy_until, busy_until)
         self.assertEqual(self.truck.in_transit_to, LocationCode("MEL"))
 
-    def test_info(self) -> None:
-        self.truck.current_location = LocationCode("SYD")
-
-        result = self.truck.info()
-
-        expected_info = (
-            f"Vehicle ID: {self.truck.vehicle_id}\n"
-            f"Name: {self.truck.name}\n"
-            f"Capacity: {self.truck.capacity}\n"
-            f"Max range: {self.truck.max_range}\n"
-            f"Status: {self.truck.status}\n"
-            f"Location: SYD"
-        )
-        self.assertEqual(result, expected_info)
-
-    def test_info_with_unknown_location(self) -> None:
-        self.truck.current_location = None
-
-        result = self.truck.info()
-
-        self.assertIn("Location: Unknown", result)
-
-
 if __name__ == "__main__":
     unittest.main()

@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call, patch
 
 from src.adapters.driving.cli.commands.view_all_trucks import ViewAllTrucks
 
@@ -31,15 +31,16 @@ class ViewAllTrucks_Should(unittest.TestCase):
         self.assertEqual(result, "No trucks.")
         cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
 
-    def test_with_multiple_trucks(self) -> None:
+    @patch("src.adapters.driving.cli.commands.view_all_trucks.render_truck_info")
+    def test_with_multiple_trucks(self, mock_render: MagicMock) -> None:
         cmd = self.make_cmd()
         truck1 = MagicMock()
-        truck1.info.return_value = "Truck 1 Info"
         truck2 = MagicMock()
-        truck2.info.return_value = "Truck 2 Info"
+        mock_render.side_effect = ["Truck 1 Info", "Truck 2 Info"]
         cmd._use_case.execute.return_value = [truck1, truck2]  # type: ignore[reportAttributeAccessIssue]
 
         result = cmd.execute()
 
         self.assertEqual(result, "Truck 1 Info\n\nTruck 2 Info")
         cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
+        self.assertEqual(mock_render.call_args_list, [call(truck1), call(truck2)])
