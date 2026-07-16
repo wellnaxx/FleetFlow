@@ -25,6 +25,7 @@ from src.domain.services.map import Map
 from src.domain.services.package_assignment_policy import PackageAssignmentPolicy
 from src.domain.services.route_scheduler import RouteScheduler
 from src.domain.value_objects.location_code import LocationCode
+from src.domain.value_objects.route_path import RoutePath
 from src.domain.value_objects.route_schedule import RoutePosition, RoutePositionKind
 
 if TYPE_CHECKING:
@@ -70,41 +71,23 @@ class DeliveryRoute(DomainEventRecorderMixin):
             EntityNotFoundError: If a departure time is supplied and no map distance exists
                 between adjacent route locations.
         """
-        self._locations = self._normalize_locations(locations)
         self.route_id = route_id
-
+        self._path = RoutePath.create(*locations)
         self.truck: Truck | None = None
         self._packages: list[DeliveryPackage] = []
         self.status: RouteStatus = RouteStatus.SCHEDULED if departure_time is not None else RouteStatus.PLANNED
 
         self._schedule: RouteSchedule | None = (
             RouteScheduler.build(
-                locations=tuple(self._locations),
+                locations=self._path.locations,
                 departure_time=departure_time,
                 speed_kmph=self.SPEED_KMPH,
             )
             if departure_time is not None
             else None
         )
-        self._pos_index: dict[LocationCode, int] = {city: i for i, city in enumerate(self._locations)}
 
         self._pending_events: list[DomainEvent] = []
-
-    def _normalize_locations(self, locations: tuple[str | LocationCode, ...]) -> list[LocationCode]:
-        """Normalize and validate route locations."""
-        if len(locations) < 2:
-            raise DomainValidationError("A route must have at least two locations.")
-
-        typed_locations = [LocationCode(location) for location in locations]
-        valid_locations = set(Map.get_locations())
-        invalid_locations = [location for location in typed_locations if location not in valid_locations]
-        if invalid_locations:
-            raise DomainValidationError(f"Invalid location code: {invalid_locations[0]}.")
-
-        if len(set(typed_locations)) != len(typed_locations):
-            raise DomainValidationError("A route cannot contain duplicate locations.")
-
-        return typed_locations
 
     @property
     def departure_time(self) -> datetime | None:
@@ -114,17 +97,17 @@ class DeliveryRoute(DomainEventRecorderMixin):
     @property
     def locations(self) -> list[LocationCode]:
         """Route locations in travel order."""
-        return list(self._locations)
+        return list(self._path.locations)
 
     @property
     def start_location(self) -> LocationCode:
         """First location on the route."""
-        return self._locations[0]
+        return self._path.start
 
     @property
     def end_location(self) -> LocationCode:
         """Final location on the route."""
-        return self._locations[-1]
+        return self._path.end
 
     @property
     def packages(self) -> tuple[DeliveryPackage, ...]:
@@ -278,7 +261,7 @@ class DeliveryRoute(DomainEventRecorderMixin):
         """
         restored_schedule = (
             RouteScheduler.build(
-                locations=tuple(self._locations),
+                locations=self._path.locations,
                 departure_time=snapshot.departure_time,
                 speed_kmph=self.SPEED_KMPH,
             )
@@ -297,7 +280,7 @@ class DeliveryRoute(DomainEventRecorderMixin):
         return (
             self._schedule.total_distance_km
             if self._schedule is not None
-            else int(sum(Map.get_distance(start, end) for start, end in pairwise(self._locations)))
+            else int(sum(Map.get_distance(start, end) for start, end in pairwise(self._path.locations)))
         )
 
     @property
@@ -324,7 +307,7 @@ class DeliveryRoute(DomainEventRecorderMixin):
         previous_departure_time = self.departure_time
         previous_expected_completion_time = self.eta_final
         new_schedule = RouteScheduler.build(
-            locations=tuple(self._locations),
+            locations=self._path.locations,
             departure_time=departure_time,
             speed_kmph=self.SPEED_KMPH,
         )
@@ -392,13 +375,7 @@ class DeliveryRoute(DomainEventRecorderMixin):
         Returns:
             True when both locations are present and start appears before end.
         """
-        start_code = LocationCode(start)
-        end_code = LocationCode(end)
-        return (
-            start_code in self._pos_index
-            and end_code in self._pos_index
-            and self._pos_index[start_code] < self._pos_index[end_code]
-        )
+        return self._path.includes_in_order(start, end)
 
     def can_accept_package(self, package: DeliveryPackage, now: datetime | None = None) -> str | None:
         """Validate whether a package can be assigned to this route.
@@ -630,7 +607,7 @@ class DeliveryRoute(DomainEventRecorderMixin):
             Maximum carried weight across all adjacent route segments.
         """
         return PackageAssignmentPolicy.maximum_segment_load(
-            locations=tuple(self._locations),
+            locations=self._path.locations,
             packages=self.packages,
             extra_package=extra_package,
         )

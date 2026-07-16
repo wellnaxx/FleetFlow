@@ -91,13 +91,14 @@ class _Truck:
         return released
 
 
-@patch("src.domain.entities.delivery_route.Map.get_locations", return_value=LOCATIONS)
-@patch("src.domain.entities.delivery_route.Map.get_distance", side_effect=get_dist)
+@patch("src.domain.services.map.Map.get_locations", return_value=LOCATIONS)
+@patch("src.domain.services.map.Map.get_distance", side_effect=get_dist)
 class DeliveryRoute_Should(unittest.TestCase):
-    def test_init_validates_locations_and_sets_id_or_uses_provided(self, *_: object) -> None:
-        route = DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), route_id=123)
+    def test_init_uses_validated_path_and_sets_route_state(self, *_: object) -> None:
+        route = DeliveryRoute(" aaa ", LocationCode("BBB"), route_id=123)
 
         self.assertEqual(route.route_id, 123)
+        self.assertEqual(route.locations, [LocationCode("AAA"), LocationCode("BBB")])
         self.assertEqual(route.start_location, LocationCode("AAA"))
         self.assertEqual(route.end_location, LocationCode("BBB"))
         self.assertEqual(route.status, RouteStatus.PLANNED)
@@ -109,18 +110,6 @@ class DeliveryRoute_Should(unittest.TestCase):
             route_id=124,
         )
         self.assertEqual(scheduled.status, RouteStatus.SCHEDULED)
-
-        with self.assertRaises(DomainValidationError):
-            DeliveryRoute(LocationCode("AAA"), route_id=1)
-
-        with self.assertRaises(DomainValidationError):
-            DeliveryRoute(LocationCode("AAA"), LocationCode("ZZZ"), route_id=1)
-
-    def test_init_rejects_duplicate_locations(self, *_: object) -> None:
-        with self.assertRaises(DomainValidationError) as ctx:
-            DeliveryRoute(LocationCode("AAA"), LocationCode("BBB"), LocationCode("AAA"), route_id=1)
-
-        self.assertIn("duplicate", str(ctx.exception).lower())
 
     def test_create_records_route_created_event(self, *_: object) -> None:
         departure_time = datetime(2025, 1, 2, 8, 0)
@@ -301,7 +290,7 @@ class DeliveryRoute_Should(unittest.TestCase):
         self.assertEqual(position.kind, "UNSCHEDULED")
         self.assertEqual(position.stop_city, LocationCode("AAA"))
 
-    def test_includes_in_order(self, *_: object) -> None:
+    def test_includes_in_order_delegates_to_route_path(self, *_: object) -> None:
         route = DeliveryRoute(
             LocationCode("AAA"),
             LocationCode("BBB"),
@@ -310,11 +299,8 @@ class DeliveryRoute_Should(unittest.TestCase):
             route_id=1,
         )
 
-        self.assertTrue(route.includes_in_order(LocationCode("AAA"), LocationCode("DDD")))
-        self.assertTrue(route.includes_in_order(LocationCode("BBB"), LocationCode("CCC")))
-        self.assertFalse(route.includes_in_order(LocationCode("CCC"), LocationCode("BBB")))
-        self.assertFalse(route.includes_in_order(LocationCode("AAA"), LocationCode("AAA")))
-        self.assertFalse(route.includes_in_order(LocationCode("AAA"), LocationCode("ZZZ")))
+        self.assertTrue(route.includes_in_order(" aaa ", "DDD"))
+        self.assertFalse(route.includes_in_order("CCC", "BBB"))
 
     def test_assign_package_sets_links_and_expected_arrival_when_scheduled(self, *_: object) -> None:
         base = datetime(2025, 1, 1, 6, 0)
