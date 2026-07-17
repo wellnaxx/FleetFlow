@@ -21,6 +21,7 @@ from src.application.dto.world_state_snapshot_dto import (
 )
 from src.application.enums.world_state_corruption_reasons import WorldStateCorruptionReason
 from src.application.exceptions.world_state_errors import WorldStateCorruptionError
+from src.application.services.vehicle_manager import VehicleManager
 from src.application.services.world_snapshot_validator import WorldStateSnapshotValidator
 from src.application.services.world_state_linker import WorldStateSnapshotLinker
 from src.application.services.world_state_reconciliation_service import WorldStateReconciliationService
@@ -32,7 +33,6 @@ from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.enums.truck_status import TruckStatus
-from src.domain.services.vehicle_manager import VehicleManager
 from src.domain.value_objects.contact_info import ContactInfo
 from src.domain.value_objects.location_code import LocationCode, location_code_or_none
 from src.ports.output.world_state_runtime_port import WorldStateRuntimePort

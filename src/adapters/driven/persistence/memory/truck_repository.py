@@ -19,10 +19,10 @@ class InMemoryTruckRepository:
         self.vehicles.append(truck)
 
     def list_fleet(self) -> list[Truck]:
-        """Return the fleet as a copy of the manager's vehicle list.
+        """Return a copy of the repository's fleet list.
 
         Returns:
-            Trucks currently managed by the fleet service.
+            Trucks currently stored by the repository.
         """
         return list(self.vehicles)
 

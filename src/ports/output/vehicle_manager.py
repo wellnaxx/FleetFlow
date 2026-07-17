@@ -1,45 +1,23 @@
-"""Output port for fleet and truck suitability services."""
+"""Application boundary for fleet access and truck assignment operations."""
 
-from datetime import datetime
+from collections.abc import Sequence
 from typing import Protocol
 
+from src.application.dto.truck_binding_dto import TruckBinding
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.entities.truck import Truck
-from src.domain.value_objects.location_code import LocationCode
-
-
-class RouteSuitabilityView(Protocol):
-    """Describe the route fields needed for truck suitability checks."""
-
-    @property
-    def total_distance_km(self) -> int:
-        """Total route distance in kilometers."""
-        ...
-
-    @property
-    def start_location(self) -> LocationCode:
-        """Route origin location."""
-        ...
-
-    @property
-    def departure_time(self) -> datetime | None:
-        """Scheduled route departure time, if scheduled."""
-        ...
-
-    def total_assigned_weight(self) -> float:
-        """Return total package weight currently assigned to the route."""
-        ...
-
-    def maximum_segment_load(self) -> float:
-        """Return the heaviest package load carried on any route segment."""
-        ...
+from src.domain.services.truck_assignment_policy import RouteSuitabilityView
 
 
 class VehicleManagerPort(Protocol):
-    """Manage truck availability and route suitability decisions."""
+    """Manage truck availability, suitability, and restored runtime state."""
 
     def list_fleet(self) -> list[Truck]:
-        """Return all fleet trucks."""
+        """Return all fleet trucks.
+
+        Returns:
+            Trucks supplied by the underlying fleet repository.
+        """
         ...
 
     def find_by_id(self, vehicle_id: int) -> Truck | None:
@@ -66,12 +44,23 @@ class VehicleManagerPort(Protocol):
         ...
 
     def find_available_for_route(self, route: DeliveryRoute) -> list[Truck]:
-        """Return free trucks suitable for a route.
+        """Return trucks whose assignment policy accepts a route.
 
         Args:
             route: Route that needs a truck.
 
         Returns:
-            Suitable free trucks.
+            Suitable trucks ordered by the service implementation.
+        """
+        ...
+
+    def replace_truck_bindings(self, bindings: Sequence[TruckBinding]) -> None:
+        """Replace mutable truck state from prepared snapshot bindings.
+
+        Args:
+            bindings: Prepared state for trucks in the live fleet.
+
+        Returns:
+            None.
         """
         ...

@@ -28,6 +28,7 @@ from src.application.services.auth_service import AuthService
 from src.application.services.authorization_service import AuthorizationService
 from src.application.services.customer_service import CustomerService
 from src.application.services.heartbeat_service import HeartbeatService
+from src.application.services.vehicle_manager import VehicleManager
 from src.application.services.world_snapshot_validator import WorldStateSnapshotValidator
 from src.application.services.world_state_linker import WorldStateSnapshotLinker
 from src.application.services.world_state_reconciliation_service import WorldStateReconciliationService
@@ -73,7 +74,6 @@ from src.application.use_cases.use_case_registry import (
 )
 from src.composition.config import AppConfig, PersistenceBackend, get_app_config
 from src.composition.seed_fleet import seed_fleet_if_empty
-from src.domain.services.vehicle_manager import VehicleManager
 from src.ports.output.audit_repository import AuditRepositoryPort
 
 logger = logging.getLogger(__name__)

@@ -6,6 +6,7 @@ from src.adapters.driven.persistence.database.graph_loaders.world_graph_loader i
 from src.adapters.driven.persistence.database.world_state_gateway import PostgresWorldStateGateway
 from src.adapters.driven.persistence.memory.truck_repository import InMemoryTruckRepository
 from src.application.dto.world_state_snapshot_dto import CountersSnapshot
+from src.application.services.vehicle_manager import VehicleManager
 from src.application.services.world_snapshot_validator import WorldStateSnapshotValidator
 from src.application.services.world_state_linker import WorldStateSnapshotLinker
 from src.application.services.world_state_reconciliation_service import WorldStateReconciliationService
@@ -15,7 +16,6 @@ from src.application.services.world_state_snapshot_rebuilder import WorldStateSn
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.entities.delivery_route import DeliveryRoute
-from src.domain.services.vehicle_manager import VehicleManager
 from src.domain.value_objects.contact_info import ContactInfo
 
 

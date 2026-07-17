@@ -10,9 +10,9 @@ from src.adapters.driven.persistence.memory.package_repository import InMemoryPa
 from src.adapters.driven.persistence.memory.route_repository import InMemoryRouteRepository
 from src.adapters.driven.persistence.memory.world_state_gateway import InMemoryWorldStateGateway
 from src.application.services.authorization_service import AuthorizationService
+from src.application.services.vehicle_manager import VehicleManager
 from src.composition.config import AppConfig, PersistenceBackend
 from src.composition.container import Container
-from src.domain.services.vehicle_manager import VehicleManager
 
 
 class ContainerTests(unittest.TestCase):

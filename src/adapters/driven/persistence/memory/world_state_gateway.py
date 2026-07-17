@@ -14,7 +14,7 @@ from src.application.services.world_state_snapshot_service import WorldStateSnap
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.entities.delivery_route import DeliveryRoute
-from src.domain.services.vehicle_manager import VehicleManager
+from src.ports.output.vehicle_manager import VehicleManagerPort
 from src.ports.output.world_state_gateway import WorldStateGatewayPort
 from src.ports.output.world_state_runtime_port import WorldStateRuntimePort
 
@@ -29,7 +29,7 @@ class InMemoryWorldStateRuntime(WorldStateRuntimePort):
         customer_repo: InMemoryCustomerRepository,
         package_repo: InMemoryPackageRepository,
         route_repo: InMemoryRouteRepository,
-        vehicle_manager: VehicleManager,
+        vehicle_manager: VehicleManagerPort,
     ) -> None:
         """Initialize the runtime swap adapter.
 

@@ -1,4 +1,4 @@
-"""Fleet inventory and truck suitability service."""
+"""Application service for fleet access, suitability, and runtime bindings."""
 
 from collections.abc import Sequence
 
@@ -6,18 +6,23 @@ from src.application.dto.truck_binding_dto import TruckBinding
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.entities.truck import Truck
 from src.domain.enums.truck_status import TruckStatus
+from src.domain.services.truck_assignment_policy import RouteSuitabilityView, TruckAssignmentPolicy
 from src.ports.output.truck_repository import TruckRepositoryPort
-from src.ports.output.vehicle_manager import RouteSuitabilityView
 
 
 class VehicleManager:
-    """Manage fleet vehicles, availability checks, and snapshot binding restore."""
+    """Coordinate fleet persistence and pure truck assignment decisions."""
 
     def __init__(self, truck_repo: TruckRepositoryPort) -> None:
+        """Initialize the fleet service.
+
+        Args:
+            truck_repo: Repository used to query and persist truck state.
+        """
         self._truck_repo = truck_repo
 
     def list_fleet(self) -> list[Truck]:
-        """Return the fleet as a copy of the manager's vehicle list.
+        """Return all trucks supplied by the fleet repository.
 
         Returns:
             Trucks currently managed by the fleet service.
@@ -47,24 +52,8 @@ class VehicleManager:
             Pair of suitability flag and failure reason. The reason is empty
             when the truck is suitable.
         """
-        if truck.max_range < route.total_distance_km:
-            return False, "range too short"
-        if truck.capacity < route.maximum_segment_load():
-            return False, "insufficient capacity"
-        if truck.current_location != route.start_location:
-            return False, f"wrong location ({truck.current_location} != {route.start_location})"
-        if truck.route is not None:
-            if route.departure_time is None:
-                return False, "route not scheduled yet"
-
-            current_eta = truck.route.eta_final
-            if current_eta is None:
-                return False, "truck already assigned to a route with unknown availability"
-
-            if current_eta >= route.departure_time:
-                return False, "truck busy in the requested time window"
-
-        return True, ""
+        decision = TruckAssignmentPolicy.evaluate(truck=truck, route=route)
+        return decision.accepted, decision.message or ""
 
     def find_available_for_route(self, route: DeliveryRoute) -> list[Truck]:
         """Return trucks that can serve a route, ordered by vehicle id.
@@ -75,21 +64,41 @@ class VehicleManager:
         Returns:
             Suitable trucks sorted by vehicle id.
         """
-        result: list[Truck] = []
-        for truck in self._truck_repo.list_fleet():
-            ok, _ = self.is_suitable_for_route(truck, route)
-            if ok:
-                result.append(truck)
-        result.sort(key=lambda truck: truck.vehicle_id)
-        return result
+        trucks = [
+            truck
+            for truck in self._truck_repo.list_fleet()
+            if TruckAssignmentPolicy.evaluate(
+                truck=truck,
+                route=route,
+            ).accepted
+        ]
+        return sorted(trucks, key=lambda truck: truck.vehicle_id)
 
     def replace_truck_bindings(self, bindings: Sequence[TruckBinding]) -> None:
         """Replace runtime truck assignment state from prepared bindings.
 
+        Existing assignment state is cleared and persisted before each
+        prepared binding is applied. A bound route receives the corresponding
+        truck backlink.
+
         Args:
             bindings: Prepared truck state produced by snapshot reconciliation.
+
+        Returns:
+            None.
+
+        Raises:
+            AssertionError: If an existing truck-to-route reference does not
+                have the matching route-to-truck backlink.
         """
         for truck in self._truck_repo.list_fleet():
+            existing_route = truck.route
+            if existing_route is not None:
+                assert existing_route.truck is truck, (
+                    "Truck and route assignment backlinks must be consistent before replacement."
+                )
+                existing_route.truck = None
+
             truck.route = None
             truck.status = TruckStatus.FREE
             truck.busy_from = None
