@@ -7,6 +7,7 @@ from psycopg.types.json import Jsonb
 from src.adapters.driven.persistence.database.executor import execute_write, fetch_all
 from src.adapters.driven.persistence.database.mappers.audit import map_audit_record
 from src.adapters.driven.persistence.database.queries import QUERIES
+from src.adapters.driven.persistence.database.validation import require_count
 from src.application.models.audit_log_query import AuditLogFilter
 from src.application.models.audit_record import AuditRecord, AuditRecordDraft
 from src.ports.output.audit_repository import AuditRepositoryPort
@@ -119,9 +120,7 @@ class PostgresAuditRepository(AuditRepositoryPort):
         if not rows:
             return [], 0
 
-        total_count = rows[0]["total"]
-        if not isinstance(total_count, int) or isinstance(total_count, bool):
-            raise TypeError("Total count must be an integer.")
+        total_count = require_count(rows[0]["total"], "Total count")
 
         audit_record_rows = [row for row in rows if row["audit_id"] is not None]
 

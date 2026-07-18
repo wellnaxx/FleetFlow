@@ -10,6 +10,13 @@ from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.enums.item_status import ItemStatus
 from src.domain.value_objects.location_code import LocationCode
+from src.shared.validation import (
+    require_int,
+    require_optional_datetime,
+    require_optional_int,
+    require_optional_str,
+    require_str,
+)
 
 
 class PackageRow(TypedDict):
@@ -69,34 +76,18 @@ def as_package_row(row: RowDict) -> PackageRow:
         KeyError: If a required package column is missing.
         TypeError: If a required package column has an unexpected type.
     """
-    package_id = row["package_id"]
-    start_location = row["start_location"]
-    end_location = row["end_location"]
+    package_id = require_int(row["package_id"], "package_id")
+    start_location = require_str(row["start_location"], "start_location")
+    end_location = require_str(row["end_location"], "end_location")
     weight = row["weight"]
-    status = row["status"]
-    current_location = row["current_location"]
-    expected_arrival = row["expected_arrival"]
-    customer_id = row["customer_id"]
-    route_id = row["route_id"]
+    status = require_str(row["status"], "status")
+    current_location = require_optional_str(row["current_location"], "current_location")
+    expected_arrival = require_optional_datetime(row["expected_arrival"], "expected_arrival")
+    customer_id = require_int(row["customer_id"], "customer_id")
+    route_id = require_optional_int(row["route_id"], "route_id")
 
-    if not isinstance(package_id, int) or isinstance(package_id, bool):
-        raise TypeError(f"package_id: expected int, got {type(package_id).__name__}")
-    if not isinstance(start_location, str):
-        raise TypeError(f"start_location: expected str, got {type(start_location).__name__}")
-    if not isinstance(end_location, str):
-        raise TypeError(f"end_location: expected str, got {type(end_location).__name__}")
     if not isinstance(weight, Decimal):
         raise TypeError(f"weight: expected Decimal, got {type(weight).__name__}")
-    if not isinstance(status, str):
-        raise TypeError(f"status: expected str, got {type(status).__name__}")
-    if current_location is not None and not isinstance(current_location, str):
-        raise TypeError(f"current_location: expected str or None, got {type(current_location).__name__}")
-    if expected_arrival is not None and not isinstance(expected_arrival, datetime):
-        raise TypeError(f"expected_arrival: expected datetime or None, got {type(expected_arrival).__name__}")
-    if not isinstance(customer_id, int) or isinstance(customer_id, bool):
-        raise TypeError(f"customer_id: expected int, got {type(customer_id).__name__}")
-    if route_id is not None and (not isinstance(route_id, int) or isinstance(route_id, bool)):
-        raise TypeError(f"route_id: expected int or None, got {type(route_id).__name__}")
 
     return PackageRow(
         package_id=package_id,

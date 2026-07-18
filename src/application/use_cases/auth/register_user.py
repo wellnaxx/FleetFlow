@@ -16,6 +16,7 @@ from src.application.exceptions.password_errors import (
     RegistrationUsernameAlreadyExistsError,
 )
 from src.application.models.user_record import UserRecord
+from src.application.services.auth_normalization import normalize_username
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.enums.auth import Permission, Role
@@ -38,7 +39,7 @@ def _username_resource_id(
     password: str,  # noqa: ARG001
 ) -> str | None:
     """Resolve the audit target resource id for a registration attempt."""
-    return username.strip().lower() or None
+    return normalize_username(username) or None
 
 
 class RegisterUserUseCase(AuthorizedUseCase[UserRecord]):

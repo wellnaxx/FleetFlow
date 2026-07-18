@@ -10,10 +10,12 @@ from typing import Any, cast
 from src.adapters.driven.persistence.json.paths import ensure_data_dir, resolve_data_path
 from src.adapters.driven.security.password_hasher import PasswordHash
 from src.application.models.user_record import UserRecord
+from src.application.services.auth_normalization import normalize_role, normalize_username
 from src.domain.enums.auth import Role
 from src.domain.exceptions import DomainValidationError
 from src.domain.value_objects.contact_info import ContactInfo
 from src.ports.output.repository_errors import DuplicateKeyError
+from src.shared.validation import require_positive_int, require_str
 
 logger = logging.getLogger(__name__)
 
@@ -58,9 +60,8 @@ class JSONUserStore:
         self._by_id = {user.user_id: user for user in users_by_username.values()}
         self._next_id = next_id
 
-    @staticmethod
-    def _normalize_username(username: str | None) -> str:
-        return (username or "").strip().lower()
+    _normalize_username = staticmethod(normalize_username)
+    _normalize_role = staticmethod(normalize_role)
 
     @staticmethod
     def _parse_loaded_payload(data: object) -> tuple[int, dict[str, UserRecord]]:
@@ -99,11 +100,12 @@ class JSONUserStore:
     def _parse_next_id(payload: dict[object, object]) -> int:
         """Validate the persisted next-id counter."""
         next_id = payload.get("_next_id", 1)
-        if not isinstance(next_id, int) or isinstance(next_id, bool):
-            raise TypeError(f"_next_id must be int, got {type(next_id).__name__}")
-        if next_id < 1:
-            raise ValueError("_next_id must be positive")
-        return next_id
+        try:
+            return require_positive_int(next_id, "_next_id")
+        except TypeError as exc:
+            raise TypeError(f"_next_id must be int, got {type(next_id).__name__}") from exc
+        except ValueError as exc:
+            raise ValueError("_next_id must be positive") from exc
 
     @staticmethod
     def _parse_raw_user(raw_user: object) -> UserRecord:
@@ -112,11 +114,13 @@ class JSONUserStore:
             raise TypeError("user record must be an object")
 
         raw = cast(dict[object, object], raw_user)
-        user_id = raw["user_id"]
-        if not isinstance(user_id, int) or isinstance(user_id, bool):
-            raise TypeError(f"user_id must be int, got {type(user_id).__name__}")
-        if user_id < 1:
-            raise ValueError("user_id must be positive")
+        user_id_value = raw["user_id"]
+        try:
+            user_id = require_positive_int(user_id_value, "user_id")
+        except TypeError as exc:
+            raise TypeError(f"user_id must be int, got {type(user_id_value).__name__}") from exc
+        except ValueError as exc:
+            raise ValueError("user_id must be positive") from exc
 
         username = JSONUserStore._parse_string_field(raw, "username")
         raw_username = username.strip()
@@ -147,31 +151,21 @@ class JSONUserStore:
     def _parse_token_version(raw: dict[object, object]) -> int:
         """Read token version, defaulting legacy persisted users to version 1."""
         value = raw.get("token_version", 1)
-        if not isinstance(value, int) or isinstance(value, bool):
-            raise TypeError(f"'token_version' must be int, got {type(value).__name__}")
-        if value < 1:
-            raise ValueError("'token_version' must be positive")
-        return value
+        try:
+            return require_positive_int(value, "token_version")
+        except TypeError as exc:
+            raise TypeError(f"'token_version' must be int, got {type(value).__name__}") from exc
+        except ValueError as exc:
+            raise ValueError("'token_version' must be positive") from exc
 
     @staticmethod
     def _parse_string_field(raw: dict[object, object], field: str) -> str:
         """Read and validate a required string field from raw JSON data."""
         value = raw[field]
-        if not isinstance(value, str):
-            raise TypeError(f"{field!r} must be str, got {type(value).__name__}")
-        return value
-
-    @staticmethod
-    def _normalize_role(role: object) -> str:
-        """Normalize a role enum or role string into the persisted role value."""
-        if isinstance(role, Role):
-            return role.value
-        if not isinstance(role, str):
-            raise TypeError(f"Invalid role: {role!r}")
         try:
-            return Role(role.strip().upper()).value
-        except ValueError as exc:
-            raise ValueError(f"Invalid role: {role!r}") from exc
+            return require_str(value, field)
+        except TypeError as exc:
+            raise TypeError(f"{field!r} must be str, got {type(value).__name__}") from exc
 
     def _atomic_write(self, data: dict[str, Any]) -> str:
         """Write JSON atomically to the configured path.

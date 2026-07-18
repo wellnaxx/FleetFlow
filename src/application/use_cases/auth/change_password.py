@@ -26,6 +26,7 @@ from src.application.exceptions.password_errors import (
     PasswordResetUserNotFoundError,
     PasswordUnchangedError,
 )
+from src.application.services.auth_normalization import normalize_username
 from src.application.services.auth_service import AuthService
 from src.application.services.authorization_service import AuthorizationService, record_authorization_denied
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
@@ -265,7 +266,7 @@ class ChangePasswordUseCase(AuthorizedUseCase[None]):
         if current_user is None:
             return None
 
-        return current_user.username.strip().lower() if current_user.username.strip() else None
+        return normalize_username(current_user.username) or None
 
     def _current_user_id(self) -> int | None:
         """Return the authenticated principal user id, if any."""
@@ -286,7 +287,7 @@ class ChangePasswordUseCase(AuthorizedUseCase[None]):
             raise PermissionError("Missing permission: ADMIN_USER")
 
     def _normalize_username(self, username: str) -> str:
-        normalized = username.strip().lower()
+        normalized = normalize_username(username)
         if not normalized:
             raise ValidationError("Username must be a non-empty string.")
         return normalized

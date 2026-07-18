@@ -24,6 +24,7 @@ from src.domain.exceptions import DomainConflictError, DomainValidationError, En
 from src.domain.services.map import Map
 from src.domain.services.package_assignment_policy import PackageAssignmentPolicy
 from src.domain.services.route_scheduler import RouteScheduler
+from src.domain.validation import require_positive_int
 from src.domain.value_objects.location_code import LocationCode
 from src.domain.value_objects.route_path import RoutePath
 from src.domain.value_objects.route_schedule import RoutePosition, RoutePositionKind
@@ -66,12 +67,13 @@ class DeliveryRoute(DomainEventRecorderMixin):
             route_id: Stable route identifier.
 
         Raises:
-            DomainValidationError: If fewer than two locations are supplied, any location is
+            DomainValidationError: If ``route_id`` is not a positive integer,
+                fewer than two locations are supplied, any location is
                 unknown, or a location is repeated.
             EntityNotFoundError: If a departure time is supplied and no map distance exists
                 between adjacent route locations.
         """
-        self.route_id = route_id
+        self.route_id = require_positive_int(route_id, "route_id")
         self._path = RoutePath.create(*locations)
         self.truck: Truck | None = None
         self._packages: list[DeliveryPackage] = []
@@ -138,7 +140,8 @@ class DeliveryRoute(DomainEventRecorderMixin):
             Newly created route with one pending `RouteCreated` event.
 
         Raises:
-            DomainValidationError: If fewer than two locations are supplied, any location is
+            DomainValidationError: If ``route_id`` is not a positive integer,
+                fewer than two locations are supplied, any location is
                 unknown, or a location is repeated.
             EntityNotFoundError: If a departure time is supplied and no map distance exists
                 between adjacent route locations.

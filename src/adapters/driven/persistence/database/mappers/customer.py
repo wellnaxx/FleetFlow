@@ -5,6 +5,7 @@ from typing import TypedDict
 from src.adapters.driven.persistence.database.executor import RowDict
 from src.domain.entities.customer import Customer
 from src.domain.value_objects.contact_info import ContactInfo
+from src.shared.validation import require_int, require_str
 
 
 class CustomerRow(TypedDict):
@@ -48,19 +49,10 @@ def _as_customer_row(row: RowDict) -> CustomerRow:
         KeyError: If a required customer column is missing.
         TypeError: If a required customer column has an unexpected type.
     """
-    customer_id = row["customer_id"]
-    name = row["name"]
-    email = row["email"]
-    phone = row["phone"]
-
-    if not isinstance(customer_id, int) or isinstance(customer_id, bool):
-        raise TypeError(f"customer_id: expected int, got {type(customer_id).__name__}")
-    if not isinstance(name, str):
-        raise TypeError(f"name: expected str, got {type(name).__name__}")
-    if not isinstance(email, str):
-        raise TypeError(f"email: expected str, got {type(email).__name__}")
-    if not isinstance(phone, str):
-        raise TypeError(f"phone: expected str, got {type(phone).__name__}")
+    customer_id = require_int(row["customer_id"], "customer_id")
+    name = require_str(row["name"], "name")
+    email = require_str(row["email"], "email")
+    phone = require_str(row["phone"], "phone")
 
     return CustomerRow(
         customer_id=customer_id,

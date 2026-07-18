@@ -11,6 +11,15 @@ from src.application.enums.event_sources import EventSource
 from src.application.models.audit_record import AuditRecord
 from src.application.models.audit_validation import require_json_object
 from src.shared.json_types import JSONObject
+from src.shared.validation import (
+    require_datetime,
+    require_int,
+    require_optional_int,
+    require_optional_str,
+    require_optional_uuid,
+    require_str,
+    require_uuid,
+)
 
 
 class AuditRow(TypedDict):
@@ -92,73 +101,25 @@ def _as_audit_row(row: RowDict) -> AuditRow:
             JSON payload shape.
         ValueError: If a persisted enum value is unknown.
     """
-    audit_id = row["audit_id"]
-    event_id = row["event_id"]
-    event_version = row["event_version"]
-    event_type = row["event_type"]
-    occurred_at = row["occurred_at"]
-    recorded_at = row["recorded_at"]
-    envelope_id = row["envelope_id"]
-    correlation_id = row["correlation_id"]
-    causation_id = row["causation_id"]
-    source = row["source"]
-    actor_user_id = row["actor_user_id"]
-    actor_username = row["actor_username"]
-    resource_type = row["resource_type"]
-    resource_id = row["resource_id"]
-    action = row["action"]
+    audit_id = require_int(row["audit_id"], "audit_id")
+    event_id = require_uuid(row["event_id"], "event_id")
+    event_version = require_int(row["event_version"], "event_version")
+    event_type = require_str(row["event_type"], "event_type")
+    occurred_at = require_datetime(row["occurred_at"], "occurred_at")
+    recorded_at = require_datetime(row["recorded_at"], "recorded_at")
+    envelope_id = require_uuid(row["envelope_id"], "envelope_id")
+    correlation_id = require_uuid(row["correlation_id"], "correlation_id")
+    causation_id = require_optional_uuid(row["causation_id"], "causation_id")
+    source = require_str(row["source"], "source")
+    actor_user_id = require_optional_int(row["actor_user_id"], "actor_user_id")
+    actor_username = require_optional_str(row["actor_username"], "actor_username")
+    resource_type = require_str(row["resource_type"], "resource_type")
+    resource_id = require_optional_str(row["resource_id"], "resource_id")
+    action = require_str(row["action"], "action")
     payload_json = row["payload_json"]
-    created_at = row["created_at"]
+    created_at = require_datetime(row["created_at"], "created_at")
 
-    if not isinstance(audit_id, int) or isinstance(audit_id, bool):
-        raise TypeError(f"audit_id: expected int, got {type(audit_id).__name__}")
-    
-    if not isinstance(event_id, UUID):
-        raise TypeError(f"event_id: expected UUID, got {type(event_id).__name__}")
-    
-    if not isinstance(event_version, int) or isinstance(event_version, bool):
-        raise TypeError(f"event_version: expected int, got {type(event_version).__name__}")
-
-    if not isinstance(event_type, str):
-        raise TypeError(f"event_type: expected str, got {type(event_type).__name__}")
-    
-    if not isinstance(occurred_at, datetime):
-        raise TypeError(f"occurred_at: expected datetime, got {type(occurred_at).__name__}")
-    
-    if not isinstance(recorded_at, datetime):
-        raise TypeError(f"recorded_at: expected datetime, got {type(recorded_at).__name__}")
-    
-    if not isinstance(envelope_id, UUID):
-        raise TypeError(f"envelope_id: expected UUID, got {type(envelope_id).__name__}")
-    
-    if not isinstance(correlation_id, UUID):
-        raise TypeError(f"correlation_id: expected UUID, got {type(correlation_id).__name__}")
-    
-    if not isinstance(causation_id, UUID) and causation_id is not None:
-        raise TypeError(f"causation_id: expected UUID or None, got {type(causation_id).__name__}")
-    
-    if not isinstance(source, str):
-        raise TypeError(f"source: expected str, got {type(source).__name__}")
-    
-    if (not isinstance(actor_user_id, int) or isinstance(actor_user_id, bool)) and actor_user_id is not None:
-        raise TypeError(f"actor_user_id: expected int or None, got {type(actor_user_id).__name__}")
-    
-    if not isinstance(actor_username, str) and actor_username is not None:
-        raise TypeError(f"actor_username: expected str or None, got {type(actor_username).__name__}")
-    
-    if not isinstance(resource_type, str):
-        raise TypeError(f"resource_type: expected str, got {type(resource_type).__name__}")
-    
-    if not isinstance(resource_id, str) and resource_id is not None:
-        raise TypeError(f"resource_id: expected str or None, got {type(resource_id).__name__}")
-    
-    if not isinstance(action, str):
-        raise TypeError(f"action: expected str, got {type(action).__name__}")
-    
     payload_json = require_json_object(payload_json, "payload_json")
-
-    if not isinstance(created_at, datetime):
-        raise TypeError(f"created_at: expected datetime, got {type(created_at).__name__}")
     
     return AuditRow(
         audit_id=audit_id,

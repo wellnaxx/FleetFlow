@@ -4,6 +4,7 @@ from typing import TypedDict
 
 from src.adapters.driven.persistence.database.executor import RowDict
 from src.application.models.user_record import UserRecord
+from src.shared.validation import require_int, require_positive_int, require_str
 
 
 class UserRecordRow(TypedDict):
@@ -62,33 +63,17 @@ def _as_user_record_row(row: RowDict) -> UserRecordRow:
         TypeError: If a required user column has an unexpected type.
         ValueError: If the token_version is not positive.
     """
-    user_id = row["user_id"]
-    username = row["username"]
-    role = row["role"]
-    name = row["name"]
-    email = row["email"]
-    phone_number = row["phone"]
-    password_hash = row["password_hash"]
-    token_version = row["token_version"]
-
-    if not isinstance(user_id, int) or isinstance(user_id, bool):
-        raise TypeError(f"user_id: expected int, got {type(user_id).__name__}")
-    if not isinstance(username, str):
-        raise TypeError(f"username: expected str, got {type(username).__name__}")
-    if not isinstance(role, str):
-        raise TypeError(f"role: expected str, got {type(role).__name__}")
-    if not isinstance(name, str):
-        raise TypeError(f"name: expected str, got {type(name).__name__}")
-    if not isinstance(email, str):
-        raise TypeError(f"email: expected str, got {type(email).__name__}")
-    if not isinstance(phone_number, str):
-        raise TypeError(f"phone: expected str, got {type(phone_number).__name__}")
-    if not isinstance(password_hash, str):
-        raise TypeError(f"password_hash: expected str, got {type(password_hash).__name__}")
-    if not isinstance(token_version, int) or isinstance(token_version, bool):
-        raise TypeError(f"token_version: expected int, got {type(token_version).__name__}")
-    if token_version < 1:
-        raise ValueError("token_version must be positive")
+    user_id = require_int(row["user_id"], "user_id")
+    username = require_str(row["username"], "username")
+    role = require_str(row["role"], "role")
+    name = require_str(row["name"], "name")
+    email = require_str(row["email"], "email")
+    phone_number = require_str(row["phone"], "phone")
+    password_hash = require_str(row["password_hash"], "password_hash")
+    try:
+        token_version = require_positive_int(row["token_version"], "token_version")
+    except ValueError as exc:
+        raise ValueError("token_version must be positive") from exc
 
     return UserRecordRow(
         user_id=user_id,

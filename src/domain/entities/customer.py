@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from src.domain.entities.mixins.event_mixin import DomainEventRecorderMixin
 from src.domain.events.customer_events import CustomerCreated
 from src.domain.exceptions import DomainConflictError, EntityNotFoundError
+from src.domain.validation import require_positive_int
 
 if TYPE_CHECKING:
     from src.domain.entities.delivery_package import DeliveryPackage
@@ -44,6 +45,14 @@ class Customer(DomainEventRecorderMixin):
         repr=False,
         compare=False,
     )
+
+    def __post_init__(self) -> None:
+        """Validate customer identity at the aggregate boundary.
+
+        Raises:
+            DomainValidationError: If ``customer_id`` is not a positive integer.
+        """
+        require_positive_int(self.customer_id, "customer_id")
 
     @property
     def name(self) -> str:
@@ -85,10 +94,16 @@ class Customer(DomainEventRecorderMixin):
 
         Returns:
             Newly created customer with one pending `CustomerCreated` event.
+
+        Raises:
+            DomainValidationError: If ``customer_id`` is not a positive integer.
         """
         customer = cls(contact=contact, customer_id=customer_id)
         customer._record_event(
-            CustomerCreated(occurred_at=occurred_at or datetime.now(), customer_id=customer_id)
+            CustomerCreated(
+                occurred_at=occurred_at or datetime.now(),
+                customer_id=customer.customer_id,
+            )
         )
         return customer
 

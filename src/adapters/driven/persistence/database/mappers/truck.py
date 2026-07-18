@@ -7,6 +7,12 @@ from src.adapters.driven.persistence.database.executor import RowDict
 from src.domain.entities.truck import Truck
 from src.domain.enums.truck_status import TruckStatus
 from src.domain.value_objects.location_code import LocationCode
+from src.shared.validation import (
+    require_int,
+    require_optional_datetime,
+    require_optional_str,
+    require_str,
+)
 
 
 class TruckRow(TypedDict):
@@ -65,34 +71,15 @@ def _as_truck_row(row: RowDict) -> TruckRow:
         KeyError: If a required truck column is missing.
         TypeError: If a required truck column has an unexpected type.
     """
-    vehicle_id = row["vehicle_id"]
-    name = row["name"]
-    capacity = row["capacity"]
-    max_range = row["max_range"]
-    status = row["status"]
-    current_location = row["current_location"]
-    busy_from = row["busy_from"]
-    busy_until = row["busy_until"]
-    in_transit_to = row["in_transit_to"]
-
-    if not isinstance(vehicle_id, int) or isinstance(vehicle_id, bool):
-        raise TypeError(f"vehicle_id: expected int, got {type(vehicle_id).__name__}")
-    if not isinstance(name, str):
-        raise TypeError(f"name: expected str, got {type(name).__name__}")
-    if not isinstance(capacity, int) or isinstance(capacity, bool):
-        raise TypeError(f"capacity: expected int, got {type(capacity).__name__}")
-    if not isinstance(max_range, int) or isinstance(max_range, bool):
-        raise TypeError(f"max_range: expected int, got {type(max_range).__name__}")
-    if not isinstance(status, str):
-        raise TypeError(f"status: expected str, got {type(status).__name__}")
-    if current_location is not None and not isinstance(current_location, str):
-        raise TypeError(f"current_location: expected str or None, got {type(current_location).__name__}")
-    if busy_from is not None and not isinstance(busy_from, datetime):
-        raise TypeError(f"busy_from: expected datetime or None, got {type(busy_from).__name__}")
-    if busy_until is not None and not isinstance(busy_until, datetime):
-        raise TypeError(f"busy_until: expected datetime or None, got {type(busy_until).__name__}")
-    if in_transit_to is not None and not isinstance(in_transit_to, str):
-        raise TypeError(f"in_transit_to: expected str or None, got {type(in_transit_to).__name__}")
+    vehicle_id = require_int(row["vehicle_id"], "vehicle_id")
+    name = require_str(row["name"], "name")
+    capacity = require_int(row["capacity"], "capacity")
+    max_range = require_int(row["max_range"], "max_range")
+    status = require_str(row["status"], "status")
+    current_location = require_optional_str(row["current_location"], "current_location")
+    busy_from = require_optional_datetime(row["busy_from"], "busy_from")
+    busy_until = require_optional_datetime(row["busy_until"], "busy_until")
+    in_transit_to = require_optional_str(row["in_transit_to"], "in_transit_to")
 
     return TruckRow(
         vehicle_id=vehicle_id,

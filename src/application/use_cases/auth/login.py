@@ -13,6 +13,7 @@ from src.application.exceptions.password_errors import (
     LoginWrongPasswordError,
 )
 from src.application.results.login_result import LoginResult
+from src.application.services.auth_normalization import normalize_username
 from src.application.services.auth_service import AuthService
 from src.application.use_cases.base.base_use_case import BaseUseCase
 from src.application.use_cases.base.event_mixin import ApplicationEventRecorderMixin
@@ -71,7 +72,7 @@ class LoginUseCase(BaseUseCase[LoginResult], ApplicationEventRecorderMixin):
                 )
             )
 
-        logger.info("User %r authenticated.", username.strip().lower())
+        logger.info("User %r authenticated.", normalize_username(username))
         return LoginResult(record, principal)
 
     def _record_login_rejection(

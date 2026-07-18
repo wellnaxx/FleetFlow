@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 
 from src.application.enums.event_sources import EventSource
 from src.shared.event import Event
+from src.shared.validation import require_non_empty_str, require_positive_int
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,18 +28,19 @@ class EventActor:
 
     @staticmethod
     def _validate_user_id(value: object) -> None:
-        if not isinstance(value, int) or isinstance(value, bool) or value < 1:
-            raise ValueError("user_id must be a positive integer.")
+        try:
+            require_positive_int(value, "user_id")
+        except (TypeError, ValueError) as exc:
+            raise ValueError("user_id must be a positive integer.") from exc
 
     @staticmethod
     def _normalize_username(value: object) -> str:
-        if not isinstance(value, str):
-            raise TypeError("username must be a non-empty string.")
-
-        normalized_username = value.strip().lower()
-        if not normalized_username:
-            raise ValueError("username must be a non-empty string.")
-        return normalized_username
+        try:
+            return require_non_empty_str(value, "username").lower()
+        except TypeError as exc:
+            raise TypeError("username must be a non-empty string.") from exc
+        except ValueError as exc:
+            raise ValueError("username must be a non-empty string.") from exc
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

@@ -23,6 +23,7 @@ from src.application.exceptions.password_errors import (
 )
 from src.application.models.current_user_principal import CurrentUserPrincipal
 from src.application.models.user_record import UserRecord
+from src.application.services.auth_normalization import normalize_username
 from src.application.services.runtime_user_factory import create_runtime_authenticated_user_from_record
 from src.domain.enums.auth import Role
 from src.domain.value_objects.contact_info import ContactInfo
@@ -76,7 +77,7 @@ class AuthService:
             RegistrationUsernameAlreadyExistsError: If the username already exists.
             RegistrationPasswordCriteriaNotMetError: If the password fails validation.
         """
-        clean_username = username.strip().lower()
+        clean_username = normalize_username(username)
         if not clean_username:
             raise RegistrationInvalidUsernameError()
         if self._store.get_by_username(clean_username) is not None:

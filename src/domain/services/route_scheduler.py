@@ -5,6 +5,7 @@ from itertools import pairwise
 
 from src.domain.exceptions import DomainValidationError
 from src.domain.services.map import Map
+from src.domain.validation import require_positive_int
 from src.domain.value_objects.location_code import LocationCode
 from src.domain.value_objects.route_schedule import RouteSchedule, RouteSegment, ScheduledStop
 
@@ -42,8 +43,10 @@ class RouteScheduler:
         if len(locations) < 2:
             raise DomainValidationError("A route schedule requires at least two locations.")
 
-        if speed_kmph <= 0:
-            raise DomainValidationError("Route speed must be positive.")
+        try:
+            normalized_speed = require_positive_int(speed_kmph, "speed_kmph")
+        except DomainValidationError as exc:
+            raise DomainValidationError("Route speed must be a positive integer.") from exc
 
         stops: list[ScheduledStop] = [
             ScheduledStop(
@@ -56,7 +59,7 @@ class RouteScheduler:
 
         for start, end in pairwise(locations):
             distance_km = Map.get_distance(start, end)
-            duration = timedelta(hours=distance_km / speed_kmph)
+            duration = timedelta(hours=distance_km / normalized_speed)
             segments.append(RouteSegment(start, end, distance_km, duration))
             current_time += duration
             stops.append(ScheduledStop(end, current_time))

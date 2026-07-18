@@ -14,6 +14,7 @@ from src.adapters.driven.persistence.database.graph_loaders.package_graph_loader
 )
 from src.adapters.driven.persistence.database.graph_loaders.route_graph_loader import load_route_graph
 from src.adapters.driven.persistence.database.queries import QUERIES
+from src.adapters.driven.persistence.database.validation import require_count
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.enums.item_status import ItemStatus
@@ -129,10 +130,7 @@ class PostgresPackageRepository:
         if row is None:
             return 0
 
-        total = row["total"]
-        if not isinstance(total, int) or isinstance(total, bool):
-            raise TypeError("Package count must be an integer.")
-        return total
+        return require_count(row["total"], "Package count")
 
     def list_unassigned(self) -> list[DeliveryPackage]:
         """Return packages that are not assigned to a route.
@@ -177,10 +175,7 @@ class PostgresPackageRepository:
         if row is None:
             return 0
 
-        total = row["total"]
-        if not isinstance(total, int) or isinstance(total, bool):
-            raise TypeError("Unassigned package count must be an integer.")
-        return total
+        return require_count(row["total"], "Unassigned package count")
 
     def list_by_route(self, route_id: int) -> list[DeliveryPackage]:
         """Return packages assigned to a route.

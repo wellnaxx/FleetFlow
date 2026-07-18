@@ -15,8 +15,12 @@ from src.adapters.driven.persistence.database.graph_loaders.route_graph_loader i
     load_route_graphs,
 )
 from src.adapters.driven.persistence.database.queries import QUERIES
+from src.adapters.driven.persistence.database.validation import require_count
 from src.domain.entities.delivery_route import DeliveryRoute
+from src.domain.enums.route_status import RouteStatus
+from src.domain.services.route_scheduler import RouteScheduler
 from src.domain.value_objects.location_code import LocationCode
+from src.domain.value_objects.route_path import RoutePath
 
 
 class PostgresRouteRepository:
@@ -36,18 +40,22 @@ class PostgresRouteRepository:
             DatabaseError: If the transaction, route insert, or stop insert fails.
             DomainValidationError: If route construction fails.
         """
-        validated_route = DeliveryRoute(*locations, departure_time=departure_time, route_id=0)
-        with transaction_cursor() as cursor:
-            route_id = execute_insert_tx(
-                cursor, QUERIES.routes.add, (departure_time, validated_route.status.value)
+        path = RoutePath.create(*locations)
+        if departure_time is not None:
+            RouteScheduler.build(
+                locations=path.locations,
+                departure_time=departure_time,
+                speed_kmph=DeliveryRoute.SPEED_KMPH,
             )
+        status = RouteStatus.SCHEDULED if departure_time is not None else RouteStatus.PLANNED
 
-            for stop_order, location in enumerate(validated_route.locations):
+        with transaction_cursor() as cursor:
+            route_id = execute_insert_tx(cursor, QUERIES.routes.add, (departure_time, status.value))
+
+            for stop_order, location in enumerate(path.locations):
                 execute_write_tx(cursor, QUERIES.routes.add_stop, (route_id, stop_order, str(location)))
 
-        return DeliveryRoute.create(
-            *validated_route.locations, departure_time=departure_time, route_id=route_id
-        )
+        return DeliveryRoute.create(*path.locations, departure_time=departure_time, route_id=route_id)
 
     def remove(self, route_id: int) -> None:
         """Remove a route by id.
@@ -110,10 +118,7 @@ class PostgresRouteRepository:
         if row is None:
             return 0
 
-        total = row["total"]
-        if not isinstance(total, int) or isinstance(total, bool):
-            raise TypeError("Route count must be an integer.")
-        return total
+        return require_count(row["total"], "Route count")
 
     def update_state(self, route: DeliveryRoute) -> None:
         """Persist mutable route runtime state.

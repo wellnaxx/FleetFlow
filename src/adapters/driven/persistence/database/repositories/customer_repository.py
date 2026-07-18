@@ -6,6 +6,7 @@ from src.adapters.driven.persistence.database.executor import (
 )
 from src.adapters.driven.persistence.database.mappers.customer import map_customer
 from src.adapters.driven.persistence.database.queries import QUERIES
+from src.adapters.driven.persistence.database.validation import require_count
 from src.domain.entities.customer import Customer
 from src.domain.value_objects.contact_info import ContactInfo
 
@@ -166,9 +167,7 @@ class PostgresCustomerRepository:
         if not rows:
             return [], 0
 
-        total = rows[0]["total"]
-        if not isinstance(total, int) or isinstance(total, bool):
-            raise TypeError("Customer count must be an integer.")
+        total = require_count(rows[0]["total"], "Customer count")
 
         customer_rows = [row for row in rows if row["customer_id"] is not None]
         return [map_customer(customer_row) for customer_row in customer_rows], total
@@ -188,7 +187,4 @@ class PostgresCustomerRepository:
         if row is None:
             return 0
 
-        total = row["total"]
-        if not isinstance(total, int) or isinstance(total, bool):
-            raise TypeError("Customer count must be an integer.")
-        return total
+        return require_count(row["total"], "Customer count")

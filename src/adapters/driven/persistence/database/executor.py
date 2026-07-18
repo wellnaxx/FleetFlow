@@ -18,6 +18,7 @@ from psycopg.abc import QueryNoTemplate
 
 from src.adapters.driven.persistence.database.connection import get_connection
 from src.adapters.driven.persistence.database.errors import DatabaseError
+from src.shared.validation import require_int
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -53,10 +54,10 @@ def _extract_inserted_id(row: Row | None) -> int:
         raise DatabaseError.missing_returning_id()
 
     new_id = row[0]
-    if not isinstance(new_id, int) or isinstance(new_id, bool):
-        raise DatabaseError.invalid_returned_id_type(new_id)
-
-    return new_id
+    try:
+        return require_int(new_id, "returned_id")
+    except TypeError as exc:
+        raise DatabaseError.invalid_returned_id_type(new_id) from exc
 
 
 def _cursor_to_dicts(cursor: Cursor[Row]) -> list[RowDict]:

@@ -9,7 +9,7 @@ from src.adapters.driven.persistence.database.mappers.user import map_user_recor
 from src.adapters.driven.persistence.database.queries import QUERIES
 from src.adapters.driven.security.password_hasher import PasswordHash
 from src.application.models.user_record import UserRecord
-from src.domain.enums.auth import Role
+from src.application.services.auth_normalization import normalize_role, normalize_username
 from src.domain.value_objects.contact_info import ContactInfo
 from src.ports.output.repository_errors import DuplicateKeyError
 
@@ -17,40 +17,8 @@ from src.ports.output.repository_errors import DuplicateKeyError
 class PostgresUserRepository:
     """Postgres-backed user repository implementation."""
 
-    @staticmethod
-    def _normalize_username(username: str | None) -> str:
-        """Normalize a username for case-insensitive lookup.
-
-        Args:
-            username: Raw username, or `None`.
-
-        Returns:
-            Lowercase trimmed username, or an empty string.
-        """
-        return (username or "").strip().lower()
-
-    @staticmethod
-    def _normalize_role(role: object) -> str:
-        """Normalize a role enum or role string into the persisted role value.
-
-        Args:
-            role: Runtime role enum or persisted role string.
-
-        Returns:
-            Persisted role value.
-
-        Raises:
-            TypeError: If role is not a role enum or string.
-            ValueError: If role is not a supported application role.
-        """
-        if isinstance(role, Role):
-            return role.value
-        if not isinstance(role, str):
-            raise TypeError(f"Invalid role: {role!r}")
-        try:
-            return Role(role.strip().upper()).value
-        except ValueError as exc:
-            raise ValueError(f"Invalid role: {role!r}") from exc
+    _normalize_username = staticmethod(normalize_username)
+    _normalize_role = staticmethod(normalize_role)
 
     def get_by_username(self, username: str) -> UserRecord | None:
         """Return a user by username.

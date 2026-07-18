@@ -1,6 +1,7 @@
 from src.adapters.driven.persistence.database.executor import RowDict, fetch_one
 from src.adapters.driven.persistence.database.queries import QUERIES
 from src.application.dto.world_state_snapshot_dto import CountersSnapshot
+from src.shared.validation import require_int
 
 
 def load_snapshot_counters() -> CountersSnapshot:
@@ -16,9 +17,4 @@ def load_snapshot_counters() -> CountersSnapshot:
 
 
 def _required_int(row: RowDict, column: str) -> int:
-    value = row[column]
-
-    if not isinstance(value, int) or isinstance(value, bool):
-        raise TypeError(f"{column}: expected int, got {type(value).__name__}")
-
-    return value
+    return require_int(row[column], column)

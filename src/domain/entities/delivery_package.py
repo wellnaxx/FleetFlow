@@ -11,6 +11,11 @@ from src.domain.enums.item_status import ItemStatus
 from src.domain.events.package_events import PackageCreated, PackageDelivered, PackagePickedUp, PackageRemoved
 from src.domain.exceptions import BusinessRuleViolationError, DomainValidationError
 from src.domain.services.map import Map
+from src.domain.validation import (
+    require_optional_positive_int,
+    require_positive_finite_float,
+    require_positive_int,
+)
 from src.domain.value_objects.location_code import LocationCode, location_code_or_none
 
 if TYPE_CHECKING:
@@ -54,19 +59,19 @@ class DeliveryPackage(DomainEventRecorderMixin):
                 This is used only for partial hydration.
 
         Raises:
-            DomainValidationError: If locations are invalid, equal, or the weight is not
-                positive, or route_id is a boolean or negative.
+            DomainValidationError: If locations are invalid or equal; an id is
+                not a positive integer; or weight is not a positive finite
+                number.
         """
         self.start_location = LocationCode(start_location)
         self.end_location = LocationCode(end_location)
-        self._package_id = package_id
+        self._package_id = require_positive_int(package_id, "package_id")
         self._validate_locations()
-        self._validate_weight(float(weight))
         self._current_location = self.start_location
-        self.weight = weight
+        self.weight = require_positive_finite_float(weight, "weight")
         self.customer = customer
         self._route = None
-        self._route_id = self._validate_route_id(route_id)
+        self._route_id = require_optional_positive_int(route_id, "route_id")
         self.expected_arrival = None
         self.status = ItemStatus.TODO
 
@@ -80,17 +85,6 @@ class DeliveryPackage(DomainEventRecorderMixin):
             raise DomainValidationError(f"Invalid end location: {self.end_location}")
         if self.start_location == self.end_location:
             raise DomainValidationError("Start and end locations must be different.")
-
-    def _validate_weight(self, weight: float) -> None:
-        """Validate the weight of the package."""
-        if weight <= 0:
-            raise DomainValidationError("Weight must be positive.")
-
-    def _validate_route_id(self, route_id: int | None) -> int | None:
-        """Validate the route ID."""
-        if route_id is not None and (isinstance(route_id, bool) or route_id < 1):
-            raise DomainValidationError("Route ID must be a positive integer.")
-        return route_id
 
     @property
     def package_id(self) -> int:
@@ -149,7 +143,9 @@ class DeliveryPackage(DomainEventRecorderMixin):
             Newly created package with one pending `PackageCreated` event.
 
         Raises:
-            DomainValidationError: If locations are invalid, equal, or the weight is not positive.
+            DomainValidationError: If locations are invalid or equal, the
+                package id is not positive, or weight is not a positive finite
+                number.
         """
         package = cls(
             start_location=start_location,
@@ -161,11 +157,11 @@ class DeliveryPackage(DomainEventRecorderMixin):
 
         package._record_event(
             PackageCreated(
-                package_id=package_id,
+                package_id=package.package_id,
                 customer_id=customer.customer_id,
                 start_location=package.start_location,
                 end_location=package.end_location,
-                weight=weight,
+                weight=package.weight,
                 initial_status=package.status,
                 initial_location=package.current_location,
                 expected_arrival=package.expected_arrival,

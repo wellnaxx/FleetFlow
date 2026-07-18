@@ -4,6 +4,7 @@ from dataclasses import replace
 
 from src.adapters.driven.security.password_hasher import PasswordHash
 from src.application.models.user_record import UserRecord
+from src.application.services.auth_normalization import normalize_role, normalize_username
 from src.domain.enums.auth import Role
 from src.domain.value_objects.contact_info import ContactInfo
 from src.ports.output.repository_errors import DuplicateKeyError
@@ -23,9 +24,8 @@ class InMemoryUserRepository:
         self._by_id: dict[int, UserRecord] = {}
         self._next_id = 1
 
-    @staticmethod
-    def _normalize_username(username: str | None) -> str:
-        return (username or "").strip().lower()
+    _normalize_username = staticmethod(normalize_username)
+    _normalize_role = staticmethod(normalize_role)
 
     def get_by_username(self, username: str) -> UserRecord | None:
         """Fetch a persisted user by username.
@@ -166,15 +166,3 @@ class InMemoryUserRepository:
         self._by_id[updated.user_id] = updated
         self.save()
         return updated
-
-    @staticmethod
-    def _normalize_role(role: object) -> str:
-        """Normalize a role enum or role string into the persisted role value."""
-        if isinstance(role, Role):
-            return role.value
-        if not isinstance(role, str):
-            raise TypeError(f"Invalid role: {role!r}")
-        try:
-            return Role(role.strip().upper()).value
-        except ValueError as exc:
-            raise ValueError(f"Invalid role: {role!r}") from exc

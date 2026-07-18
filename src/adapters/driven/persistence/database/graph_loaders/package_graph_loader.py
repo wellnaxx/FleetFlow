@@ -15,6 +15,7 @@ from src.adapters.driven.persistence.database.graph_loaders.route_graph_loader i
 )
 from src.adapters.driven.persistence.database.mappers.package import as_package_row, map_package_with_customer
 from src.adapters.driven.persistence.database.queries import QUERIES
+from src.adapters.driven.persistence.database.validation import require_count
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.entities.delivery_route import DeliveryRoute
@@ -184,9 +185,7 @@ def _split_page_rows_and_total(rows: list[RowDict], label: str) -> tuple[list[Ro
     if not rows:
         return [], 0
 
-    total = rows[0]["total"]
-    if not isinstance(total, int) or isinstance(total, bool):
-        raise TypeError(f"{label} must be an integer.")
+    total = require_count(rows[0]["total"], label)
 
     return [row for row in rows if row["package_id"] is not None], total
 

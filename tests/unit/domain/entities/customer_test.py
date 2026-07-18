@@ -3,7 +3,7 @@ from datetime import datetime
 
 from src.domain.entities.customer import Customer
 from src.domain.events.customer_events import CustomerCreated
-from src.domain.exceptions import DomainConflictError, EntityNotFoundError
+from src.domain.exceptions import DomainConflictError, DomainValidationError, EntityNotFoundError
 from src.domain.value_objects.contact_info import ContactInfo
 
 
@@ -52,6 +52,14 @@ class Customer_Should(unittest.TestCase):
         customer = Customer(contact=self.make_contact(), customer_id=17)
 
         self.assertEqual(customer.pending_events, ())
+
+    def test_constructor_rejects_invalid_customer_id(self) -> None:
+        for customer_id in (0, -1, True, 1.0, "1"):
+            with self.subTest(customer_id=customer_id), self.assertRaises(DomainValidationError):
+                Customer(
+                    contact=self.make_contact(),
+                    customer_id=customer_id,  # type: ignore[reportArgumentType]
+                )
 
     def test_delivery_packages_is_tuple_and_readonly_view(self) -> None:
         c = Customer(self.make_contact("Carlos"), 2)

@@ -54,6 +54,22 @@ class TestTruck_Should(unittest.TestCase):
         self.assertIsInstance(truck.capacity, int)
         self.assertIsInstance(truck.max_range, int)
 
+    def test_init_rejects_invalid_positive_integer_fields(self) -> None:
+        for field_name in ("vehicle_id", "capacity", "max_range"):
+            for value in (0, -1, True, 1.0, "1"):
+                values: dict[str, object] = {
+                    "vehicle_id": 1,
+                    "name": TruckModel.SCANIA,
+                    "capacity": 1000,
+                    "max_range": 500,
+                }
+                values[field_name] = value
+
+                with self.subTest(field_name=field_name, value=value), self.assertRaises(
+                    DomainValidationError
+                ):
+                    Truck(**values)  # type: ignore[arg-type]
+
     def test_is_free_when_free(self) -> None:
         self.truck.status = TruckStatus.FREE
 

@@ -26,6 +26,13 @@ from src.application.exceptions.world_state_errors import (
 from src.domain.enums.truck_status import TruckStatus
 from src.domain.value_objects.location_code import LocationCode
 from src.ports.output.world_state_persistence import WorldStatePersistencePort
+from src.shared.validation import (
+    require_int,
+    require_optional_int,
+    require_optional_str,
+    require_positive_finite_float,
+    require_str,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -229,19 +236,14 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
     def _package_snapshot_from_raw(self, raw: object) -> PackageSnapshot:
         data = self._require_mapping(raw)
 
-        weight = data.get("weight")
-        if not isinstance(weight, (int, float)) or isinstance(weight, bool):
-            raise TypeError("weight must be numeric")
-
-        route_id_raw = data.get("route_id")
-        if route_id_raw is not None and (not isinstance(route_id_raw, int) or isinstance(route_id_raw, bool)):
-            raise TypeError("route_id must be int or null")
+        weight = require_positive_finite_float(data.get("weight"), "weight")
+        route_id_raw = require_optional_int(data.get("route_id"), "route_id")
 
         return PackageSnapshot(
             package_id=self._require_int(data, "package_id"),
             start=LocationCode(self._require_str(data, "start")),
             end=LocationCode(self._require_str(data, "end")),
-            weight=float(weight),
+            weight=weight,
             customer_id=self._require_int(data, "customer_id"),
             route_id=route_id_raw,
         )
@@ -252,23 +254,14 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
         locations_raw = self._require_list(data.get("locations"))
         package_ids_raw = self._require_list(data.get("package_ids"))
 
-        locations: list[LocationCode] = []
-        for item in locations_raw:
-            if not isinstance(item, str):
-                raise TypeError("route location must be str")
-            locations.append(LocationCode(item))
+        locations = [LocationCode(require_str(item, "route_location")) for item in locations_raw]
 
-        package_ids: list[int] = []
-        for item in package_ids_raw:
-            if not isinstance(item, int) or isinstance(item, bool):
-                raise TypeError("package id must be int")
-            package_ids.append(item)
+        package_ids = [require_int(item, "package_id") for item in package_ids_raw]
 
-        truck_vehicle_id_raw = data.get("truck_vehicle_id")
-        if truck_vehicle_id_raw is not None and (
-            not isinstance(truck_vehicle_id_raw, int) or isinstance(truck_vehicle_id_raw, bool)
-        ):
-            raise TypeError("truck_vehicle_id must be int or null")
+        truck_vehicle_id_raw = require_optional_int(
+            data.get("truck_vehicle_id"),
+            "truck_vehicle_id",
+        )
 
         return RouteSnapshot(
             route_id=self._require_int(data, "route_id"),
@@ -281,9 +274,7 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
     def _truck_snapshot_from_raw(self, raw: object) -> TruckSnapshot:
         data = self._require_mapping(raw)
 
-        route_id_raw = data.get("route_id")
-        if route_id_raw is not None and (not isinstance(route_id_raw, int) or isinstance(route_id_raw, bool)):
-            raise TypeError("route_id must be int or null")
+        route_id_raw = require_optional_int(data.get("route_id"), "route_id")
 
         return TruckSnapshot(
             vehicle_id=self._require_int(data, "vehicle_id"),
@@ -315,24 +306,13 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
         return cast(list[object], value)
 
     def _require_int(self, raw: dict[str, object], field: str) -> int:
-        value = raw.get(field)
-        if not isinstance(value, int) or isinstance(value, bool):
-            raise TypeError(f"{field} must be int")
-        return value
+        return require_int(raw.get(field), field)
 
     def _require_str(self, raw: dict[str, object], field: str) -> str:
-        value = raw.get(field)
-        if not isinstance(value, str):
-            raise TypeError(f"{field} must be str")
-        return value
+        return require_str(raw.get(field), field)
 
     def _require_str_or_none(self, raw: dict[str, object], field: str) -> str | None:
-        value = raw.get(field)
-        if value is None:
-            return None
-        if not isinstance(value, str):
-            raise TypeError(f"{field} must be str or null")
-        return value
+        return require_optional_str(raw.get(field), field)
 
     def _require_location_or_none(self, raw: dict[str, object], field: str) -> LocationCode | None:
         value = self._require_str_or_none(raw, field)

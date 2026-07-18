@@ -1,0 +1,98 @@
+import unittest
+from datetime import datetime
+from uuid import uuid4
+
+from src.shared.validation import (
+    require_datetime,
+    require_int,
+    require_non_empty_str,
+    require_non_negative_int,
+    require_optional_datetime,
+    require_optional_int,
+    require_optional_positive_int,
+    require_optional_str,
+    require_optional_uuid,
+    require_positive_finite_float,
+    require_positive_int,
+    require_str,
+    require_uuid,
+)
+
+
+class SharedValidation_Should(unittest.TestCase):
+    def test_require_int_accepts_int_and_rejects_bool_and_other_types(self) -> None:
+        self.assertEqual(require_int(3, "value"), 3)
+
+        for value in (True, False, 3.0, "3", None):
+            with self.subTest(value=value), self.assertRaises(TypeError):
+                require_int(value, "value")
+
+    def test_optional_int_accepts_none_and_rejects_bool(self) -> None:
+        self.assertIsNone(require_optional_int(None, "value"))
+        self.assertEqual(require_optional_int(3, "value"), 3)
+
+        with self.assertRaisesRegex(TypeError, "expected int or None"):
+            require_optional_int(True, "value")
+
+    def test_positive_int_rejects_zero_and_negative_values(self) -> None:
+        self.assertEqual(require_positive_int(1, "value"), 1)
+
+        for value in (0, -1):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                require_positive_int(value, "value")
+
+    def test_optional_positive_int_allows_none(self) -> None:
+        self.assertIsNone(require_optional_positive_int(None, "value"))
+        self.assertEqual(require_optional_positive_int(1, "value"), 1)
+
+    def test_non_negative_int_accepts_zero_and_rejects_negative_values(self) -> None:
+        self.assertEqual(require_non_negative_int(0, "value"), 0)
+
+        with self.assertRaises(ValueError):
+            require_non_negative_int(-1, "value")
+
+    def test_string_helpers_preserve_or_normalize_according_to_contract(self) -> None:
+        self.assertEqual(require_str(" value ", "value"), " value ")
+        self.assertEqual(require_non_empty_str(" value ", "value"), "value")
+        self.assertEqual(require_optional_str("", "value"), "")
+        self.assertIsNone(require_optional_str(None, "value"))
+
+        with self.assertRaises(ValueError):
+            require_non_empty_str("   ", "value")
+
+    def test_datetime_helpers_validate_required_and_optional_values(self) -> None:
+        value = datetime(2030, 1, 1, 10, 0)
+
+        self.assertIs(require_datetime(value, "value"), value)
+        self.assertIs(require_optional_datetime(value, "value"), value)
+        self.assertIsNone(require_optional_datetime(None, "value"))
+
+        with self.assertRaises(TypeError):
+            require_datetime("2030-01-01", "value")
+
+    def test_uuid_helpers_validate_required_and_optional_values(self) -> None:
+        value = uuid4()
+
+        self.assertIs(require_uuid(value, "value"), value)
+        self.assertIs(require_optional_uuid(value, "value"), value)
+        self.assertIsNone(require_optional_uuid(None, "value"))
+
+        with self.assertRaises(TypeError):
+            require_uuid(str(value), "value")
+
+    def test_positive_finite_float_normalizes_numeric_values(self) -> None:
+        self.assertEqual(require_positive_finite_float(3, "value"), 3.0)
+        self.assertEqual(require_positive_finite_float(3.5, "value"), 3.5)
+
+    def test_positive_finite_float_rejects_invalid_numbers_and_types(self) -> None:
+        for value in (True, "3", None):
+            with self.subTest(value=value), self.assertRaises(TypeError):
+                require_positive_finite_float(value, "value")
+
+        for value in (0, -1, float("nan"), float("inf"), float("-inf")):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                require_positive_finite_float(value, "value")
+
+    def test_positive_finite_float_translates_integer_overflow(self) -> None:
+        with self.assertRaisesRegex(ValueError, r"^weight must be finite\.$"):
+            require_positive_finite_float(10**10_000, "weight")

@@ -111,6 +111,15 @@ class DeliveryRoute_Should(unittest.TestCase):
         )
         self.assertEqual(scheduled.status, RouteStatus.SCHEDULED)
 
+    def test_init_rejects_invalid_route_id(self, *_: object) -> None:
+        for route_id in (0, -1, True, 1.0, "1"):
+            with self.subTest(route_id=route_id), self.assertRaises(DomainValidationError):
+                DeliveryRoute(
+                    LocationCode("AAA"),
+                    LocationCode("BBB"),
+                    route_id=route_id,  # type: ignore[reportArgumentType]
+                )
+
     def test_create_records_route_created_event(self, *_: object) -> None:
         departure_time = datetime(2025, 1, 2, 8, 0)
 

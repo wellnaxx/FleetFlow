@@ -7,6 +7,7 @@ from src.adapters.driven.persistence.database.executor import RowDict
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.enums.route_status import RouteStatus
 from src.domain.value_objects.location_code import LocationCode
+from src.shared.validation import require_int, require_optional_datetime, require_optional_int, require_str
 
 
 class RouteRow(TypedDict):
@@ -63,21 +64,10 @@ def as_route_row(row: RowDict) -> RouteRow:
         KeyError: If a required route column is missing.
         TypeError: If a required route column has an unexpected type.
     """
-    route_id = row["route_id"]
-    departure_time = row["departure_time"]
-    status = row["status"]
-    truck_vehicle_id = row["truck_vehicle_id"]
-
-    if not isinstance(route_id, int) or isinstance(route_id, bool):
-        raise TypeError(f"route_id: expected int, got {type(route_id).__name__}")
-    if departure_time is not None and not isinstance(departure_time, datetime):
-        raise TypeError(f"departure_time: expected datetime or None, got {type(departure_time).__name__}")
-    if not isinstance(status, str):
-        raise TypeError(f"status: expected str, got {type(status).__name__}")
-    if truck_vehicle_id is not None and (
-        not isinstance(truck_vehicle_id, int) or isinstance(truck_vehicle_id, bool)
-    ):
-        raise TypeError(f"truck_vehicle_id: expected int or None, got {type(truck_vehicle_id).__name__}")
+    route_id = require_int(row["route_id"], "route_id")
+    departure_time = require_optional_datetime(row["departure_time"], "departure_time")
+    status = require_str(row["status"], "status")
+    truck_vehicle_id = require_optional_int(row["truck_vehicle_id"], "truck_vehicle_id")
 
     return RouteRow(
         route_id=route_id,
@@ -100,13 +90,8 @@ def as_route_stop_row(row: RowDict) -> RouteStopRow:
         KeyError: If a required route stop column is missing.
         TypeError: If a required route stop column has an unexpected type.
     """
-    stop_order = row["stop_order"]
-    location_code = row["location_code"]
-
-    if not isinstance(stop_order, int) or isinstance(stop_order, bool):
-        raise TypeError(f"stop_order: expected int, got {type(stop_order).__name__}")
-    if not isinstance(location_code, str):
-        raise TypeError(f"location_code: expected str, got {type(location_code).__name__}")
+    stop_order = require_int(row["stop_order"], "stop_order")
+    location_code = require_str(row["location_code"], "location_code")
 
     return RouteStopRow(
         stop_order=stop_order,

@@ -17,6 +17,7 @@ from src.adapters.driven.persistence.database.mappers.truck import map_truck
 from src.adapters.driven.persistence.database.queries import QUERIES
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.entities.truck import Truck
+from src.shared.validation import require_optional_int
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,12 +135,4 @@ def _optional_route_id(row: RowDict) -> int | None:
     Raises:
         TypeError: If the route_id column has an unexpected type.
     """
-    value = row["route_id"]
-
-    if value is None:
-        return None
-
-    if not isinstance(value, int) or isinstance(value, bool):
-        raise TypeError(f"route_id: expected int or None, got {type(value).__name__}")
-
-    return value
+    return require_optional_int(row["route_id"], "route_id")

@@ -37,6 +37,7 @@ from src.adapters.driven.persistence.database.graph_loaders.shared import (
 from src.adapters.driven.persistence.database.mappers.route import map_route
 from src.adapters.driven.persistence.database.mappers.truck import map_truck
 from src.adapters.driven.persistence.database.queries import QUERIES
+from src.adapters.driven.persistence.database.validation import require_count
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -239,9 +240,7 @@ def _split_route_page_rows_and_total(rows: list[RowDict]) -> tuple[list[RowDict]
     if not rows:
         return [], 0
 
-    total = rows[0]["total"]
-    if not isinstance(total, int) or isinstance(total, bool):
-        raise TypeError("Route count must be an integer.")
+    total = require_count(rows[0]["total"], "Route count")
 
     return [row for row in rows if row["route_id"] is not None], total
 

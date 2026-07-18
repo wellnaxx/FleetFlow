@@ -160,6 +160,40 @@ class TestDeliveryPackage_Should(unittest.TestCase):
         with self.assertRaises(DomainValidationError):
             DeliveryPackage(LocationCode("SYD"), LocationCode("BRI"), 0, customer, 1)
 
+    def test_constructor_normalizes_integer_weight_to_float(self) -> None:
+        customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
+
+        package = DeliveryPackage(LocationCode("SYD"), LocationCode("BRI"), 500, customer, 1)
+
+        self.assertEqual(package.weight, 500.0)
+        self.assertIsInstance(package.weight, float)
+
+    def test_constructor_rejects_non_finite_and_non_numeric_weight(self) -> None:
+        customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
+
+        for weight in (True, "500", float("nan"), float("inf"), float("-inf")):
+            with self.subTest(weight=weight), self.assertRaises(DomainValidationError):
+                DeliveryPackage(
+                    LocationCode("SYD"),
+                    LocationCode("BRI"),
+                    weight,  # type: ignore[reportArgumentType]
+                    customer,
+                    1,
+                )
+
+    def test_constructor_rejects_invalid_package_id(self) -> None:
+        customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), 1)
+
+        for package_id in (0, -1, True, 1.0, "1"):
+            with self.subTest(package_id=package_id), self.assertRaises(DomainValidationError):
+                DeliveryPackage(
+                    LocationCode("SYD"),
+                    LocationCode("BRI"),
+                    500,
+                    customer,
+                    package_id,  # type: ignore[reportArgumentType]
+                )
+
     def test_package_customer_empty_name(self):
         with self.assertRaises(DomainValidationError):
             Customer(ContactInfo(LocationCode(""), "dan@e.com", "0484568777"), 1)
