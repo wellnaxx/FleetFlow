@@ -16,12 +16,15 @@ FleetFlow currently supports:
 - Package creation, lookup, removal, unassigned-package listing, and route assignment.
 - Route creation, lookup, removal, in-progress tracking, package assignment, and truck assignment.
 - Truck fleet management with deterministic city dispersion.
-- Truck suitability checks for start-location compatibility, route range, time-window availability, and carrying capacity.
+- Pure package and truck assignment policies with structured acceptance/rejection decisions.
+- Truck suitability checks for start-location compatibility, route range, time-window availability, availability-location transitions, and carrying capacity.
 - Segment-based capacity validation, so a truck is checked against the maximum load carried on each route leg rather than total package weight across the whole route.
+- Immutable, validated route paths and schedules with indexed location and arrival lookups.
 - Customer records derived from package creation, including email and phone lookup indexes.
 - User authentication with manager and employee roles.
 - JWT access/refresh tokens for HTTP authentication, with token-version revocation.
 - Typed domain, application, and repository errors for expected validation, not-found, conflict, authentication, and persistence failures.
+- Centralized layer-neutral runtime validation with domain and adapter wrappers that preserve boundary-specific errors.
 - Global FastAPI exception handlers that map expected application/domain failures to stable, sanitized HTTP responses.
 - Immutable domain and application event types with per-entity/use-case pending-event recording, event checkpoints for rollback, context-local envelope metadata, synchronous in-process dispatch, and structured event logging.
 - Browsable audit log with normalized descriptors, versioned event payloads, subscribed persistence handlers, in-memory and PostgreSQL repositories, and actor-scoped CLI/HTTP queries.
@@ -66,7 +69,7 @@ FleetFlow/
 |   |   |-- exceptions/           # application and world-state exception hierarchy
 |   |   |-- models/               # persisted/query models such as UserRecord, AuditRecord, AuditLogQuery
 |   |   |-- results/              # use-case/service result objects
-|   |   |-- services/             # auth, authorization, heartbeat, reconciliation, snapshot services
+|   |   |-- services/             # auth, authorization, fleet orchestration, heartbeat, reconciliation, snapshot services
 |   |   |   |-- audit_mapping/    # typed event-to-audit registry and mappings grouped by event family
 |   |   |   `-- validators/       # focused world-state schema, identity, reference, truck, and compatibility validators
 |   |   `-- use_cases/            # auth, package, route, truck, customer, and state workflows
@@ -76,12 +79,12 @@ FleetFlow/
 |   |   |-- enums/                # roles, permissions, item/route/truck statuses
 |   |   |-- events/               # immutable domain event definitions
 |   |   |-- exceptions.py         # typed domain validation, not-found, and conflict errors
-|   |   |-- services/             # map, vehicle, route scheduling, and package assignment policies
-|   |   `-- value_objects/        # contact/location values, route schedules, and assignment decisions
+|   |   |-- services/             # map, route scheduling, and package/truck assignment policies
+|   |   `-- value_objects/        # contact/location values, route paths/schedules, and assignment decisions
 |   |-- ports/
 |   |   |-- input/                # reserved for future input-port abstractions
 |   |   `-- output/               # repository, audit, persistence, runtime, event publisher, and vehicle ports
-|   `-- shared/                   # environment helpers and generic event primitives
+|   `-- shared/                   # environment, JSON, event, and runtime-validation primitives
 |-- tests/
 |-- postman/                      # API collection, local environment, and runner notes
 |-- cli_main.py                  # CLI entrypoint
@@ -129,12 +132,16 @@ FleetFlow models:
 - `User`, `Employee`, and `Manager`
 - `ContactInfo`
 - `LocationCode`
+- `RoutePath`
 - `RouteSchedule`, `RouteSegment`, `ScheduledStop`, and `RoutePosition`
-- `PackageAssignmentDecision`
+- `PackageAssignmentDecision` and `TruckAssignmentDecision`
 - `Map`
-- `VehicleManager`
 - `RouteScheduler`
-- `PackageAssignmentPolicy`
+- `PackageAssignmentPolicy` and `TruckAssignmentPolicy`
+
+The application layer also provides `VehicleManager`, which coordinates truck
+repository access and runtime route/truck binding replacement while delegating
+suitability decisions to the pure domain policy.
 
 Supported hub codes are:
 
@@ -142,26 +149,40 @@ Supported hub codes are:
 SYD, MEL, ADL, ASP, BRI, DAR, PER
 ```
 
-`LocationCode` normalizes location text to uppercase. `Map` owns the supported location set and intercity distances.
+`LocationCode` normalizes location text to uppercase. `RoutePath` owns the
+ordered, unique set of supported stops and its immutable position index. `Map`
+owns the supported location set and intercity distances.
 
 ## Route, Truck, and Package Rules
 
 FleetFlow enforces the main logistics invariants in the domain and application layers:
 
-- Routes must contain at least two unique supported locations.
+- `RoutePath` normalizes raw route stops and requires at least two unique,
+  supported locations.
 - Packages can only be assigned to routes that contain their start and end locations in the correct order.
-- `RouteScheduler` builds an immutable `RouteSchedule` containing ordered segments, stop times, final ETA,
+- `RouteScheduler` builds an immutable `RouteSchedule` from a validated path, containing ordered segments, stop times, final ETA,
   total distance, and indexed arrival/position lookups.
 - `PackageAssignmentPolicy` returns a structured acceptance or rejection decision for route compatibility,
   pickup progress, truck range, and maximum segment load.
 - Package assignment updates package-route links and expected arrival when possible, while reassignment to the
   same route remains idempotent.
 - Removing a package from a route clears its active assignment state.
-- Truck assignment checks current location, route range, availability window, and carrying capacity.
+- `TruckAssignmentPolicy` returns a structured decision for range, maximum
+  segment load, immediate location, schedule overlap, and the location where an
+  already assigned truck becomes available.
+- Application `VehicleManager` performs fleet repository access and binding
+  replacement without owning assignment policy rules.
 - Carrying capacity is checked by maximum segment load rather than total assigned package weight.
 - Heartbeat/reconciliation updates route statuses, truck positions, truck releases, package statuses, package current locations, and expected arrivals.
 
-Expected domain failures use typed exceptions. Validation problems, missing domain entities, and conflict/business-rule failures are translated by application use cases and global HTTP exception handlers into stable CLI/API-facing messages instead of relying on raw `ValueError` text.
+Expected domain failures use typed exceptions. Reusable primitive validation for
+integers, strings, datetimes, UUIDs, and finite positive numbers lives in
+`src/shared/validation.py`; domain adapters translate those failures into
+`DomainValidationError`, while persistence and application boundaries retain
+their own error contracts. Validation problems, missing domain entities, and
+conflict/business-rule failures are translated by application use cases and
+global HTTP exception handlers into stable CLI/API-facing messages instead of
+relying on raw `ValueError` text.
 
 ## Events And Observability
 
@@ -699,7 +720,7 @@ python -m mypy .
 
 ## Roadmap
 
-FleetFlow is currently a logistics backend with CLI and HTTP driving adapters, a layered/hexagonal architecture, domain entities, use cases, ports, in-memory repositories, a PostgreSQL repository adapter, JSON world-state persistence, authentication, autosave/load support, heartbeat reconciliation, segment-aware route capacity checks, and synchronous in-process event publication.
+FleetFlow is currently a logistics backend with CLI and HTTP driving adapters, a layered/hexagonal architecture, domain entities, immutable route path/schedule values, pure package/truck assignment policies, use cases, ports, in-memory repositories, a PostgreSQL repository adapter, JSON world-state persistence, authentication, autosave/load support, heartbeat reconciliation, segment-aware route capacity checks, and synchronous in-process event publication.
 
 The current architecture leaves several possible paths for future development. These are not required for the core project to work, but they are natural extensions if the project continues growing.
 
