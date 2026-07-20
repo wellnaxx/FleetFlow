@@ -237,6 +237,44 @@ def require_optional_uuid(value: object, field_name: str) -> UUID | None:
     return value
 
 
+def _require_finite_float(value: object, field_name: str) -> float:
+    """Require and normalize a finite integer or floating-point number."""
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise TypeError(f"{field_name}: expected int or float, got {type(value).__name__}")
+
+    try:
+        normalized = float(value)
+    except OverflowError as exc:
+        raise ValueError(f"{field_name} must be finite.") from exc
+
+    if not math.isfinite(normalized):
+        raise ValueError(f"{field_name} must be finite.")
+    return normalized
+
+
+def require_non_negative_finite_float(value: object, field_name: str) -> float:
+    """Require and normalize a finite number greater than or equal to zero.
+
+    Integer and floating-point inputs are accepted, except booleans. Numeric
+    strings and other coercible objects are deliberately rejected.
+
+    Args:
+        value: Runtime value to validate.
+        field_name: Field name used in the error message.
+
+    Returns:
+        Validated value normalized to ``float``.
+
+    Raises:
+        TypeError: If ``value`` is not an integer or float, or is a boolean.
+        ValueError: If ``value`` is non-finite or negative.
+    """
+    normalized = _require_finite_float(value, field_name)
+    if normalized < 0:
+        raise ValueError(f"{field_name} must be non-negative.")
+    return normalized
+
+
 def require_positive_finite_float(value: object, field_name: str) -> float:
     """Require and normalize a finite number greater than zero.
 
@@ -254,16 +292,7 @@ def require_positive_finite_float(value: object, field_name: str) -> float:
         TypeError: If ``value`` is not an integer or float, or is a boolean.
         ValueError: If ``value`` is non-finite or not positive.
     """
-    if isinstance(value, bool) or not isinstance(value, int | float):
-        raise TypeError(f"{field_name}: expected int or float, got {type(value).__name__}")
-
-    try:
-        normalized = float(value)
-    except OverflowError as exc:
-        raise ValueError(f"{field_name} must be finite.") from exc
-
-    if not math.isfinite(normalized):
-        raise ValueError(f"{field_name} must be finite.")
+    normalized = _require_finite_float(value, field_name)
     if normalized <= 0:
         raise ValueError(f"{field_name} must be positive.")
     return normalized

@@ -6,6 +6,7 @@ from src.shared.validation import (
     require_datetime,
     require_int,
     require_non_empty_str,
+    require_non_negative_finite_float,
     require_non_negative_int,
     require_optional_datetime,
     require_optional_int,
@@ -96,3 +97,19 @@ class SharedValidation_Should(unittest.TestCase):
     def test_positive_finite_float_translates_integer_overflow(self) -> None:
         with self.assertRaisesRegex(ValueError, r"^weight must be finite\.$"):
             require_positive_finite_float(10**10_000, "weight")
+
+    def test_non_negative_finite_float_accepts_zero_and_fractional_values(self) -> None:
+        self.assertEqual(require_non_negative_finite_float(0, "load"), 0.0)
+        self.assertEqual(require_non_negative_finite_float(1.5, "load"), 1.5)
+
+    def test_non_negative_finite_float_rejects_invalid_values(self) -> None:
+        for value in (True, "1", None):
+            with self.subTest(value=value), self.assertRaises(TypeError):
+                require_non_negative_finite_float(value, "load")
+
+        for value in (-1, float("nan"), float("inf"), float("-inf")):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                require_non_negative_finite_float(value, "load")
+
+        with self.assertRaisesRegex(ValueError, r"^load must be finite\.$"):
+            require_non_negative_finite_float(10**10_000, "load")
