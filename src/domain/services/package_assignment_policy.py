@@ -5,7 +5,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from src.domain.enums.package_assignment_rejection_reasons import PackageAssignmentRejectionReason
+from src.domain.services.route_load_calculator import RouteLoadCalculator
 from src.domain.value_objects.package_assignment_decision import PackageAssignmentDecision
+from src.domain.value_objects.package_load import PackageLoad
 from src.domain.value_objects.route_schedule import RoutePositionKind
 
 if TYPE_CHECKING:
@@ -130,11 +132,38 @@ class PackageAssignmentPolicy:
     def _evaluate_truck_constraints(
         route: DeliveryRoute, extra_package: DeliveryPackage
     ) -> PackageAssignmentDecision:
-        """Evaluate candidate segment load and route range against the assigned truck."""
+        """Evaluate candidate segment load and route range against the assigned truck.
+
+        Existing and candidate package entities are reduced to ``PackageLoad``
+        values before the shared load calculator is invoked. A route without an
+        assigned truck has no truck-specific constraints and is accepted.
+
+        Args:
+            route: Route whose assigned truck and existing package loads are
+                being evaluated.
+            extra_package: Candidate package included in the capacity check.
+
+        Returns:
+            Acceptance when no truck constraint fails, otherwise the first
+            capacity or range rejection.
+        """
         if route.truck is None:
             return PackageAssignmentDecision.accept()
-        max_segment_load = PackageAssignmentPolicy.maximum_segment_load(
-            locations=tuple(route.locations), packages=route.packages, extra_package=extra_package
+        max_segment_load = RouteLoadCalculator.maximum_segment_load(
+            locations=tuple(route.locations),
+            packages=tuple(
+                PackageLoad(
+                    package.start_location,
+                    package.end_location,
+                    package.weight,
+                )
+                for package in route.packages
+            ),
+            extra_package=PackageLoad(
+                extra_package.start_location,
+                extra_package.end_location,
+                extra_package.weight,
+            ),
         )
         if max_segment_load > route.truck.capacity:
             return PackageAssignmentDecision.reject(
@@ -151,44 +180,3 @@ class PackageAssignmentPolicy:
             )
 
         return PackageAssignmentDecision.accept()
-
-    @staticmethod
-    def maximum_segment_load(
-        *,
-        locations: tuple[LocationCode, ...],
-        packages: tuple[DeliveryPackage, ...],
-        extra_package: DeliveryPackage | None = None,
-    ) -> float:
-        """Return the heaviest cargo load carried on any route segment.
-
-        Capacity is constrained by the maximum simultaneous load between two
-        adjacent stops, not by the sum of every package assigned to the whole
-        route. `extra_package` is included as a candidate load without mutating
-        route state.
-
-        Args:
-            locations: Ordered route locations used to identify segment spans.
-            packages: Packages already assigned to the route.
-            extra_package: Optional package being evaluated for assignment.
-
-        Returns:
-            Maximum carried weight across all adjacent route segments.
-        """
-        indices = {location: index for index, location in enumerate(locations)}
-        segment_loads = [0.0] * (len(locations) - 1)
-
-        candidates = packages
-        if extra_package is not None:
-            candidates = (*candidates, extra_package)
-
-        for package in candidates:
-            start_index = indices.get(package.start_location)
-            end_index = indices.get(package.end_location)
-
-            if start_index is None or end_index is None or start_index >= end_index:
-                continue
-
-            for segment_index in range(start_index, end_index):
-                segment_loads[segment_index] += package.weight
-
-        return max(segment_loads, default=0.0)

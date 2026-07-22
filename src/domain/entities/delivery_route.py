@@ -23,9 +23,11 @@ from src.domain.events.route_events import (
 from src.domain.exceptions import DomainConflictError, DomainValidationError, EntityNotFoundError
 from src.domain.services.map import Map
 from src.domain.services.package_assignment_policy import PackageAssignmentPolicy
+from src.domain.services.route_load_calculator import RouteLoadCalculator
 from src.domain.services.route_scheduler import RouteScheduler
 from src.domain.validation import require_positive_int
 from src.domain.value_objects.location_code import LocationCode
+from src.domain.value_objects.package_load import PackageLoad
 from src.domain.value_objects.route_path import RoutePath
 from src.domain.value_objects.route_schedule import RoutePosition, RoutePositionKind
 
@@ -592,7 +594,12 @@ class DeliveryRoute(DomainEventRecorderMixin):
         return True
 
     def total_assigned_weight(self) -> float:
-        """Total weight of currently assigned packages."""
+        """Return the total weight of all currently assigned packages.
+
+        Returns:
+            Sum of assigned package weights in kilograms. This aggregate is
+            distinct from the maximum simultaneous segment load.
+        """
         return sum(package.weight for package in self._packages)
 
     def maximum_segment_load(self, extra_package: DeliveryPackage | None = None) -> float:
@@ -600,19 +607,32 @@ class DeliveryRoute(DomainEventRecorderMixin):
 
         Capacity is constrained by the maximum simultaneous load between two
         adjacent stops, not by the sum of every package assigned to the whole
-        route. `extra_package` is included as a candidate load without mutating
-        route state.
+        route. Assigned package entities and ``extra_package`` are reduced to
+        immutable ``PackageLoad`` values before invoking the shared calculator.
+        The candidate is included without mutating route assignment state.
 
         Args:
             extra_package: Optional package being evaluated for assignment.
 
         Returns:
-            Maximum carried weight across all adjacent route segments.
+            Maximum simultaneous carried weight across all adjacent route
+            segments, in kilograms, or ``0.0`` when no segment carries load.
         """
-        return PackageAssignmentPolicy.maximum_segment_load(
+        return RouteLoadCalculator.maximum_segment_load(
             locations=self._path.locations,
-            packages=self.packages,
-            extra_package=extra_package,
+            packages=tuple(
+                PackageLoad(
+                    package.start_location,
+                    package.end_location,
+                    package.weight,
+                )
+                for package in self.packages
+            ),
+            extra_package=PackageLoad(
+                extra_package.start_location, extra_package.end_location, extra_package.weight
+            )
+            if extra_package is not None
+            else None,
         )
 
     def _update_expected_arrival(self, package: DeliveryPackage) -> None:

@@ -73,14 +73,6 @@ def evaluate(
     )
 
 
-def typed_packages(*packages: _Package) -> tuple[DeliveryPackage, ...]:
-    return cast("tuple[DeliveryPackage, ...]", packages)
-
-
-def typed_package(package: _Package) -> DeliveryPackage:
-    return cast("DeliveryPackage", package)
-
-
 class PackageAssignmentPolicy_Should(unittest.TestCase):
     def test_accepts_compatible_package_when_route_has_no_truck(self) -> None:
         decision = evaluate(_Route(), _Package(1, AAA, DDD, 10))
@@ -185,49 +177,3 @@ class PackageAssignmentPolicy_Should(unittest.TestCase):
         decision = evaluate(route, _Package(1, CCC, BBB, 100), now=None)
 
         self.assertEqual(decision.reason, PackageAssignmentRejectionReason.LOCATIONS_OUT_OF_ORDER)
-
-    def test_maximum_segment_load_uses_simultaneous_not_total_package_weight(self) -> None:
-        packages = (
-            _Package(1, AAA, BBB, 40),
-            _Package(2, BBB, CCC, 40),
-        )
-
-        result = PackageAssignmentPolicy.maximum_segment_load(
-            locations=(AAA, BBB, CCC, DDD),
-            packages=typed_packages(*packages),
-        )
-
-        self.assertEqual(result, 40)
-
-    def test_maximum_segment_load_includes_optional_candidate(self) -> None:
-        assigned = _Package(1, AAA, CCC, 30)
-        candidate = _Package(2, BBB, DDD, 30)
-
-        result = PackageAssignmentPolicy.maximum_segment_load(
-            locations=(AAA, BBB, CCC, DDD),
-            packages=typed_packages(assigned),
-            extra_package=typed_package(candidate),
-        )
-
-        self.assertEqual(result, 60)
-
-    def test_maximum_segment_load_ignores_packages_outside_or_reversed_on_route(self) -> None:
-        packages = (
-            _Package(1, AAA, LocationCode("ZZZ"), 30),
-            _Package(2, CCC, BBB, 30),
-        )
-
-        result = PackageAssignmentPolicy.maximum_segment_load(
-            locations=(AAA, BBB, CCC),
-            packages=typed_packages(*packages),
-        )
-
-        self.assertEqual(result, 0.0)
-
-    def test_maximum_segment_load_returns_zero_without_route_segments(self) -> None:
-        result = PackageAssignmentPolicy.maximum_segment_load(
-            locations=(),
-            packages=(),
-        )
-
-        self.assertEqual(result, 0.0)
