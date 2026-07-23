@@ -32,9 +32,11 @@ class FleetOverviewQueryPort(Protocol):
             persistence snapshot.
 
         Raises:
-            TypeError: If ``active_route_limit`` has an invalid runtime type.
-            ValueError: If ``active_route_limit`` is outside the supported
-                range or persisted aggregate data violates the result contract.
+            TypeError: If an argument or persisted value has an invalid
+                runtime type.
+            ValueError: If ``generated_at`` is timezone-aware,
+                ``active_route_limit`` is outside the supported range, or
+                persisted aggregate data violates the result contract.
             RuntimeError: If an active route position lacks fields required by
                 its position kind.
         """
