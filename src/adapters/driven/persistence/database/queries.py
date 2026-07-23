@@ -14,6 +14,8 @@ from src.adapters.driven.persistence.database.loader import load_sql
 
 @dataclass(frozen=True, slots=True)
 class CustomerQueries:
+    """SQL statements used by customer persistence adapters."""
+
     add: str
     add_snapshot: str
     get_by_id: str
@@ -29,6 +31,8 @@ class CustomerQueries:
 
 @dataclass(frozen=True, slots=True)
 class RouteQueries:
+    """SQL statements used by route persistence adapters."""
+
     add: str
     add_snapshot: str
     add_stop: str
@@ -43,6 +47,8 @@ class RouteQueries:
 
 @dataclass(frozen=True, slots=True)
 class PackageQueries:
+    """SQL statements used by package persistence adapters."""
+
     add: str
     add_snapshot: str
     get_by_id: str
@@ -65,6 +71,8 @@ class PackageQueries:
 
 @dataclass(frozen=True, slots=True)
 class TruckQueries:
+    """SQL statements used by truck persistence adapters."""
+
     add: str
     get_by_id: str
     get_by_route_id: str
@@ -78,6 +86,8 @@ class TruckQueries:
 
 @dataclass(frozen=True, slots=True)
 class UserQueries:
+    """SQL statements used by user persistence adapters."""
+
     add: str
     get_by_username: str
     get_by_id: str
@@ -90,6 +100,8 @@ class UserQueries:
 
 @dataclass(frozen=True, slots=True)
 class WorldStateQueries:
+    """SQL statements used by world-state persistence adapters."""
+
     clear_world: str
     get_snapshot_counters: str
     reset_customer_sequence: str
@@ -99,10 +111,23 @@ class WorldStateQueries:
 
 @dataclass(frozen=True, slots=True)
 class AuditQueries:
+    """SQL statements used by audit persistence adapters."""
+
     add: str
     list_all: str
     list_page: str
     list_page_with_total: str
+
+
+@dataclass(frozen=True, slots=True)
+class FleetOverviewQueries:
+    """SQL statements used to build one PostgreSQL fleet overview snapshot."""
+
+    active_route_packages: str
+    active_routes: str
+    package_counts: str
+    route_counts: str
+    truck_counts: str
 
 
 class QueryRegistry:
@@ -250,7 +275,7 @@ class QueryRegistry:
             reset_package_sequence=load_sql("world_state/reset_package_sequence.sql"),
             reset_route_sequence=load_sql("world_state/reset_route_sequence.sql"),
         )
-    
+
     @cached_property
     def audit(self) -> AuditQueries:
         """Load audit SQL queries.
@@ -266,6 +291,24 @@ class QueryRegistry:
             list_all=load_sql("audit/list_all.sql"),
             list_page=load_sql("audit/list_page.sql"),
             list_page_with_total=load_sql("audit/list_page_with_total.sql"),
+        )
+
+    @cached_property
+    def fleet_overview(self) -> FleetOverviewQueries:
+        """Load fleet-overview SQL queries.
+
+        Returns:
+            Fleet-overview query collection.
+
+        Raises:
+            FileNotFoundError: If a fleet-overview SQL file is missing.
+        """
+        return FleetOverviewQueries(
+            active_route_packages=load_sql("fleet_overview/active_route_packages.sql"),
+            active_routes=load_sql("fleet_overview/active_routes.sql"),
+            package_counts=load_sql("fleet_overview/package_counts.sql"),
+            route_counts=load_sql("fleet_overview/route_counts.sql"),
+            truck_counts=load_sql("fleet_overview/truck_counts.sql"),
         )
 
 
