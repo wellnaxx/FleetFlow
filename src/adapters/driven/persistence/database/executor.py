@@ -23,7 +23,7 @@ from src.shared.validation import require_int
 if TYPE_CHECKING:
     from collections.abc import Generator
 
-    from psycopg import Cursor
+    from psycopg import Cursor, IsolationLevel
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +43,17 @@ def _as_query(sql: SQLQuery) -> QueryNoTemplate:
 
 
 def _get_column_names(cursor: Cursor[Row]) -> list[str]:
+    """Return result-column names or reject a statement without a result set.
+
+    Args:
+        cursor: Executed database cursor.
+
+    Returns:
+        Column names in database result order.
+
+    Raises:
+        DatabaseError: If the cursor has no result description.
+    """
     if cursor.description is None:
         raise DatabaseError.wrong_query_result()
 
@@ -50,6 +61,18 @@ def _get_column_names(cursor: Cursor[Row]) -> list[str]:
 
 
 def _extract_inserted_id(row: Row | None) -> int:
+    """Extract and validate the first returned insert column as an integer id.
+
+    Args:
+        row: First row returned by an insert statement.
+
+    Returns:
+        Validated inserted identifier.
+
+    Raises:
+        DatabaseError: If no row was returned or the first value is not an
+            integer.
+    """
     if row is None:
         raise DatabaseError.missing_returning_id()
 
@@ -61,12 +84,14 @@ def _extract_inserted_id(row: Row | None) -> int:
 
 
 def _cursor_to_dicts(cursor: Cursor[Row]) -> list[RowDict]:
+    """Materialize every cursor row as a column-name dictionary."""
     columns = _get_column_names(cursor)
     rows = cursor.fetchall()
     return [dict(zip(columns, row, strict=True)) for row in rows]
 
 
 def _cursor_to_dict(cursor: Cursor[Row], row: Row | None) -> RowDict | None:
+    """Map one optional cursor row to a column-name dictionary."""
     if row is None:
         return None
 
@@ -92,22 +117,48 @@ def _db_operation(label: str) -> Generator[None]:
 
 
 @contextmanager
-def transaction_cursor() -> Generator[Cursor[Row]]:
-    """Yield a cursor inside one transaction.
+def transaction_cursor(
+    *,
+    isolation_level: IsolationLevel | None = None,
+    read_only: bool = False,
+) -> Generator[Cursor[Row]]:
+    """Yield a cursor inside a configurable transaction.
 
-    The transaction commits on normal exit and rolls back on exception.
+    Transaction characteristics are applied before the cursor is opened. The
+    transaction commits on normal exit and rolls back on any exception raised
+    by the caller or a database helper.
+
+    Args:
+        isolation_level: Optional psycopg isolation level. ``None`` preserves
+            the connection's configured default.
+        read_only: Whether PostgreSQL must reject writes in the transaction.
+
+    Yields:
+        Cursor bound to the configured transaction.
+
+    Raises:
+        DatabaseError: If connection setup, transaction configuration, cursor
+            creation, execution, commit, or rollback fails. Existing
+            ``DatabaseError`` instances are propagated unchanged.
     """
     try:
-        with get_connection() as conn, conn.cursor() as cursor:
-            try:
-                logger.debug("Starting PostgreSQL transaction.")
-                yield cursor
-                conn.commit()
-                logger.debug("Committed PostgreSQL transaction.")
-            except Exception:
-                conn.rollback()
-                logger.debug("Rolled back PostgreSQL transaction.")
-                raise
+        with get_connection() as conn:
+            if isolation_level is not None:
+                conn.isolation_level = isolation_level
+
+            if read_only:
+                conn.read_only = True
+
+            with conn.cursor() as cursor:
+                try:
+                    logger.debug("Starting PostgreSQL transaction.")
+                    yield cursor
+                    conn.commit()
+                    logger.debug("Committed PostgreSQL transaction.")
+                except Exception:
+                    conn.rollback()
+                    logger.debug("Rolled back PostgreSQL transaction.")
+                    raise
     except DatabaseError:
         raise
     except Exception as exc:
