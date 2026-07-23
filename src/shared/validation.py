@@ -2,6 +2,7 @@
 
 import math
 from datetime import datetime
+from decimal import Decimal
 from uuid import UUID
 
 
@@ -295,4 +296,49 @@ def require_positive_finite_float(value: object, field_name: str) -> float:
     normalized = _require_finite_float(value, field_name)
     if normalized <= 0:
         raise ValueError(f"{field_name} must be positive.")
+    return normalized
+
+
+def require_finite_decimal(value: object, field_name: str) -> Decimal:
+    """Require and return a finite ``Decimal`` without coercion.
+
+    Args:
+        value: Runtime value to validate.
+        field_name: Field name used in the error message.
+
+    Returns:
+        Original finite decimal value.
+
+    Raises:
+        TypeError: If ``value`` is not a ``Decimal``.
+        ValueError: If ``value`` is NaN or positive/negative infinity.
+    """
+    if not isinstance(value, Decimal):
+        raise TypeError(f"{field_name}: expected Decimal, got {type(value).__name__}")
+
+    if not value.is_finite():
+        raise ValueError(f"{field_name} must be finite.")
+
+    return value
+
+
+def require_finite_positive_decimal(value: object, field_name: str) -> Decimal:
+    """Require and return a finite ``Decimal`` greater than zero.
+
+    Args:
+        value: Runtime value to validate.
+        field_name: Field name used in the error message.
+
+    Returns:
+        Original finite positive decimal value.
+
+    Raises:
+        TypeError: If ``value`` is not a ``Decimal``.
+        ValueError: If ``value`` is non-finite, zero, or negative.
+    """
+    normalized = require_finite_decimal(value, field_name)
+
+    if normalized <= 0:
+        raise ValueError(f"{field_name} must be positive.")
+
     return normalized

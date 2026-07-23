@@ -1,9 +1,12 @@
 import unittest
 from datetime import datetime
+from decimal import Decimal
 from uuid import uuid4
 
 from src.shared.validation import (
     require_datetime,
+    require_finite_decimal,
+    require_finite_positive_decimal,
     require_int,
     require_non_empty_str,
     require_non_negative_finite_float,
@@ -113,3 +116,34 @@ class SharedValidation_Should(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, r"^load must be finite\.$"):
             require_non_negative_finite_float(10**10_000, "load")
+
+    def test_finite_decimal_preserves_finite_decimal_values(self) -> None:
+        value = Decimal("10.250")
+
+        self.assertIs(require_finite_decimal(value, "weight"), value)
+        self.assertIs(require_finite_decimal(Decimal("0"), "weight").is_zero(), True)
+        self.assertEqual(require_finite_decimal(Decimal("-1"), "weight"), Decimal("-1"))
+
+    def test_finite_decimal_rejects_other_numeric_types_and_non_finite_values(self) -> None:
+        for value in (1, 1.0, True, "1", None):
+            with self.subTest(value=value), self.assertRaises(TypeError):
+                require_finite_decimal(value, "weight")
+
+        for value in (Decimal("NaN"), Decimal("sNaN"), Decimal("Infinity"), Decimal("-Infinity")):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "weight must be finite"):
+                require_finite_decimal(value, "weight")
+
+    def test_finite_positive_decimal_accepts_positive_values(self) -> None:
+        value = Decimal("0.001")
+
+        self.assertIs(require_finite_positive_decimal(value, "weight"), value)
+
+    def test_finite_positive_decimal_rejects_zero_negative_and_non_finite_values(self) -> None:
+        for value, message in (
+            (Decimal("0"), "positive"),
+            (Decimal("-0.001"), "positive"),
+            (Decimal("NaN"), "finite"),
+            (Decimal("Infinity"), "finite"),
+        ):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, message):
+                require_finite_positive_decimal(value, "weight")
