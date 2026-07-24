@@ -39,6 +39,8 @@ class Permission(Enum):
 
     AUDIT_VIEW = auto()
 
+    FLEET_OVERVIEW_VIEW = auto()
+
     AUTHENTICATED = auto()  # signals that authentication was required but missing (used in denial events)
 
 
@@ -60,6 +62,7 @@ _EMPLOYEE_PERMISSIONS: frozenset[Permission] = frozenset(
         Permission.ROUTE_REMOVE,
         Permission.TRUCK_VIEW,
         Permission.CUSTOMER_VIEW,
+        Permission.FLEET_OVERVIEW_VIEW,
     }
 )
 

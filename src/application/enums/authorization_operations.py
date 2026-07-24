@@ -44,3 +44,6 @@ class AuthorizationOperation(StrEnum):
     WORLD_STATE_EXPORT = "world_state.export"
     WORLD_STATE_IMPORT = "world_state.import"
     AUDIT_LOG_VIEW = "audit_log.view"
+
+    # Fleet workflows.
+    FLEET_OVERVIEW_VIEW = "fleet_overview.view"
