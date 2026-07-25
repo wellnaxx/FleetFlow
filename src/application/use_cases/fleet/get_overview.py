@@ -5,6 +5,7 @@ from datetime import datetime
 
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.authorization_operations import AuthorizationOperation
+from src.application.exceptions.application_errors import ValidationError
 from src.application.results.fleet_overview import FleetOverview
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
@@ -58,15 +59,16 @@ class GetFleetOverviewUseCase(AuthorizedUseCase[FleetOverview]):
         Raises:
             PermissionError: If the caller is unauthenticated or lacks fleet
                 overview permission.
-            TypeError: If ``active_route_limit`` has an invalid runtime type.
-            ValueError: If the limit is outside 1 through 100, the clock is
-                incompatible with business-time requirements, or persisted
-                overview data violates its contract.
+            ValidationError: If the limit, clock value, or persisted overview
+                data violates the query contract.
             DatabaseError: If the persistence query fails.
             RuntimeError: If an active route cannot be projected from its
                 persisted scheduling data.
         """
-        return self._overview_query.get_overview(
-            generated_at=self._clock(),
-            active_route_limit=active_route_limit,
-        )
+        try:
+            return self._overview_query.get_overview(
+                generated_at=self._clock(),
+                active_route_limit=active_route_limit,
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(str(exc)) from exc

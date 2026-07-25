@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.events.auth_events import AuthorizationDenied
+from src.application.exceptions.application_errors import ValidationError
 from src.application.results.fleet_overview import FleetOverview
 from src.application.services.authorization_service import AuthorizationService
 from src.application.use_cases.fleet.get_overview import GetFleetOverviewUseCase
@@ -101,27 +102,55 @@ class GetFleetOverviewUseCaseShould(unittest.TestCase):
         event = self._only_denial(use_case)
         self.assertEqual(event.required_permissions, (Permission.FLEET_OVERVIEW_VIEW,))
 
-    def test_propagates_query_validation_and_database_failures(self) -> None:
-        """Leave query-layer failures unchanged for driving adapters to map."""
+    def test_translates_query_type_and_value_errors_to_validation_error(self) -> None:
+        """Expose query-contract failures through the application exception API."""
         for error in (
             TypeError("invalid limit"),
             ValueError("limit outside range"),
-            RuntimeError("database unavailable"),
         ):
             with self.subTest(error=error):
                 self.query.reset_mock()
                 self.clock.reset_mock()
                 self.query.get_overview.side_effect = error
 
-                with self.assertRaises(type(error)) as raised:
+                with self.assertRaisesRegex(ValidationError, str(error)) as raised:
                     self.use_case.execute(active_route_limit=101)
 
-                self.assertIs(raised.exception, error)
+                self.assertIs(raised.exception.__cause__, error)
                 self.clock.assert_called_once_with()
                 self.query.get_overview.assert_called_once_with(
                     generated_at=GENERATED_AT,
                     active_route_limit=101,
                 )
+
+    def test_translates_clock_type_and_value_errors_without_querying(self) -> None:
+        """Translate invalid clock values before persistence can be queried."""
+        for error in (
+            TypeError("clock failed"),
+            ValueError("invalid business time"),
+        ):
+            with self.subTest(error=error):
+                self.query.reset_mock()
+                self.clock.reset_mock()
+                self.clock.side_effect = error
+
+                with self.assertRaisesRegex(ValidationError, str(error)) as raised:
+                    self.use_case.execute()
+
+                self.assertIs(raised.exception.__cause__, error)
+                self.query.get_overview.assert_not_called()
+
+        self.clock.side_effect = None
+
+    def test_propagates_non_validation_query_failures(self) -> None:
+        """Leave operational failures unchanged for driving adapters to map."""
+        error = RuntimeError("database unavailable")
+        self.query.get_overview.side_effect = error
+
+        with self.assertRaisesRegex(RuntimeError, "database unavailable") as raised:
+            self.use_case.execute()
+
+        self.assertIs(raised.exception, error)
 
     @staticmethod
     def _only_denial(use_case: GetFleetOverviewUseCase) -> AuthorizationDenied:
