@@ -1,8 +1,10 @@
 import unittest
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import MagicMock, patch
 
 from src.adapters.driving.cli.command_factory import CommandFactory
+from src.adapters.driving.cli.commands.get_fleet_overview import GetFleetOverview
 
 
 class CommandFactoryShould(unittest.TestCase):
@@ -28,6 +30,9 @@ class CommandFactoryShould(unittest.TestCase):
             ),
             customer_cases=SimpleNamespace(
                 view_all=MagicMock(),
+            ),
+            fleet_cases=SimpleNamespace(
+                get_overview=MagicMock(),
             ),
             route_cases=SimpleNamespace(
                 create=MagicMock(),
@@ -145,6 +150,12 @@ class CommandFactoryShould(unittest.TestCase):
                 container.route_cases.assign_packages,
             ),
             ("viewalltrucks", "viewalltrucks", [], container.truck_cases.view_all),
+            (
+                "getfleetoverview 25",
+                "getfleetoverview",
+                ["25"],
+                container.fleet_cases.get_overview,
+            ),
         ]
 
         for raw_input, command_name, params, expected_use_case in cases:
@@ -162,3 +173,14 @@ class CommandFactoryShould(unittest.TestCase):
 
                 self.assertIs(result, sentinel_cmd)
                 builder.assert_called_once_with(container, tuple(params))
+
+    def test_get_fleet_overview_receives_registered_use_case_and_collector(self) -> None:
+        """Build the fleet command from its typed container use-case group."""
+        factory, container = self.make_factory()
+
+        command = cast(GetFleetOverview, factory.create("getfleetoverview 25"))
+
+        self.assertIsInstance(command, GetFleetOverview)
+        self.assertEqual(command.params, ("25",))
+        self.assertIs(command.use_case, container.fleet_cases.get_overview)
+        self.assertIs(command.event_collector, container.event_collector)

@@ -16,6 +16,7 @@ from src.adapters.driving.cli.commands.create_package import CreatePackage
 from src.adapters.driving.cli.commands.create_route import CreateRoute
 from src.adapters.driving.cli.commands.find_suitable_routes_for_package import FindSuitableRoutesForPackage
 from src.adapters.driving.cli.commands.find_suitable_trucks_for_route import FindSuitableTrucksForRoute
+from src.adapters.driving.cli.commands.get_fleet_overview import GetFleetOverview
 from src.adapters.driving.cli.commands.load_state import LoadState
 from src.adapters.driving.cli.commands.remove_package import RemovePackage
 from src.adapters.driving.cli.commands.remove_route import RemoveRoute
@@ -100,6 +101,11 @@ _CONTAINER_COMMANDS: dict[str, CommandBuilder] = {
     ),
     "viewauditlogs": lambda container, params: ViewAuditLogs(
         params, container.audit_use_cases.view_audit_logs, container.event_collector
+    ),
+    "getfleetoverview": lambda container, params: GetFleetOverview(
+        params,
+        container.fleet_cases.get_overview,
+        container.event_collector,
     ),
 }
 

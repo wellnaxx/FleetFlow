@@ -80,6 +80,35 @@ class EngineTests(unittest.TestCase):
         mock_exec_line.assert_called_once_with("viewallcustomers")
         self.assertFalse(engine._running)  # pyright: ignore[reportPrivateUsage]
 
+    def test_start_dispatches_fleet_overview_main_menu_action(self) -> None:
+        """Dispatch the fleet-overview prompt from the main menu."""
+        engine, _factory, _auth, _authz, _save_world, _advance = self.make_engine()
+
+        with (
+            patch.object(engine, "_get_fleet_overview") as get_overview,
+            patch("builtins.input", side_effect=["7", "0"]),
+        ):
+            engine.start()
+
+        get_overview.assert_called_once_with()
+
+    def test_get_fleet_overview_builds_default_and_explicit_limit_commands(self) -> None:
+        """Omit a blank limit and forward a supplied active-route limit."""
+        engine, _factory, _auth, _authz, _save_world, _advance = self.make_engine()
+
+        for raw_limit, expected in (
+            ("", "getfleetoverview"),
+            ("25", "getfleetoverview 25"),
+        ):
+            with (
+                self.subTest(raw_limit=raw_limit),
+                patch.object(engine, "_exec_line") as execute,
+                patch("builtins.input", return_value=raw_limit),
+            ):
+                engine._get_fleet_overview()  # pyright: ignore[reportPrivateUsage]
+
+            execute.assert_called_once_with(expected)
+
     def test_start_accepts_command_mode_alias(self) -> None:
         engine, _factory, _auth, _authz, _save_world, _advance = self.make_engine()
 

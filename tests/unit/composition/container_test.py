@@ -6,6 +6,7 @@ from src.adapters.driven.persistence.database.world_state_gateway import Postgre
 from src.adapters.driven.persistence.json.config import JSONConfig, set_json_config
 from src.adapters.driven.persistence.memory.audit_repository import InMemoryAuditRepository
 from src.adapters.driven.persistence.memory.customer_repository import InMemoryCustomerRepository
+from src.adapters.driven.persistence.memory.fleet_overview_query import InMemoryFleetOverviewQuery
 from src.adapters.driven.persistence.memory.package_repository import InMemoryPackageRepository
 from src.adapters.driven.persistence.memory.route_repository import InMemoryRouteRepository
 from src.adapters.driven.persistence.memory.world_state_gateway import InMemoryWorldStateGateway
@@ -39,6 +40,16 @@ class ContainerTests(unittest.TestCase):
         )
 
         self.assertIs(container.audit_repo, audit_repository)
+        self.assertIsInstance(container.fleet_overview_query, InMemoryFleetOverviewQuery)
+        self.assertIs(
+            container.fleet_cases.get_overview._overview_query,  # pyright: ignore[reportPrivateUsage]
+            container.fleet_overview_query,
+        )
+        self.assertIs(container.fleet_cases.get_overview.authz, container.authz)
+        self.assertIs(
+            container.fleet_cases.get_overview._clock,  # pyright: ignore[reportPrivateUsage]
+            container.clock,
+        )
         self.assertIsInstance(container.customer_repo, InMemoryCustomerRepository)
         self.assertIsInstance(container.package_repo, InMemoryPackageRepository)
         self.assertIsInstance(container.route_repo, InMemoryRouteRepository)
@@ -51,6 +62,7 @@ class ContainerTests(unittest.TestCase):
         self.assertIs(container.state_cases.save._world_state_gateway, container.world_state_gateway)  # type: ignore[attr-defined]
         self.assertEqual(container.default_world_state_path, "state.json")
 
+    @patch("src.composition.container.PostgresFleetOverviewQuery")
     @patch("src.composition.container.PostgresAuditRepository")
     @patch("src.composition.container.PostgresUnitOfWork")
     @patch("src.composition.container.PostgresTruckRepository")
@@ -65,6 +77,7 @@ class ContainerTests(unittest.TestCase):
         truck_repo_cls: MagicMock,
         unit_of_work_cls: MagicMock,
         audit_repo_cls: MagicMock,
+        fleet_overview_query_cls: MagicMock,
     ) -> None:
         auth = MagicMock()
         auth.current_user = None
@@ -91,9 +104,20 @@ class ContainerTests(unittest.TestCase):
         self.assertIs(container.truck_repo, truck_repo)
         self.assertIs(container.unit_of_work, unit_of_work_cls.return_value)
         self.assertIs(container.audit_repo, audit_repo_cls.return_value)
+        self.assertIs(container.fleet_overview_query, fleet_overview_query_cls.return_value)
+        self.assertIs(
+            container.fleet_cases.get_overview._overview_query,  # pyright: ignore[reportPrivateUsage]
+            fleet_overview_query_cls.return_value,
+        )
+        self.assertIs(container.fleet_cases.get_overview.authz, container.authz)
+        self.assertIs(
+            container.fleet_cases.get_overview._clock,  # pyright: ignore[reportPrivateUsage]
+            container.clock,
+        )
         self.assertIsInstance(container.world_state_gateway, PostgresWorldStateGateway)
         self.assertFalse(container.autosave_enabled)
         self.assertIsNone(container.world_state_runtime)
         self.assertIsNone(container.world_state_snapshot_service)
         self.assertIs(container.state_cases.save._world_state_gateway, container.world_state_gateway)  # type: ignore[attr-defined]
         audit_repo_cls.assert_called_once_with()
+        fleet_overview_query_cls.assert_called_once_with()

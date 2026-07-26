@@ -79,6 +79,7 @@ class Engine:
                 "4": lambda: self._exec_line("viewallcustomers"),
                 "5": self._menu_state,
                 "6": self._menu_audits,
+                "7": self._get_fleet_overview,
                 "login": lambda: self._exec_line("login"),
                 "logout": lambda: self._exec_line("logout"),
                 "whoami": lambda: self._exec_line("whoami"),
@@ -109,6 +110,14 @@ class Engine:
         """Stop the main menu loop without terminating the Python process."""
         print("Goodbye!")
         self._running = False
+
+    def _get_fleet_overview(self) -> None:
+        """Prompt for the active-route limit and display the fleet overview."""
+        active_route_limit = input("Active route limit (blank for 10): ").strip()
+        parts = ["getfleetoverview"]
+        if active_route_limit:
+            parts.append(active_route_limit)
+        self._exec_line(self._join_command(parts))
 
     def _run_submenu(
         self,
@@ -551,6 +560,7 @@ class Engine:
         print("4) Customers")
         print("5) State")
         print("6) Audit Logs")
+        print("7) Fleet Overview")
         print("cmd) Command Mode")
         print("login) Login")
         print("logout) Logout")
@@ -571,6 +581,7 @@ class Engine:
         print("  viewallpackages")
         print("  viewalltrucks")
         print("  viewauditlogs --limit 50 --total")
+        print("  getfleetoverview [active_route_limit]")
         print("  save <filename>")
         print("  load <filename>")
         print("  login | logout | whoami")

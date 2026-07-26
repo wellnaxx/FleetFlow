@@ -9,6 +9,7 @@ from src.application.use_cases.auth.logout import LogoutUseCase
 from src.application.use_cases.auth.register_user import RegisterUserUseCase
 from src.application.use_cases.auth.who_am_i import WhoAmIUseCase
 from src.application.use_cases.customers.view_all_customers import ViewAllCustomersUseCase
+from src.application.use_cases.fleet.get_overview import GetFleetOverviewUseCase
 from src.application.use_cases.packages.create_package import CreatePackageUseCase
 from src.application.use_cases.packages.remove_package import RemovePackageUseCase
 from src.application.use_cases.packages.view_all_packages import ViewAllPackagesUseCase
@@ -47,6 +48,13 @@ class CustomerUseCases:
     """Customer-facing use cases."""
 
     view_all: ViewAllCustomersUseCase
+
+
+@dataclass(frozen=True, slots=True)
+class FleetUseCases:
+    """Cross-aggregate fleet reporting use cases."""
+
+    get_overview: GetFleetOverviewUseCase
 
 
 @dataclass(frozen=True, slots=True)

@@ -5,6 +5,9 @@ from datetime import datetime
 
 from src.adapters.driven.persistence.database.repositories.audit_repository import PostgresAuditRepository
 from src.adapters.driven.persistence.database.repositories.customer_repository import PostgresCustomerRepository
+from src.adapters.driven.persistence.database.repositories.fleet_overview_query import (
+    PostgresFleetOverviewQuery,
+)
 from src.adapters.driven.persistence.database.repositories.package_repository import PostgresPackageRepository
 from src.adapters.driven.persistence.database.repositories.route_repository import PostgresRouteRepository
 from src.adapters.driven.persistence.database.repositories.truck_repository import PostgresTruckRepository
@@ -15,6 +18,7 @@ from src.adapters.driven.persistence.json.config import get_json_config
 from src.adapters.driven.persistence.json.world_state_persistence import JsonWorldStatePersistence
 from src.adapters.driven.persistence.memory.audit_repository import InMemoryAuditRepository
 from src.adapters.driven.persistence.memory.customer_repository import InMemoryCustomerRepository
+from src.adapters.driven.persistence.memory.fleet_overview_query import InMemoryFleetOverviewQuery
 from src.adapters.driven.persistence.memory.package_repository import InMemoryPackageRepository
 from src.adapters.driven.persistence.memory.route_repository import InMemoryRouteRepository
 from src.adapters.driven.persistence.memory.truck_repository import InMemoryTruckRepository
@@ -43,6 +47,7 @@ from src.application.use_cases.auth.logout import LogoutUseCase
 from src.application.use_cases.auth.register_user import RegisterUserUseCase
 from src.application.use_cases.auth.who_am_i import WhoAmIUseCase
 from src.application.use_cases.customers.view_all_customers import ViewAllCustomersUseCase
+from src.application.use_cases.fleet.get_overview import GetFleetOverviewUseCase
 from src.application.use_cases.packages.create_package import CreatePackageUseCase
 from src.application.use_cases.packages.remove_package import RemovePackageUseCase
 from src.application.use_cases.packages.view_all_packages import ViewAllPackagesUseCase
@@ -67,6 +72,7 @@ from src.application.use_cases.use_case_registry import (
     AuditUseCases,
     AuthUseCases,
     CustomerUseCases,
+    FleetUseCases,
     PackageUseCases,
     RouteUseCases,
     StateUseCases,
@@ -75,6 +81,7 @@ from src.application.use_cases.use_case_registry import (
 from src.composition.config import AppConfig, PersistenceBackend, get_app_config
 from src.composition.seed_fleet import seed_fleet_if_empty
 from src.ports.output.audit_repository import AuditRepositoryPort
+from src.ports.output.fleet_overview_query import FleetOverviewQueryPort
 
 logger = logging.getLogger(__name__)
 
@@ -84,11 +91,13 @@ class Container:
 
     auth_cases: AuthUseCases
     customer_cases: CustomerUseCases
+    fleet_cases: FleetUseCases
     package_cases: PackageUseCases
     route_cases: RouteUseCases
     truck_cases: TruckUseCases
     state_cases: StateUseCases
     audit_use_cases: AuditUseCases
+    fleet_overview_query: FleetOverviewQueryPort
 
     def __init__(
         self,
@@ -164,6 +173,11 @@ class Container:
             trucks=self.truck_repo,
         )
         self.audit_repo = self._audit_repository or InMemoryAuditRepository()
+        self.fleet_overview_query = InMemoryFleetOverviewQuery(
+            package_repository=self.package_repo,
+            route_repository=self.route_repo,
+            truck_repository=self.truck_repo,
+        )
 
     def _wire_postgres(self) -> None:
         """Wire PostgreSQL persistence implementations."""
@@ -174,6 +188,7 @@ class Container:
         self.truck_repo = PostgresTruckRepository()
         self.unit_of_work = PostgresUnitOfWork()
         self.audit_repo = self._audit_repository or PostgresAuditRepository()
+        self.fleet_overview_query = PostgresFleetOverviewQuery()
 
     def _wire_world_state(self, config: AppConfig) -> None:
         """Wire world-state snapshot import/export for the active backend."""
@@ -243,6 +258,14 @@ class Container:
 
         self.customer_cases = CustomerUseCases(
             view_all=ViewAllCustomersUseCase(self.customer_repo, self.authz),
+        )
+
+        self.fleet_cases = FleetUseCases(
+            get_overview=GetFleetOverviewUseCase(
+                self.fleet_overview_query,
+                self.authz,
+                clock=self.clock,
+            ),
         )
 
         self.package_cases = PackageUseCases(
