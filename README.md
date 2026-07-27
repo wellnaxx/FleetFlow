@@ -12,13 +12,19 @@ FleetFlow is a logistics management system for packages, delivery routes, trucks
 FleetFlow currently supports:
 
 - Interactive menu-driven operation and command-mode workflows.
-- FastAPI HTTP adapter with authentication plus customer, package, route, truck, and world-state workflows.
+- FastAPI HTTP adapter with authentication plus customer, package, route, truck, fleet-overview,
+  audit-log, and world-state workflows.
 - Package creation, lookup, removal, unassigned-package listing, and route assignment.
 - Route creation, lookup, removal, in-progress tracking, package assignment, and truck assignment.
 - Truck fleet management with deterministic city dispersion.
+- Authorized point-in-time fleet overviews containing package, route, and truck counts; overdue and
+  unassigned work; and ordered active-route details with schedule-derived positions, segment loads,
+  assigned trucks, and capacity utilization.
 - Pure package and truck assignment policies with structured acceptance/rejection decisions.
 - Truck suitability checks for start-location compatibility, route range, time-window availability, availability-location transitions, and carrying capacity.
-- Segment-based capacity validation, so a truck is checked against the maximum load carried on each route leg rather than total package weight across the whole route.
+- A reusable route-load calculator for segment-based capacity validation and fleet reporting, so truck
+  capacity is evaluated against the maximum simultaneous load on a route leg rather than total package
+  weight across the whole route.
 - Immutable, validated route paths and schedules with indexed location and arrival lookups.
 - Customer records derived from package creation, including email and phone lookup indexes.
 - User authentication with manager and employee roles.
@@ -38,7 +44,9 @@ FleetFlow currently supports:
 - PostgreSQL world-state export/import through the same JSON snapshot format.
 - Startup recovery for default saved state: missing state is ignored, corrupt state is quarantined, and unexpected runtime errors still fail loudly.
 - A Postman/Newman collection covering authentication, authorization, logistics workflows, state import/export, validation, and token revocation.
-- A large automated test suite covering domain behavior, application services, use cases, CLI commands, HTTP routers/dependencies, JSON and database persistence, runtime swaps, snapshot import/export, and startup behavior.
+- A large automated test suite covering domain behavior, application services, use cases, CLI commands,
+  HTTP routers/dependencies, fleet-overview composition and projections, JSON and database persistence,
+  runtime swaps, snapshot import/export, and startup behavior.
 
 ## Architecture Overview
 
@@ -53,9 +61,9 @@ FleetFlow/
 |   |   |-- driven/
 |   |   |   |-- events/           # in-process event dispatcher and structured event logging handler
 |   |   |   |-- logging/          # stdout/file logging configuration
-|   |   |   |-- persistence/database/ # PostgreSQL repositories, SQL, graph loaders, unit of work, snapshot gateway/importer
+|   |   |   |-- persistence/database/ # PostgreSQL repositories, overview queries, SQL, graph loaders, UoW, snapshots
 |   |   |   |-- persistence/json/ # JSON world-state and user persistence
-|   |   |   |-- persistence/memory/# in-memory repositories and runtime state gateway
+|   |   |   |-- persistence/memory/# in-memory repositories, overview query, and runtime state gateway
 |   |   |   `-- security/         # password hashing and JWT token services/configuration
 |   |   `-- driving/
 |   |       |-- cli/              # engine, menus, command factory, CLI commands
@@ -72,7 +80,7 @@ FleetFlow/
 |   |   |-- services/             # auth, authorization, fleet orchestration, heartbeat, reconciliation, snapshot services
 |   |   |   |-- audit_mapping/    # typed event-to-audit registry and mappings grouped by event family
 |   |   |   `-- validators/       # focused world-state schema, identity, reference, truck, and compatibility validators
-|   |   `-- use_cases/            # auth, package, route, truck, customer, and state workflows
+|   |   `-- use_cases/            # auth, package, route, truck, customer, fleet, audit, and state workflows
 |   |-- composition/              # dependency container, event catalog, subscriptions, and composition root
 |   |-- domain/
 |   |   |-- entities/             # customers, packages, routes, trucks, users
@@ -83,7 +91,7 @@ FleetFlow/
 |   |   `-- value_objects/        # contact/location values, route paths/schedules, and assignment decisions
 |   |-- ports/
 |   |   |-- input/                # reserved for future input-port abstractions
-|   |   `-- output/               # repository, audit, persistence, runtime, event publisher, and vehicle ports
+|   |   `-- output/               # repositories, fleet/audit queries, persistence, runtime, event, and vehicle ports
 |   `-- shared/                   # environment, JSON, event, and runtime-validation primitives
 |-- tests/
 |-- postman/                      # API collection, local environment, and runner notes
@@ -137,6 +145,7 @@ FleetFlow models:
 - `PackageAssignmentDecision` and `TruckAssignmentDecision`
 - `Map`
 - `RouteScheduler`
+- `RouteLoadCalculator`
 - `PackageAssignmentPolicy` and `TruckAssignmentPolicy`
 
 The application layer also provides `VehicleManager`, which coordinates truck
@@ -164,6 +173,8 @@ FleetFlow enforces the main logistics invariants in the domain and application l
   total distance, and indexed arrival/position lookups.
 - `PackageAssignmentPolicy` returns a structured acceptance or rejection decision for route compatibility,
   pickup progress, truck range, and maximum segment load.
+- `RouteLoadCalculator` derives per-segment package loads and the maximum simultaneous route load without
+  requiring route hydration solely for reporting calculations.
 - Package assignment updates package-route links and expected arrival when possible, while reassignment to the
   same route remains idempotent.
 - Removing a package from a route clears its active assignment state.
@@ -288,11 +299,48 @@ JsonWorldStatePersistence.read()
   -> clear live world tables, insert customers/routes/packages, update fixed fleet trucks, reset id sequences
 ```
 
-When `PERSISTENCE_BACKEND=postgres`, package, route, truck, customer, user, authentication, audit, and unit-of-work operations have PostgreSQL adapters. Autosave and default startup JSON loading are disabled for this backend, but explicit `save` and `load` commands are available as snapshot export/import operations. PostgreSQL snapshot import/export is covered by unit tests and a gateway-level round-trip integration test with injected database boundaries; a live PostgreSQL test harness is still future infrastructure work.
+When `PERSISTENCE_BACKEND=postgres`, package, route, truck, customer, user, authentication, audit,
+fleet-overview query, and unit-of-work operations have PostgreSQL adapters. Autosave and default startup
+JSON loading are disabled for this backend, but explicit `save` and `load` commands are available as
+snapshot export/import operations. PostgreSQL snapshot import/export is covered by unit tests and a
+gateway-level round-trip integration test with injected database boundaries; a live PostgreSQL test
+harness is still future infrastructure work.
 
 The PostgreSQL schema also includes `audit_records` plus indexes for event idempotency, resource history, actor history, event type, action, source, occurrence time, creation time, and correlation id. Audit timestamps intentionally distinguish app-local business time (`occurred_at`) from UTC system timestamps (`recorded_at` and `created_at`).
 
 Audit records are written by the in-process event subscription graph and can be browsed through the `viewauditlogs` CLI command or the HTTP audit endpoint. Managers with `AUDIT_VIEW` can query the full history; employees are restricted to records attributed to their own actor identity.
+
+## Fleet Overview
+
+FleetFlow exposes a read-only, cross-aggregate fleet overview through both persistence backends. The
+application use case obtains one app-local business timestamp from the injected container clock and passes
+that timestamp to the active `FleetOverviewQueryPort`, ensuring package deadlines, route deadlines, and
+active-route positions are evaluated against the same point in time.
+
+The overview contains:
+
+- package counts by `TODO`, `IN_PROGRESS`, and `DONE`, plus unassigned and past-due counts;
+- route counts by `PLANNED`, `SCHEDULED`, `IN_PROGRESS`, and `COMPLETED`, plus past-due counts;
+- free, assigned, and unknown-location truck counts;
+- a bounded, ordered collection of active routes;
+- each active route's persisted status, start/end locations, schedule-derived at-stop or in-transit
+  position, assigned package count, maximum segment load, assigned truck, and capacity utilization.
+
+The in-memory adapter materializes each repository collection once and calculates all metrics for that
+entity family from the same collection. The PostgreSQL adapter runs aggregate and active-route queries in a
+read-only `REPEATABLE READ` transaction, validates returned rows, bounds active-route candidates before
+loading package rows, reconstructs schedule-dependent positions in the domain layer, and retains the same
+next-ETA/route-id ordering as the memory adapter.
+
+Both employees and managers currently receive `FLEET_OVERVIEW_VIEW`. Authorization failures are recorded
+through the normal `AuthorizationDenied` event path. The driving-adapter entry points are:
+
+```text
+getfleetoverview [active_route_limit]
+GET /api/fleet/overview?active_route_limit=10
+```
+
+The active-route limit defaults to `10` and must be from `1` through `100`.
 
 ## Authentication and Authorization
 
@@ -361,6 +409,12 @@ Install the project runtime dependencies before running the CLI or API:
 python -m pip install -e .
 ```
 
+For development, static analysis, and the full automated suite, install the optional development tools:
+
+```bash
+python -m pip install -e ".[dev]"
+```
+
 Create local configuration from the checked-in example:
 
 ```powershell
@@ -373,7 +427,10 @@ cp .env.example .env
 
 Update `.env` with the selected persistence backend, database credentials, JWT secrets, and optional logging settings. The local `.env` file is ignored by Git.
 
-The default backend is in-memory plus JSON world-state persistence. To select PostgreSQL, set the required environment variables before starting the app:
+When `PERSISTENCE_BACKEND` is absent, the application defaults to in-memory logistics repositories plus
+JSON world-state persistence. The checked-in `.env.example` currently selects PostgreSQL; change its copied
+value to `memory` for local in-memory operation, or configure the required database settings before using
+the example's `postgres` value:
 
 ```text
 PERSISTENCE_BACKEND=postgres
@@ -469,6 +526,7 @@ The main menu exposes:
 - Customers
 - State
 - Audit Logs
+- Fleet Overview
 - Command mode via `cmd`
 - Login
 - Logout
@@ -504,6 +562,7 @@ The command registry currently supports:
 - `save`
 - `load`
 - `viewauditlogs`
+- `getfleetoverview`
 
 Examples:
 
@@ -524,6 +583,7 @@ viewroutesinprogress
 viewalltrucks
 viewallcustomers
 viewauditlogs --limit 50 --total
+getfleetoverview 10
 save state.json
 load state.json
 login admin
@@ -564,6 +624,7 @@ The FastAPI adapter currently exposes:
 - `POST /api/state/save`
 - `POST /api/state/load`
 - `GET /api/audit/`
+- `GET /api/fleet/overview`
 
 Login uses OAuth2-style form data with content type `application/x-www-form-urlencoded`; it does not accept a JSON login body:
 
@@ -626,6 +687,17 @@ GET /api/audit/?actor_user_id=2&source=HTTP&occurred_from=2025-01-01T00:00:00
 
 Managers with `AUDIT_VIEW` may browse all matching records. Employees are restricted by the application use
 case to records attributed to their own user id and username.
+
+Fleet overview accepts one bounded query parameter and returns a nested operational projection:
+
+```text
+GET /api/fleet/overview
+GET /api/fleet/overview?active_route_limit=25
+```
+
+`active_route_limit` defaults to `10` and accepts values from `1` through `100`. The response contains a
+single generation timestamp, package/route/truck summaries, computed category totals, and ordered active
+routes with discriminated `at_stop` or `in_transit` position objects.
 
 World-state endpoints act as JSON snapshot export/import operations. With the in-memory backend they save/load runtime state; with the PostgreSQL backend they export/import the database-backed world graph through the same snapshot format:
 
@@ -720,7 +792,12 @@ python -m mypy .
 
 ## Roadmap
 
-FleetFlow is currently a logistics backend with CLI and HTTP driving adapters, a layered/hexagonal architecture, domain entities, immutable route path/schedule values, pure package/truck assignment policies, use cases, ports, in-memory repositories, a PostgreSQL repository adapter, JSON world-state persistence, authentication, autosave/load support, heartbeat reconciliation, segment-aware route capacity checks, and synchronous in-process event publication.
+FleetFlow is currently a logistics backend with CLI and HTTP driving adapters, a layered/hexagonal
+architecture, domain entities, immutable route path/schedule values, pure package/truck assignment
+policies, use cases, ports, in-memory repositories, PostgreSQL repository/query adapters, a point-in-time
+fleet overview, JSON world-state persistence, authentication, autosave/load support, heartbeat
+reconciliation, segment-aware route capacity checks, audit browsing, and synchronous in-process event
+publication.
 
 The current architecture leaves several possible paths for future development. These are not required for the core project to work, but they are natural extensions if the project continues growing.
 
@@ -736,11 +813,15 @@ This would allow the current use cases to act as command handlers without rewrit
 
 ### HTTP API expansion
 
-The current FastAPI adapter covers authentication, customer listing, package workflows, route workflows, truck listing, world-state import/export, and actor-scoped audit-log browsing. Remaining HTTP work is general hardening, broader integration coverage, and further response-contract consistency.
+The current FastAPI adapter covers authentication, customer listing, package workflows, route workflows,
+truck listing, fleet overview, world-state import/export, and actor-scoped audit-log browsing. Remaining
+HTTP work is general hardening, broader integration coverage, and further response-contract consistency.
 
 ### PostgreSQL persistence adapter
 
-The current PostgreSQL adapter sits behind the existing repository ports for package, route, truck, customer, and unit-of-work persistence. It gives FleetFlow a more realistic long-running backend while preserving the CLI and application use-case boundaries.
+The current PostgreSQL adapter sits behind repository/query ports for package, route, truck, customer,
+user, audit, fleet-overview, and unit-of-work persistence. It gives FleetFlow a more realistic long-running
+backend while preserving the CLI and application use-case boundaries.
 
 Remaining work includes operational migration tooling, stronger integration coverage against a real database, and production hardening for snapshot import/export workflows such as backup/restore procedures and operational safeguards.
 
@@ -758,11 +839,15 @@ Some future operations may not belong directly inside a CLI command or HTTP requ
 
 A lightweight PostgreSQL-backed job table could support this before introducing external queue infrastructure.
 
-### Dashboard and query layer
+### Fleet overview and reporting
 
-FleetFlow could add read-focused query services for operational visibility. Possible dashboard data includes fleet status, package status, route progress, delayed packages, assigned capacity, completed routes, and truck utilisation.
+The first read-focused operational projection is implemented: `FleetOverviewQueryPort` has memory and
+PostgreSQL adapters and exposes status totals, delayed work, truck availability, route progress, segment
+load, and truck utilization through CLI and HTTP.
 
-This can start with indexed PostgreSQL queries or materialized views. Redis caching or live WebSocket updates would only be useful if the dashboard became more dynamic or expensive to query.
+Future reporting can build on this boundary with historical trends, SLA summaries, depot-level grouping,
+throughput metrics, or a visual dashboard. Materialized views, caching, or live WebSocket updates would
+only be useful if those projections became expensive or needed near-real-time browser updates.
 
 ### Advanced logistics features
 
