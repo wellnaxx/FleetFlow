@@ -1,3 +1,5 @@
+from typing import Self
+
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from src.application.models.user_record import UserRecord
@@ -95,7 +97,7 @@ class CurrentUserResponse(BaseModel):
     phone_number: str | None = Field(default=None, description="Phone number of the authenticated user.")
 
     @classmethod
-    def from_record(cls, record: UserRecord) -> "CurrentUserResponse":
+    def from_record(cls, record: UserRecord) -> Self:
         """Build an HTTP response from a persisted user record.
 
         Args:

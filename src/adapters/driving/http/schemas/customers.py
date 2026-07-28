@@ -1,3 +1,5 @@
+from typing import Self
+
 from pydantic import BaseModel, Field, NonNegativeInt, PositiveInt
 
 from src.application.use_cases.pagination import PageResult
@@ -13,7 +15,7 @@ class CustomerResponse(BaseModel):
     phone_number: str = Field(description="Customer phone number, or empty when not provided.")
 
     @classmethod
-    def from_customer(cls, customer: Customer) -> "CustomerResponse":
+    def from_customer(cls, customer: Customer) -> Self:
         """Build an HTTP response from a customer entity.
 
         Args:
@@ -40,7 +42,7 @@ class CustomerPageResponse(BaseModel):
     offset: NonNegativeInt
 
     @classmethod
-    def from_page(cls, page: PageResult[Customer]) -> "CustomerPageResponse":
+    def from_page(cls, page: PageResult[Customer]) -> Self:
         """Build a paginated HTTP response from a customer page result.
 
         Args:

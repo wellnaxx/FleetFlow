@@ -42,7 +42,7 @@ class TruckResponse(BaseModel):
         return self
 
     @classmethod
-    def from_truck(cls, truck: Truck) -> "TruckResponse":
+    def from_truck(cls, truck: Truck) -> Self:
         """Build an HTTP response from a truck entity.
 
         Args:

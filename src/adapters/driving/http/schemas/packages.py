@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Self
 
 from pydantic import BaseModel, EmailStr, Field, NonNegativeFloat, NonNegativeInt, PositiveFloat, PositiveInt
 
@@ -43,7 +44,7 @@ class PackageResponse(PackageBase):
     )
 
     @classmethod
-    def from_package(cls, package: DeliveryPackage) -> "PackageResponse":
+    def from_package(cls, package: DeliveryPackage) -> Self:
         """Build an HTTP response from a package entity.
 
         Args:
@@ -75,7 +76,7 @@ class PackagePageResponse(BaseModel):
     offset: NonNegativeInt
 
     @classmethod
-    def from_page(cls, page: PageResult[DeliveryPackage]) -> "PackagePageResponse":
+    def from_page(cls, page: PageResult[DeliveryPackage]) -> Self:
         """Build a paginated HTTP response from a package page result.
 
         Args:
@@ -110,7 +111,7 @@ class PackageSuitableRouteResponse(BaseModel):
     end_city: str = Field(..., description="Package destination city used for the route match.")
 
     @classmethod
-    def from_match(cls, match: SuitableRouteForPackage) -> "PackageSuitableRouteResponse":
+    def from_match(cls, match: SuitableRouteForPackage) -> Self:
         """Build an HTTP response from a suitable-route match.
 
         Args:

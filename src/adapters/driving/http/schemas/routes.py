@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Self
 
 from pydantic import BaseModel, Field, NonNegativeInt, PositiveInt
 
@@ -42,7 +42,7 @@ class RouteResponse(BaseModel):
     )
 
     @classmethod
-    def from_route(cls, route: DeliveryRoute) -> "RouteResponse":
+    def from_route(cls, route: DeliveryRoute) -> Self:
         """Build an HTTP response from a delivery route entity.
 
         Args:
@@ -81,7 +81,7 @@ class RouteInProgressResponse(BaseModel):
         cls,
         route: DeliveryRoute,
         position: RoutePosition,
-    ) -> "RouteInProgressResponse":
+    ) -> Self:
         """Build an HTTP response from an active route and computed position.
 
         Args:
@@ -113,7 +113,7 @@ class RoutePageResponse(BaseModel):
     offset: NonNegativeInt
 
     @classmethod
-    def from_page(cls, page: PageResult[DeliveryRoute]) -> "RoutePageResponse":
+    def from_page(cls, page: PageResult[DeliveryRoute]) -> Self:
         """Build a paginated HTTP response from a route page result.
 
         Args:
@@ -170,7 +170,7 @@ class AssignPackagesToRouteResponse(BaseModel):
     errors: list[PackageAssignmentErrorResponse] = Field(..., description="List of package assignment errors.")
 
     @classmethod
-    def from_result(cls, result: AssignPackagesToRouteResult) -> "AssignPackagesToRouteResponse":
+    def from_result(cls, result: AssignPackagesToRouteResult) -> Self:
         """Build an HTTP response from a package-assignment result.
 
         Args:
@@ -212,7 +212,7 @@ class AssignTruckToRouteResponse(BaseModel):
     truck_id: PositiveInt = Field(..., description="Identifier of the truck that was assigned to the route.")
 
     @classmethod
-    def from_result(cls, result: AssignTruckToRouteResult) -> "AssignTruckToRouteResponse":
+    def from_result(cls, result: AssignTruckToRouteResult) -> Self:
         """Build an HTTP response from a truck-assignment result.
 
         Args:

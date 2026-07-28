@@ -1,6 +1,7 @@
 """HTTP response schemas for audit-log endpoints."""
 
 from datetime import datetime
+from typing import Self
 
 from pydantic import UUID4, BaseModel, NonNegativeInt, PositiveInt
 
@@ -34,7 +35,7 @@ class AuditRecordResponse(BaseModel):
     created_at: datetime
 
     @classmethod
-    def from_record(cls, record: AuditRecord) -> "AuditRecordResponse":
+    def from_record(cls, record: AuditRecord) -> Self:
         """Build a response model from a persisted audit record.
 
         Args:
@@ -74,7 +75,7 @@ class AuditRecordPageResponse(BaseModel):
     offset: NonNegativeInt
 
     @classmethod
-    def from_page(cls, page: PageResult[AuditRecord]) -> "AuditRecordPageResponse":
+    def from_page(cls, page: PageResult[AuditRecord]) -> Self:
         """Build a paginated response from a use-case page result.
 
         Args:
