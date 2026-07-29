@@ -137,7 +137,7 @@ FleetFlow models:
 - `DeliveryPackage`
 - `DeliveryRoute`
 - `Truck`
-- `User`, `Employee`, and `Manager`
+- role-bearing `User`
 - `ContactInfo`
 - `LocationCode`
 - `RoutePath`

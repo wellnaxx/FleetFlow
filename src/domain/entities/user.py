@@ -1,11 +1,11 @@
-"""Base runtime user entity."""
+"""Runtime user entity."""
 
 from src.domain.enums.auth import Role
 from src.domain.value_objects.contact_info import ContactInfo
 
 
 class User:
-    """Authenticated user with role and contact information."""
+    """Authenticated user whose role determines authorization capabilities."""
 
     def __init__(self, contact: ContactInfo, role: Role, user_id: int) -> None:
         """Create a runtime user entity.

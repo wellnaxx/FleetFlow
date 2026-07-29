@@ -7,9 +7,9 @@ from src.domain.enums.auth import Role
 class CurrentUserPrincipal:
     """Application-level identity for the currently authenticated actor.
 
-    The principal is distinct from the persisted ``UserRecord`` and from the
-    domain user entity hierarchy. It carries only the identity and role data
-    needed by authorization, event context, and session-aware use cases.
+    The principal is distinct from the persisted ``UserRecord`` and the domain
+    ``User`` entity. It carries only the identity and role data needed by
+    authorization, event context, and session-aware use cases.
     """
 
     user_id: int
