@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -17,42 +16,34 @@ if TYPE_CHECKING:
     from src.domain.value_objects.contact_info import ContactInfo
 
 
-def _empty_delivery_packages() -> list[DeliveryPackage]:
-    """Return a typed empty package collection for dataclass initialization."""
-    return []
-
-
-def _empty_pending_events() -> list[DomainEvent]:
-    """Return a typed empty pending events collection for dataclass initialization."""
-    return []
-
-
-@dataclass(frozen=True, slots=True)
 class Customer(DomainEventRecorderMixin):
-    """Customer contact record with an active package collection."""
+    """Customer aggregate with contact details and active package ownership."""
 
-    contact: ContactInfo
-    customer_id: int
+    __slots__ = ("_customer_id", "_delivery_packages", "_pending_events", "contact")
 
-    _delivery_packages: list[DeliveryPackage] = field(
-        default_factory=_empty_delivery_packages,
-        repr=False,
-    )
+    def __init__(self, contact: ContactInfo, customer_id: int) -> None:
+        """Create a customer without recording a creation event.
 
-    _pending_events: list[DomainEvent] = field(
-        default_factory=_empty_pending_events,
-        init=False,
-        repr=False,
-        compare=False,
-    )
+        Direct construction is intended for persistence hydration. Use
+        :meth:`create` when creating a new customer through a business
+        workflow.
 
-    def __post_init__(self) -> None:
-        """Validate customer identity at the aggregate boundary.
+        Args:
+            contact: Validated customer contact information.
+            customer_id: Stable positive customer identifier.
 
         Raises:
             DomainValidationError: If ``customer_id`` is not a positive integer.
         """
-        require_positive_int(self.customer_id, "customer_id")
+        self.contact = contact
+        self._customer_id = require_positive_int(customer_id, "customer_id")
+        self._delivery_packages: list[DeliveryPackage] = []
+        self._pending_events: list[DomainEvent] = []
+
+    @property
+    def customer_id(self) -> int:
+        """Stable customer identifier."""
+        return self._customer_id
 
     @property
     def name(self) -> str:

@@ -53,6 +53,13 @@ class Customer_Should(unittest.TestCase):
 
         self.assertEqual(customer.pending_events, ())
 
+    def test_customers_with_matching_data_remain_distinct_entities(self) -> None:
+        first = Customer(contact=self.make_contact(), customer_id=17)
+        second = Customer(contact=self.make_contact(), customer_id=17)
+
+        self.assertIsNot(first, second)
+        self.assertNotEqual(first, second)
+
     def test_constructor_rejects_invalid_customer_id(self) -> None:
         for customer_id in (0, -1, True, 1.0, "1"):
             with self.subTest(customer_id=customer_id), self.assertRaises(DomainValidationError):
