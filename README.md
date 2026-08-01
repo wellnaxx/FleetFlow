@@ -83,7 +83,7 @@ FleetFlow/
 |   |   `-- use_cases/            # auth, package, route, truck, customer, fleet, audit, and state workflows
 |   |-- composition/              # dependency container, event catalog, subscriptions, and composition root
 |   |-- domain/
-|   |   |-- entities/             # customers, packages, routes, trucks, users
+|   |   |-- entities/             # customers, packages, routes, trucks
 |   |   |-- enums/                # roles, permissions, item/route/truck statuses
 |   |   |-- events/               # immutable domain event definitions
 |   |   |-- exceptions.py         # typed domain validation, not-found, and conflict errors
@@ -137,7 +137,6 @@ FleetFlow models:
 - `DeliveryPackage`
 - `DeliveryRoute`
 - `Truck`
-- role-bearing `User`
 - `ContactInfo`
 - `LocationCode`
 - `RoutePath`
