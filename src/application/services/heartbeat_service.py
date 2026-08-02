@@ -51,9 +51,7 @@ class HeartbeatService:
         """
         routes = self._routes.list_all()
 
-        route_snapshots = [
-            (route, route.snapshot_state(), route.event_checkpoint()) for route in routes
-        ]
+        route_snapshots = [(route, route.snapshot_state(), route.event_checkpoint()) for route in routes]
         package_snapshots = [
             (package, package.snapshot_state(), package.event_checkpoint())
             for route in routes

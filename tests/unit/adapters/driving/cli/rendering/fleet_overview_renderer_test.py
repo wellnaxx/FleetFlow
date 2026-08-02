@@ -171,4 +171,3 @@ class FleetOverviewRendererShould(unittest.TestCase):
 
         self.assertIn("    Position: At MEL; next ETA: Final stop", result)
         self.assertLess(result.index("Route 30"), result.index("Route 10"))
-

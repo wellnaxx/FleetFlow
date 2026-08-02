@@ -61,9 +61,7 @@ class ExecutorShould(unittest.TestCase):
     ) -> None:
         """Translate connection configuration errors into DatabaseError."""
         conn, _ = self._connection_and_cursor(get_connection_mock)
-        type(conn).isolation_level = property(
-            fset=MagicMock(side_effect=RuntimeError("configuration failed"))
-        )
+        type(conn).isolation_level = property(fset=MagicMock(side_effect=RuntimeError("configuration failed")))
 
         with (
             self.assertRaisesRegex(DatabaseError, "configuration failed"),

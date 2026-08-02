@@ -104,9 +104,7 @@ def list_routes(
     result = execute_and_drain_events(
         recorder=use_case,
         event_collector=event_collector,
-        action=lambda: use_case.execute(
-            PageQuery(limit=limit, offset=offset, include_total=include_total)
-        ),
+        action=lambda: use_case.execute(PageQuery(limit=limit, offset=offset, include_total=include_total)),
     )
     return RoutePageResponse.from_page(result)
 

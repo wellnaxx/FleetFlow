@@ -61,7 +61,7 @@ def require_ordered_optional_datetime_range(
 
     if start > end:
         raise ValueError(f"{field_name}_from must be before or equal to {field_name}_to.")
-    
+
 
 def require_json_object(value: object, field_name: str) -> JSONObject:
     """Validate and return a JSON object with string keys and JSON-compatible values.

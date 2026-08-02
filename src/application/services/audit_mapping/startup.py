@@ -21,6 +21,4 @@ def map_fleet_seeded(event: FleetSeeded) -> AuditDescriptor:
     )
 
 
-STARTUP_AUDIT_MAPPINGS: tuple[AuditDescriptorMapping, ...] = (
-    audit_mapping(FleetSeeded, map_fleet_seeded),
-)
+STARTUP_AUDIT_MAPPINGS: tuple[AuditDescriptorMapping, ...] = (audit_mapping(FleetSeeded, map_fleet_seeded),)

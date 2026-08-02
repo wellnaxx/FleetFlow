@@ -16,6 +16,7 @@ from src.domain.value_objects.location_code import LocationCode
 @dataclass(frozen=True, slots=True, kw_only=True)
 class RouteCreated(DomainEvent):
     """Event recorded when a new delivery route is created."""
+
     event_version: ClassVar[int] = 2
 
     route_id: int
@@ -28,6 +29,7 @@ class RouteCreated(DomainEvent):
 @dataclass(frozen=True, slots=True, kw_only=True)
 class RouteScheduled(DomainEvent):
     """Event recorded when a delivery route is scheduled for departure."""
+
     event_version: ClassVar[int] = 2
 
     route_id: int
@@ -42,6 +44,7 @@ class RouteScheduled(DomainEvent):
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PackageAssignedToRoute(DomainEvent):
     """Event recorded when a package is assigned to a delivery route."""
+
     event_version: ClassVar[int] = 2
 
     package_id: int
@@ -54,6 +57,7 @@ class PackageAssignedToRoute(DomainEvent):
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PackageDetachedFromRoute(DomainEvent):
     """Event recorded when a package is detached from a delivery route."""
+
     event_version: ClassVar[int] = 2
 
     package_id: int
@@ -71,6 +75,7 @@ class PackageDetachedFromRoute(DomainEvent):
 @dataclass(frozen=True, slots=True, kw_only=True)
 class TruckAssignedToRoute(DomainEvent):
     """Event recorded when a truck is assigned to a delivery route."""
+
     event_version: ClassVar[int] = 2
 
     truck_id: int
@@ -89,6 +94,7 @@ class TruckAssignedToRoute(DomainEvent):
 @dataclass(frozen=True, slots=True, kw_only=True)
 class TruckReleasedFromRoute(DomainEvent):
     """Event recorded when a truck is released from a delivery route."""
+
     event_version: ClassVar[int] = 2
 
     truck_id: int
@@ -112,6 +118,7 @@ class RouteStarted(DomainEvent):
     Reconciliation may infer this transition after the scheduled departure
     time has already passed.
     """
+
     event_version: ClassVar[int] = 2
 
     route_id: int
@@ -126,6 +133,7 @@ class RouteCompleted(DomainEvent):
     Reconciliation may observe this transition directly from either the
     scheduled or in-progress state.
     """
+
     event_version: ClassVar[int] = 2
 
     route_id: int
@@ -138,6 +146,7 @@ class RouteCompleted(DomainEvent):
 @dataclass(frozen=True, slots=True, kw_only=True)
 class RouteRemoved(DomainEvent):
     """Event recorded when a delivery route is removed from the system."""
+
     event_version: ClassVar[int] = 2
 
     route_id: int

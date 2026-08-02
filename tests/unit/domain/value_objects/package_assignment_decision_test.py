@@ -29,9 +29,12 @@ class PackageAssignmentDecision_Should(unittest.TestCase):
 
     def test_rejects_rejection_without_non_blank_message(self) -> None:
         for message in (None, "", "   "):
-            with self.subTest(message=message), self.assertRaisesRegex(
-                DomainValidationError,
-                "requires a message",
+            with (
+                self.subTest(message=message),
+                self.assertRaisesRegex(
+                    DomainValidationError,
+                    "requires a message",
+                ),
             ):
                 PackageAssignmentDecision(
                     reason=PackageAssignmentRejectionReason.TRUCK_CAPACITY_EXCEEDED,

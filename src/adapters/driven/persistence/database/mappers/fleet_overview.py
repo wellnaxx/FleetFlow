@@ -569,8 +569,7 @@ def map_active_route_overview(
             truck_id=typed_route_row["truck_vehicle_id"],
             capacity=typed_route_row["truck_capacity"],
         )
-        if typed_route_row["truck_vehicle_id"] is not None
-        and typed_route_row["truck_capacity"] is not None
+        if typed_route_row["truck_vehicle_id"] is not None and typed_route_row["truck_capacity"] is not None
         else None
     )
 

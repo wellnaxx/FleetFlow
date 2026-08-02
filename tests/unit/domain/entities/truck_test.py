@@ -65,9 +65,7 @@ class TestTruck_Should(unittest.TestCase):
                 }
                 values[field_name] = value
 
-                with self.subTest(field_name=field_name, value=value), self.assertRaises(
-                    DomainValidationError
-                ):
+                with self.subTest(field_name=field_name, value=value), self.assertRaises(DomainValidationError):
                     Truck(**values)  # type: ignore[arg-type]
 
     def test_is_free_when_free(self) -> None:
@@ -225,6 +223,7 @@ class TestTruck_Should(unittest.TestCase):
         self.assertEqual(self.truck.busy_from, busy_from)
         self.assertEqual(self.truck.busy_until, busy_until)
         self.assertEqual(self.truck.in_transit_to, LocationCode("MEL"))
+
 
 if __name__ == "__main__":
     unittest.main()

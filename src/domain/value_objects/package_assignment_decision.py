@@ -66,9 +66,7 @@ class PackageAssignmentDecision:
 def _require_runtime_types(reason: object, message: object) -> None:
     """Require assignment decision fields to satisfy their runtime types."""
     if reason is not None and not isinstance(reason, PackageAssignmentRejectionReason):
-        raise DomainValidationError(
-            "Assignment rejection reason must be a PackageAssignmentRejectionReason."
-        )
+        raise DomainValidationError("Assignment rejection reason must be a PackageAssignmentRejectionReason.")
 
     if message is not None and not isinstance(message, str):
         raise DomainValidationError("Assignment decision message must be a string.")

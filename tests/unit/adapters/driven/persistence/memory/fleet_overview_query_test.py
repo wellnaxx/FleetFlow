@@ -421,9 +421,12 @@ class InMemoryFleetOverviewQueryShould(unittest.TestCase):
             self.route_repository.list_all.return_value = [
                 _route(route_id=1, status=RouteStatus.IN_PROGRESS, position=position)
             ]
-            with self.subTest(position=position), self.assertRaisesRegex(
-                RuntimeError,
-                "missing segment information",
+            with (
+                self.subTest(position=position),
+                self.assertRaisesRegex(
+                    RuntimeError,
+                    "missing segment information",
+                ),
             ):
                 self.query.get_overview(generated_at=GENERATED_AT, active_route_limit=10)
 

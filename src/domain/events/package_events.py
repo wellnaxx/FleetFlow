@@ -12,6 +12,7 @@ from src.domain.value_objects.location_code import LocationCode
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PackageCreated(DomainEvent):
     """Event recorded when a new package is created."""
+
     event_version: ClassVar[int] = 2
 
     package_id: int
@@ -27,6 +28,7 @@ class PackageCreated(DomainEvent):
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PackageRemoved(DomainEvent):
     """Event recorded when a package is removed from the system."""
+
     event_version: ClassVar[int] = 2
 
     package_id: int
@@ -47,6 +49,7 @@ class PackagePickedUp(DomainEvent):
     Reconciliation may infer this transition after the scheduled pickup time
     has already passed.
     """
+
     event_version: ClassVar[int] = 2
 
     package_id: int
@@ -61,6 +64,7 @@ class PackagePickedUp(DomainEvent):
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PackageDelivered(DomainEvent):
     """Event recorded for the normal in-progress-to-delivered transition."""
+
     event_version: ClassVar[int] = 2
 
     package_id: int

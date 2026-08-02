@@ -84,18 +84,20 @@ class HttpRequestLoggingMiddlewareShould(unittest.IsolatedAsyncioTestCase):
 
     @staticmethod
     def _request() -> Request:
-        return Request({
-            "type": "http",
-            "http_version": "1.1",
-            "method": "GET",
-            "scheme": "http",
-            "path": "/health",
-            "raw_path": b"/health",
-            "query_string": b"",
-            "headers": [],
-            "client": ("testclient", 50000),
-            "server": ("testserver", 80),
-        })
+        return Request(
+            {
+                "type": "http",
+                "http_version": "1.1",
+                "method": "GET",
+                "scheme": "http",
+                "path": "/health",
+                "raw_path": b"/health",
+                "query_string": b"",
+                "headers": [],
+                "client": ("testclient", 50000),
+                "server": ("testserver", 80),
+            }
+        )
 
 
 class HttpEventContextIntegrationShould(unittest.TestCase):

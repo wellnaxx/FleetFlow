@@ -19,26 +19,30 @@ from src.application.models.audit_log_query import AuditLogFilter, AuditLogQuery
 from src.application.use_cases.audit.view_audits import ViewAuditLogsUseCase
 from src.application.use_cases.pagination import PageQuery
 
-_ALLOWED_FILTER_OPTIONS: Final[frozenset[str]] = frozenset([
-    "--limit",
-    "--offset",
-    "--total",
-    "--event_type",
-    "--resource_type",
-    "--resource_id",
-    "--action",
-    "--actor_user_id",
-    "--actor_username",
-    "--source",
-    "--occurred_from",
-    "--occurred_to",
-    "--created_from",
-    "--created_to",
-])
+_ALLOWED_FILTER_OPTIONS: Final[frozenset[str]] = frozenset(
+    [
+        "--limit",
+        "--offset",
+        "--total",
+        "--event_type",
+        "--resource_type",
+        "--resource_id",
+        "--action",
+        "--actor_user_id",
+        "--actor_username",
+        "--source",
+        "--occurred_from",
+        "--occurred_to",
+        "--created_from",
+        "--created_to",
+    ]
+)
 
-_FLAG_OPTIONS: Final[frozenset[str]] = frozenset([
-    "--total",
-])
+_FLAG_OPTIONS: Final[frozenset[str]] = frozenset(
+    [
+        "--total",
+    ]
+)
 
 
 class ViewAuditLogs(EventDrainingCommand[ViewAuditLogsUseCase]):

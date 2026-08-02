@@ -85,7 +85,7 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         truck = MagicMock()
         truck.vehicle_id = 11
         route.assign_truck = MagicMock(
-            side_effect=lambda assigned_truck, *, occurred_at: setattr(route, "truck", assigned_truck) # pyright: ignore[reportUnknownLambdaType]
+            side_effect=lambda assigned_truck, *, occurred_at: setattr(route, "truck", assigned_truck)  # pyright: ignore[reportUnknownLambdaType]
         )
 
         self.mock_routes.get_by_id.return_value = route
@@ -126,7 +126,7 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         truck = MagicMock()
         truck.vehicle_id = 11
         route.assign_truck = MagicMock(
-            side_effect=lambda assigned_truck, *, occurred_at: setattr(route, "truck", assigned_truck) # pyright: ignore[reportUnknownLambdaType]
+            side_effect=lambda assigned_truck, *, occurred_at: setattr(route, "truck", assigned_truck)  # pyright: ignore[reportUnknownLambdaType]
         )
 
         self.mock_routes.get_by_id.return_value = route
@@ -204,7 +204,7 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         truck = MagicMock()
         truck.vehicle_id = 11
         route.assign_truck = MagicMock(
-            side_effect=lambda assigned_truck, *, occurred_at: setattr(route, "truck", assigned_truck) # pyright: ignore[reportUnknownLambdaType]
+            side_effect=lambda assigned_truck, *, occurred_at: setattr(route, "truck", assigned_truck)  # pyright: ignore[reportUnknownLambdaType]
         )
 
         self.mock_routes.get_by_id.return_value = route

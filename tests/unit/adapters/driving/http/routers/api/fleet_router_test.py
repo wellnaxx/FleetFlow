@@ -46,12 +46,8 @@ class FleetRouterShould(unittest.TestCase):
         register_exception_handlers(self.app)
         self.use_case = MagicMock(spec=GetFleetOverviewUseCase)
         self.event_collector = MagicMock()
-        self.app.dependency_overrides[fleet_router_module.get_fleet_overview_use_case] = (
-            lambda: self.use_case
-        )
-        self.app.dependency_overrides[fleet_router_module.get_event_collector] = (
-            lambda: self.event_collector
-        )
+        self.app.dependency_overrides[fleet_router_module.get_fleet_overview_use_case] = lambda: self.use_case
+        self.app.dependency_overrides[fleet_router_module.get_event_collector] = lambda: self.event_collector
         self.client = TestClient(self.app)
 
     def tearDown(self) -> None:

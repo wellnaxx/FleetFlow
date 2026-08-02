@@ -37,18 +37,14 @@ class AuditDescriptorRegistryTests(unittest.TestCase):
     """Validate explicit registration and exact concrete-type dispatch."""
 
     def test_maps_registered_exact_event_type(self) -> None:
-        mapper = AuditDescriptorMapper(
-            (audit_mapping(_RegisteredEvent, _map_registered_event),)
-        )
+        mapper = AuditDescriptorMapper((audit_mapping(_RegisteredEvent, _map_registered_event),))
 
         descriptor = mapper.map(_RegisteredEvent(resource_id=7, occurred_at=NOW))
 
         self.assertEqual(descriptor.resource_id, "7")
 
     def test_does_not_implicitly_apply_base_event_mapping_to_subclass(self) -> None:
-        mapper = AuditDescriptorMapper(
-            (audit_mapping(_RegisteredEvent, _map_registered_event),)
-        )
+        mapper = AuditDescriptorMapper((audit_mapping(_RegisteredEvent, _map_registered_event),))
 
         with self.assertRaisesRegex(ValueError, "Unsupported event type: _DerivedEvent"):
             mapper.map(_DerivedEvent(resource_id=7, occurred_at=NOW))

@@ -19,8 +19,8 @@ class CustomersRouterShould(unittest.TestCase):
         self.app.include_router(customers_router)
         register_exception_handlers(self.app)
         self.event_collector = MagicMock()
-        self.app.dependency_overrides[customers_router_module.get_event_collector] = (
-            lambda: self.event_collector
+        self.app.dependency_overrides[customers_router_module.get_event_collector] = lambda: (
+            self.event_collector
         )
         self.client = TestClient(self.app)
 

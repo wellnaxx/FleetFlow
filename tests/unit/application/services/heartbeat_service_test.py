@@ -495,7 +495,7 @@ class HeartbeatServiceTests(unittest.TestCase):
     def test_advance_restores_package_event_checkpoint_when_persistence_fails(self) -> None:
         base = datetime(2025, 1, 1, 8, 0)
         package = _FakePackage("S3", "E3")
-        package._pending_events.append(("created", base - timedelta(hours=1))) # pyright: ignore[reportPrivateUsage]
+        package._pending_events.append(("created", base - timedelta(hours=1)))  # pyright: ignore[reportPrivateUsage]
         route = _FakeRoute(
             locations=["S3", "E3"],
             departure_time=base,

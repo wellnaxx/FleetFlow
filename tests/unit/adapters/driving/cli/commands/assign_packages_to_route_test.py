@@ -34,9 +34,7 @@ class AssignPackageToRoute_Should(unittest.TestCase):
 
     def test_execute_propagates_permission_errors_from_use_case(self) -> None:
         cmd = self.make_cmd(["5", "42"])
-        _use_case_mock(cmd).execute.side_effect = PermissionError(
-            "Missing permission: ROUTE_ASSIGN_PACKAGE"
-        )
+        _use_case_mock(cmd).execute.side_effect = PermissionError("Missing permission: ROUTE_ASSIGN_PACKAGE")
 
         with self.assertRaises(PermissionError) as ctx:
             cmd.execute()
@@ -82,12 +80,8 @@ class AssignPackageToRoute_Should(unittest.TestCase):
         route = MagicMock()
         _use_case_mock(cmd).execute.return_value = AssignPackagesToRouteResult(
             successes=[
-                PackageAssignmentSuccess(
-                    package_id=8, route_id=7, eta_text="2025-10-01 18:00", route=route
-                ),
-                PackageAssignmentSuccess(
-                    package_id=9, route_id=7, eta_text="2025-10-01 19:00", route=route
-                ),
+                PackageAssignmentSuccess(package_id=8, route_id=7, eta_text="2025-10-01 18:00", route=route),
+                PackageAssignmentSuccess(package_id=9, route_id=7, eta_text="2025-10-01 19:00", route=route),
                 PackageAssignmentSuccess(package_id=10, route_id=7, eta_text="N/A", route=route),
             ],
             errors=[],
@@ -126,9 +120,7 @@ class AssignPackageToRoute_Should(unittest.TestCase):
         route = MagicMock()
         _use_case_mock(cmd).execute.return_value = AssignPackagesToRouteResult(
             successes=[
-                PackageAssignmentSuccess(
-                    package_id=8, route_id=7, eta_text="2025-10-01 18:00", route=route
-                ),
+                PackageAssignmentSuccess(package_id=8, route_id=7, eta_text="2025-10-01 18:00", route=route),
             ],
             errors=[
                 PackageAssignmentError(
@@ -285,9 +277,7 @@ class AssignPackageToRoute_Should(unittest.TestCase):
     ) -> None:
         mock_parse.side_effect = _parse_int
         cmd = self.make_cmd(["1", "2"])
-        _use_case_mock(cmd).execute.return_value = AssignPackagesToRouteResult(
-            successes=[], errors=[]
-        )
+        _use_case_mock(cmd).execute.return_value = AssignPackagesToRouteResult(successes=[], errors=[])
 
         _ = cmd.execute()
 
@@ -302,9 +292,7 @@ class AssignPackageToRoute_Should(unittest.TestCase):
     ) -> None:
         mock_parse.side_effect = [10, 20, 30]
         cmd = self.make_cmd(["10", "20", "30"])
-        _use_case_mock(cmd).execute.return_value = AssignPackagesToRouteResult(
-            successes=[], errors=[]
-        )
+        _use_case_mock(cmd).execute.return_value = AssignPackagesToRouteResult(successes=[], errors=[])
 
         cmd.execute()
 

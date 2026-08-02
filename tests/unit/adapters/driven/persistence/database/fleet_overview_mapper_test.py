@@ -231,22 +231,22 @@ class RouteOverviewMapperShould(unittest.TestCase):
         invalid_values = cast(
             "tuple[object, ...]",
             (
-            {},
-            [1],
-            [
-                {
-                    "route_id": 21,
-                    "departure_time": DEPARTURE.isoformat(),
-                    "stops": {},
-                }
-            ],
-            [
-                {
-                    "route_id": 21,
-                    "departure_time": DEPARTURE.isoformat(),
-                    "stops": [1],
-                }
-            ],
+                {},
+                [1],
+                [
+                    {
+                        "route_id": 21,
+                        "departure_time": DEPARTURE.isoformat(),
+                        "stops": {},
+                    }
+                ],
+                [
+                    {
+                        "route_id": 21,
+                        "departure_time": DEPARTURE.isoformat(),
+                        "stops": [1],
+                    }
+                ],
             ),
         )
         for candidates in invalid_values:

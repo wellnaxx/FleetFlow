@@ -27,9 +27,7 @@ def map_route_created(event: RouteCreated) -> AuditDescriptor:
         payload_json={
             "route_id": str(event.route_id),
             "locations": [str(location) for location in event.locations],
-            "departure_time": (
-                event.departure_time.isoformat() if event.departure_time is not None else None
-            ),
+            "departure_time": (event.departure_time.isoformat() if event.departure_time is not None else None),
             "initial_status": event.initial_status.value,
             "expected_completion_time": (
                 event.expected_completion_time.isoformat()
@@ -51,9 +49,7 @@ def map_route_scheduled(event: RouteScheduled) -> AuditDescriptor:
             "previous_status": event.previous_status.value,
             "new_status": event.new_status.value,
             "previous_departure_time": (
-                event.previous_departure_time.isoformat()
-                if event.previous_departure_time is not None
-                else None
+                event.previous_departure_time.isoformat() if event.previous_departure_time is not None else None
             ),
             "new_departure_time": event.new_departure_time.isoformat(),
             "previous_expected_completion_time": (
@@ -82,9 +78,7 @@ def map_package_assigned_to_route(event: PackageAssignedToRoute) -> AuditDescrip
                 else None
             ),
             "new_expected_arrival": (
-                event.new_expected_arrival.isoformat()
-                if event.new_expected_arrival is not None
-                else None
+                event.new_expected_arrival.isoformat() if event.new_expected_arrival is not None else None
             ),
         },
     )
@@ -110,9 +104,7 @@ def map_package_detached_from_route(event: PackageDetachedFromRoute) -> AuditDes
                 else None
             ),
             "new_expected_arrival": (
-                event.new_expected_arrival.isoformat()
-                if event.new_expected_arrival is not None
-                else None
+                event.new_expected_arrival.isoformat() if event.new_expected_arrival is not None else None
             ),
             "reason": event.reason.value,
         },
@@ -136,17 +128,11 @@ def map_truck_assigned_to_route(event: TruckAssignedToRoute) -> AuditDescriptor:
             "previous_busy_from": (
                 event.previous_busy_from.isoformat() if event.previous_busy_from is not None else None
             ),
-            "new_busy_from": (
-                event.new_busy_from.isoformat() if event.new_busy_from is not None else None
-            ),
+            "new_busy_from": (event.new_busy_from.isoformat() if event.new_busy_from is not None else None),
             "previous_busy_until": (
-                event.previous_busy_until.isoformat()
-                if event.previous_busy_until is not None
-                else None
+                event.previous_busy_until.isoformat() if event.previous_busy_until is not None else None
             ),
-            "new_busy_until": (
-                event.new_busy_until.isoformat() if event.new_busy_until is not None else None
-            ),
+            "new_busy_until": (event.new_busy_until.isoformat() if event.new_busy_until is not None else None),
         },
     )
 
@@ -168,17 +154,11 @@ def map_truck_released_from_route(event: TruckReleasedFromRoute) -> AuditDescrip
             "previous_busy_from": (
                 event.previous_busy_from.isoformat() if event.previous_busy_from is not None else None
             ),
-            "new_busy_from": (
-                event.new_busy_from.isoformat() if event.new_busy_from is not None else None
-            ),
+            "new_busy_from": (event.new_busy_from.isoformat() if event.new_busy_from is not None else None),
             "previous_busy_until": (
-                event.previous_busy_until.isoformat()
-                if event.previous_busy_until is not None
-                else None
+                event.previous_busy_until.isoformat() if event.previous_busy_until is not None else None
             ),
-            "new_busy_until": (
-                event.new_busy_until.isoformat() if event.new_busy_until is not None else None
-            ),
+            "new_busy_until": (event.new_busy_until.isoformat() if event.new_busy_until is not None else None),
             "reason": event.reason.value,
         },
     )

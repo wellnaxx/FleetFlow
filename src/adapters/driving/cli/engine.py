@@ -425,10 +425,12 @@ class Engine:
                 heartbeat_summary = self._advance_world_state.execute()
                 heartbeat_changed = self._heartbeat_changed(heartbeat_summary)
                 if heartbeat_changed:
-                    self._event_collector.drain((
-                        *heartbeat_summary.event_recorders,
-                        self._advance_world_state,
-                    ))
+                    self._event_collector.drain(
+                        (
+                            *heartbeat_summary.event_recorders,
+                            self._advance_world_state,
+                        )
+                    )
 
                     logger.info("Pre-command heartbeat changed world state before %s.", command_name)
 

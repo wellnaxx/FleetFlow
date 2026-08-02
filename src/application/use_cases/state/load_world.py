@@ -67,7 +67,6 @@ class LoadWorldStateUseCase(AuthorizedUseCase[str]):
 
         self._clock = clock
 
-
     @requires(
         Permission.APP_LOAD_STATE,
         operation=AuthorizationOperation.WORLD_STATE_IMPORT,

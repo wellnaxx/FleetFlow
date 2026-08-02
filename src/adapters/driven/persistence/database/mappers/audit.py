@@ -120,7 +120,7 @@ def _as_audit_row(row: RowDict) -> AuditRow:
     created_at = require_datetime(row["created_at"], "created_at")
 
     payload_json = require_json_object(payload_json, "payload_json")
-    
+
     return AuditRow(
         audit_id=audit_id,
         event_id=event_id,

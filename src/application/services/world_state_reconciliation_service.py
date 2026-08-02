@@ -66,8 +66,7 @@ class WorldStateReconciliationService:
             route_snapshot = route.snapshot_state()
             route_event_checkpoint = route.event_checkpoint()
             package_snapshots = tuple(
-                (package, package.snapshot_state(), package.event_checkpoint())
-                for package in route.packages
+                (package, package.snapshot_state(), package.event_checkpoint()) for package in route.packages
             )
             original_truck = route.truck
             truck_snapshot = original_truck.snapshot_state() if original_truck is not None else None

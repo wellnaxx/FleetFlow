@@ -16,9 +16,12 @@ class RequireCountTest(unittest.TestCase):
     def test_rejects_non_integer_values_and_booleans(self) -> None:
         """Reject values that PostgreSQL integer counts cannot represent."""
         for value in (True, 1.0, "1", None):
-            with self.subTest(value=value), self.assertRaisesRegex(
-                TypeError,
-                r"^Audit record count must be an integer\.$",
+            with (
+                self.subTest(value=value),
+                self.assertRaisesRegex(
+                    TypeError,
+                    r"^Audit record count must be an integer\.$",
+                ),
             ):
                 require_count(value, "Audit record count")
 

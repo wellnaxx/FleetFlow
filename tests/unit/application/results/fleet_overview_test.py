@@ -129,6 +129,7 @@ class FleetOverviewShould(unittest.TestCase):
 
     def test_active_route_rejects_invalid_assigned_package_count(self) -> None:
         """Reject negative and boolean package counts on active routes."""
+
         def build_route(assigned_package_count: int) -> ActiveRouteOverview:
             return ActiveRouteOverview(
                 route_id=8,
@@ -148,6 +149,7 @@ class FleetOverviewShould(unittest.TestCase):
 
     def test_active_route_rejects_invalid_maximum_segment_load(self) -> None:
         """Reject negative, non-finite, and non-numeric route load aggregates."""
+
         def build_route(maximum_segment_load: float) -> ActiveRouteOverview:
             return ActiveRouteOverview(
                 route_id=8,

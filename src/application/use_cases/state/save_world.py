@@ -56,7 +56,6 @@ class SaveWorldStateUseCase(AuthorizedUseCase[str]):
 
         self._clock = clock
 
-
     @requires(
         Permission.APP_SAVE_STATE,
         operation=AuthorizationOperation.WORLD_STATE_EXPORT,

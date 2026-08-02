@@ -136,4 +136,3 @@ class GetFleetOverviewCommandShould(unittest.TestCase):
 
         self.event_collector.drain.assert_called_once_with((self.use_case,))
         render_mock.assert_called_once_with(self.overview)
-

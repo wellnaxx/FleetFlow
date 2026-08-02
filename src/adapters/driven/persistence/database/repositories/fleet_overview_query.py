@@ -154,10 +154,9 @@ class PostgresFleetOverviewQuery:
             if not route_rows:
                 return selected
 
-            route_ids = sorted({
-                require_positive_int(route_row["route_id"], "route_id")
-                for route_row in route_rows
-            })
+            route_ids = sorted(
+                {require_positive_int(route_row["route_id"], "route_id") for route_row in route_rows}
+            )
             next_after_route_id = route_ids[-1]
             if next_after_route_id <= after_route_id:
                 raise DatabaseError("Active-route candidate pagination did not advance.")

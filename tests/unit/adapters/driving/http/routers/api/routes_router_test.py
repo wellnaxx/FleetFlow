@@ -29,9 +29,7 @@ class RoutesRouterShould(unittest.TestCase):
         self.app.include_router(routes_router)
         register_exception_handlers(self.app)
         self.event_collector = MagicMock()
-        self.app.dependency_overrides[routes_router_module.get_event_collector] = (
-            lambda: self.event_collector
-        )
+        self.app.dependency_overrides[routes_router_module.get_event_collector] = lambda: self.event_collector
         self.client = TestClient(self.app)
 
     def tearDown(self) -> None:
@@ -183,9 +181,7 @@ class RoutesRouterShould(unittest.TestCase):
     def test_list_in_progress_routes_returns_position_responses(self) -> None:
         use_case = MagicMock()
         route = self._route(route_id=41)
-        position = RoutePosition(
-            kind=RoutePositionKind.AT_STOP, stop_city=LocationCode("SYD")
-        )
+        position = RoutePosition(kind=RoutePositionKind.AT_STOP, stop_city=LocationCode("SYD"))
         use_case.execute.return_value = [(route, position)]
         self.app.dependency_overrides[routes_router_module.get_view_routes_in_progress_use_case] = lambda: (
             use_case

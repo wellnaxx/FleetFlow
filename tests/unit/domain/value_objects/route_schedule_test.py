@@ -177,9 +177,12 @@ class RouteSchedule_Should(unittest.TestCase):
         ]
 
         for expected_message, segment, arrival_at in invalid_segments:
-            with self.subTest(field=expected_message), self.assertRaisesRegex(
-                DomainValidationError,
-                expected_message,
+            with (
+                self.subTest(field=expected_message),
+                self.assertRaisesRegex(
+                    DomainValidationError,
+                    expected_message,
+                ),
             ):
                 RouteSchedule(
                     departure_time=DEPARTURE,
@@ -197,9 +200,12 @@ class RouteSchedule_Should(unittest.TestCase):
         ]
 
         for expected_message, segment in invalid_segments:
-            with self.subTest(field=expected_message), self.assertRaisesRegex(
-                DomainValidationError,
-                expected_message,
+            with (
+                self.subTest(field=expected_message),
+                self.assertRaisesRegex(
+                    DomainValidationError,
+                    expected_message,
+                ),
             ):
                 RouteSchedule(
                     departure_time=DEPARTURE,
@@ -220,4 +226,3 @@ class RouteSchedule_Should(unittest.TestCase):
                     ScheduledStop(location=BBB, arrival_at=DEPARTURE + timedelta(hours=2)),
                 ),
             )
-

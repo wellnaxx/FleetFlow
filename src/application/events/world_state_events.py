@@ -31,6 +31,7 @@ class WorldStateExportFailed(ApplicationEvent):
 @dataclass(frozen=True, slots=True, kw_only=True)
 class WorldStateImported(ApplicationEvent):
     """Event recorded when the world state is imported from a file."""
+
     event_version: ClassVar[int] = 2
 
     snapshot_path: str
@@ -68,6 +69,7 @@ class WorldStateSnapshotQuarantined(ApplicationEvent):
 @dataclass(frozen=True, slots=True, kw_only=True)
 class WorldStateRuntimeSwapped(ApplicationEvent):
     """Event recorded when the in-memory runtime state is atomically replaced."""
+
     event_version: ClassVar[int] = 2
 
     snapshot_path: str
@@ -79,6 +81,7 @@ class WorldStateRuntimeSwapped(ApplicationEvent):
 @dataclass(frozen=True, slots=True, kw_only=True)
 class WorldStateStartupRestored(ApplicationEvent):
     """Event recorded when world state is automatically restored at startup."""
+
     event_version: ClassVar[int] = 2
 
     snapshot_path: str

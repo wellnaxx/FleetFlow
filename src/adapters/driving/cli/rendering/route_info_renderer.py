@@ -41,6 +41,7 @@ def render_route_info(route: DeliveryRoute, *, position: RoutePosition | None = 
 
     return "\n".join(lines)
 
+
 def _get_status_info(route: DeliveryRoute, *, position: RoutePosition | None) -> str:
     pos = route.current_position() if position is None else position
     if pos.kind == RoutePositionKind.BEFORE_START:

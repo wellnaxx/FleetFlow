@@ -37,17 +37,23 @@ class RoutePathShould(unittest.TestCase):
         )
 
         for locations in invalid_collections:
-            with self.subTest(locations=locations), self.assertRaisesRegex(
-                DomainValidationError,
-                "tuple of LocationCode instances",
+            with (
+                self.subTest(locations=locations),
+                self.assertRaisesRegex(
+                    DomainValidationError,
+                    "tuple of LocationCode instances",
+                ),
             ):
                 RoutePath(locations)  # type: ignore[reportArgumentType]
 
     def test_rejects_fewer_than_two_locations(self, *_: object) -> None:
         for locations in ((), ("AAA",)):
-            with self.subTest(locations=locations), self.assertRaisesRegex(
-                DomainValidationError,
-                "at least two",
+            with (
+                self.subTest(locations=locations),
+                self.assertRaisesRegex(
+                    DomainValidationError,
+                    "at least two",
+                ),
             ):
                 RoutePath.create(*locations)
 
