@@ -5,10 +5,8 @@ from unittest.mock import MagicMock
 
 from src.adapters.driven.persistence.memory.route_repository import InMemoryRouteRepository
 from src.adapters.driven.persistence.memory.unit_of_work import InMemoryUnitOfWork
-from src.application.use_cases.routes.assign_truck_to_route import (
-    AssignTruckToRouteResult,
-    AssignTruckToRouteUseCase,
-)
+from src.application.results.assign_truck_to_route_result import AssignTruckToRouteResult
+from src.application.use_cases.routes.assign_truck_to_route import AssignTruckToRouteUseCase
 from src.application.use_cases.routes.create_route import CreateRouteUseCase
 from src.application.use_cases.routes.remove_route import RemoveRouteUseCase
 from src.domain.enums.truck_status import TruckStatus

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.exceptions.application_errors import ConflictError, NotFoundError
+from src.application.results.assign_truck_to_route_result import AssignTruckToRouteResult
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.enums.auth import Permission
@@ -50,15 +51,6 @@ class _RouteSuitabilityProbe:
     def maximum_segment_load(self) -> float:
         """Return maximum segment load for the probed route."""
         return self.assigned_weight
-
-
-@dataclass(frozen=True, slots=True)
-class AssignTruckToRouteResult:
-    """Result returned after a truck is assigned to a route."""
-
-    route_id: int
-    truck_id: int
-    route: DeliveryRoute
 
 
 class AssignTruckToRouteUseCase(AuthorizedUseCase[AssignTruckToRouteResult]):

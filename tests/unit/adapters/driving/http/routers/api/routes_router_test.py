@@ -14,8 +14,8 @@ from src.application.results.assign_packages_to_route_result import (
     PackageAssignmentError,
     PackageAssignmentSuccess,
 )
+from src.application.results.assign_truck_to_route_result import AssignTruckToRouteResult
 from src.application.use_cases.pagination import PageQuery, PageResult
-from src.application.use_cases.routes.assign_truck_to_route import AssignTruckToRouteResult
 from src.domain.entities.delivery_route import DeliveryRoute, RoutePosition, RoutePositionKind
 from src.domain.entities.truck import Truck
 from src.domain.enums.truck_status import TruckStatus
