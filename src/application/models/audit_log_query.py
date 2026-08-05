@@ -6,6 +6,7 @@ from datetime import datetime
 from src.application.enums.audit_actions import AuditAction
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.event_sources import EventSource
+from src.application.messaging.query import Query
 from src.application.models.audit_validation import (
     require_datetime,
     require_enum,
@@ -91,8 +92,12 @@ class AuditLogFilter:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class AuditLogQuery:
+class AuditLogQuery(Query):
     """Paginated audit-log read request.
+
+    This model is also the message dispatched through the application query
+    bus. Keeping one request type prevents adapter, handler, and use-case
+    pagination or filtering contracts from drifting apart.
 
     Attributes:
         page: Pagination options for the audit listing.
