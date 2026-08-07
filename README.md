@@ -5,7 +5,7 @@
 ![Architecture](https://img.shields.io/badge/Architecture-Hexagonal--style-8B5CF6)
 ![Tests](https://img.shields.io/badge/Tests-pytest%20%2B%20unittest-2563EB)
 
-FleetFlow is a logistics management system for packages, delivery routes, trucks, customers, and authenticated users across Australian freight hub locations. It currently exposes an interactive CLI and a FastAPI HTTP adapter. The internals are structured around domain entities, application use cases, services, ports, adapters, and a composition root so workflows can be reused by multiple driving adapters.
+FleetFlow is a logistics management system for packages, delivery routes, trucks, customers, and authenticated users across Australian freight hub locations. It currently exposes an interactive CLI and a FastAPI HTTP adapter. The internals are structured around domain entities, application use cases, typed messaging contracts, services, ports, adapters, and a composition root so workflows can be reused by multiple driving adapters.
 
 ## Capabilities
 
@@ -31,6 +31,9 @@ FleetFlow currently supports:
 - JWT access/refresh tokens for HTTP authentication, with token-version revocation.
 - Typed domain, application, and repository errors for expected validation, not-found, conflict, authentication, and persistence failures.
 - Centralized layer-neutral runtime validation with domain and adapter wrappers that preserve boundary-specific errors.
+- Typed command/query messages, routing keys, dispatch input-port protocols, and thin handlers covering the
+  current interactive workflows. Concrete buses, handler registration, and adapter migration remain in progress;
+  CLI and HTTP currently continue to invoke use cases directly.
 - Global FastAPI exception handlers that map expected application/domain failures to stable, sanitized HTTP responses.
 - Immutable domain and application event types with per-entity/use-case pending-event recording, event checkpoints for rollback, context-local envelope metadata, synchronous in-process dispatch, and structured event logging.
 - Browsable audit log with normalized descriptors, versioned event payloads, subscribed persistence handlers, in-memory and PostgreSQL repositories, and actor-scoped CLI/HTTP queries.
@@ -44,9 +47,9 @@ FleetFlow currently supports:
 - PostgreSQL world-state export/import through the same JSON snapshot format.
 - Startup recovery for default saved state: missing state is ignored, corrupt state is quarantined, and unexpected runtime errors still fail loudly.
 - A Postman/Newman collection covering authentication, authorization, logistics workflows, state import/export, validation, and token revocation.
-- A large automated test suite covering domain behavior, application services, use cases, CLI commands,
-  HTTP routers/dependencies, fleet-overview composition and projections, JSON and database persistence,
-  runtime swaps, snapshot import/export, and startup behavior.
+- A large automated test suite covering domain behavior, application services, use cases, typed command/query
+  handlers, CLI commands, HTTP routers/dependencies, fleet-overview composition and projections, JSON and
+  database persistence, runtime swaps, snapshot import/export, and startup behavior.
 
 ## Architecture Overview
 
@@ -69,13 +72,17 @@ FleetFlow/
 |   |       |-- cli/              # engine, menus, command factory, CLI commands
 |   |       `-- http/             # FastAPI app, routers, schemas, request dependencies
 |   |-- application/
+|   |   |-- commands/             # immutable state-changing messages and typed routing keys
 |   |   |-- dto/                  # persisted snapshot and runtime transfer objects
 |   |   |-- enums/                # application-level classifications and reasons
 |   |   |-- event_handlers/       # audit and other event consumers
 |   |   |-- eventing/             # collector, execution context, event envelopes, handler protocol
 |   |   |-- events/               # immutable application event definitions
 |   |   |-- exceptions/           # application and world-state exception hierarchy
+|   |   |-- handlers/             # thin command/query adapters over existing use cases
+|   |   |-- messaging/            # message markers, typed keys, and handler protocols
 |   |   |-- models/               # persisted/query models such as UserRecord, AuditRecord, AuditLogQuery
+|   |   |-- queries/              # immutable read messages and typed routing keys
 |   |   |-- results/              # use-case/service result objects
 |   |   |-- services/             # auth, authorization, fleet orchestration, heartbeat, reconciliation, snapshot services
 |   |   |   |-- audit_mapping/    # typed event-to-audit registry and mappings grouped by event family
@@ -90,7 +97,7 @@ FleetFlow/
 |   |   |-- services/             # map, route scheduling, and package/truck assignment policies
 |   |   `-- value_objects/        # contact/location values, route paths/schedules, and assignment decisions
 |   |-- ports/
-|   |   |-- input/                # reserved for future input-port abstractions
+|   |   |-- input/                # dispatch-only CommandBus and QueryBus protocols
 |   |   `-- output/               # repositories, fleet/audit queries, persistence, runtime, event, and vehicle ports
 |   `-- shared/                   # environment, JSON, event, and runtime-validation primitives
 |-- tests/
@@ -125,6 +132,21 @@ FastAPI Router
   -> In-memory/PostgreSQL Repository or JSON Persistence Adapter
   -> EventCollector drains pending events
   -> In-process EventDispatcher invokes subscribers
+```
+
+These diagrams describe the currently wired runtime. The application also contains the first command/query
+bus migration slice: immutable messages, result-typed routing keys, structural handler contracts, dispatch-only
+input ports, and thin handlers that adapt messages to existing use-case signatures. No concrete bus or
+composition-owned handler registry is wired yet, so CLI and HTTP adapters do not dispatch through this layer.
+
+The intended next-stage flow is:
+
+```text
+CLI Command / FastAPI Router
+  -> CommandBus or QueryBus
+  -> Typed CommandHandler or QueryHandler
+  -> Existing Application Use Case
+  -> Application Service / Output Port / Domain
 ```
 
 The composition root is `src/composition/container.py`. It wires repositories, domain services, application services, world-state persistence, runtime state management, the event collector, and use-case registries. `src/composition/runtime.py` provides cached runtime dependencies shared by the CLI and HTTP adapters. Event subscriptions are centralized in `src/composition/event_subscriptions.py`.
@@ -806,9 +828,17 @@ The existing backend can be tightened further by hardening PostgreSQL setup/migr
 
 ### Command bus layer
 
-FleetFlow already uses application use cases as the main operation boundary. A future command bus could make that boundary more formal by giving CLI commands, future API requests, authorization checks, logging, autosave behavior, and metrics one consistent dispatch path.
+FleetFlow now has immutable command/query messages for the current interactive workflows, typed routing keys,
+structural handler protocols, dispatch-only `CommandBus` and `QueryBus` input ports, and thin handlers that adapt
+those messages to existing use cases. Handler tests verify argument forwarding, result propagation, and the few
+temporary representation conversions required by current use-case signatures.
 
-This would allow the current use cases to act as command handlers without rewriting the domain model.
+The remaining work is to implement concrete bus registries, register every key/handler pair in composition, and
+migrate CLI and HTTP adapters from direct use-case calls to typed dispatch. Once that path is stable, repeated
+cross-cutting behavior such as event draining, logging, metrics, and transaction boundaries can move into a small
+bus pipeline. Straightforward handler/use-case pairs can then be merged where the separate adapter no longer adds
+value. The heartbeat-only world-state advancement workflow remains an internal orchestration path rather than a
+public command.
 
 ### HTTP API expansion
 
