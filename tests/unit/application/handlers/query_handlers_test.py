@@ -96,9 +96,7 @@ class QueryHandlersShould(unittest.TestCase):
         use_case.execute.return_value = expected
         page = PageQuery(limit=12, offset=24, include_total=True)
 
-        result = ViewUnassignedPackagesQueryHandler(use_case).handle(
-            ViewUnassignedPackagesQuery(page=page)
-        )
+        result = ViewUnassignedPackagesQueryHandler(use_case).handle(ViewUnassignedPackagesQuery(page=page))
 
         self.assertIs(result, expected)
         use_case.execute.assert_called_once_with(page)
@@ -187,6 +185,7 @@ class QueryHandlersShould(unittest.TestCase):
 
         self.assertIs(result, expected)
         use_case.execute.assert_called_once_with()
+
 
 if __name__ == "__main__":
     unittest.main()
