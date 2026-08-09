@@ -24,9 +24,11 @@ class QueryBus(Protocol):
             Value returned by the registered query handler.
 
         Raises:
-            LookupError: If no handler is registered for ``key``.
-            TypeError: If the runtime query type does not match the key's
-                declared query type.
+            MessageHandlerNotFoundError: If no handler is registered under the
+                supplied key name.
+            MessageTypeMismatchError: If the runtime query type does not match
+                the key, or the key name belongs to a registration with a
+                different query type.
             Exception: Propagates failures raised by the registered handler.
         """
         ...
