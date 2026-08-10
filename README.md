@@ -32,8 +32,9 @@ FleetFlow currently supports:
 - Typed domain, application, and repository errors for expected validation, not-found, conflict, authentication, and persistence failures.
 - Centralized layer-neutral runtime validation with domain and adapter wrappers that preserve boundary-specific errors.
 - Typed command/query messages, routing keys, dispatch input-port protocols, and thin handlers covering the
-  current interactive workflows. Concrete buses, handler registration, and adapter migration remain in progress;
-  CLI and HTTP currently continue to invoke use cases directly.
+  current interactive workflows. Synchronous in-process command and query buses are implemented;
+  composition-owned registration and adapter migration remain in progress, so CLI and HTTP currently continue to
+  invoke use cases directly.
 - Global FastAPI exception handlers that map expected application/domain failures to stable, sanitized HTTP responses.
 - Immutable domain and application event types with per-entity/use-case pending-event recording, event checkpoints for rollback, context-local envelope metadata, synchronous in-process dispatch, and structured event logging.
 - Browsable audit log with normalized descriptors, versioned event payloads, subscribed persistence handlers, in-memory and PostgreSQL repositories, and actor-scoped CLI/HTTP queries.
@@ -136,8 +137,10 @@ FastAPI Router
 
 These diagrams describe the currently wired runtime. The application also contains the first command/query
 bus migration slice: immutable messages, result-typed routing keys, structural handler contracts, dispatch-only
-input ports, and thin handlers that adapt messages to existing use-case signatures. No concrete bus or
-composition-owned handler registry is wired yet, so CLI and HTTP adapters do not dispatch through this layer.
+input ports, and thin handlers that adapt messages to existing use-case signatures. The in-process command and
+query buses support exact-type dispatch, name-based routing, duplicate-registration protection, and unchanged
+handler error propagation. Composition-owned registration remains unfinished, so CLI and HTTP adapters do not
+dispatch through this layer yet.
 
 The intended next-stage flow is:
 
@@ -833,12 +836,14 @@ structural handler protocols, dispatch-only `CommandBus` and `QueryBus` input po
 those messages to existing use cases. Handler tests verify argument forwarding, result propagation, and the few
 temporary representation conversions required by current use-case signatures.
 
-The remaining work is to implement concrete bus registries, register every key/handler pair in composition, and
-migrate CLI and HTTP adapters from direct use-case calls to typed dispatch. Once that path is stable, repeated
-cross-cutting behavior such as event draining, logging, metrics, and transaction boundaries can move into a small
-bus pipeline. Straightforward handler/use-case pairs can then be merged where the separate adapter no longer adds
-value. The heartbeat-only world-state advancement workflow remains an internal orchestration path rather than a
-public command.
+The synchronous command and query buses are implemented and tested with routing-name identity, exact message-type
+checks, duplicate-registration rejection, missing-handler reporting, and unchanged handler result/error
+propagation. The remaining work is to register every key/handler pair in composition and migrate CLI and HTTP
+adapters from direct use-case calls to typed dispatch. Once that path is stable, repeated cross-cutting behavior
+such as event draining, logging, metrics, and transaction boundaries can move into a small bus pipeline.
+Straightforward handler/use-case pairs can then be merged where the separate adapter no longer adds value. The
+heartbeat-only world-state advancement workflow remains an internal orchestration path rather than a public
+command.
 
 ### HTTP API expansion
 
