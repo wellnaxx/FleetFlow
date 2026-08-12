@@ -7,6 +7,7 @@ from src.application.use_cases.auth.change_password import ChangePasswordUseCase
 from src.application.use_cases.auth.login import LoginUseCase
 from src.application.use_cases.auth.logout import LogoutUseCase
 from src.application.use_cases.auth.register_user import RegisterUserUseCase
+from src.application.use_cases.auth.reset_password import ResetPasswordUseCase
 from src.application.use_cases.auth.who_am_i import WhoAmIUseCase
 from src.application.use_cases.customers.view_all_customers import ViewAllCustomersUseCase
 from src.application.use_cases.fleet.get_overview import GetFleetOverviewUseCase
@@ -41,6 +42,7 @@ class AuthUseCases:
     who_am_i: WhoAmIUseCase
     register_user: RegisterUserUseCase
     change_password: ChangePasswordUseCase
+    reset_password: ResetPasswordUseCase
 
 
 @dataclass(frozen=True, slots=True)

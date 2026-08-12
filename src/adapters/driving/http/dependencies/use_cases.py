@@ -11,6 +11,7 @@ from src.application.use_cases.auth.change_password import ChangePasswordUseCase
 from src.application.use_cases.auth.login import LoginUseCase
 from src.application.use_cases.auth.logout import LogoutUseCase
 from src.application.use_cases.auth.register_user import RegisterUserUseCase
+from src.application.use_cases.auth.reset_password import ResetPasswordUseCase
 from src.application.use_cases.customers.view_all_customers import ViewAllCustomersUseCase
 from src.application.use_cases.fleet.get_overview import GetFleetOverviewUseCase
 from src.application.use_cases.packages.create_package import CreatePackageUseCase
@@ -91,6 +92,27 @@ def get_change_password_use_case(
         HTTPException: Raised by `get_current_user` when authentication fails.
     """
     return ChangePasswordUseCase(auth=auth_service, authz=principal.authz, clock=container.clock)
+
+
+def get_reset_password_use_case(
+    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    container: Annotated[Container, Depends(get_container)],
+) -> ResetPasswordUseCase:
+    """Build the password-reset use case for the authenticated request.
+
+    Args:
+        principal: Authenticated HTTP principal carrying request-scoped authorization.
+        auth_service: Shared authentication service.
+        container: Application dependency container.
+
+    Returns:
+        Administrative password-reset use case bound to request-scoped authorization.
+
+    Raises:
+        HTTPException: Raised by `get_current_user` when authentication fails.
+    """
+    return ResetPasswordUseCase(auth=auth_service, authz=principal.authz, clock=container.clock)
 
 
 def get_logout_use_case(

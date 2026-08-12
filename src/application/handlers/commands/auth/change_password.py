@@ -1,7 +1,6 @@
-"""Command handlers for self-service and administrative password updates."""
+"""Command handler for self-service password changes."""
 
 from src.application.commands.auth.change_password import ChangeOwnPasswordCommand
-from src.application.commands.auth.reset_password import ResetUserPasswordCommand
 from src.application.use_cases.auth.change_password import ChangePasswordUseCase
 
 
@@ -27,34 +26,7 @@ class ChangeOwnPasswordCommandHandler:
             Exception: Propagates authorization, authentication, validation,
                 persistence, and other failures raised by the use case.
         """
-        self._use_case.execute_current_user(
-            new_password=command.new_password,
-            old_password=command.current_password,
-        )
-
-
-class ResetUserPasswordCommandHandler:
-    """Adapt an administrative reset command to the current password workflow."""
-
-    def __init__(self, use_case: ChangePasswordUseCase) -> None:
-        """Initialize the handler with the existing password use case.
-
-        Args:
-            use_case: Workflow that authorizes and performs password resets.
-        """
-        self._use_case = use_case
-
-    def handle(self, command: ResetUserPasswordCommand) -> None:
-        """Reset the target user's password.
-
-        Args:
-            command: Target username and replacement password.
-
-        Raises:
-            Exception: Propagates authorization, validation, persistence, and
-                other failures raised by the use case.
-        """
         self._use_case.execute(
-            username=command.username,
+            current_password=command.current_password,
             new_password=command.new_password,
         )

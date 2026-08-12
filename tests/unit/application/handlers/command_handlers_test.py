@@ -17,13 +17,11 @@ from src.application.commands.routes.create_route import CreateRouteCommand
 from src.application.commands.routes.remove_route import RemoveRouteCommand
 from src.application.commands.state.load_world import LoadWorldCommand
 from src.application.commands.state.save_world import SaveWorldCommand
-from src.application.handlers.commands.auth.change_password import (
-    ChangeOwnPasswordCommandHandler,
-    ResetUserPasswordCommandHandler,
-)
+from src.application.handlers.commands.auth.change_password import ChangeOwnPasswordCommandHandler
 from src.application.handlers.commands.auth.login import LoginCommandHandler
 from src.application.handlers.commands.auth.logout import LogoutCommandHandler
 from src.application.handlers.commands.auth.register_user import RegisterUserCommandHandler
+from src.application.handlers.commands.auth.reset_password import ResetUserPasswordCommandHandler
 from src.application.handlers.commands.packages.create_package import CreatePackageCommandHandler
 from src.application.handlers.commands.packages.remove_package import RemovePackageCommandHandler
 from src.application.handlers.commands.routes.assign_packages_to_route import (
@@ -103,8 +101,7 @@ class CommandHandlersShould(unittest.TestCase):
         )
 
         self.assertIsNone(result)
-        use_case.execute_current_user.assert_called_once_with(new_password="new", old_password="old")
-        use_case.execute.assert_not_called()
+        use_case.execute.assert_called_once_with(current_password="old", new_password="new")
 
     def test_reset_password_selects_administrative_flow(self) -> None:
         use_case = MagicMock()
@@ -115,7 +112,6 @@ class CommandHandlersShould(unittest.TestCase):
 
         self.assertIsNone(result)
         use_case.execute.assert_called_once_with(username="employee", new_password="new")
-        use_case.execute_current_user.assert_not_called()
 
     def test_create_package_delegates_delivery_and_customer_fields(self) -> None:
         use_case = MagicMock()

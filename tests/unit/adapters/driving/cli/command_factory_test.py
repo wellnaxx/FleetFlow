@@ -20,6 +20,7 @@ class CommandFactoryShould(unittest.TestCase):
                 who_am_i=MagicMock(),
                 register_user=MagicMock(),
                 change_password=MagicMock(),
+                reset_password=MagicMock(),
             ),
             package_cases=SimpleNamespace(
                 create=MagicMock(),
@@ -98,7 +99,8 @@ class CommandFactoryShould(unittest.TestCase):
                 ["alice", "employee", "Alice"],
                 container.auth_cases.register_user,
             ),
-            ("changepassword alice", "changepassword", ["alice"], container.auth_cases.change_password),
+            ("changepassword", "changepassword", [], container.auth_cases.change_password),
+            ("resetpassword alice", "resetpassword", ["alice"], container.auth_cases.reset_password),
             (
                 'createpackage "SYD" "MEL" 5 "Alice"',
                 "createpackage",

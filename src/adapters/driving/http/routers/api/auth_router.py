@@ -19,6 +19,7 @@ from src.adapters.driving.http.dependencies.use_cases import (
     get_login_use_case,
     get_logout_use_case,
     get_register_user_use_case,
+    get_reset_password_use_case,
 )
 from src.adapters.driving.http.schemas.auth import (
     ChangeOwnPasswordRequest,
@@ -38,6 +39,7 @@ from src.application.use_cases.auth.change_password import ChangePasswordUseCase
 from src.application.use_cases.auth.login import LoginUseCase
 from src.application.use_cases.auth.logout import LogoutUseCase
 from src.application.use_cases.auth.register_user import RegisterUserUseCase
+from src.application.use_cases.auth.reset_password import ResetPasswordUseCase
 from src.composition.runtime import get_user_repository
 from src.domain.enums.auth import Role
 from src.ports.output.user_repository import UserRepositoryPort
@@ -211,9 +213,9 @@ def change_password(
         execute_and_drain_events(
             recorder=use_case,
             event_collector=event_collector,
-            action=lambda: use_case.execute_current_user(
+            action=lambda: use_case.execute(
+                current_password=request.current_password,
                 new_password=request.new_password,
-                old_password=request.current_password,
             ),
         )
     except AuthenticationError as exc:
@@ -224,7 +226,7 @@ def change_password(
 def reset_password(
     username: str,
     request: ResetUserPasswordRequest,
-    use_case: Annotated[ChangePasswordUseCase, Depends(get_change_password_use_case)],
+    use_case: Annotated[ResetPasswordUseCase, Depends(get_reset_password_use_case)],
     event_collector: Annotated[EventCollector, Depends(get_event_collector)],
 ) -> None:
     """Reset another user's password. This endpoint is intended for admin use.
@@ -232,7 +234,7 @@ def reset_password(
     Args:
         username: Username of the user whose password should be reset.
         request: New password request body.
-        use_case: Use case for changing passwords, injected by FastAPI.
+        use_case: Administrative password-reset use case injected by FastAPI.
         event_collector: Collector used to publish password-reset events.
 
     Returns:

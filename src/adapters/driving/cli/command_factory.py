@@ -10,6 +10,7 @@ from src.adapters.driving.cli.commands.auth_change_password import AuthChangePas
 from src.adapters.driving.cli.commands.auth_login import AuthLogin
 from src.adapters.driving.cli.commands.auth_logout import AuthLogout
 from src.adapters.driving.cli.commands.auth_register import AuthRegisterUser
+from src.adapters.driving.cli.commands.auth_reset_password import AuthResetPassword
 from src.adapters.driving.cli.commands.auth_whoami import AuthWhoAmI
 from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
 from src.adapters.driving.cli.commands.create_package import CreatePackage
@@ -46,6 +47,9 @@ _CONTAINER_COMMANDS: dict[str, CommandBuilder] = {
     ),
     "changepassword": lambda container, params: AuthChangePassword(
         params, container.auth_cases.change_password, container.event_collector
+    ),
+    "resetpassword": lambda container, params: AuthResetPassword(
+        params, container.auth_cases.reset_password, container.event_collector
     ),
     "save": lambda container, params: SaveState(params, container.state_cases.save, container.event_collector),
     "load": lambda container, params: LoadState(params, container.state_cases.load, container.event_collector),

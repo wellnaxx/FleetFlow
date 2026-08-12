@@ -1,4 +1,4 @@
-"""CLI command for self-service and manager password changes."""
+"""CLI command for changing the current user's password."""
 
 import getpass
 
@@ -8,47 +8,40 @@ from src.application.use_cases.auth.change_password import ChangePasswordUseCase
 
 
 class AuthChangePassword(EventDrainingCommand[ChangePasswordUseCase]):
-    """Change the current user's password or reset another user's password.
+    """Run the self-service password-change workflow.
 
     Usage:
-        changepassword: self-service flow prompting old/new/confirm.
-        changepassword <username>: manager override prompting new/confirm.
+        changepassword
     """
 
     skips_heartbeat = True
     autosaves_state = False
 
     def execute(self) -> str:
-        """Run the password-change flow.
+        """Prompt for current and replacement passwords.
 
         Returns:
-            CLI confirmation text.
+            Password-change confirmation text.
 
         Raises:
-            PermissionError: If the caller is not authorized.
-            ValueError: If password confirmation or validation fails.
+            PermissionError: If no user is authenticated.
+            ValueError: If arguments are supplied or password confirmation
+                validation fails.
+            AuthenticationError: If the current password is incorrect.
         """
-        target = self._params[0].strip().lower() if self._params else None
+        if self._params:
+            raise ValueError("changepassword does not accept arguments.")
 
-        if target:
-            new_pw = getpass.getpass(f"New password for '{target}': ")
-            confirm = getpass.getpass("Confirm new password: ")
-            validate_passwords(new_pw, confirm)
-
-            self._run_and_drain(self._use_case, lambda: self._use_case.execute(target, new_pw))
-            return f"Password reset for '{target}'."
-
-        old_pw = getpass.getpass("Old password: ")
-        new_pw = getpass.getpass("New password: ")
-        confirm = getpass.getpass("Confirm new password: ")
-        validate_passwords(new_pw, confirm)
+        current_password = getpass.getpass("Current password: ")
+        new_password = getpass.getpass("New password: ")
+        confirmation = getpass.getpass("Confirm new password: ")
+        validate_passwords(new_password, confirmation)
 
         self._run_and_drain(
             self._use_case,
-            lambda: self._use_case.execute_current_user(
-                new_pw,
-                old_password=old_pw,
+            lambda: self._use_case.execute(
+                current_password=current_password,
+                new_password=new_password,
             ),
         )
-
         return "Password changed."

@@ -583,6 +583,7 @@ The command registry currently supports:
 - `whoami`
 - `registeruser`
 - `changepassword`
+- `resetpassword`
 - `save`
 - `load`
 - `viewauditlogs`
@@ -612,7 +613,8 @@ save state.json
 load state.json
 login admin
 whoami
-changepassword admin
+changepassword
+resetpassword employee
 logout
 ```
 

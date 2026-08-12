@@ -45,6 +45,7 @@ from src.application.use_cases.auth.change_password import ChangePasswordUseCase
 from src.application.use_cases.auth.login import LoginUseCase
 from src.application.use_cases.auth.logout import LogoutUseCase
 from src.application.use_cases.auth.register_user import RegisterUserUseCase
+from src.application.use_cases.auth.reset_password import ResetPasswordUseCase
 from src.application.use_cases.auth.who_am_i import WhoAmIUseCase
 from src.application.use_cases.customers.view_all_customers import ViewAllCustomersUseCase
 from src.application.use_cases.fleet.get_overview import GetFleetOverviewUseCase
@@ -253,7 +254,8 @@ class Container:
             logout=LogoutUseCase(self.auth.user_repository, self.auth, self.authz, self.clock),
             who_am_i=WhoAmIUseCase(self.auth),
             register_user=RegisterUserUseCase(self.auth, self.authz),
-            change_password=ChangePasswordUseCase(self.auth, self.authz),
+            change_password=ChangePasswordUseCase(self.auth, self.authz, self.clock),
+            reset_password=ResetPasswordUseCase(self.auth, self.authz, self.clock),
         )
 
         self.customer_cases = CustomerUseCases(

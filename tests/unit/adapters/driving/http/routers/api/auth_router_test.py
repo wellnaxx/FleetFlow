@@ -167,9 +167,9 @@ class AuthRouterShould(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 204)
-        use_case.execute_current_user.assert_called_once_with(
+        use_case.execute.assert_called_once_with(
+            current_password="OldSecret123!",
             new_password="NewSecret123!",
-            old_password="OldSecret123!",
         )
         event_collector.drain.assert_called_once_with((use_case,))
 
@@ -177,7 +177,7 @@ class AuthRouterShould(unittest.TestCase):
         principal = self._principal()
         use_case = MagicMock()
         event_collector = MagicMock()
-        use_case.execute_current_user.side_effect = AuthenticationError("Old password incorrect.")
+        use_case.execute.side_effect = AuthenticationError("Old password incorrect.")
         self.app.dependency_overrides[auth_router_module.get_current_user] = lambda: principal
         self.app.dependency_overrides[auth_router_module.get_change_password_use_case] = lambda: use_case
         self.app.dependency_overrides[auth_router_module.get_event_collector] = lambda: event_collector
@@ -197,7 +197,7 @@ class AuthRouterShould(unittest.TestCase):
     def test_change_password_returns_forbidden_for_permission_error(self) -> None:
         principal = self._principal()
         use_case = MagicMock()
-        use_case.execute_current_user.side_effect = PermissionError("Unauthenticated")
+        use_case.execute.side_effect = PermissionError("Unauthenticated")
         self.app.dependency_overrides[auth_router_module.get_current_user] = lambda: principal
         self.app.dependency_overrides[auth_router_module.get_change_password_use_case] = lambda: use_case
 
@@ -215,7 +215,7 @@ class AuthRouterShould(unittest.TestCase):
     def test_reset_password_resets_target_password(self) -> None:
         use_case = MagicMock()
         event_collector = MagicMock()
-        self.app.dependency_overrides[auth_router_module.get_change_password_use_case] = lambda: use_case
+        self.app.dependency_overrides[auth_router_module.get_reset_password_use_case] = lambda: use_case
         self.app.dependency_overrides[auth_router_module.get_event_collector] = lambda: event_collector
 
         response = self.client.post(
@@ -230,7 +230,7 @@ class AuthRouterShould(unittest.TestCase):
     def test_reset_password_returns_bad_request_for_invalid_password(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = ValidationError("Password must be at least 8 characters.")
-        self.app.dependency_overrides[auth_router_module.get_change_password_use_case] = lambda: use_case
+        self.app.dependency_overrides[auth_router_module.get_reset_password_use_case] = lambda: use_case
 
         response = self.client.post(
             "/auth/users/bob/reset-password",
@@ -243,7 +243,7 @@ class AuthRouterShould(unittest.TestCase):
     def test_reset_password_returns_forbidden_for_permission_error(self) -> None:
         use_case = MagicMock()
         use_case.execute.side_effect = PermissionError("Missing permission: ADMIN_USER")
-        self.app.dependency_overrides[auth_router_module.get_change_password_use_case] = lambda: use_case
+        self.app.dependency_overrides[auth_router_module.get_reset_password_use_case] = lambda: use_case
 
         response = self.client.post(
             "/auth/users/bob/reset-password",
