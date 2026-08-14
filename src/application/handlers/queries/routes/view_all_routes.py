@@ -17,7 +17,7 @@ class ViewAllRoutesQueryHandler:
         """
         self._use_case = use_case
 
-    def handle(self, query: ViewAllRoutesQuery) -> PageResult[DeliveryRoute]:
+    def execute(self, query: ViewAllRoutesQuery) -> PageResult[DeliveryRoute]:
         """Return routes selected by the pagination request.
 
         Args:

@@ -16,7 +16,7 @@ class ViewPackageQueryHandler:
         """
         self._use_case = use_case
 
-    def handle(self, query: ViewPackageQuery) -> DeliveryPackage:
+    def execute(self, query: ViewPackageQuery) -> DeliveryPackage:
         """Return the identified package.
 
         Args:

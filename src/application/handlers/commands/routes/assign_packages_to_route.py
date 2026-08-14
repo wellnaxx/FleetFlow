@@ -16,7 +16,7 @@ class AssignPackagesToRouteCommandHandler:
         """
         self._use_case = use_case
 
-    def handle(self, command: AssignPackagesToRouteCommand) -> AssignPackagesToRouteResult:
+    def execute(self, command: AssignPackagesToRouteCommand) -> AssignPackagesToRouteResult:
         """Assign the requested packages to the target route.
 
         Args:

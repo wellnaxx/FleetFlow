@@ -53,7 +53,7 @@ class ReturningHandler:
         self.result = result
         self.queries: list[ExampleQuery] = []
 
-    def handle(self, query: ExampleQuery) -> object:
+    def execute(self, query: ExampleQuery) -> object:
         self.queries.append(query)
         return self.result
 
@@ -64,7 +64,7 @@ class RaisingHandler:
     def __init__(self, error: Exception) -> None:
         self.error = error
 
-    def handle(self, query: ExampleQuery) -> object:
+    def execute(self, query: ExampleQuery) -> object:
         del query
         raise self.error
 

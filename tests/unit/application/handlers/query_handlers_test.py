@@ -53,7 +53,7 @@ class QueryHandlersShould(unittest.TestCase):
             filters=AuditLogFilter(event_type="PackageCreated"),
         )
 
-        result = ViewAuditsQueryHandler(use_case).handle(query)
+        result = ViewAuditsQueryHandler(use_case).execute(query)
 
         self.assertIs(result, expected)
         use_case.execute.assert_called_once_with(query)
@@ -63,7 +63,7 @@ class QueryHandlersShould(unittest.TestCase):
         expected = object()
         use_case.execute.return_value = expected
 
-        result = WhoAmIQueryHandler(use_case).handle(WhoAmIQuery())
+        result = WhoAmIQueryHandler(use_case).execute(WhoAmIQuery())
 
         self.assertIs(result, expected)
         use_case.execute.assert_called_once_with()
@@ -74,7 +74,7 @@ class QueryHandlersShould(unittest.TestCase):
         use_case.execute.return_value = expected
         page = PageQuery(limit=12, offset=24, include_total=True)
 
-        result = ViewAllCustomersQueryHandler(use_case).handle(ViewAllCustomersQuery(page=page))
+        result = ViewAllCustomersQueryHandler(use_case).execute(ViewAllCustomersQuery(page=page))
 
         self.assertIs(result, expected)
         use_case.execute.assert_called_once_with(page)
@@ -85,7 +85,7 @@ class QueryHandlersShould(unittest.TestCase):
         use_case.execute.return_value = expected
         page = PageQuery(limit=12, offset=24, include_total=True)
 
-        result = ViewAllPackagesQueryHandler(use_case).handle(ViewAllPackagesQuery(page=page))
+        result = ViewAllPackagesQueryHandler(use_case).execute(ViewAllPackagesQuery(page=page))
 
         self.assertIs(result, expected)
         use_case.execute.assert_called_once_with(page)
@@ -96,7 +96,7 @@ class QueryHandlersShould(unittest.TestCase):
         use_case.execute.return_value = expected
         page = PageQuery(limit=12, offset=24, include_total=True)
 
-        result = ViewUnassignedPackagesQueryHandler(use_case).handle(ViewUnassignedPackagesQuery(page=page))
+        result = ViewUnassignedPackagesQueryHandler(use_case).execute(ViewUnassignedPackagesQuery(page=page))
 
         self.assertIs(result, expected)
         use_case.execute.assert_called_once_with(page)
@@ -107,7 +107,7 @@ class QueryHandlersShould(unittest.TestCase):
         use_case.execute.return_value = expected
         page = PageQuery(limit=12, offset=24, include_total=True)
 
-        result = ViewAllRoutesQueryHandler(use_case).handle(ViewAllRoutesQuery(page=page))
+        result = ViewAllRoutesQueryHandler(use_case).execute(ViewAllRoutesQuery(page=page))
 
         self.assertIs(result, expected)
         use_case.execute.assert_called_once_with(page)
@@ -117,7 +117,7 @@ class QueryHandlersShould(unittest.TestCase):
         expected = object()
         use_case.execute.return_value = expected
 
-        result = GetFleetOverviewQueryHandler(use_case).handle(GetFleetOverviewQuery(active_route_limit=25))
+        result = GetFleetOverviewQueryHandler(use_case).execute(GetFleetOverviewQuery(active_route_limit=25))
 
         self.assertIs(result, expected)
         use_case.execute.assert_called_once_with(25)
@@ -127,7 +127,7 @@ class QueryHandlersShould(unittest.TestCase):
         expected = object()
         use_case.execute.return_value = expected
 
-        result = ViewPackageQueryHandler(use_case).handle(ViewPackageQuery(package_id=4))
+        result = ViewPackageQueryHandler(use_case).execute(ViewPackageQuery(package_id=4))
 
         self.assertIs(result, expected)
         use_case.execute.assert_called_once_with(4)
@@ -137,7 +137,7 @@ class QueryHandlersShould(unittest.TestCase):
         expected = object()
         use_case.execute.return_value = expected
 
-        result = FindSuitableRoutesForPackageQueryHandler(use_case).handle(
+        result = FindSuitableRoutesForPackageQueryHandler(use_case).execute(
             FindSuitableRoutesForPackageQuery(package_id=4)
         )
 
@@ -149,7 +149,7 @@ class QueryHandlersShould(unittest.TestCase):
         expected = object()
         use_case.execute.return_value = expected
 
-        result = FindSuitableTrucksForRouteQueryHandler(use_case).handle(
+        result = FindSuitableTrucksForRouteQueryHandler(use_case).execute(
             FindSuitableTrucksForRouteQuery(route_id=6)
         )
 
@@ -161,7 +161,7 @@ class QueryHandlersShould(unittest.TestCase):
         expected = object()
         use_case.execute.return_value = expected
 
-        result = ViewRouteQueryHandler(use_case).handle(ViewRouteQuery(route_id=6))
+        result = ViewRouteQueryHandler(use_case).execute(ViewRouteQuery(route_id=6))
 
         self.assertIs(result, expected)
         use_case.execute.assert_called_once_with(6)
@@ -171,7 +171,7 @@ class QueryHandlersShould(unittest.TestCase):
         expected = object()
         use_case.execute.return_value = expected
 
-        result = ViewRoutesInProgressQueryHandler(use_case).handle(ViewRoutesInProgressQuery(now=NOW))
+        result = ViewRoutesInProgressQueryHandler(use_case).execute(ViewRoutesInProgressQuery(now=NOW))
 
         self.assertIs(result, expected)
         use_case.execute.assert_called_once_with(NOW)
@@ -181,7 +181,7 @@ class QueryHandlersShould(unittest.TestCase):
         expected = object()
         use_case.execute.return_value = expected
 
-        result = ViewAllTrucksQueryHandler(use_case).handle(ViewAllTrucksQuery())
+        result = ViewAllTrucksQueryHandler(use_case).execute(ViewAllTrucksQuery())
 
         self.assertIs(result, expected)
         use_case.execute.assert_called_once_with()

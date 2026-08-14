@@ -16,7 +16,7 @@ class AssignTruckToRouteCommandHandler:
         """
         self._use_case = use_case
 
-    def handle(self, command: AssignTruckToRouteCommand) -> AssignTruckToRouteResult:
+    def execute(self, command: AssignTruckToRouteCommand) -> AssignTruckToRouteResult:
         """Assign the requested truck to the target route.
 
         Args:

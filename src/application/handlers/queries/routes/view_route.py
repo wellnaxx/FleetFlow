@@ -16,7 +16,7 @@ class ViewRouteQueryHandler:
         """
         self._use_case = use_case
 
-    def handle(self, query: ViewRouteQuery) -> DeliveryRoute:
+    def execute(self, query: ViewRouteQuery) -> DeliveryRoute:
         """Return the identified route.
 
         Args:

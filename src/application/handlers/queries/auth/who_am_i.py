@@ -16,7 +16,7 @@ class WhoAmIQueryHandler:
         """
         self._use_case = use_case
 
-    def handle(self, query: WhoAmIQuery) -> CurrentUserPrincipal | None:
+    def execute(self, query: WhoAmIQuery) -> CurrentUserPrincipal | None:
         """Return the current principal, if one is authenticated.
 
         Args:

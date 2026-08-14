@@ -7,14 +7,15 @@ from src.application.messaging.query import Query
 
 
 class CommandHandler[C: Command, R](Protocol):
-    """Handle one concrete command type and produce its typed result.
+    """Execute one concrete command type and produce its typed result.
 
-    Concrete handlers satisfy this protocol structurally and do not need to
-    inherit from it. Handler registration supplies the corresponding
-    ``CommandKey[C, R]`` and is owned by composition rather than the handler.
+    Application use cases and temporary command adapters satisfy this protocol
+    structurally and do not need to inherit from it. Registration supplies the
+    corresponding ``CommandKey[C, R]`` and is owned by composition rather than
+    the executor.
     """
 
-    def handle(self, command: C) -> R:
+    def execute(self, command: C) -> R:
         """Execute the application operation represented by a command.
 
         Args:
@@ -25,20 +26,21 @@ class CommandHandler[C: Command, R](Protocol):
 
         Raises:
             Exception: Propagates application, domain, persistence, and other
-                failures raised while handling the command.
+                failures raised while executing the command.
         """
         ...
 
 
 class QueryHandler[Q: Query, R](Protocol):
-    """Handle one concrete query type and produce its typed projection.
+    """Execute one concrete query type and produce its typed projection.
 
-    Concrete handlers satisfy this protocol structurally. They do not own
-    routing keys or registration; composition binds a handler to the matching
-    ``QueryKey[Q, R]`` when constructing the query bus.
+    Application use cases and temporary query adapters satisfy this protocol
+    structurally. They do not own routing keys or registration; composition
+    binds an executor to the matching ``QueryKey[Q, R]`` when constructing the
+    query bus.
     """
 
-    def handle(self, query: Q) -> R:
+    def execute(self, query: Q) -> R:
         """Execute the read operation represented by a query.
 
         Args:
@@ -49,6 +51,6 @@ class QueryHandler[Q: Query, R](Protocol):
 
         Raises:
             Exception: Propagates application, domain, persistence, and other
-                failures raised while handling the query.
+                failures raised while executing the query.
         """
         ...

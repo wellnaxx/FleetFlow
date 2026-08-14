@@ -17,7 +17,7 @@ class ViewUnassignedPackagesQueryHandler:
         """
         self._use_case = use_case
 
-    def handle(self, query: ViewUnassignedPackagesQuery) -> PageResult[DeliveryPackage]:
+    def execute(self, query: ViewUnassignedPackagesQuery) -> PageResult[DeliveryPackage]:
         """Return unassigned packages selected by pagination.
 
         Args:

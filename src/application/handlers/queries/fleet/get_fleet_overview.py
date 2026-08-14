@@ -16,7 +16,7 @@ class GetFleetOverviewQueryHandler:
         """
         self._use_case = use_case
 
-    def handle(self, query: GetFleetOverviewQuery) -> FleetOverview:
+    def execute(self, query: GetFleetOverviewQuery) -> FleetOverview:
         """Return the current fleet projection with a bounded active set.
 
         Args:

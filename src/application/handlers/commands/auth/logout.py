@@ -15,7 +15,7 @@ class LogoutCommandHandler:
         """
         self._use_case = use_case
 
-    def handle(self, command: LogoutCommand) -> None:
+    def execute(self, command: LogoutCommand) -> None:
         """Terminate the authenticated session represented by context.
 
         Args:

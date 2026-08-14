@@ -16,7 +16,7 @@ class RemovePackageCommandHandler:
         """
         self._use_case = use_case
 
-    def handle(self, command: RemovePackageCommand) -> RemovePackageResult:
+    def execute(self, command: RemovePackageCommand) -> RemovePackageResult:
         """Remove the identified package.
 
         Args:

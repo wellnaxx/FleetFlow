@@ -17,7 +17,7 @@ class ViewRoutesInProgressQueryHandler:
         """
         self._use_case = use_case
 
-    def handle(
+    def execute(
         self,
         query: ViewRoutesInProgressQuery,
     ) -> list[tuple[DeliveryRoute, RoutePosition]]:

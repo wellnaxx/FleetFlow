@@ -15,7 +15,7 @@ class ResetUserPasswordCommandHandler:
         """
         self._use_case = use_case
 
-    def handle(self, command: ResetUserPasswordCommand) -> None:
+    def execute(self, command: ResetUserPasswordCommand) -> None:
         """Reset the target user's password.
 
         Args:

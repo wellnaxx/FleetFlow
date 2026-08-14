@@ -53,7 +53,7 @@ class ReturningHandler:
         self.result = result
         self.commands: list[ExampleCommand] = []
 
-    def handle(self, command: ExampleCommand) -> object:
+    def execute(self, command: ExampleCommand) -> object:
         self.commands.append(command)
         return self.result
 
@@ -64,7 +64,7 @@ class RaisingHandler:
     def __init__(self, error: Exception) -> None:
         self.error = error
 
-    def handle(self, command: ExampleCommand) -> object:
+    def execute(self, command: ExampleCommand) -> object:
         del command
         raise self.error
 

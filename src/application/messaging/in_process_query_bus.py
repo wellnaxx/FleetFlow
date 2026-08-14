@@ -70,7 +70,7 @@ class InProcessQueryBus:
                     f"Registration {key.name!r} expects {key.query_type.__name__}, "
                     f"got {type(query).__name__}."
                 )
-            return handler.handle(cast(Q, query))
+            return handler.execute(cast(Q, query))
 
         self._handlers[key.name] = _QueryRegistration(
             query_type=key.query_type,

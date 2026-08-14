@@ -16,7 +16,7 @@ class ViewAllTrucksQueryHandler:
         """
         self._use_case = use_case
 
-    def handle(self, query: ViewAllTrucksQuery) -> list[Truck]:
+    def execute(self, query: ViewAllTrucksQuery) -> list[Truck]:
         """Return all visible trucks.
 
         Args:

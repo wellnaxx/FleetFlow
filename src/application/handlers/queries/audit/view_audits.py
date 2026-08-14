@@ -17,7 +17,7 @@ class ViewAuditsQueryHandler:
         """
         self._use_case = use_case
 
-    def handle(self, query: AuditLogQuery) -> PageResult[AuditRecord]:
+    def execute(self, query: AuditLogQuery) -> PageResult[AuditRecord]:
         """Return the audit records visible for the supplied query.
 
         Args:

@@ -16,7 +16,7 @@ class RemoveRouteCommandHandler:
         """
         self._use_case = use_case
 
-    def handle(self, command: RemoveRouteCommand) -> DeliveryRoute:
+    def execute(self, command: RemoveRouteCommand) -> DeliveryRoute:
         """Remove the identified route and coordinate assignment cleanup.
 
         Args:

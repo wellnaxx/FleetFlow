@@ -16,7 +16,7 @@ class ChangeOwnPasswordCommandHandler:
         """
         self._use_case = use_case
 
-    def handle(self, command: ChangeOwnPasswordCommand) -> None:
+    def execute(self, command: ChangeOwnPasswordCommand) -> None:
         """Change the authenticated principal's password.
 
         Args:

@@ -16,7 +16,7 @@ class RegisterUserCommandHandler:
         """
         self._use_case = use_case
 
-    def handle(self, command: RegisterUserCommand) -> UserRecord:
+    def execute(self, command: RegisterUserCommand) -> UserRecord:
         """Register the requested user account.
 
         Args:

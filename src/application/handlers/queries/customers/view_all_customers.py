@@ -17,7 +17,7 @@ class ViewAllCustomersQueryHandler:
         """
         self._use_case = use_case
 
-    def handle(self, query: ViewAllCustomersQuery) -> PageResult[Customer]:
+    def execute(self, query: ViewAllCustomersQuery) -> PageResult[Customer]:
         """Return customers selected by the pagination request.
 
         Args:

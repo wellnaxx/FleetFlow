@@ -16,7 +16,7 @@ class CreateRouteCommandHandler:
         """
         self._use_case = use_case
 
-    def handle(self, command: CreateRouteCommand) -> DeliveryRoute:
+    def execute(self, command: CreateRouteCommand) -> DeliveryRoute:
         """Create a route from its ordered locations and departure time.
 
         Args:

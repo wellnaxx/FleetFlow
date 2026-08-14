@@ -17,7 +17,7 @@ class ViewAllPackagesQueryHandler:
         """
         self._use_case = use_case
 
-    def handle(self, query: ViewAllPackagesQuery) -> PageResult[DeliveryPackage]:
+    def execute(self, query: ViewAllPackagesQuery) -> PageResult[DeliveryPackage]:
         """Return packages selected by the pagination request.
 
         Args:

@@ -16,7 +16,7 @@ class LoginCommandHandler:
         """
         self._use_case = use_case
 
-    def handle(self, command: LoginCommand) -> LoginResult:
+    def execute(self, command: LoginCommand) -> LoginResult:
         """Authenticate the supplied credentials.
 
         Args:

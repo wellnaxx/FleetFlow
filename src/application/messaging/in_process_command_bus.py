@@ -70,7 +70,7 @@ class InProcessCommandBus:
                     f"Registration {key.name!r} expects {key.command_type.__name__}, "
                     f"got {type(command).__name__}."
                 )
-            return handler.handle(cast(C, command))
+            return handler.execute(cast(C, command))
 
         self._handlers[key.name] = _CommandRegistration(
             command_type=key.command_type,

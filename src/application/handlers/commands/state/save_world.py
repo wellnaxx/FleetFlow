@@ -15,7 +15,7 @@ class SaveWorldCommandHandler:
         """
         self._use_case = use_case
 
-    def handle(self, command: SaveWorldCommand) -> str:
+    def execute(self, command: SaveWorldCommand) -> str:
         """Save world state to the requested path.
 
         Args:

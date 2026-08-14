@@ -16,7 +16,7 @@ class CreatePackageCommandHandler:
         """
         self._use_case = use_case
 
-    def handle(self, command: CreatePackageCommand) -> DeliveryPackage:
+    def execute(self, command: CreatePackageCommand) -> DeliveryPackage:
         """Create a package from the command fields.
 
         Args:

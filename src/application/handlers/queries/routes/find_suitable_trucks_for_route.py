@@ -16,7 +16,7 @@ class FindSuitableTrucksForRouteQueryHandler:
         """
         self._use_case = use_case
 
-    def handle(self, query: FindSuitableTrucksForRouteQuery) -> list[Truck]:
+    def execute(self, query: FindSuitableTrucksForRouteQuery) -> list[Truck]:
         """Return trucks suitable for the identified route.
 
         Args:

@@ -15,7 +15,7 @@ class LoadWorldCommandHandler:
         """
         self._use_case = use_case
 
-    def handle(self, command: LoadWorldCommand) -> str:
+    def execute(self, command: LoadWorldCommand) -> str:
         """Load world state from the requested path.
 
         Args:

@@ -20,7 +20,7 @@ class FindSuitableRoutesForPackageQueryHandler:
         """
         self._use_case = use_case
 
-    def handle(self, query: FindSuitableRoutesForPackageQuery) -> list[SuitableRouteForPackage]:
+    def execute(self, query: FindSuitableRoutesForPackageQuery) -> list[SuitableRouteForPackage]:
         """Return routes suitable for the identified package.
 
         Args:

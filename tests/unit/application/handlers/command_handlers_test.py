@@ -45,7 +45,7 @@ class CommandHandlersShould(unittest.TestCase):
         expected = object()
         use_case.execute.return_value = expected
 
-        result = LoginCommandHandler(use_case).handle(LoginCommand(username="alex", password="secret"))
+        result = LoginCommandHandler(use_case).execute(LoginCommand(username="alex", password="secret"))
 
         self.assertIs(result, expected)
         use_case.execute.assert_called_once_with("alex", "secret")
@@ -56,14 +56,14 @@ class CommandHandlersShould(unittest.TestCase):
         use_case.execute.side_effect = failure
 
         with self.assertRaises(RuntimeError) as raised:
-            LoginCommandHandler(use_case).handle(LoginCommand(username="alex", password="secret"))
+            LoginCommandHandler(use_case).execute(LoginCommand(username="alex", password="secret"))
 
         self.assertIs(raised.exception, failure)
 
     def test_logout_delegates_without_arguments(self) -> None:
         use_case = MagicMock()
 
-        result = LogoutCommandHandler(use_case).handle(LogoutCommand())
+        result = LogoutCommandHandler(use_case).execute(LogoutCommand())
 
         self.assertIsNone(result)
         use_case.execute.assert_called_once_with()
@@ -81,7 +81,7 @@ class CommandHandlersShould(unittest.TestCase):
             password="secret",
         )
 
-        result = RegisterUserCommandHandler(use_case).handle(command)
+        result = RegisterUserCommandHandler(use_case).execute(command)
 
         self.assertIs(result, expected)
         use_case.execute.assert_called_once_with(
@@ -96,7 +96,7 @@ class CommandHandlersShould(unittest.TestCase):
     def test_change_own_password_selects_current_user_flow(self) -> None:
         use_case = MagicMock()
 
-        result = ChangeOwnPasswordCommandHandler(use_case).handle(
+        result = ChangeOwnPasswordCommandHandler(use_case).execute(
             ChangeOwnPasswordCommand(current_password="old", new_password="new")
         )
 
@@ -106,7 +106,7 @@ class CommandHandlersShould(unittest.TestCase):
     def test_reset_password_selects_administrative_flow(self) -> None:
         use_case = MagicMock()
 
-        result = ResetUserPasswordCommandHandler(use_case).handle(
+        result = ResetUserPasswordCommandHandler(use_case).execute(
             ResetUserPasswordCommand(username="employee", new_password="new")
         )
 
@@ -126,7 +126,7 @@ class CommandHandlersShould(unittest.TestCase):
             phone="0412345678",
         )
 
-        result = CreatePackageCommandHandler(use_case).handle(command)
+        result = CreatePackageCommandHandler(use_case).execute(command)
 
         self.assertIs(result, expected)
         use_case.execute.assert_called_once_with(
@@ -143,7 +143,7 @@ class CommandHandlersShould(unittest.TestCase):
         expected = object()
         use_case.execute.return_value = expected
 
-        result = RemovePackageCommandHandler(use_case).handle(RemovePackageCommand(package_id=7))
+        result = RemovePackageCommandHandler(use_case).execute(RemovePackageCommand(package_id=7))
 
         self.assertIs(result, expected)
         use_case.execute.assert_called_once_with(7)
@@ -153,7 +153,7 @@ class CommandHandlersShould(unittest.TestCase):
         expected = object()
         use_case.execute.return_value = expected
 
-        result = AssignPackagesToRouteCommandHandler(use_case).handle(
+        result = AssignPackagesToRouteCommandHandler(use_case).execute(
             AssignPackagesToRouteCommand(route_id=3, package_ids=(4, 5))
         )
 
@@ -165,7 +165,7 @@ class CommandHandlersShould(unittest.TestCase):
         expected = object()
         use_case.execute.return_value = expected
 
-        result = AssignTruckToRouteCommandHandler(use_case).handle(
+        result = AssignTruckToRouteCommandHandler(use_case).execute(
             AssignTruckToRouteCommand(truck_id=2, route_id=3, now=NOW)
         )
 
@@ -178,7 +178,7 @@ class CommandHandlersShould(unittest.TestCase):
         use_case.execute.return_value = expected
         command = CreateRouteCommand(locations=("SYD", "CBR", "MEL"), departure_time=NOW)
 
-        result = CreateRouteCommandHandler(use_case).handle(command)
+        result = CreateRouteCommandHandler(use_case).execute(command)
 
         self.assertIs(result, expected)
         use_case.execute.assert_called_once_with(("SYD", "CBR", "MEL"), NOW)
@@ -188,7 +188,7 @@ class CommandHandlersShould(unittest.TestCase):
         expected = object()
         use_case.execute.return_value = expected
 
-        result = RemoveRouteCommandHandler(use_case).handle(RemoveRouteCommand(route_id=8))
+        result = RemoveRouteCommandHandler(use_case).execute(RemoveRouteCommand(route_id=8))
 
         self.assertIs(result, expected)
         use_case.execute.assert_called_once_with(8)
@@ -197,7 +197,7 @@ class CommandHandlersShould(unittest.TestCase):
         use_case = MagicMock()
         use_case.execute.return_value = "C:/snapshots/world.json"
 
-        result = LoadWorldCommandHandler(use_case).handle(LoadWorldCommand(path="world.json"))
+        result = LoadWorldCommandHandler(use_case).execute(LoadWorldCommand(path="world.json"))
 
         self.assertEqual(result, "C:/snapshots/world.json")
         use_case.execute.assert_called_once_with("world.json")
@@ -206,7 +206,7 @@ class CommandHandlersShould(unittest.TestCase):
         use_case = MagicMock()
         use_case.execute.return_value = "C:/snapshots/world.json"
 
-        result = SaveWorldCommandHandler(use_case).handle(SaveWorldCommand(path="world.json"))
+        result = SaveWorldCommandHandler(use_case).execute(SaveWorldCommand(path="world.json"))
 
         self.assertEqual(result, "C:/snapshots/world.json")
         use_case.execute.assert_called_once_with("world.json")
