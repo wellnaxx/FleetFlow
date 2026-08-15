@@ -31,10 +31,10 @@ FleetFlow currently supports:
 - JWT access/refresh tokens for HTTP authentication, with token-version revocation.
 - Typed domain, application, and repository errors for expected validation, not-found, conflict, authentication, and persistence failures.
 - Centralized layer-neutral runtime validation with domain and adapter wrappers that preserve boundary-specific errors.
-- Typed command/query messages, routing keys, dispatch input-port protocols, and thin handlers covering the
-  current interactive workflows. Synchronous in-process command and query buses are implemented;
-  composition-owned registration and adapter migration remain in progress, so CLI and HTTP currently continue to
-  invoke use cases directly.
+- Typed command/query messages, routing keys, dispatch input-port protocols, synchronous in-process buses,
+  exhaustive message catalogs, and composition-owned registration for every interactive workflow. Temporary
+  handlers expose the same `execute(message)` contract targeted for direct use-case execution; container wiring
+  and CLI/HTTP migration remain in progress, so driving adapters currently continue to invoke use cases directly.
 - Global FastAPI exception handlers that map expected application/domain failures to stable, sanitized HTTP responses.
 - Immutable domain and application event types with per-entity/use-case pending-event recording, event checkpoints for rollback, context-local envelope metadata, synchronous in-process dispatch, and structured event logging.
 - Browsable audit log with normalized descriptors, versioned event payloads, subscribed persistence handlers, in-memory and PostgreSQL repositories, and actor-scoped CLI/HTTP queries.
@@ -80,8 +80,8 @@ FleetFlow/
 |   |   |-- eventing/             # collector, execution context, event envelopes, handler protocol
 |   |   |-- events/               # immutable application event definitions
 |   |   |-- exceptions/           # application and world-state exception hierarchy
-|   |   |-- handlers/             # thin command/query adapters over existing use cases
-|   |   |-- messaging/            # message markers, typed keys, and handler protocols
+|   |   |-- handlers/             # temporary command/query executors over existing use cases
+|   |   |-- messaging/            # message markers, typed keys, executor protocols, and in-process buses
 |   |   |-- models/               # persisted/query models such as UserRecord, AuditRecord, AuditLogQuery
 |   |   |-- queries/              # immutable read messages and typed routing keys
 |   |   |-- results/              # use-case/service result objects
@@ -89,7 +89,7 @@ FleetFlow/
 |   |   |   |-- audit_mapping/    # typed event-to-audit registry and mappings grouped by event family
 |   |   |   `-- validators/       # focused world-state schema, identity, reference, truck, and compatibility validators
 |   |   `-- use_cases/            # auth, package, route, truck, customer, fleet, audit, and state workflows
-|   |-- composition/              # dependency container, event catalog, subscriptions, and composition root
+|   |-- composition/              # container, event/message catalogs, subscriptions, and bus registration
 |   |-- domain/
 |   |   |-- entities/             # customers, packages, routes, trucks
 |   |   |-- enums/                # roles, permissions, item/route/truck statuses
@@ -135,24 +135,24 @@ FastAPI Router
   -> In-process EventDispatcher invokes subscribers
 ```
 
-These diagrams describe the currently wired runtime. The application also contains the first command/query
-bus migration slice: immutable messages, result-typed routing keys, structural handler contracts, dispatch-only
-input ports, and thin handlers that adapt messages to existing use-case signatures. The in-process command and
-query buses support exact-type dispatch, name-based routing, duplicate-registration protection, and unchanged
-handler error propagation. Composition-owned registration remains unfinished, so CLI and HTTP adapters do not
-dispatch through this layer yet.
+These diagrams describe the currently wired runtime. The application also contains a complete pre-adapter
+command/query bus layer: immutable messages, result-typed routing keys, structural `execute(message)` contracts,
+dispatch-only input ports, synchronous in-process buses, exhaustive command/query catalogs, and explicit
+composition-owned registration for every published message. The buses support exact-type dispatch, name-based
+routing, duplicate-registration protection, missing-handler reporting, and unchanged executor error propagation.
+Composition tests verify every key, temporary handler class, injected use case, catalog entry, and registration
+order. The container does not yet instantiate these buses, and CLI/HTTP adapters do not yet dispatch through them.
 
 The intended next-stage flow is:
 
 ```text
 CLI Command / FastAPI Router
   -> CommandBus or QueryBus
-  -> Typed CommandHandler or QueryHandler
-  -> Existing Application Use Case
+  -> Application Use Case.execute(Command or Query)
   -> Application Service / Output Port / Domain
 ```
 
-The composition root is `src/composition/container.py`. It wires repositories, domain services, application services, world-state persistence, runtime state management, the event collector, and use-case registries. `src/composition/runtime.py` provides cached runtime dependencies shared by the CLI and HTTP adapters. Event subscriptions are centralized in `src/composition/event_subscriptions.py`.
+The composition root is `src/composition/container.py`. It wires repositories, domain services, application services, world-state persistence, runtime state management, the event collector, and use-case registries. `src/composition/message_buses.py` owns the complete command/query registration builders, while `src/composition/command_catalog.py` and `src/composition/query_catalog.py` provide authoritative completeness catalogs. These builders are not yet called by the container. `src/composition/runtime.py` provides cached runtime dependencies shared by the CLI and HTTP adapters. Event subscriptions are centralized in `src/composition/event_subscriptions.py`.
 
 ## Domain Model
 
@@ -833,19 +833,24 @@ The existing backend can be tightened further by hardening PostgreSQL setup/migr
 
 ### Command bus layer
 
-FleetFlow now has immutable command/query messages for the current interactive workflows, typed routing keys,
-structural handler protocols, dispatch-only `CommandBus` and `QueryBus` input ports, and thin handlers that adapt
-those messages to existing use cases. Handler tests verify argument forwarding, result propagation, and the few
-temporary representation conversions required by current use-case signatures.
+FleetFlow now has immutable command/query messages for every interactive workflow, typed routing keys,
+structural `execute(message)` protocols, dispatch-only `CommandBus` and `QueryBus` input ports, synchronous
+in-process buses, and authoritative command/query type catalogs. Temporary handlers adapt those messages to the
+existing positional use-case signatures. Their tests verify argument forwarding, result propagation, and the few
+temporary representation conversions required during migration.
 
-The synchronous command and query buses are implemented and tested with routing-name identity, exact message-type
-checks, duplicate-registration rejection, missing-handler reporting, and unchanged handler result/error
-propagation. The remaining work is to register every key/handler pair in composition and migrate CLI and HTTP
-adapters from direct use-case calls to typed dispatch. Once that path is stable, repeated cross-cutting behavior
-such as event draining, logging, metrics, and transaction boundaries can move into a small bus pipeline.
-Straightforward handler/use-case pairs can then be merged where the separate adapter no longer adds value. The
-heartbeat-only world-state advancement workflow remains an internal orchestration path rather than a public
-command.
+Composition now explicitly registers all 13 commands and all 13 queries. Tests verify every key, handler type,
+injected use-case instance, catalog entry, ordering invariant, and absence of duplicate catalog types. Bus tests
+also cover routing-name identity, exact message-type checks, duplicate-registration rejection, missing-handler
+reporting, and unchanged executor result/error propagation.
+
+The remaining migration is to change each public use case from `execute(field, ...)` to
+`execute(command_or_query)`, register that use case directly, and remove its temporary handler. The resulting
+buses then need to be instantiated by the container and injected into CLI/HTTP adapters. Event draining must move
+to a bus or executor boundary before adapters lose direct access to event-aware use cases. Once typed dispatch is
+the sole adapter path, repeated cross-cutting behavior such as event draining, logging, metrics, and transaction
+boundaries can move into a small execution pipeline. The heartbeat-only world-state advancement workflow remains
+an internal orchestration path rather than a public command.
 
 ### HTTP API expansion
 
