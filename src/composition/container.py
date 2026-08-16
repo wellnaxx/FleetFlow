@@ -28,8 +28,6 @@ from src.adapters.driven.persistence.memory.world_state_gateway import (
     InMemoryWorldStateRuntime,
 )
 from src.application.eventing.collector import EventCollector
-from src.application.messaging.in_process_command_bus import InProcessCommandBus
-from src.application.messaging.in_process_query_bus import InProcessQueryBus
 from src.application.services.auth_service import AuthService
 from src.application.services.authorization_service import AuthorizationService
 from src.application.services.customer_service import CustomerService
@@ -84,6 +82,8 @@ from src.application.use_cases.use_case_registry import (
 from src.composition.config import AppConfig, PersistenceBackend, get_app_config
 from src.composition.message_buses import build_command_bus, build_query_bus
 from src.composition.seed_fleet import seed_fleet_if_empty
+from src.ports.input.command_bus import CommandBus
+from src.ports.input.query_bus import QueryBus
 from src.ports.output.audit_repository import AuditRepositoryPort
 from src.ports.output.fleet_overview_query import FleetOverviewQueryPort
 
@@ -91,7 +91,7 @@ logger = logging.getLogger(__name__)
 
 
 class Container:
-    """Wire repositories, services, use cases, and shared runtime services."""
+    """Wire persistence, services, use cases, message buses, and runtime state."""
 
     auth_cases: AuthUseCases
     customer_cases: CustomerUseCases
@@ -102,8 +102,8 @@ class Container:
     state_cases: StateUseCases
     audit_use_cases: AuditUseCases
     fleet_overview_query: FleetOverviewQueryPort
-    command_bus: InProcessCommandBus
-    query_bus: InProcessQueryBus
+    command_bus: CommandBus
+    query_bus: QueryBus
 
     def __init__(
         self,
@@ -316,7 +316,7 @@ class Container:
         )
 
     def _wire_message_buses(self) -> None:
-        """Wire in-process command and query buses."""
+        """Build complete in-process buses and expose dispatch-only ports."""
         logger.debug("Wiring in-process command and query buses.")
         self.command_bus = build_command_bus(
             auth_cases=self.auth_cases,

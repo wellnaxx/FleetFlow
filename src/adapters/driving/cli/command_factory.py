@@ -41,7 +41,7 @@ _CONTAINER_COMMANDS: dict[str, CommandBuilder] = {
     "logout": lambda container, params: AuthLogout(
         params, container.auth_cases.logout, container.event_collector
     ),
-    "whoami": lambda container, params: AuthWhoAmI(params, container.auth_cases.who_am_i),
+    "whoami": lambda container, params: AuthWhoAmI(params, container.query_bus),
     "registeruser": lambda container, params: AuthRegisterUser(
         params, container.auth_cases.register_user, container.event_collector
     ),

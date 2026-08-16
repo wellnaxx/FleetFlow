@@ -4,6 +4,7 @@ from typing import cast
 from unittest.mock import MagicMock, patch
 
 from src.adapters.driving.cli.command_factory import CommandFactory
+from src.adapters.driving.cli.commands.auth_whoami import AuthWhoAmI
 from src.adapters.driving.cli.commands.get_fleet_overview import GetFleetOverview
 
 
@@ -49,6 +50,7 @@ class CommandFactoryShould(unittest.TestCase):
             truck_cases=SimpleNamespace(
                 view_all=MagicMock(),
             ),
+            query_bus=MagicMock(),
             event_collector=MagicMock(),
         )
         factory = CommandFactory(container=container)  # type: ignore[reportArgumentType]
@@ -85,14 +87,14 @@ class CommandFactoryShould(unittest.TestCase):
         self.assertIs(result, sentinel_cmd)
         builder.assert_called_once_with(container, ("42  ",))
 
-    def test_container_backed_commands_receive_params_and_use_case(self) -> None:
+    def test_container_backed_commands_receive_parsed_params(self) -> None:
         factory, container = self.make_factory()
         cases: list[tuple[str, str, list[str], object]] = [
             ("save state.json", "save", ["state.json"], container.state_cases.save),
             ("load state.json", "load", ["state.json"], container.state_cases.load),
             ("login alice", "login", ["alice"], container.auth_cases.login),
             ("logout", "logout", [], container.auth_cases.logout),
-            ("whoami", "whoami", [], container.auth_cases.who_am_i),
+            ("whoami", "whoami", [], container.query_bus),
             (
                 "registeruser alice employee Alice",
                 "registeruser",
@@ -160,8 +162,8 @@ class CommandFactoryShould(unittest.TestCase):
             ),
         ]
 
-        for raw_input, command_name, params, expected_use_case in cases:
-            del expected_use_case
+        for raw_input, command_name, params, expected_dependency in cases:
+            del expected_dependency
             with self.subTest(command_name=command_name):
                 sentinel_cmd = object()
                 builder = MagicMock(return_value=sentinel_cmd)
@@ -175,6 +177,16 @@ class CommandFactoryShould(unittest.TestCase):
 
                 self.assertIs(result, sentinel_cmd)
                 builder.assert_called_once_with(container, tuple(params))
+
+    def test_who_am_i_receives_registered_query_bus(self) -> None:
+        """Build the migrated WhoAmI command with the container query bus."""
+        factory, container = self.make_factory()
+
+        command = cast(AuthWhoAmI, factory.create("whoami"))
+
+        self.assertIsInstance(command, AuthWhoAmI)
+        self.assertEqual(command.params, ())
+        self.assertIs(command.query_bus, container.query_bus)
 
     def test_get_fleet_overview_receives_registered_use_case_and_collector(self) -> None:
         """Build the fleet command from its typed container use-case group."""

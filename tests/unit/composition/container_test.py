@@ -10,6 +10,9 @@ from src.adapters.driven.persistence.memory.fleet_overview_query import InMemory
 from src.adapters.driven.persistence.memory.package_repository import InMemoryPackageRepository
 from src.adapters.driven.persistence.memory.route_repository import InMemoryRouteRepository
 from src.adapters.driven.persistence.memory.world_state_gateway import InMemoryWorldStateGateway
+from src.application.messaging.in_process_command_bus import InProcessCommandBus
+from src.application.messaging.in_process_query_bus import InProcessQueryBus
+from src.application.queries.auth.who_am_i import WHO_AM_I, WhoAmIQuery
 from src.application.services.authorization_service import AuthorizationService
 from src.application.services.vehicle_manager import VehicleManager
 from src.composition.config import AppConfig, PersistenceBackend
@@ -58,6 +61,9 @@ class ContainerTests(unittest.TestCase):
         self.assertTrue(container.autosave_enabled)
         self.assertIsInstance(container.authz, AuthorizationService)
         self.assertIs(container.authz.current_user, auth.current_user)
+        self.assertIsInstance(container.command_bus, InProcessCommandBus)
+        self.assertIsInstance(container.query_bus, InProcessQueryBus)
+        self.assertIsNone(container.query_bus.dispatch(WHO_AM_I, WhoAmIQuery()))
         self.assertIs(container.world_state_gateway._snapshot_service, container.world_state_snapshot_service)  # type: ignore[attr-defined]
         self.assertIs(container.state_cases.save._world_state_gateway, container.world_state_gateway)  # type: ignore[attr-defined]
         self.assertEqual(container.default_world_state_path, "state.json")

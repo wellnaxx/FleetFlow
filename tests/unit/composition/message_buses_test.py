@@ -109,9 +109,9 @@ class MessageBusCompositionShould(unittest.TestCase):
     def test_registers_every_query_with_expected_handler_and_use_case(self) -> None:
         """Bind every query key to the correct handler and workflow."""
         bus = MagicMock()
-        expected: tuple[tuple[object, type[object], object], ...] = (
+        expected: tuple[tuple[object, type[object] | None, object], ...] = (
             (subject.VIEW_AUDITS, subject.ViewAuditsQueryHandler, self.audit_cases.view_audit_logs),
-            (subject.WHO_AM_I, subject.WhoAmIQueryHandler, self.auth_cases.who_am_i),
+            (subject.WHO_AM_I, None, self.auth_cases.who_am_i),
             (
                 subject.VIEW_ALL_CUSTOMERS,
                 subject.ViewAllCustomersQueryHandler,
@@ -167,10 +167,13 @@ class MessageBusCompositionShould(unittest.TestCase):
         self.assertIs(result, bus)
         self.assertEqual(bus.register.call_count, len(expected))
         for actual, (key, handler_type, use_case) in zip(bus.register.call_args_list, expected, strict=True):
-            actual_key, handler = cast(tuple[object, object], actual.args)
+            actual_key, executor = cast(tuple[object, object], actual.args)
             self.assertIs(actual_key, key)
-            self.assertIs(type(handler), handler_type)
-            self.assertIs(cast(object, vars(handler)["_use_case"]), use_case)
+            if handler_type is None:
+                self.assertIs(executor, use_case)
+            else:
+                self.assertIs(type(executor), handler_type)
+                self.assertIs(cast(object, vars(executor)["_use_case"]), use_case)
 
         self.assertEqual(
             tuple(key.query_type for key, _, _ in expected),

@@ -39,7 +39,6 @@ from src.application.handlers.commands.routes.remove_route import RemoveRouteCom
 from src.application.handlers.commands.state.load_world import LoadWorldCommandHandler
 from src.application.handlers.commands.state.save_world import SaveWorldCommandHandler
 from src.application.handlers.queries.audit.view_audits import ViewAuditsQueryHandler
-from src.application.handlers.queries.auth.who_am_i import WhoAmIQueryHandler
 from src.application.handlers.queries.customers.view_all_customers import ViewAllCustomersQueryHandler
 from src.application.handlers.queries.fleet.get_fleet_overview import GetFleetOverviewQueryHandler
 from src.application.handlers.queries.packages.view_all_packages import ViewAllPackagesQueryHandler
@@ -174,7 +173,7 @@ def build_query_bus(
     bus.register(VIEW_AUDITS, ViewAuditsQueryHandler(audit_cases.view_audit_logs))
 
     # Authentication and account management
-    bus.register(WHO_AM_I, WhoAmIQueryHandler(auth_cases.who_am_i))
+    bus.register(WHO_AM_I, auth_cases.who_am_i)
 
     # Customer-facing queries
     bus.register(VIEW_ALL_CUSTOMERS, ViewAllCustomersQueryHandler(customer_cases.view_all))

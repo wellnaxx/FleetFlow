@@ -1,11 +1,11 @@
 """CLI command for showing the current authenticated user."""
 
-from src.adapters.driving.cli.commands.base_command.base_command import BaseCommand
-from src.application.use_cases.auth.who_am_i import WhoAmIUseCase
+from src.adapters.driving.cli.commands.base_command.query_bus_command import QueryBusCommand
+from src.application.queries.auth.who_am_i import WHO_AM_I, WhoAmIQuery
 
 
-class AuthWhoAmI(BaseCommand[WhoAmIUseCase]):
-    """Render the active authentication session."""
+class AuthWhoAmI(QueryBusCommand):
+    """Dispatch the principal query and render the active CLI session."""
 
     skips_heartbeat = True
     autosaves_state = False
@@ -14,9 +14,12 @@ class AuthWhoAmI(BaseCommand[WhoAmIUseCase]):
         """Return the current user's display name and role.
 
         Returns:
-            CLI output for the current session.
+            Current user's display name and role, or a logged-out message.
+
+        Raises:
+            Exception: Propagates query routing and workflow failures.
         """
-        user = self._use_case.execute()
-        if not user:
+        user = self.query_bus.dispatch(key=WHO_AM_I, query=WhoAmIQuery())
+        if user is None:
             return "Not logged in."
-        return "Not logged in." if not user else f"{user.name} [{user.role.value}]"
+        return f"{user.name} [{user.role.value}]"
