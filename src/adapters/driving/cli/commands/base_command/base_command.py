@@ -7,7 +7,9 @@ from collections.abc import Iterable
 class BaseCommand[T](ABC):
     """Abstract base for all CLI commands.
 
-    Concrete commands expose one application use case at the CLI boundary.
+    Concrete commands receive one application execution dependency. Existing
+    adapters generally receive a use case directly, while bus-migrated
+    adapters receive a command or query bus through a specialized subclass.
 
     Class flags describe command side effects for the CLI engine:
     `mutates_state` means the command changes runtime world state,
@@ -42,7 +44,12 @@ class BaseCommand[T](ABC):
 
     @property
     def use_case(self) -> T:
-        """Return the application use case bound to the command."""
+        """Return the execution dependency stored by the legacy base slot.
+
+        Direct-use-case commands interpret this value as a use case. The
+        bus-specific base classes expose it through a semantically named
+        ``command_bus`` or ``query_bus`` property during adapter migration.
+        """
         return self._use_case
 
     @abstractmethod
