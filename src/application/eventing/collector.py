@@ -1,16 +1,30 @@
 """Collect pending events from recorders and publish them as envelopes."""
 
 from collections.abc import Iterable
-from typing import NamedTuple
+from typing import NamedTuple, Protocol
 
 from src.application.eventing.current_context import envelope_event
-from src.application.use_cases.base.event_mixin import ApplicationEventRecorderMixin
-from src.domain.entities.mixins.event_mixin import DomainEventRecorderMixin
 from src.ports.output.event_publisher import EventPublisherPort
 from src.shared.event import Event
 
-# Object that buffers pending application or domain events.
-type EventRecorder = ApplicationEventRecorderMixin | DomainEventRecorderMixin
+
+class EventRecorder(Protocol):
+    """Structural contract for an object buffering unpublished events.
+
+    Application execution scopes and domain entities satisfy this protocol
+    without sharing an inheritance hierarchy. Collectors only need immutable
+    access to pending events and a way to clear them after the complete
+    publication batch succeeds.
+    """
+
+    @property
+    def pending_events(self) -> tuple[Event, ...]:
+        """Return pending events in their original recording order."""
+        ...
+
+    def clear_events(self) -> None:
+        """Remove every pending event after successful publication."""
+        ...
 
 
 class _RecorderSnapshot(NamedTuple):
@@ -47,7 +61,7 @@ class EventCollector:
         """Publish all pending events from recorders and clear them on success.
 
         Args:
-            recorders: Application use cases or domain entities that may hold
+            recorders: Execution scopes or domain entities that may hold
                 pending events.
 
         Raises:

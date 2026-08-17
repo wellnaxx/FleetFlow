@@ -1,17 +1,35 @@
 from datetime import datetime
 
+from src.application.eventing.recorder_scope import get_optional_event_recorder_scope
 from src.application.events.base import ApplicationEvent
 from src.shared.event_recorder_mixin import EventRecorderMixin
 
 
 class ApplicationEventRecorderMixin(EventRecorderMixin[ApplicationEvent]):
-    """Marker mixin for use cases that record pending application events."""
+    """Record application events through scoped or legacy storage.
+
+    Bus-migrated workflows write into an execution-local recorder scope.
+    Legacy adapters execute without a scope and retain events on the use-case
+    instance for explicit drainage. An event is written to exactly one
+    destination.
+    """
 
     __slots__ = ()
 
     def record_event(self, event: ApplicationEvent) -> None:
-        """Record an application event from cross-cutting infrastructure."""
-        self._record_event(event)
+        """Record an application event using the active execution model.
+
+        Args:
+            event: Event emitted by the workflow or authorization
+                infrastructure.
+        """
+        scope = get_optional_event_recorder_scope()
+
+        if scope is None:
+            self._record_event(event)
+            return
+
+        scope.record_application_event(event)
 
     def event_occurred_at(self) -> datetime:
         """Return the timestamp to use for events recorded by infrastructure.
