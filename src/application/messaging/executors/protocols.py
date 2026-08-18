@@ -6,7 +6,7 @@ from typing import Protocol
 class MessageExecutor[M, R](Protocol):
     """Execute one typed message and return its associated result."""
 
-    def execute(self, message: M) -> R:
+    def execute(self, message: M, /) -> R:
         """Execute a command or query.
 
         Args:

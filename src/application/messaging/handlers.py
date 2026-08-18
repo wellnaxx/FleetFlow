@@ -15,7 +15,7 @@ class CommandHandler[C: Command, R](Protocol):
     the executor.
     """
 
-    def execute(self, command: C) -> R:
+    def execute(self, command: C, /) -> R:
         """Execute the application operation represented by a command.
 
         Args:
@@ -40,7 +40,7 @@ class QueryHandler[Q: Query, R](Protocol):
     query bus.
     """
 
-    def execute(self, query: Q) -> R:
+    def execute(self, query: Q, /) -> R:
         """Execute the read operation represented by a query.
 
         Args:

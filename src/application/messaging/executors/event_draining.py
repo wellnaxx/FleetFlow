@@ -37,7 +37,7 @@ class EventDrainingExecutor[M, R]:
         self._delegate = delegate
         self._event_collector = event_collector
 
-    def execute(self, message: M) -> R:
+    def execute(self, message: M, /) -> R:
         """Execute a message inside a fresh event-recorder scope.
 
         Args:
