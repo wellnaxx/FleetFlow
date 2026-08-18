@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 from src.adapters.driving.cli.command_factory import CommandFactory
 from src.adapters.driving.cli.commands.auth_whoami import AuthWhoAmI
 from src.adapters.driving.cli.commands.get_fleet_overview import GetFleetOverview
+from src.adapters.driving.cli.commands.view_audits import ViewAuditLogs
 
 
 class CommandFactoryShould(unittest.TestCase):
@@ -154,6 +155,7 @@ class CommandFactoryShould(unittest.TestCase):
                 container.route_cases.assign_packages,
             ),
             ("viewalltrucks", "viewalltrucks", [], container.truck_cases.view_all),
+            ("viewauditlogs", "viewauditlogs", [], container.query_bus),
             (
                 "getfleetoverview 25",
                 "getfleetoverview",
@@ -186,6 +188,16 @@ class CommandFactoryShould(unittest.TestCase):
 
         self.assertIsInstance(command, AuthWhoAmI)
         self.assertEqual(command.params, ())
+        self.assertIs(command.query_bus, container.query_bus)
+
+    def test_view_audit_logs_receives_registered_query_bus(self) -> None:
+        """Build the migrated audit command with the container query bus."""
+        factory, container = self.make_factory()
+
+        command = cast(ViewAuditLogs, factory.create("viewauditlogs --limit 10"))
+
+        self.assertIsInstance(command, ViewAuditLogs)
+        self.assertEqual(command.params, ("--limit", "10"))
         self.assertIs(command.query_bus, container.query_bus)
 
     def test_get_fleet_overview_receives_registered_use_case_and_collector(self) -> None:

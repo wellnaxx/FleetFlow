@@ -332,7 +332,9 @@ class Container:
             package_cases=self.package_cases,
             route_cases=self.route_cases,
             truck_cases=self.truck_cases,
+            event_collector=self.event_collector,
         )
+
 
 def build_container(
     auth: AuthService,

@@ -49,6 +49,7 @@ class MessageBusCompositionShould(unittest.TestCase):
             load=MagicMock(),
         )
         self.audit_cases = subject.AuditUseCases(view_audit_logs=MagicMock())
+        self.event_collector = MagicMock(spec=subject.EventCollector)
 
     def test_registers_every_command_with_expected_handler_and_use_case(self) -> None:
         """Bind every command key to the correct handler and workflow."""
@@ -110,7 +111,7 @@ class MessageBusCompositionShould(unittest.TestCase):
         """Bind every query key to the correct handler and workflow."""
         bus = MagicMock()
         expected: tuple[tuple[object, type[object] | None, object], ...] = (
-            (subject.VIEW_AUDITS, subject.ViewAuditsQueryHandler, self.audit_cases.view_audit_logs),
+            (subject.VIEW_AUDITS, subject.EventDrainingExecutor, self.audit_cases.view_audit_logs),
             (subject.WHO_AM_I, None, self.auth_cases.who_am_i),
             (
                 subject.VIEW_ALL_CUSTOMERS,
@@ -162,6 +163,7 @@ class MessageBusCompositionShould(unittest.TestCase):
                 self.package_cases,
                 self.route_cases,
                 self.truck_cases,
+                self.event_collector,
             )
 
         self.assertIs(result, bus)
@@ -171,6 +173,10 @@ class MessageBusCompositionShould(unittest.TestCase):
             self.assertIs(actual_key, key)
             if handler_type is None:
                 self.assertIs(executor, use_case)
+            elif handler_type is subject.EventDrainingExecutor:
+                self.assertIs(type(executor), handler_type)
+                self.assertIs(cast(object, vars(executor)["_delegate"]), use_case)
+                self.assertIs(vars(executor)["_event_collector"], self.event_collector)
             else:
                 self.assertIs(type(executor), handler_type)
                 self.assertIs(cast(object, vars(executor)["_use_case"]), use_case)

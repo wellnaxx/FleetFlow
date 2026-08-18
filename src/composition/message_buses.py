@@ -23,6 +23,7 @@ from src.application.commands.routes.create_route import CREATE_ROUTE
 from src.application.commands.routes.remove_route import REMOVE_ROUTE
 from src.application.commands.state.load_world import LOAD_WORLD
 from src.application.commands.state.save_world import SAVE_WORLD
+from src.application.eventing.collector import EventCollector
 from src.application.handlers.commands.auth.change_password import ChangeOwnPasswordCommandHandler
 from src.application.handlers.commands.auth.login import LoginCommandHandler
 from src.application.handlers.commands.auth.logout import LogoutCommandHandler
@@ -38,7 +39,6 @@ from src.application.handlers.commands.routes.create_route import CreateRouteCom
 from src.application.handlers.commands.routes.remove_route import RemoveRouteCommandHandler
 from src.application.handlers.commands.state.load_world import LoadWorldCommandHandler
 from src.application.handlers.commands.state.save_world import SaveWorldCommandHandler
-from src.application.handlers.queries.audit.view_audits import ViewAuditsQueryHandler
 from src.application.handlers.queries.customers.view_all_customers import ViewAllCustomersQueryHandler
 from src.application.handlers.queries.fleet.get_fleet_overview import GetFleetOverviewQueryHandler
 from src.application.handlers.queries.packages.view_all_packages import ViewAllPackagesQueryHandler
@@ -56,6 +56,7 @@ from src.application.handlers.queries.routes.view_all_routes import ViewAllRoute
 from src.application.handlers.queries.routes.view_route import ViewRouteQueryHandler
 from src.application.handlers.queries.routes.view_routes_in_progress import ViewRoutesInProgressQueryHandler
 from src.application.handlers.queries.trucks.view_all_trucks import ViewAllTrucksQueryHandler
+from src.application.messaging.executors.event_draining import EventDrainingExecutor
 from src.application.messaging.in_process_command_bus import InProcessCommandBus
 from src.application.messaging.in_process_query_bus import InProcessQueryBus
 from src.application.queries.audit.view_audits import VIEW_AUDITS
@@ -143,12 +144,14 @@ def build_query_bus(
     package_cases: PackageUseCases,
     route_cases: RouteUseCases,
     truck_cases: TruckUseCases,
+    event_collector: EventCollector,
 ) -> InProcessQueryBus:
-    """Build a query bus containing every application query handler.
+    """Build a query bus containing every application query executor.
 
-    A fresh bus is created for each call. Handlers are constructed around the
-    supplied use-case instances and registered under their canonical typed
-    keys. The function does not execute queries or drain recorded events.
+    A fresh bus is created for each call. Legacy handlers and directly
+    registered use cases are bound under their canonical typed keys. Migrated
+    event-aware workflows are decorated to drain their execution-local events
+    when dispatched; no query executes during construction.
 
     Args:
         audit_cases: Audit-facing use cases.
@@ -158,6 +161,7 @@ def build_query_bus(
         package_cases: Package-facing use cases.
         route_cases: Route-facing use cases.
         truck_cases: Truck-facing use cases.
+        event_collector: Collector injected into event-aware query executors.
 
     Returns:
         Fresh in-process query bus with every published query registered.
@@ -170,7 +174,10 @@ def build_query_bus(
     bus = InProcessQueryBus()
 
     # Audit queries
-    bus.register(VIEW_AUDITS, ViewAuditsQueryHandler(audit_cases.view_audit_logs))
+    bus.register(
+        VIEW_AUDITS,
+        EventDrainingExecutor(delegate=audit_cases.view_audit_logs, event_collector=event_collector),
+    )
 
     # Authentication and account management
     bus.register(WHO_AM_I, auth_cases.who_am_i)

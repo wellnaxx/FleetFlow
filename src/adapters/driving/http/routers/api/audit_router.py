@@ -5,16 +5,15 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
 
-from src.adapters.driving.http.dependencies.eventing import execute_and_drain_events, get_event_collector
-from src.adapters.driving.http.dependencies.use_cases import get_view_audit_logs_use_case
+from src.adapters.driving.http.dependencies.message_buses import get_authenticated_query_bus
 from src.adapters.driving.http.schemas.audit import AuditRecordPageResponse
 from src.application.enums.audit_actions import AuditAction
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.event_sources import EventSource
-from src.application.eventing.collector import EventCollector
 from src.application.models.audit_log_query import AuditLogFilter, AuditLogQuery
-from src.application.use_cases.audit.view_audits import ViewAuditLogsUseCase
+from src.application.queries.audit.view_audits import VIEW_AUDITS
 from src.application.use_cases.pagination import PageQuery
+from src.ports.input.query_bus import QueryBus
 
 audit_router = APIRouter(prefix="/audit", tags=["audit"])
 
@@ -48,7 +47,12 @@ def get_audit_log_filter(
         created_to: Inclusive upper bound for audit persistence time.
 
     Returns:
-        Validated audit-log filter for the application use case.
+        Validated audit-log filter for the application query.
+
+    Raises:
+        TypeError: If a supplied value has an invalid runtime type.
+        ValueError: If a string is blank, an identifier is invalid, or a
+            datetime range is inconsistent.
     """
     return AuditLogFilter(
         event_type=event_type,
@@ -67,8 +71,7 @@ def get_audit_log_filter(
 
 @audit_router.get("/", status_code=status.HTTP_200_OK)
 def list_audits(
-    use_case: Annotated[ViewAuditLogsUseCase, Depends(get_view_audit_logs_use_case)],
-    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
+    query_bus: Annotated[QueryBus, Depends(get_authenticated_query_bus)],
     filters: Annotated[AuditLogFilter, Depends(get_audit_log_filter)],
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -77,8 +80,7 @@ def list_audits(
     """List audit records visible to the authenticated principal.
 
     Args:
-        use_case: Audit-log view use case injected by FastAPI.
-        event_collector: Collector used to publish authorization-denied events.
+        query_bus: Authenticated query bus injected by FastAPI.
         filters: Audit-log filters built from query parameters.
         limit: Maximum number of records to return.
         offset: Number of matching records to skip.
@@ -91,6 +93,10 @@ def list_audits(
         PermissionError: If the current principal cannot view the requested
             audit records.
         ValidationError: If pagination or audit filters are invalid.
+        MessageHandlerNotFoundError: If the audit query is not registered.
+        MessageTypeMismatchError: If query-bus registration is inconsistent.
+        Exception: Propagates other failures raised by the registered query
+            handler for the configured HTTP exception handlers.
     """
     query = AuditLogQuery(
         page=PageQuery(
@@ -101,8 +107,6 @@ def list_audits(
         filters=filters,
     )
 
-    result = execute_and_drain_events(
-        recorder=use_case, event_collector=event_collector, action=lambda: use_case.execute(query)
-    )
+    result = query_bus.dispatch(key=VIEW_AUDITS, query=query)
 
     return AuditRecordPageResponse.from_page(result)

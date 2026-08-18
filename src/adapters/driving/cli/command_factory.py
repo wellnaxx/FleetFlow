@@ -103,9 +103,7 @@ _CONTAINER_COMMANDS: dict[str, CommandBuilder] = {
     "viewalltrucks": lambda container, params: ViewAllTrucks(
         params, container.truck_cases.view_all, container.event_collector
     ),
-    "viewauditlogs": lambda container, params: ViewAuditLogs(
-        params, container.audit_use_cases.view_audit_logs, container.event_collector
-    ),
+    "viewauditlogs": lambda container, params: ViewAuditLogs(params, container.query_bus),
     "getfleetoverview": lambda container, params: GetFleetOverview(
         params,
         container.fleet_cases.get_overview,

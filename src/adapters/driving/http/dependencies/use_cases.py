@@ -6,7 +6,6 @@ from fastapi import Depends
 
 from src.adapters.driving.http.dependencies.auth import AuthenticatedHTTPPrincipal, get_current_user
 from src.application.services.auth_service import AuthService
-from src.application.use_cases.audit.view_audits import ViewAuditLogsUseCase
 from src.application.use_cases.auth.change_password import ChangePasswordUseCase
 from src.application.use_cases.auth.login import LoginUseCase
 from src.application.use_cases.auth.logout import LogoutUseCase
@@ -511,28 +510,6 @@ def get_load_world_state_use_case(
     return LoadWorldStateUseCase(
         container.world_state_gateway,
         container.world_state_persistence,
-        authz=principal.authz,
-    )
-
-
-def get_view_audit_logs_use_case(
-    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
-    container: Annotated[Container, Depends(get_container)],
-) -> ViewAuditLogsUseCase:
-    """Build the audit-log view use case for the authenticated request.
-
-    Args:
-        principal: Authenticated HTTP principal carrying request-scoped authorization.
-        container: Application dependency container.
-
-    Returns:
-        Audit-log view use case bound to the audit repository.
-
-    Raises:
-        HTTPException: Raised by `get_current_user` when authentication fails.
-    """
-    return ViewAuditLogsUseCase(
-        container.audit_repo,
         authz=principal.authz,
     )
 

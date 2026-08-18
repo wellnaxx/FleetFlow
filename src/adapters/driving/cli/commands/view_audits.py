@@ -5,7 +5,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Final
 
-from src.adapters.driving.cli.commands.base_command.event_draining_command import EventDrainingCommand
+from src.adapters.driving.cli.commands.base_command.query_bus_command import QueryBusCommand
 from src.adapters.driving.cli.commands.validation_helpers import (
     normalize_string,
     try_parse_datetime,
@@ -16,7 +16,7 @@ from src.application.enums.audit_actions import AuditAction
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.event_sources import EventSource
 from src.application.models.audit_log_query import AuditLogFilter, AuditLogQuery
-from src.application.use_cases.audit.view_audits import ViewAuditLogsUseCase
+from src.application.queries.audit.view_audits import VIEW_AUDITS
 from src.application.use_cases.pagination import PageQuery
 
 _ALLOWED_FILTER_OPTIONS: Final[frozenset[str]] = frozenset(
@@ -45,7 +45,7 @@ _FLAG_OPTIONS: Final[frozenset[str]] = frozenset(
 )
 
 
-class ViewAuditLogs(EventDrainingCommand[ViewAuditLogsUseCase]):
+class ViewAuditLogs(QueryBusCommand):
     """Render audit records using option-based CLI filters."""
 
     def execute(self) -> str:
@@ -60,10 +60,7 @@ class ViewAuditLogs(EventDrainingCommand[ViewAuditLogsUseCase]):
             ValueError: If CLI options or filter values are invalid.
         """
         query = _parse_query(self.params)
-        result = self._run_and_drain(
-            recorder=self.use_case,
-            action=lambda: self.use_case.execute(query),
-        )
+        result = self.query_bus.dispatch(key=VIEW_AUDITS, query=query)
 
         return (
             "\n\n".join(render_audit_record(record) for record in result.items)

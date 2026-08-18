@@ -10,36 +10,35 @@ from src.application.enums.audit_actions import AuditAction
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.event_sources import EventSource
 from src.application.models.audit_log_query import AuditLogQuery
+from src.application.queries.audit.view_audits import VIEW_AUDITS
 from src.application.use_cases.pagination import PageResult
+from src.ports.input.query_bus import QueryBus
 
 
 class ViewAuditLogsShould(unittest.TestCase):
     """Verify audit-log CLI parsing, execution, and rendering behavior."""
 
-    def make_cmd(self, params: list[str]) -> ViewAuditLogs:
-        """Build a command with mocked use-case dependencies."""
-        cmd = ViewAuditLogs.__new__(ViewAuditLogs)
-        cmd._params = tuple(params)  # type: ignore[reportAttributeAccessIssue]
-        cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._event_collector = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        return cmd
+    def make_cmd(self, params: list[str]) -> tuple[ViewAuditLogs, MagicMock]:
+        """Build a command with an isolated query-bus mock."""
+        query_bus = MagicMock(spec=QueryBus)
+        return ViewAuditLogs(params, query_bus), query_bus
 
     def test_execute_returns_empty_message_when_no_records_match(self) -> None:
-        cmd = self.make_cmd([])
-        cmd._use_case.execute.return_value = PageResult(items=(), total=None, limit=None, offset=0)  # type: ignore[reportAttributeAccessIssue]
+        cmd, query_bus = self.make_cmd([])
+        query_bus.dispatch.return_value = PageResult(items=(), total=None, limit=None, offset=0)
 
         result = cmd.execute()
 
         self.assertEqual(result, "No audit records available.")
-        cmd._event_collector.drain.assert_called_once_with((cmd._use_case,))  # type: ignore[reportUnknownMemberType]
+        query_bus.dispatch.assert_called_once()
 
     @patch("src.adapters.driving.cli.commands.view_audits.render_audit_record")
     def test_execute_renders_records_separated_by_blank_lines(self, mock_render: MagicMock) -> None:
-        cmd = self.make_cmd([])
+        cmd, query_bus = self.make_cmd([])
         record_1 = MagicMock()
         record_2 = MagicMock()
         mock_render.side_effect = ["record one", "record two"]
-        cmd._use_case.execute.return_value = PageResult(  # type: ignore[reportAttributeAccessIssue]
+        query_bus.dispatch.return_value = PageResult(
             items=(record_1, record_2),
             total=None,
             limit=None,
@@ -51,10 +50,10 @@ class ViewAuditLogsShould(unittest.TestCase):
         self.assertEqual(result, "record one\n\nrecord two")
         mock_render.assert_any_call(record_1)
         mock_render.assert_any_call(record_2)
-        cmd._event_collector.drain.assert_called_once_with((cmd._use_case,))  # type: ignore[reportUnknownMemberType]
+        query_bus.dispatch.assert_called_once()
 
     def test_execute_builds_query_from_all_supported_options(self) -> None:
-        cmd = self.make_cmd(
+        cmd, query_bus = self.make_cmd(
             [
                 "--limit",
                 "10",
@@ -85,11 +84,13 @@ class ViewAuditLogsShould(unittest.TestCase):
                 "2026-07-07",
             ]
         )
-        cmd._use_case.execute.return_value = PageResult(items=(), total=0, limit=10, offset=5)  # type: ignore[reportAttributeAccessIssue]
+        query_bus.dispatch.return_value = PageResult(items=(), total=0, limit=10, offset=5)
 
         cmd.execute()
 
-        query = cast(AuditLogQuery, cmd._use_case.execute.call_args.args[0])  # type: ignore[reportUnknownMemberType]
+        query_bus.dispatch.assert_called_once()
+        self.assertIs(query_bus.dispatch.call_args.kwargs["key"], VIEW_AUDITS)
+        query = cast(AuditLogQuery, query_bus.dispatch.call_args.kwargs["query"])
         self.assertEqual(query.page.limit, 10)
         self.assertEqual(query.page.offset, 5)
         self.assertTrue(query.page.include_total)
@@ -117,26 +118,26 @@ class ViewAuditLogsShould(unittest.TestCase):
 
         for params, expected_message in cases:
             with self.subTest(params=params):
-                cmd = self.make_cmd(params)
+                cmd, query_bus = self.make_cmd(params)
 
                 with self.assertRaisesRegex(ValueError, expected_message):
                     cmd.execute()
 
-                cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
+                query_bus.dispatch.assert_not_called()
 
     def test_execute_rejects_blank_text_filters(self) -> None:
-        cmd = self.make_cmd(["--resource_id", "   "])
+        cmd, query_bus = self.make_cmd(["--resource_id", "   "])
 
         with self.assertRaisesRegex(ValueError, "--resource_id must not be an empty string"):
             cmd.execute()
 
-        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
+        query_bus.dispatch.assert_not_called()
 
-    def test_execute_drains_use_case_events_when_use_case_raises(self) -> None:
-        cmd = self.make_cmd([])
-        cmd._use_case.execute.side_effect = PermissionError("Cannot view audit logs")  # type: ignore[reportAttributeAccessIssue]
+    def test_execute_propagates_query_bus_failure(self) -> None:
+        cmd, query_bus = self.make_cmd([])
+        query_bus.dispatch.side_effect = PermissionError("Cannot view audit logs")
 
         with self.assertRaises(PermissionError):
             cmd.execute()
 
-        cmd._event_collector.drain.assert_called_once_with((cmd._use_case,))  # type: ignore[reportUnknownMemberType]
+        query_bus.dispatch.assert_called_once()
