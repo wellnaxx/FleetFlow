@@ -23,6 +23,10 @@ from src.application.eventing.current_context import (
 from src.application.models.current_user_principal import CurrentUserPrincipal
 from src.application.models.user_record import UserRecord
 from src.application.services.authorization_service import AuthorizationService
+from src.application.services.current_authorization import (
+    get_authorization_context,
+    get_optional_authorization_context,
+)
 from src.domain.enums.auth import Role
 
 
@@ -139,6 +143,7 @@ class HttpAuthDependencyShould(unittest.IsolatedAsyncioTestCase):
         user_repo = MagicMock()
         principal = self._principal()
         request_context = self._request_context()
+        container_authorization = AuthorizationService(None)
 
         with (
             bind_event_context(request_context),
@@ -156,12 +161,17 @@ class HttpAuthDependencyShould(unittest.IsolatedAsyncioTestCase):
             assert actor_context.actor is not None
             self.assertEqual(actor_context.actor.user_id, 1)
             self.assertEqual(actor_context.actor.username, "alice")
+            self.assertIs(get_authorization_context().current_user, principal.current_user)
+            self.assertIs(container_authorization.current_user, principal.current_user)
 
             await dependency.aclose()
             self.assertIs(get_event_context(), request_context)
+            self.assertIsNone(get_optional_authorization_context())
+            self.assertIsNone(container_authorization.current_user)
 
         from_token.assert_called_once_with("access-token", user_repo)
         self.assertIsNone(get_optional_event_context())
+        self.assertIsNone(get_optional_authorization_context())
 
     async def test_get_current_user_restores_request_context_when_endpoint_fails(self) -> None:
         user_repo = MagicMock()
@@ -178,8 +188,10 @@ class HttpAuthDependencyShould(unittest.IsolatedAsyncioTestCase):
                 await dependency.athrow(RuntimeError("endpoint failed"))
 
             self.assertIs(get_event_context(), request_context)
+            self.assertIsNone(get_optional_authorization_context())
 
         self.assertIsNone(get_optional_event_context())
+        self.assertIsNone(get_optional_authorization_context())
 
     async def test_get_current_user_leaves_request_context_unchanged_when_token_validation_fails(self) -> None:
         user_repo = MagicMock()
@@ -196,6 +208,7 @@ class HttpAuthDependencyShould(unittest.IsolatedAsyncioTestCase):
 
         self.assertIs(ctx.exception, failure)
         self.assertIsNone(get_optional_event_context())
+        self.assertIsNone(get_optional_authorization_context())
 
     def _record(self, *, role: str) -> UserRecord:
         return UserRecord(

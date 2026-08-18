@@ -11,6 +11,7 @@ from src.application.exceptions.application_errors import UnsupportedRoleError, 
 from src.application.models.current_user_principal import CurrentUserPrincipal
 from src.application.models.user_record import UserRecord
 from src.application.services.authorization_service import AuthorizationService
+from src.application.services.current_authorization import bind_authorization_context
 from src.application.services.runtime_user_factory import create_runtime_authenticated_user_from_record
 from src.composition.runtime import get_user_repository
 from src.ports.output.user_repository import UserRepositoryPort
@@ -112,7 +113,8 @@ async def get_current_user(
 
     Yields:
         Authenticated HTTP principal representing the current request user
-        while an actor-enriched event context is bound.
+        while actor-enriched event and request-authorization contexts are
+        bound.
 
     Raises:
         HTTPException: Raised with:
@@ -129,7 +131,10 @@ async def get_current_user(
         ),
     )
 
-    with bind_event_context(actor_context):
+    with (
+        bind_event_context(actor_context),
+        bind_authorization_context(principal.current_user),
+    ):
         yield principal
 
 

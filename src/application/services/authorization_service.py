@@ -9,12 +9,18 @@ from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.events.auth_events import AuthorizationDenied
 from src.application.models.current_user_principal import CurrentUserPrincipal
+from src.application.services.current_authorization import get_optional_authorization_context
 from src.application.use_cases.base.event_mixin import ApplicationEventRecorderMixin
 from src.domain.enums.auth import ROLE_PERMISSIONS, Permission
 
 
 class AuthorizationService:
-    """Tracks current user and exposes permission checks."""
+    """Resolve current identity and expose role-based permission checks.
+
+    Request-scoped authorization context takes precedence over the mutable
+    session principal used by the CLI. Container-owned use cases can therefore
+    remain shared while concurrent HTTP requests observe isolated principals.
+    """
 
     def __init__(self, current_user: CurrentUserPrincipal | None) -> None:
         """Initialize authorization state.
@@ -22,7 +28,20 @@ class AuthorizationService:
         Args:
             current_user: Current authenticated principal, or `None` when unauthenticated.
         """
-        self.current_user: CurrentUserPrincipal | None = current_user
+        self._session_user: CurrentUserPrincipal | None = current_user
+
+    @property
+    def current_user(self) -> CurrentUserPrincipal | None:
+        """Return the scoped principal or session fallback when unbound."""
+        context = get_optional_authorization_context()
+        if context is not None:
+            return context.current_user
+        return self._session_user
+
+    @current_user.setter
+    def current_user(self, value: CurrentUserPrincipal | None) -> None:
+        """Update the CLI/session principal used outside scoped execution."""
+        self._session_user = value
 
     def has(self, perm: Permission) -> bool:
         """Return whether the current user has a permission.
@@ -33,9 +52,10 @@ class AuthorizationService:
         Returns:
             True when a current user exists and their role grants the permission.
         """
-        if not self.current_user:
+        current_user = self.current_user
+        if current_user is None:
             return False
-        allowed: frozenset[Permission] = ROLE_PERMISSIONS.get(self.current_user.role, frozenset())
+        allowed: frozenset[Permission] = ROLE_PERMISSIONS.get(current_user.role, frozenset())
         return perm in allowed
 
 
