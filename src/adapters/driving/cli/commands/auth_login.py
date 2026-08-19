@@ -2,11 +2,11 @@
 
 import getpass
 
-from src.adapters.driving.cli.commands.base_command.event_draining_command import EventDrainingCommand
-from src.application.use_cases.auth.login import LoginUseCase
+from src.adapters.driving.cli.commands.base_command.command_bus_command import CommandBusCommand
+from src.application.commands.auth.login import LOGIN, LoginCommand
 
 
-class AuthLogin(EventDrainingCommand[LoginUseCase]):
+class AuthLogin(CommandBusCommand):
     """Authenticate a user and update the CLI session."""
 
     mutates_session = True
@@ -14,16 +14,27 @@ class AuthLogin(EventDrainingCommand[LoginUseCase]):
     autosaves_state = False
 
     def execute(self) -> str:
-        """Prompt for credentials and log in.
+        """Collect credentials and dispatch a login command.
 
         Returns:
             CLI success message for the authenticated user.
 
         Raises:
-            ValueError: If credentials are invalid.
+            ValueError: If more than one username argument is supplied.
+            AuthenticationError: If the credentials are rejected.
+            ValidationError: If persisted account data is invalid.
+            DatabaseError: If account retrieval or persistence fails.
         """
+        if len(self.params) > 1:
+            raise ValueError("login accepts at most one username argument.")
 
-        username = self._params[0] if self._params else input("Username: ").strip()
+        username = self.params[0].strip() if self.params else input("Username: ").strip()
         password = getpass.getpass("Password: ")
-        result = self._run_and_drain(self._use_case, lambda: self._use_case.execute(username, password))
+        result = self.command_bus.dispatch(
+            key=LOGIN,
+            command=LoginCommand(
+                username=username,
+                password=password,
+            ),
+        )
         return f"Logged in as {result.principal.name} [{result.principal.role.value}]"

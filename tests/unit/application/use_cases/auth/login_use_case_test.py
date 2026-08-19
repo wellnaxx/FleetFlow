@@ -3,6 +3,7 @@ from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from src.application.commands.auth.login import LoginCommand
 from src.application.enums.user_login_rejection_reasons import UserLoginRejectionReason
 from src.application.events.auth_events import UserAuthenticated, UserLoginRejected
 from src.application.exceptions.password_errors import LoginWrongPasswordError
@@ -27,7 +28,7 @@ class LoginUseCase_Should(unittest.TestCase):
         occurred_at = datetime(2025, 1, 1, 12, 0)
         use_case = LoginUseCase(auth, clock=lambda: occurred_at)
 
-        result = use_case.execute("alice", "Secret123")
+        result = use_case.execute(LoginCommand(username="alice", password="Secret123"))
 
         self.assertIs(result.record, record)
         self.assertIs(result.principal, principal)
@@ -48,7 +49,7 @@ class LoginUseCase_Should(unittest.TestCase):
         use_case = LoginUseCase(auth, clock=lambda: occurred_at)
 
         with self.assertRaises(LoginWrongPasswordError):
-            use_case.execute("alice", "wrong")
+            use_case.execute(LoginCommand(username="alice", password="wrong"))
 
         event = use_case.pending_events[0]
         self.assertIsInstance(event, UserLoginRejected)

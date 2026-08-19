@@ -55,7 +55,7 @@ class MessageBusCompositionShould(unittest.TestCase):
         """Bind every command key to the correct handler and workflow."""
         bus = MagicMock()
         expected: tuple[tuple[object, type[object], object], ...] = (
-            (subject.LOGIN, subject.LoginCommandHandler, self.auth_cases.login),
+            (subject.LOGIN, subject.EventDrainingExecutor, self.auth_cases.login),
             (subject.LOGOUT, subject.LogoutCommandHandler, self.auth_cases.logout),
             (subject.REGISTER_USER, subject.RegisterUserCommandHandler, self.auth_cases.register_user),
             (

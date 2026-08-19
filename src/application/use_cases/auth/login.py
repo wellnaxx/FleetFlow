@@ -4,6 +4,7 @@ import logging
 from collections.abc import Callable
 from datetime import datetime
 
+from src.application.commands.auth.login import LoginCommand
 from src.application.events.auth_events import UserAuthenticated, UserLoginRejected
 from src.application.exceptions.password_errors import (
     LoginInvalidPersistedPasswordHashError,
@@ -36,12 +37,12 @@ class LoginUseCase(BaseUseCase[LoginResult], ApplicationEventRecorderMixin):
 
         self._pending_events = []
 
-    def execute(self, username: str, password: str) -> LoginResult:
+    def execute(self, command: LoginCommand) -> LoginResult:
         """Authenticate a user and return persisted record plus current principal.
 
         Args:
-            username: Login username.
-            password: Plain-text password.
+            command: Login name and plain-text password supplied by the
+                unauthenticated caller.
 
         Returns:
             Login result containing the persisted user record and authenticated principal.
@@ -53,7 +54,7 @@ class LoginUseCase(BaseUseCase[LoginResult], ApplicationEventRecorderMixin):
         occurred_at = self._clock()
 
         try:
-            principal, record = self._auth.login(username, password)
+            principal, record = self._auth.login(command.username, command.password)
         except (
             LoginUserNotFoundError,
             LoginInvalidPersistedPasswordHashError,
@@ -63,7 +64,7 @@ class LoginUseCase(BaseUseCase[LoginResult], ApplicationEventRecorderMixin):
             self._record_login_rejection(exc, occurred_at)
             raise
         else:
-            self._record_event(
+            self.record_event(
                 UserAuthenticated(
                     user_id=principal.user_id,
                     username=principal.username,
@@ -72,7 +73,7 @@ class LoginUseCase(BaseUseCase[LoginResult], ApplicationEventRecorderMixin):
                 )
             )
 
-        logger.info("User %r authenticated.", normalize_username(username))
+        logger.info("User %r authenticated.", normalize_username(command.username))
         return LoginResult(record, principal)
 
     def _record_login_rejection(
@@ -80,7 +81,13 @@ class LoginUseCase(BaseUseCase[LoginResult], ApplicationEventRecorderMixin):
         exc: LoginRejectedMixin,
         occurred_at: datetime,
     ) -> None:
-        self._record_event(
+        """Record a typed authentication rejection event.
+
+        Args:
+            exc: Authentication failure carrying normalized audit metadata.
+            occurred_at: Business timestamp shared by the login attempt.
+        """
+        self.record_event(
             UserLoginRejected(
                 user_id=exc.user_id,
                 username=exc.username,

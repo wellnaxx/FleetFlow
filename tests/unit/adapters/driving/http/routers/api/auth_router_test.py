@@ -16,6 +16,7 @@ from src.adapters.driving.http.routers.api.auth_router import (
     auth_router,
 )
 from src.application.commands.auth.change_password import CHANGE_OWN_PASSWORD, ChangeOwnPasswordCommand
+from src.application.commands.auth.login import LOGIN, LoginCommand
 from src.application.exceptions.application_errors import AuthenticationError, ValidationError
 from src.application.models.current_user_principal import CurrentUserPrincipal
 from src.application.models.user_record import UserRecord
@@ -36,14 +37,12 @@ class AuthRouterShould(unittest.TestCase):
         self.app.dependency_overrides.clear()
 
     def test_login_returns_token_pair(self) -> None:
-        use_case = MagicMock()
-        event_collector = MagicMock()
+        command_bus = MagicMock(spec=CommandBus)
         record = self._record()
-        use_case.execute.return_value = LoginResult(
+        command_bus.dispatch.return_value = LoginResult(
             record=record, principal=self._principal(record).current_user
         )
-        self.app.dependency_overrides[auth_router_module.get_login_use_case] = lambda: use_case
-        self.app.dependency_overrides[auth_router_module.get_event_collector] = lambda: event_collector
+        self.app.dependency_overrides[auth_router_module.get_command_bus] = lambda: command_bus
 
         with self._patched_tokens():
             response = self.client.post(
@@ -60,15 +59,17 @@ class AuthRouterShould(unittest.TestCase):
                 "token_type": "bearer",
             },
         )
-        use_case.execute.assert_called_once_with("alice", "Secret123!")
-        event_collector.drain.assert_called_once_with((use_case,))
+        command_bus.dispatch.assert_called_once()
+        self.assertIs(command_bus.dispatch.call_args.kwargs["key"], LOGIN)
+        command = command_bus.dispatch.call_args.kwargs["command"]
+        self.assertIsInstance(command, LoginCommand)
+        self.assertEqual(command.username, "alice")
+        self.assertEqual(command.password, "Secret123!")
 
     def test_login_returns_unauthorized_for_invalid_credentials(self) -> None:
-        use_case = MagicMock()
-        event_collector = MagicMock()
-        use_case.execute.side_effect = AuthenticationError("bad credentials")
-        self.app.dependency_overrides[auth_router_module.get_login_use_case] = lambda: use_case
-        self.app.dependency_overrides[auth_router_module.get_event_collector] = lambda: event_collector
+        command_bus = MagicMock(spec=CommandBus)
+        command_bus.dispatch.side_effect = AuthenticationError("bad credentials")
+        self.app.dependency_overrides[auth_router_module.get_command_bus] = lambda: command_bus
 
         response = self.client.post(
             "/auth/login",
@@ -77,18 +78,16 @@ class AuthRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json()["detail"], "Invalid username or password.")
-        use_case.execute.assert_called_once_with("alice", "wrong")
-        event_collector.drain.assert_called_once_with((use_case,))
+        command_bus.dispatch.assert_called_once()
+        self.assertIs(command_bus.dispatch.call_args.kwargs["key"], LOGIN)
 
     def test_login_returns_bad_request_for_invalid_persisted_role_before_token_creation(self) -> None:
-        use_case = MagicMock()
-        event_collector = MagicMock()
+        command_bus = MagicMock(spec=CommandBus)
         record = self._record(role="OWNER")
-        use_case.execute.return_value = LoginResult(
+        command_bus.dispatch.return_value = LoginResult(
             record=record, principal=self._principal(record).current_user
         )
-        self.app.dependency_overrides[auth_router_module.get_login_use_case] = lambda: use_case
-        self.app.dependency_overrides[auth_router_module.get_event_collector] = lambda: event_collector
+        self.app.dependency_overrides[auth_router_module.get_command_bus] = lambda: command_bus
 
         with self._patched_tokens() as token_mocks:
             response = self.client.post(
@@ -98,8 +97,7 @@ class AuthRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["detail"], "Invalid persisted user role.")
-        use_case.execute.assert_called_once_with("alice", "Secret123!")
-        event_collector.drain.assert_called_once_with((use_case,))
+        command_bus.dispatch.assert_called_once()
         token_mocks["create_access_token"].assert_not_called()
         token_mocks["create_refresh_token"].assert_not_called()
 

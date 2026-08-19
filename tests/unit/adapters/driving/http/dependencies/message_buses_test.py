@@ -8,14 +8,15 @@ from src.adapters.driving.http.dependencies.auth import AuthenticatedHTTPPrincip
 from src.adapters.driving.http.dependencies.message_buses import (
     get_authenticated_command_bus,
     get_authenticated_query_bus,
+    get_command_bus,
 )
 from src.composition.container import Container
 from src.ports.input.command_bus import CommandBus
 from src.ports.input.query_bus import QueryBus
 
 
-class AuthenticatedMessageBusDependenciesShould(unittest.TestCase):
-    """Expose the container buses after FastAPI authenticates the request."""
+class MessageBusDependenciesShould(unittest.TestCase):
+    """Expose public and authenticated buses from the container."""
 
     def setUp(self) -> None:
         """Create isolated principal, container, and bus doubles."""
@@ -27,8 +28,14 @@ class AuthenticatedMessageBusDependenciesShould(unittest.TestCase):
         self.container.query_bus = self.query_bus
 
     def test_returns_container_command_bus(self) -> None:
-        """Return the configured command bus without wrapping it."""
+        """Return the configured bus after authentication."""
         result = get_authenticated_command_bus(self.principal, self.container)
+
+        self.assertIs(result, self.command_bus)
+
+    def test_returns_public_container_command_bus(self) -> None:
+        """Return the command bus without requiring a principal."""
+        result = get_command_bus(self.container)
 
         self.assertIs(result, self.command_bus)
 

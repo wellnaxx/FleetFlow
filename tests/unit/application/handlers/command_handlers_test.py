@@ -4,7 +4,6 @@ import unittest
 from datetime import datetime
 from unittest.mock import MagicMock
 
-from src.application.commands.auth.login import LoginCommand
 from src.application.commands.auth.logout import LogoutCommand
 from src.application.commands.auth.register_user import RegisterUserCommand
 from src.application.commands.auth.reset_password import ResetUserPasswordCommand
@@ -16,7 +15,6 @@ from src.application.commands.routes.create_route import CreateRouteCommand
 from src.application.commands.routes.remove_route import RemoveRouteCommand
 from src.application.commands.state.load_world import LoadWorldCommand
 from src.application.commands.state.save_world import SaveWorldCommand
-from src.application.handlers.commands.auth.login import LoginCommandHandler
 from src.application.handlers.commands.auth.logout import LogoutCommandHandler
 from src.application.handlers.commands.auth.register_user import RegisterUserCommandHandler
 from src.application.handlers.commands.auth.reset_password import ResetUserPasswordCommandHandler
@@ -37,26 +35,6 @@ NOW = datetime(2026, 8, 6, 12, 30)
 
 class CommandHandlersShould(unittest.TestCase):
     """Verify that command handlers delegate once with the intended arguments."""
-
-    def test_login_delegates_credentials_and_returns_result(self) -> None:
-        use_case = MagicMock()
-        expected = object()
-        use_case.execute.return_value = expected
-
-        result = LoginCommandHandler(use_case).execute(LoginCommand(username="alex", password="secret"))
-
-        self.assertIs(result, expected)
-        use_case.execute.assert_called_once_with("alex", "secret")
-
-    def test_login_propagates_use_case_failure(self) -> None:
-        use_case = MagicMock()
-        failure = RuntimeError("login failed")
-        use_case.execute.side_effect = failure
-
-        with self.assertRaises(RuntimeError) as raised:
-            LoginCommandHandler(use_case).execute(LoginCommand(username="alex", password="secret"))
-
-        self.assertIs(raised.exception, failure)
 
     def test_logout_delegates_without_arguments(self) -> None:
         use_case = MagicMock()

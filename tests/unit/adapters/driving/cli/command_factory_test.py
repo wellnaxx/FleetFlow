@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 from src.adapters.driving.cli.command_factory import CommandFactory
 from src.adapters.driving.cli.commands.auth_change_password import AuthChangePassword
+from src.adapters.driving.cli.commands.auth_login import AuthLogin
 from src.adapters.driving.cli.commands.auth_whoami import AuthWhoAmI
 from src.adapters.driving.cli.commands.get_fleet_overview import GetFleetOverview
 from src.adapters.driving.cli.commands.view_audits import ViewAuditLogs
@@ -95,7 +96,7 @@ class CommandFactoryShould(unittest.TestCase):
         cases: list[tuple[str, str, list[str], object]] = [
             ("save state.json", "save", ["state.json"], container.state_cases.save),
             ("load state.json", "load", ["state.json"], container.state_cases.load),
-            ("login alice", "login", ["alice"], container.auth_cases.login),
+            ("login alice", "login", ["alice"], container.command_bus),
             ("logout", "logout", [], container.auth_cases.logout),
             ("whoami", "whoami", [], container.query_bus),
             (
@@ -200,6 +201,16 @@ class CommandFactoryShould(unittest.TestCase):
 
         self.assertIsInstance(command, AuthChangePassword)
         self.assertEqual(command.params, ())
+        self.assertIs(command.command_bus, container.command_bus)
+
+    def test_login_receives_registered_command_bus(self) -> None:
+        """Build the migrated login command with the public command bus."""
+        factory, container = self.make_factory()
+
+        command = cast(AuthLogin, factory.create("login alice"))
+
+        self.assertIsInstance(command, AuthLogin)
+        self.assertEqual(command.params, ("alice",))
         self.assertIs(command.command_bus, container.command_bus)
 
     def test_view_audit_logs_receives_registered_query_bus(self) -> None:

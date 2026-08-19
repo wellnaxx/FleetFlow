@@ -6,7 +6,6 @@ from fastapi import Depends
 
 from src.adapters.driving.http.dependencies.auth import AuthenticatedHTTPPrincipal, get_current_user
 from src.application.services.auth_service import AuthService
-from src.application.use_cases.auth.login import LoginUseCase
 from src.application.use_cases.auth.logout import LogoutUseCase
 from src.application.use_cases.auth.register_user import RegisterUserUseCase
 from src.application.use_cases.auth.reset_password import ResetPasswordUseCase
@@ -53,22 +52,6 @@ def get_register_user_use_case(
         HTTPException: Raised by `get_current_user` when authentication fails.
     """
     return RegisterUserUseCase(auth=auth_service, authz=principal.authz)
-
-
-def get_login_use_case(
-    container: Annotated[Container, Depends(get_container)],
-    auth_service: Annotated[AuthService, Depends(get_auth_service)],
-) -> LoginUseCase:
-    """Build the login use case for an unauthenticated HTTP request.
-
-    Args:
-        container: Application dependency container.
-        auth_service: Shared authentication service.
-
-    Returns:
-        Login use case with the container clock for event timestamps.
-    """
-    return LoginUseCase(auth=auth_service, clock=container.clock)
 
 
 def get_reset_password_use_case(

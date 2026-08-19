@@ -1,4 +1,4 @@
-"""FastAPI dependencies exposing authenticated message-bus input ports."""
+"""FastAPI dependencies exposing public and authenticated message buses."""
 
 from typing import Annotated
 
@@ -9,6 +9,24 @@ from src.composition.container import Container
 from src.composition.runtime import get_container
 from src.ports.input.command_bus import CommandBus
 from src.ports.input.query_bus import QueryBus
+
+
+def get_command_bus(
+    container: Annotated[Container, Depends(get_container)],
+) -> CommandBus:
+    """Return the command bus for a public HTTP workflow.
+
+    Public workflows such as login still execute inside the request event
+    context established by HTTP middleware, but they must not require an
+    already authenticated principal.
+
+    Args:
+        container: Application container owning the configured command bus.
+
+    Returns:
+        Dispatch-only command-bus input port.
+    """
+    return container.command_bus
 
 
 def get_authenticated_command_bus(

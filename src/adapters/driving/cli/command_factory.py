@@ -37,7 +37,7 @@ type CommandParams = tuple[str, ...]
 type CommandBuilder = Callable[[Container, CommandParams], BaseCommand[Any]]
 
 _CONTAINER_COMMANDS: dict[str, CommandBuilder] = {
-    "login": lambda container, params: AuthLogin(params, container.auth_cases.login, container.event_collector),
+    "login": lambda container, params: AuthLogin(params, container.command_bus),
     "logout": lambda container, params: AuthLogout(
         params, container.auth_cases.logout, container.event_collector
     ),

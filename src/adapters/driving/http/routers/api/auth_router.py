@@ -14,9 +14,11 @@ from src.adapters.driving.http.dependencies.auth import (
     principal_from_token,
 )
 from src.adapters.driving.http.dependencies.eventing import execute_and_drain_events, get_event_collector
-from src.adapters.driving.http.dependencies.message_buses import get_authenticated_command_bus
+from src.adapters.driving.http.dependencies.message_buses import (
+    get_authenticated_command_bus,
+    get_command_bus,
+)
 from src.adapters.driving.http.dependencies.use_cases import (
-    get_login_use_case,
     get_logout_use_case,
     get_register_user_use_case,
     get_reset_password_use_case,
@@ -30,13 +32,13 @@ from src.adapters.driving.http.schemas.auth import (
     TokenResponse,
 )
 from src.application.commands.auth.change_password import CHANGE_OWN_PASSWORD, ChangeOwnPasswordCommand
+from src.application.commands.auth.login import LOGIN, LoginCommand
 from src.application.eventing.collector import EventCollector
 from src.application.exceptions.application_errors import (
     AuthenticationError,
     ValidationError,
 )
 from src.application.models.user_record import UserRecord
-from src.application.use_cases.auth.login import LoginUseCase
 from src.application.use_cases.auth.logout import LogoutUseCase
 from src.application.use_cases.auth.register_user import RegisterUserUseCase
 from src.application.use_cases.auth.reset_password import ResetPasswordUseCase
@@ -153,15 +155,14 @@ def register(
 @auth_router.post("/login", status_code=status.HTTP_200_OK)
 def login(
     form_data: Annotated[LoginFormData, Depends(_get_login_form_data)],
-    use_case: Annotated[LoginUseCase, Depends(get_login_use_case)],
-    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
+    command_bus: Annotated[CommandBus, Depends(get_command_bus)],
 ) -> TokenResponse:
     """Authenticate with username/password and return an access + refresh token pair.
 
     Args:
         form_data: Login credentials extracted from form data.
-        use_case: Use case for authenticating users, injected by FastAPI.
-        event_collector: Collector used to publish authentication events.
+        command_bus: Public command bus injected by FastAPI. The registered
+            executor owns authentication-event publication.
 
     Returns:
         A token response containing a new access token and refresh token.
@@ -173,10 +174,12 @@ def login(
             * 500 - Database operation failure.
     """
     try:
-        result = execute_and_drain_events(
-            recorder=use_case,
-            event_collector=event_collector,
-            action=lambda: use_case.execute(form_data.username, form_data.password),
+        result = command_bus.dispatch(
+            key=LOGIN,
+            command=LoginCommand(
+                username=form_data.username,
+                password=form_data.password,
+            ),
         )
         return _token_response(result.record)
     except AuthenticationError as exc:
