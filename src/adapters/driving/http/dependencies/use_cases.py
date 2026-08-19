@@ -6,7 +6,6 @@ from fastapi import Depends
 
 from src.adapters.driving.http.dependencies.auth import AuthenticatedHTTPPrincipal, get_current_user
 from src.application.services.auth_service import AuthService
-from src.application.use_cases.auth.change_password import ChangePasswordUseCase
 from src.application.use_cases.auth.login import LoginUseCase
 from src.application.use_cases.auth.logout import LogoutUseCase
 from src.application.use_cases.auth.register_user import RegisterUserUseCase
@@ -70,27 +69,6 @@ def get_login_use_case(
         Login use case with the container clock for event timestamps.
     """
     return LoginUseCase(auth=auth_service, clock=container.clock)
-
-
-def get_change_password_use_case(
-    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
-    auth_service: Annotated[AuthService, Depends(get_auth_service)],
-    container: Annotated[Container, Depends(get_container)],
-) -> ChangePasswordUseCase:
-    """Build the password-change use case for the authenticated request.
-
-    Args:
-        principal: Authenticated HTTP principal carrying request-scoped authorization.
-        auth_service: Shared authentication service.
-        container: Application dependency container.
-
-    Returns:
-        Password-change use case bound to request-scoped authorization.
-
-    Raises:
-        HTTPException: Raised by `get_current_user` when authentication fails.
-    """
-    return ChangePasswordUseCase(auth=auth_service, authz=principal.authz, clock=container.clock)
 
 
 def get_reset_password_use_case(

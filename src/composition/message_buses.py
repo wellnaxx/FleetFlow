@@ -24,7 +24,6 @@ from src.application.commands.routes.remove_route import REMOVE_ROUTE
 from src.application.commands.state.load_world import LOAD_WORLD
 from src.application.commands.state.save_world import SAVE_WORLD
 from src.application.eventing.collector import EventCollector
-from src.application.handlers.commands.auth.change_password import ChangeOwnPasswordCommandHandler
 from src.application.handlers.commands.auth.login import LoginCommandHandler
 from src.application.handlers.commands.auth.logout import LogoutCommandHandler
 from src.application.handlers.commands.auth.register_user import RegisterUserCommandHandler
@@ -89,18 +88,21 @@ def build_command_bus(
     package_cases: PackageUseCases,
     route_cases: RouteUseCases,
     state_cases: StateUseCases,
+    event_collector: EventCollector,
 ) -> InProcessCommandBus:
     """Build a command bus containing every application command handler.
 
     A fresh bus is created for each call. Handlers are constructed around the
     supplied use-case instances and registered under their canonical typed
-    keys. The function does not dispatch commands or drain recorded events.
+    keys. Event-producing use cases that have migrated to direct message
+    execution are wrapped so each dispatch drains its scoped events.
 
     Args:
         auth_cases: Authentication and account-management use cases.
         package_cases: Package-facing use cases.
         route_cases: Route-facing use cases.
         state_cases: World-state management use cases.
+        event_collector: Collector used by event-aware command executors.
 
     Returns:
         Fresh in-process command bus with every published command registered.
@@ -116,7 +118,13 @@ def build_command_bus(
     bus.register(LOGIN, LoginCommandHandler(auth_cases.login))
     bus.register(LOGOUT, LogoutCommandHandler(auth_cases.logout))
     bus.register(REGISTER_USER, RegisterUserCommandHandler(auth_cases.register_user))
-    bus.register(CHANGE_OWN_PASSWORD, ChangeOwnPasswordCommandHandler(auth_cases.change_password))
+    bus.register(
+        CHANGE_OWN_PASSWORD,
+        EventDrainingExecutor(
+            delegate=auth_cases.change_password,
+            event_collector=event_collector,
+        ),
+    )
     bus.register(RESET_USER_PASSWORD, ResetUserPasswordCommandHandler(auth_cases.reset_password))
 
     # Package management
@@ -176,7 +184,10 @@ def build_query_bus(
     # Audit queries
     bus.register(
         VIEW_AUDITS,
-        EventDrainingExecutor(delegate=audit_cases.view_audit_logs, event_collector=event_collector),
+        EventDrainingExecutor(
+            delegate=audit_cases.view_audit_logs,
+            event_collector=event_collector,
+        ),
     )
 
     # Authentication and account management

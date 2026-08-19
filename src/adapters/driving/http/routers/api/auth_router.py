@@ -14,8 +14,8 @@ from src.adapters.driving.http.dependencies.auth import (
     principal_from_token,
 )
 from src.adapters.driving.http.dependencies.eventing import execute_and_drain_events, get_event_collector
+from src.adapters.driving.http.dependencies.message_buses import get_authenticated_command_bus
 from src.adapters.driving.http.dependencies.use_cases import (
-    get_change_password_use_case,
     get_login_use_case,
     get_logout_use_case,
     get_register_user_use_case,
@@ -29,19 +29,20 @@ from src.adapters.driving.http.schemas.auth import (
     ResetUserPasswordRequest,
     TokenResponse,
 )
+from src.application.commands.auth.change_password import CHANGE_OWN_PASSWORD, ChangeOwnPasswordCommand
 from src.application.eventing.collector import EventCollector
 from src.application.exceptions.application_errors import (
     AuthenticationError,
     ValidationError,
 )
 from src.application.models.user_record import UserRecord
-from src.application.use_cases.auth.change_password import ChangePasswordUseCase
 from src.application.use_cases.auth.login import LoginUseCase
 from src.application.use_cases.auth.logout import LogoutUseCase
 from src.application.use_cases.auth.register_user import RegisterUserUseCase
 from src.application.use_cases.auth.reset_password import ResetPasswordUseCase
 from src.composition.runtime import get_user_repository
 from src.domain.enums.auth import Role
+from src.ports.input.command_bus import CommandBus
 from src.ports.output.user_repository import UserRepositoryPort
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
@@ -188,16 +189,14 @@ def login(
 @auth_router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
 def change_password(
     request: ChangeOwnPasswordRequest,
-    use_case: Annotated[ChangePasswordUseCase, Depends(get_change_password_use_case)],
-    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
+    command_bus: Annotated[CommandBus, Depends(get_authenticated_command_bus)],
 ) -> None:
     """Change the current user's password.
 
     Args:
         request: Current and new password request body.
-        principal: Currently authenticated user, injected by FastAPI.
-        use_case: Use case for changing passwords, injected by FastAPI.
-        event_collector: Collector used to publish password-change events.
+        command_bus: Authenticated command bus injected by FastAPI. The
+            registered executor owns password-change event publication.
 
     Returns:
         None
@@ -210,12 +209,10 @@ def change_password(
             * 500 - Database operation failure.
     """
     try:
-        execute_and_drain_events(
-            recorder=use_case,
-            event_collector=event_collector,
-            action=lambda: use_case.execute(
-                current_password=request.current_password,
-                new_password=request.new_password,
+        command_bus.dispatch(
+            key=CHANGE_OWN_PASSWORD,
+            command=ChangeOwnPasswordCommand(
+                current_password=request.current_password, new_password=request.new_password
             ),
         )
     except AuthenticationError as exc:

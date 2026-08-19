@@ -323,6 +323,7 @@ class Container:
             package_cases=self.package_cases,
             route_cases=self.route_cases,
             state_cases=self.state_cases,
+            event_collector=self.event_collector,
         )
         self.query_bus = build_query_bus(
             audit_cases=self.audit_use_cases,

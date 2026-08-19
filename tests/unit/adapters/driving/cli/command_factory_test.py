@@ -4,6 +4,7 @@ from typing import cast
 from unittest.mock import MagicMock, patch
 
 from src.adapters.driving.cli.command_factory import CommandFactory
+from src.adapters.driving.cli.commands.auth_change_password import AuthChangePassword
 from src.adapters.driving.cli.commands.auth_whoami import AuthWhoAmI
 from src.adapters.driving.cli.commands.get_fleet_overview import GetFleetOverview
 from src.adapters.driving.cli.commands.view_audits import ViewAuditLogs
@@ -51,6 +52,7 @@ class CommandFactoryShould(unittest.TestCase):
             truck_cases=SimpleNamespace(
                 view_all=MagicMock(),
             ),
+            command_bus=MagicMock(),
             query_bus=MagicMock(),
             event_collector=MagicMock(),
         )
@@ -102,7 +104,7 @@ class CommandFactoryShould(unittest.TestCase):
                 ["alice", "employee", "Alice"],
                 container.auth_cases.register_user,
             ),
-            ("changepassword", "changepassword", [], container.auth_cases.change_password),
+            ("changepassword", "changepassword", [], container.command_bus),
             ("resetpassword alice", "resetpassword", ["alice"], container.auth_cases.reset_password),
             (
                 'createpackage "SYD" "MEL" 5 "Alice"',
@@ -189,6 +191,16 @@ class CommandFactoryShould(unittest.TestCase):
         self.assertIsInstance(command, AuthWhoAmI)
         self.assertEqual(command.params, ())
         self.assertIs(command.query_bus, container.query_bus)
+
+    def test_change_password_receives_registered_command_bus(self) -> None:
+        """Build the migrated password-change command with the command bus."""
+        factory, container = self.make_factory()
+
+        command = cast(AuthChangePassword, factory.create("changepassword"))
+
+        self.assertIsInstance(command, AuthChangePassword)
+        self.assertEqual(command.params, ())
+        self.assertIs(command.command_bus, container.command_bus)
 
     def test_view_audit_logs_receives_registered_query_bus(self) -> None:
         """Build the migrated audit command with the container query bus."""

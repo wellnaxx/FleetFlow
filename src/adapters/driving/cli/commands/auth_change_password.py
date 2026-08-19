@@ -2,12 +2,12 @@
 
 import getpass
 
-from src.adapters.driving.cli.commands.base_command.event_draining_command import EventDrainingCommand
+from src.adapters.driving.cli.commands.base_command.command_bus_command import CommandBusCommand
 from src.adapters.driving.cli.commands.validation_helpers import validate_passwords
-from src.application.use_cases.auth.change_password import ChangePasswordUseCase
+from src.application.commands.auth.change_password import CHANGE_OWN_PASSWORD, ChangeOwnPasswordCommand
 
 
-class AuthChangePassword(EventDrainingCommand[ChangePasswordUseCase]):
+class AuthChangePassword(CommandBusCommand):
     """Run the self-service password-change workflow.
 
     Usage:
@@ -18,7 +18,7 @@ class AuthChangePassword(EventDrainingCommand[ChangePasswordUseCase]):
     autosaves_state = False
 
     def execute(self) -> str:
-        """Prompt for current and replacement passwords.
+        """Prompt for passwords and dispatch a self-service change command.
 
         Returns:
             Password-change confirmation text.
@@ -28,6 +28,10 @@ class AuthChangePassword(EventDrainingCommand[ChangePasswordUseCase]):
             ValueError: If arguments are supplied or password confirmation
                 validation fails.
             AuthenticationError: If the current password is incorrect.
+            ValidationError: If the account or replacement password is
+                invalid.
+            NotFoundError: If the authenticated account no longer exists.
+            DatabaseError: If password persistence fails.
         """
         if self._params:
             raise ValueError("changepassword does not accept arguments.")
@@ -37,9 +41,9 @@ class AuthChangePassword(EventDrainingCommand[ChangePasswordUseCase]):
         confirmation = getpass.getpass("Confirm new password: ")
         validate_passwords(new_password, confirmation)
 
-        self._run_and_drain(
-            self._use_case,
-            lambda: self._use_case.execute(
+        self.command_bus.dispatch(
+            key=CHANGE_OWN_PASSWORD,
+            command=ChangeOwnPasswordCommand(
                 current_password=current_password,
                 new_password=new_password,
             ),

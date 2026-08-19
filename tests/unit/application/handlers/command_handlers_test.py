@@ -4,7 +4,6 @@ import unittest
 from datetime import datetime
 from unittest.mock import MagicMock
 
-from src.application.commands.auth.change_password import ChangeOwnPasswordCommand
 from src.application.commands.auth.login import LoginCommand
 from src.application.commands.auth.logout import LogoutCommand
 from src.application.commands.auth.register_user import RegisterUserCommand
@@ -17,7 +16,6 @@ from src.application.commands.routes.create_route import CreateRouteCommand
 from src.application.commands.routes.remove_route import RemoveRouteCommand
 from src.application.commands.state.load_world import LoadWorldCommand
 from src.application.commands.state.save_world import SaveWorldCommand
-from src.application.handlers.commands.auth.change_password import ChangeOwnPasswordCommandHandler
 from src.application.handlers.commands.auth.login import LoginCommandHandler
 from src.application.handlers.commands.auth.logout import LogoutCommandHandler
 from src.application.handlers.commands.auth.register_user import RegisterUserCommandHandler
@@ -92,16 +90,6 @@ class CommandHandlersShould(unittest.TestCase):
             phone_number="0412345678",
             password="secret",
         )
-
-    def test_change_own_password_selects_current_user_flow(self) -> None:
-        use_case = MagicMock()
-
-        result = ChangeOwnPasswordCommandHandler(use_case).execute(
-            ChangeOwnPasswordCommand(current_password="old", new_password="new")
-        )
-
-        self.assertIsNone(result)
-        use_case.execute.assert_called_once_with(current_password="old", new_password="new")
 
     def test_reset_password_selects_administrative_flow(self) -> None:
         use_case = MagicMock()

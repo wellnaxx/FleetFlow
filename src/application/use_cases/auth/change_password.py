@@ -4,6 +4,7 @@ import logging
 from collections.abc import Callable
 from datetime import datetime
 
+from src.application.commands.auth.change_password import ChangeOwnPasswordCommand
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.enums.user_password_change_rejection_reasons import UserPasswordChangeRejectionReason
@@ -46,12 +47,13 @@ class ChangePasswordUseCase(AuthorizedUseCase[None]):
         self._auth = auth
         self._clock = clock
 
-    def execute(self, current_password: str, new_password: str) -> None:
+    def execute(self, command: ChangeOwnPasswordCommand) -> None:
         """Change the current principal's password.
 
         Args:
-            current_password: Existing plain-text password to verify.
-            new_password: Replacement plain-text password.
+            command: Current and replacement password values for the
+                authenticated principal. The principal identity comes from
+                request- or session-scoped authorization context.
 
         Raises:
             PermissionError: If no user is authenticated.
@@ -79,7 +81,7 @@ class ChangePasswordUseCase(AuthorizedUseCase[None]):
         username = current_user.username
         normalized_username = normalize_username(username)
         if not normalized_username:
-            self._record_event(
+            self.record_event(
                 UserPasswordChangeRejected(
                     user_id=current_user.user_id,
                     username=username,
@@ -92,8 +94,8 @@ class ChangePasswordUseCase(AuthorizedUseCase[None]):
         try:
             record = self._auth.change_password(
                 normalized_username,
-                current_password,
-                new_password,
+                command.current_password,
+                command.new_password,
             )
         except (
             PasswordChangeUserNotFoundError,
@@ -105,7 +107,7 @@ class ChangePasswordUseCase(AuthorizedUseCase[None]):
             self._record_password_change_rejection(exc, occurred_at)
             raise
 
-        self._record_event(
+        self.record_event(
             UserPasswordChanged(
                 user_id=record.user_id,
                 username=record.username,
@@ -125,7 +127,7 @@ class ChangePasswordUseCase(AuthorizedUseCase[None]):
             exc: Authentication-service failure carrying audit metadata.
             occurred_at: Business timestamp shared by the attempted workflow.
         """
-        self._record_event(
+        self.record_event(
             UserPasswordChangeRejected(
                 user_id=exc.user_id,
                 username=exc.username,

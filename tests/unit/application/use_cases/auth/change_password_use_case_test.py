@@ -4,6 +4,7 @@ import unittest
 from datetime import datetime
 from unittest.mock import MagicMock
 
+from src.application.commands.auth.change_password import ChangeOwnPasswordCommand
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.enums.user_password_change_rejection_reasons import UserPasswordChangeRejectionReason
@@ -38,12 +39,23 @@ def _user_record(user_id: int, username: str) -> UserRecord:
 class ChangePasswordUseCaseShould(unittest.TestCase):
     """Verify current-principal password changes and event recording."""
 
+    @staticmethod
+    def command(
+        current_password: str = "OldSecret123",
+        new_password: str = "NewSecret123",
+    ) -> ChangeOwnPasswordCommand:
+        """Build a password-change command for use-case tests."""
+        return ChangeOwnPasswordCommand(
+            current_password=current_password,
+            new_password=new_password,
+        )
+
     def test_changes_authenticated_principal_password(self) -> None:
         auth = MagicMock()
         auth.change_password.return_value = _user_record(2, "employee")
         use_case = ChangePasswordUseCase(auth, employee_authz(), clock=lambda: NOW)
 
-        result = use_case.execute(current_password="OldSecret123", new_password="NewSecret123")
+        result = use_case.execute(self.command())
 
         self.assertIsNone(result)
         auth.change_password.assert_called_once_with("employee", "OldSecret123", "NewSecret123")
@@ -60,7 +72,7 @@ class ChangePasswordUseCaseShould(unittest.TestCase):
         use_case = ChangePasswordUseCase(auth, AuthorizationService(None), clock=lambda: NOW)
 
         with self.assertRaisesRegex(PermissionError, "Unauthenticated"):
-            use_case.execute(current_password="OldSecret123", new_password="NewSecret123")
+            use_case.execute(self.command())
 
         auth.change_password.assert_not_called()
         event = use_case.pending_events[0]
@@ -78,7 +90,7 @@ class ChangePasswordUseCaseShould(unittest.TestCase):
         use_case = ChangePasswordUseCase(auth, authz, clock=lambda: NOW)
 
         with self.assertRaisesRegex(ValidationError, "non-empty"):
-            use_case.execute(current_password="OldSecret123", new_password="NewSecret123")
+            use_case.execute(self.command())
 
         auth.change_password.assert_not_called()
         event = use_case.pending_events[0]
@@ -96,7 +108,7 @@ class ChangePasswordUseCaseShould(unittest.TestCase):
         use_case = ChangePasswordUseCase(auth, employee_authz(), clock=lambda: NOW)
 
         with self.assertRaises(CurrentPasswordIncorrectError) as raised:
-            use_case.execute(current_password="wrong", new_password="NewSecret123")
+            use_case.execute(self.command(current_password="wrong"))
 
         self.assertIs(raised.exception, expected)
         event = use_case.pending_events[0]

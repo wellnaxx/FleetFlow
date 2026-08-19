@@ -60,7 +60,7 @@ class MessageBusCompositionShould(unittest.TestCase):
             (subject.REGISTER_USER, subject.RegisterUserCommandHandler, self.auth_cases.register_user),
             (
                 subject.CHANGE_OWN_PASSWORD,
-                subject.ChangeOwnPasswordCommandHandler,
+                subject.EventDrainingExecutor,
                 self.auth_cases.change_password,
             ),
             (
@@ -92,6 +92,7 @@ class MessageBusCompositionShould(unittest.TestCase):
                 self.package_cases,
                 self.route_cases,
                 self.state_cases,
+                self.event_collector,
             )
 
         self.assertIs(result, bus)
@@ -100,7 +101,14 @@ class MessageBusCompositionShould(unittest.TestCase):
             actual_key, handler = cast(tuple[object, object], actual.args)
             self.assertIs(actual_key, key)
             self.assertIs(type(handler), handler_type)
-            self.assertIs(cast(object, vars(handler)["_use_case"]), use_case)
+            if isinstance(handler, subject.EventDrainingExecutor):
+                self.assertIs(cast(object, vars(handler)["_delegate"]), use_case)
+                self.assertIs(
+                    cast(object, vars(handler)["_event_collector"]),
+                    self.event_collector,
+                )
+            else:
+                self.assertIs(cast(object, vars(handler)["_use_case"]), use_case)
 
         self.assertEqual(
             tuple(key.command_type for key, _, _ in expected),
