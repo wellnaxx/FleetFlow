@@ -4,7 +4,6 @@ import unittest
 from datetime import datetime
 from unittest.mock import MagicMock
 
-from src.application.commands.auth.logout import LogoutCommand
 from src.application.commands.auth.register_user import RegisterUserCommand
 from src.application.commands.auth.reset_password import ResetUserPasswordCommand
 from src.application.commands.packages.create_package import CreatePackageCommand
@@ -15,7 +14,6 @@ from src.application.commands.routes.create_route import CreateRouteCommand
 from src.application.commands.routes.remove_route import RemoveRouteCommand
 from src.application.commands.state.load_world import LoadWorldCommand
 from src.application.commands.state.save_world import SaveWorldCommand
-from src.application.handlers.commands.auth.logout import LogoutCommandHandler
 from src.application.handlers.commands.auth.register_user import RegisterUserCommandHandler
 from src.application.handlers.commands.auth.reset_password import ResetUserPasswordCommandHandler
 from src.application.handlers.commands.packages.create_package import CreatePackageCommandHandler
@@ -35,14 +33,6 @@ NOW = datetime(2026, 8, 6, 12, 30)
 
 class CommandHandlersShould(unittest.TestCase):
     """Verify that command handlers delegate once with the intended arguments."""
-
-    def test_logout_delegates_without_arguments(self) -> None:
-        use_case = MagicMock()
-
-        result = LogoutCommandHandler(use_case).execute(LogoutCommand())
-
-        self.assertIsNone(result)
-        use_case.execute.assert_called_once_with()
 
     def test_register_user_delegates_all_account_fields(self) -> None:
         use_case = MagicMock()

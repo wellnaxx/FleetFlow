@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 from src.adapters.driving.cli.command_factory import CommandFactory
 from src.adapters.driving.cli.commands.auth_change_password import AuthChangePassword
 from src.adapters.driving.cli.commands.auth_login import AuthLogin
+from src.adapters.driving.cli.commands.auth_logout import AuthLogout
 from src.adapters.driving.cli.commands.auth_whoami import AuthWhoAmI
 from src.adapters.driving.cli.commands.get_fleet_overview import GetFleetOverview
 from src.adapters.driving.cli.commands.view_audits import ViewAuditLogs
@@ -97,7 +98,7 @@ class CommandFactoryShould(unittest.TestCase):
             ("save state.json", "save", ["state.json"], container.state_cases.save),
             ("load state.json", "load", ["state.json"], container.state_cases.load),
             ("login alice", "login", ["alice"], container.command_bus),
-            ("logout", "logout", [], container.auth_cases.logout),
+            ("logout", "logout", [], container.command_bus),
             ("whoami", "whoami", [], container.query_bus),
             (
                 "registeruser alice employee Alice",
@@ -211,6 +212,16 @@ class CommandFactoryShould(unittest.TestCase):
 
         self.assertIsInstance(command, AuthLogin)
         self.assertEqual(command.params, ("alice",))
+        self.assertIs(command.command_bus, container.command_bus)
+
+    def test_logout_receives_registered_command_bus(self) -> None:
+        """Build the migrated logout command with the command bus."""
+        factory, container = self.make_factory()
+
+        command = cast(AuthLogout, factory.create("logout"))
+
+        self.assertIsInstance(command, AuthLogout)
+        self.assertEqual(command.params, ())
         self.assertIs(command.command_bus, container.command_bus)
 
     def test_view_audit_logs_receives_registered_query_bus(self) -> None:

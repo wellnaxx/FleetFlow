@@ -17,6 +17,7 @@ from src.adapters.driving.http.routers.api.auth_router import (
 )
 from src.application.commands.auth.change_password import CHANGE_OWN_PASSWORD, ChangeOwnPasswordCommand
 from src.application.commands.auth.login import LOGIN, LoginCommand
+from src.application.commands.auth.logout import LOGOUT, LogoutCommand
 from src.application.exceptions.application_errors import AuthenticationError, ValidationError
 from src.application.models.current_user_principal import CurrentUserPrincipal
 from src.application.models.user_record import UserRecord
@@ -310,49 +311,44 @@ class AuthRouterShould(unittest.TestCase):
         self.assertEqual(token_input["role"], Role.EMPLOYEE.value)
         token_mocks["create_refresh_token"].assert_called_once_with(token_input)
 
-    def test_logout_executes_logout_use_case(self) -> None:
-        principal = self._principal()
-        use_case = MagicMock()
-        event_collector = MagicMock()
-        self.app.dependency_overrides[auth_router_module.get_current_user] = lambda: principal
-        self.app.dependency_overrides[auth_router_module.get_logout_use_case] = lambda: use_case
-        self.app.dependency_overrides[auth_router_module.get_event_collector] = lambda: event_collector
+    def test_logout_dispatches_logout_command(self) -> None:
+        command_bus = MagicMock(spec=CommandBus)
+        self.app.dependency_overrides[auth_router_module.get_authenticated_command_bus] = (
+            lambda: command_bus
+        )
 
         response = self.client.post("/auth/logout")
 
         self.assertEqual(response.status_code, 204)
-        use_case.execute.assert_called_once_with()
-        event_collector.drain.assert_called_once_with((use_case,))
+        command_bus.dispatch.assert_called_once()
+        self.assertIs(command_bus.dispatch.call_args.kwargs["key"], LOGOUT)
+        self.assertIsInstance(command_bus.dispatch.call_args.kwargs["command"], LogoutCommand)
 
-    def test_logout_drains_events_when_user_record_is_already_missing(self) -> None:
-        principal = self._principal()
-        use_case = MagicMock()
-        event_collector = MagicMock()
-        self.app.dependency_overrides[auth_router_module.get_current_user] = lambda: principal
-        self.app.dependency_overrides[auth_router_module.get_logout_use_case] = lambda: use_case
-        self.app.dependency_overrides[auth_router_module.get_event_collector] = lambda: event_collector
+    def test_logout_returns_forbidden_for_command_bus_permission_error(self) -> None:
+        command_bus = MagicMock(spec=CommandBus)
+        command_bus.dispatch.side_effect = PermissionError("Authenticated user has no username.")
+        self.app.dependency_overrides[auth_router_module.get_authenticated_command_bus] = (
+            lambda: command_bus
+        )
 
         response = self.client.post("/auth/logout")
 
-        self.assertEqual(response.status_code, 204)
-        use_case.execute.assert_called_once_with()
-        event_collector.drain.assert_called_once_with((use_case,))
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["detail"], "Authenticated user has no username.")
+        command_bus.dispatch.assert_called_once()
 
     def test_logout_returns_generic_error_for_database_failure(self) -> None:
-        principal = self._principal()
-        use_case = MagicMock()
-        event_collector = MagicMock()
-        use_case.execute.side_effect = DatabaseError.write_failed(Exception("boom"))
-        self.app.dependency_overrides[auth_router_module.get_current_user] = lambda: principal
-        self.app.dependency_overrides[auth_router_module.get_logout_use_case] = lambda: use_case
-        self.app.dependency_overrides[auth_router_module.get_event_collector] = lambda: event_collector
+        command_bus = MagicMock(spec=CommandBus)
+        command_bus.dispatch.side_effect = DatabaseError.write_failed(Exception("boom"))
+        self.app.dependency_overrides[auth_router_module.get_authenticated_command_bus] = (
+            lambda: command_bus
+        )
 
         response = self.client.post("/auth/logout")
 
         self.assertEqual(response.status_code, 500)
         self.assertEqual(response.json()["detail"], "Database operation failed.")
-        use_case.execute.assert_called_once_with()
-        event_collector.drain.assert_called_once_with((use_case,))
+        command_bus.dispatch.assert_called_once()
 
     def test_me_returns_null_for_absent_contact_fields(self) -> None:
         principal = self._principal(

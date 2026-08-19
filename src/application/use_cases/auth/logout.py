@@ -4,21 +4,21 @@ import logging
 from collections.abc import Callable
 from datetime import datetime
 
+from src.application.commands.auth.logout import LogoutCommand
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.enums.token_revocation_reasons import TokenRevocationReason
 from src.application.events.auth_events import UserSessionEnded, UserTokensRevoked
 from src.application.services.auth_service import AuthService
 from src.application.services.authorization_service import AuthorizationService, record_authorization_denied
-from src.application.use_cases.base.base_use_case import BaseUseCase
-from src.application.use_cases.base.event_mixin import ApplicationEventRecorderMixin
+from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.enums.auth import Permission
 from src.ports.output.user_repository import UserRepositoryPort
 
 logger = logging.getLogger(__name__)
 
 
-class LogoutUseCase(BaseUseCase[None], ApplicationEventRecorderMixin):
+class LogoutUseCase(AuthorizedUseCase[None]):
     """Terminate an authentication session and revoke outstanding tokens."""
 
     def __init__(
@@ -36,23 +36,27 @@ class LogoutUseCase(BaseUseCase[None], ApplicationEventRecorderMixin):
             authz: Request or session authorization state containing the current principal.
             clock: Clock provider used to timestamp application events.
         """
+        super().__init__(authz)
         self._user_repo = user_repository
         self._auth = auth
-        self._authz = authz
         self._clock = clock
 
-        self._pending_events = []
-
-    def execute(self) -> None:
+    def execute(self, command: LogoutCommand) -> None:
         """Log out the current authenticated principal.
+
+        Args:
+            command: Fieldless command selecting the context-driven logout
+                workflow.
 
         Raises:
             PermissionError: If no principal is authenticated or the principal
                 has no username.
+            DatabaseError: If token-version persistence fails.
         """
         occurred_at = self._clock()
+        del command
 
-        current_user = self._authz.current_user
+        current_user = self.authz.current_user
         if current_user is None:
             record_authorization_denied(
                 self,
@@ -79,7 +83,7 @@ class LogoutUseCase(BaseUseCase[None], ApplicationEventRecorderMixin):
         self._user_repo.increment_token_version_by_id(current_user.user_id)
         self._auth.logout()
 
-        self._record_event(
+        self.record_event(
             UserTokensRevoked(
                 user_id=current_user.user_id,
                 username=username,
@@ -87,7 +91,7 @@ class LogoutUseCase(BaseUseCase[None], ApplicationEventRecorderMixin):
                 occurred_at=occurred_at,
             )
         )
-        self._record_event(
+        self.record_event(
             UserSessionEnded(
                 user_id=current_user.user_id,
                 username=username,

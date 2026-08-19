@@ -19,7 +19,6 @@ from src.adapters.driving.http.dependencies.message_buses import (
     get_command_bus,
 )
 from src.adapters.driving.http.dependencies.use_cases import (
-    get_logout_use_case,
     get_register_user_use_case,
     get_reset_password_use_case,
 )
@@ -33,13 +32,13 @@ from src.adapters.driving.http.schemas.auth import (
 )
 from src.application.commands.auth.change_password import CHANGE_OWN_PASSWORD, ChangeOwnPasswordCommand
 from src.application.commands.auth.login import LOGIN, LoginCommand
+from src.application.commands.auth.logout import LOGOUT, LogoutCommand
 from src.application.eventing.collector import EventCollector
 from src.application.exceptions.application_errors import (
     AuthenticationError,
     ValidationError,
 )
 from src.application.models.user_record import UserRecord
-from src.application.use_cases.auth.logout import LogoutUseCase
 from src.application.use_cases.auth.register_user import RegisterUserUseCase
 from src.application.use_cases.auth.reset_password import ResetPasswordUseCase
 from src.composition.runtime import get_user_repository
@@ -283,15 +282,14 @@ def refresh_token(
 
 @auth_router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 def logout(
-    use_case: Annotated[LogoutUseCase, Depends(get_logout_use_case)],
-    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
+    command_bus: Annotated[CommandBus, Depends(get_authenticated_command_bus)],
 ) -> None:
     """Invalidate all sessions for the current user.
 
     Args:
-        principal: Currently authenticated user, injected by FastAPI.
-        use_case: Use case for logging out, injected by FastAPI.
-        event_collector: Collector used to publish logout and token-revocation events.
+        command_bus: Authenticated command bus injected by FastAPI. The
+            registered executor owns token-revocation and session-end event
+            publication.
 
     Returns:
         None
@@ -301,11 +299,7 @@ def logout(
             * 401 - Invalid, expired, revoked, or userless access token.
             * 500 - Database operation failure.
     """
-    execute_and_drain_events(
-        recorder=use_case,
-        event_collector=event_collector,
-        action=lambda: use_case.execute(),
-    )
+    command_bus.dispatch(key=LOGOUT, command=LogoutCommand())
 
 
 @auth_router.get("/me", status_code=status.HTTP_200_OK)

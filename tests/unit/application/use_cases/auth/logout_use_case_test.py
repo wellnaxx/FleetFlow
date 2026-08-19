@@ -2,6 +2,7 @@ import unittest
 from datetime import datetime
 from unittest.mock import MagicMock
 
+from src.application.commands.auth.logout import LogoutCommand
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.enums.token_revocation_reasons import TokenRevocationReason
@@ -32,7 +33,7 @@ class LogoutUseCase_Should(unittest.TestCase):
         occurred_at = datetime(2025, 1, 1, 12, 0)
         use_case = LogoutUseCase(user_repo, auth, authz, clock=lambda: occurred_at)
 
-        result = use_case.execute()
+        result = use_case.execute(LogoutCommand())
 
         self.assertIsNone(result)
         user_repo.increment_token_version_by_id.assert_called_once_with(7)
@@ -61,7 +62,7 @@ class LogoutUseCase_Should(unittest.TestCase):
         use_case = LogoutUseCase(user_repo, auth, authz)
 
         with self.assertRaises(RuntimeError):
-            use_case.execute()
+            use_case.execute(LogoutCommand())
 
         auth.logout.assert_not_called()
         self.assertEqual(use_case.pending_events, ())
@@ -74,7 +75,7 @@ class LogoutUseCase_Should(unittest.TestCase):
         use_case = LogoutUseCase(user_repo, auth, AuthorizationService(None), clock=lambda: occurred_at)
 
         with self.assertRaises(PermissionError):
-            use_case.execute()
+            use_case.execute(LogoutCommand())
 
         user_repo.increment_token_version_by_id.assert_not_called()
         auth.logout.assert_not_called()
@@ -101,7 +102,7 @@ class LogoutUseCase_Should(unittest.TestCase):
         )
 
         with self.assertRaises(PermissionError):
-            use_case.execute()
+            use_case.execute(LogoutCommand())
 
         user_repo.increment_token_version_by_id.assert_not_called()
         auth.logout.assert_not_called()

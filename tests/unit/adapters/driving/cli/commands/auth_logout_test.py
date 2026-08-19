@@ -1,44 +1,54 @@
-from __future__ import annotations
+"""Tests for the logout CLI command."""
 
 import unittest
 from unittest.mock import MagicMock
 
 from src.adapters.driving.cli.commands.auth_logout import AuthLogout
+from src.application.commands.auth.logout import LOGOUT, LogoutCommand
+from src.ports.input.command_bus import CommandBus
 
 
-class AuthLogout_Should(unittest.TestCase):
-    def make_cmd(self) -> AuthLogout:
-        cmd = AuthLogout.__new__(AuthLogout)
-        cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._params = []  # type: ignore[reportAttributeAccessIssue]  # not used, but keep consistent with other commands
-        cmd._event_collector = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        return cmd
+class AuthLogoutShould(unittest.TestCase):
+    """Verify logout metadata, argument validation, and typed dispatch."""
 
-    def test_mutates_session_true(self) -> None:
+    def make_cmd(self, params: tuple[str, ...] = ()) -> tuple[AuthLogout, MagicMock]:
+        """Build the command with an isolated command-bus mock."""
+        command_bus = MagicMock(spec=CommandBus)
+        return AuthLogout(params, command_bus), command_bus
+
+    def test_mutates_session(self) -> None:
         self.assertTrue(AuthLogout.mutates_session)
 
-    def test_logout_skips_heartbeat(self) -> None:
+    def test_skips_heartbeat(self) -> None:
         self.assertTrue(AuthLogout.skips_heartbeat)
 
-    def test_execute_calls_logout_and_returns_message(self) -> None:
-        cmd = self.make_cmd()
+    def test_dispatches_logout_command_and_returns_message(self) -> None:
+        cmd, command_bus = self.make_cmd()
+
         result = cmd.execute()
-        cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
+
         self.assertEqual(result, "Logged out.")
+        command_bus.dispatch.assert_called_once()
+        self.assertIs(command_bus.dispatch.call_args.kwargs["key"], LOGOUT)
+        self.assertIsInstance(command_bus.dispatch.call_args.kwargs["command"], LogoutCommand)
 
-    def test_execute_propagates_errors_from_auth(self) -> None:
-        cmd = self.make_cmd()
-        cmd._use_case.execute.side_effect = RuntimeError("session not found")  # type: ignore[reportAttributeAccessIssue]
+    def test_propagates_command_bus_failure(self) -> None:
+        cmd, command_bus = self.make_cmd()
+        command_bus.dispatch.side_effect = RuntimeError("session not found")
 
-        with self.assertRaises(RuntimeError) as ctx:
+        with self.assertRaisesRegex(RuntimeError, "session not found"):
             cmd.execute()
 
-        self.assertIn("session not found", str(ctx.exception))
-        cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
+        command_bus.dispatch.assert_called_once()
 
-    def test_execute_ignores_params_if_present(self) -> None:
-        cmd = self.make_cmd()
-        cmd._params = ["extra", "ignored"]  # type: ignore[reportAttributeAccessIssue]
-        result = cmd.execute()
-        cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
-        self.assertEqual(result, "Logged out.")
+    def test_rejects_arguments_before_dispatch(self) -> None:
+        cmd, command_bus = self.make_cmd(("extra",))
+
+        with self.assertRaisesRegex(ValueError, "does not accept arguments"):
+            cmd.execute()
+
+        command_bus.dispatch.assert_not_called()
+
+
+if __name__ == "__main__":
+    unittest.main()

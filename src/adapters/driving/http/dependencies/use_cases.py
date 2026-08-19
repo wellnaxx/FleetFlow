@@ -6,7 +6,6 @@ from fastapi import Depends
 
 from src.adapters.driving.http.dependencies.auth import AuthenticatedHTTPPrincipal, get_current_user
 from src.application.services.auth_service import AuthService
-from src.application.use_cases.auth.logout import LogoutUseCase
 from src.application.use_cases.auth.register_user import RegisterUserUseCase
 from src.application.use_cases.auth.reset_password import ResetPasswordUseCase
 from src.application.use_cases.customers.view_all_customers import ViewAllCustomersUseCase
@@ -73,29 +72,6 @@ def get_reset_password_use_case(
         HTTPException: Raised by `get_current_user` when authentication fails.
     """
     return ResetPasswordUseCase(auth=auth_service, authz=principal.authz, clock=container.clock)
-
-
-def get_logout_use_case(
-    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
-    auth_service: Annotated[AuthService, Depends(get_auth_service)],
-    container: Annotated[Container, Depends(get_container)],
-) -> LogoutUseCase:
-    """Build the logout use case for an authenticated request.
-
-    Args:
-        principal: Authenticated HTTP principal carrying request-scoped authorization.
-        auth_service: Shared authentication service used to clear local session state.
-        container: Application dependency container.
-
-    Returns:
-        Logout use case bound to the active user repository and auth service.
-    """
-    return LogoutUseCase(
-        user_repository=auth_service.user_repository,
-        auth=auth_service,
-        authz=principal.authz,
-        clock=container.clock,
-    )
 
 
 def get_view_all_customers_use_case(

@@ -24,7 +24,6 @@ from src.application.commands.routes.remove_route import REMOVE_ROUTE
 from src.application.commands.state.load_world import LOAD_WORLD
 from src.application.commands.state.save_world import SAVE_WORLD
 from src.application.eventing.collector import EventCollector
-from src.application.handlers.commands.auth.logout import LogoutCommandHandler
 from src.application.handlers.commands.auth.register_user import RegisterUserCommandHandler
 from src.application.handlers.commands.auth.reset_password import ResetUserPasswordCommandHandler
 from src.application.handlers.commands.packages.create_package import CreatePackageCommandHandler
@@ -121,7 +120,13 @@ def build_command_bus(
             event_collector=event_collector,
         ),
     )
-    bus.register(LOGOUT, LogoutCommandHandler(auth_cases.logout))
+    bus.register(
+        LOGOUT,
+        EventDrainingExecutor(
+            delegate=auth_cases.logout,
+            event_collector=event_collector,
+        ),
+    )
     bus.register(REGISTER_USER, RegisterUserCommandHandler(auth_cases.register_user))
     bus.register(
         CHANGE_OWN_PASSWORD,

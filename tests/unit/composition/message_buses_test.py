@@ -56,7 +56,7 @@ class MessageBusCompositionShould(unittest.TestCase):
         bus = MagicMock()
         expected: tuple[tuple[object, type[object], object], ...] = (
             (subject.LOGIN, subject.EventDrainingExecutor, self.auth_cases.login),
-            (subject.LOGOUT, subject.LogoutCommandHandler, self.auth_cases.logout),
+            (subject.LOGOUT, subject.EventDrainingExecutor, self.auth_cases.logout),
             (subject.REGISTER_USER, subject.RegisterUserCommandHandler, self.auth_cases.register_user),
             (
                 subject.CHANGE_OWN_PASSWORD,
