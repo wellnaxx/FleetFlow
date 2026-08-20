@@ -2,13 +2,13 @@
 
 import getpass
 
-from src.adapters.driving.cli.commands.base_command.event_draining_command import EventDrainingCommand
+from src.adapters.driving.cli.commands.base_command.command_bus_command import CommandBusCommand
 from src.adapters.driving.cli.commands.validation_helpers import validate_passwords
-from src.application.use_cases.auth.register_user import RegisterUserUseCase
+from src.application.commands.auth.register_user import REGISTER_USER, RegisterUserCommand
 from src.domain.enums.auth import Role
 
 
-class AuthRegisterUser(EventDrainingCommand[RegisterUserUseCase]):
+class AuthRegisterUser(CommandBusCommand):
     """Register employee or manager users from CLI input.
 
     Usage:
@@ -20,17 +20,26 @@ class AuthRegisterUser(EventDrainingCommand[RegisterUserUseCase]):
     autosaves_state = False
 
     def execute(self) -> str:
-        """Collect user details and create the persisted user.
+        """Collect account details and dispatch a registration command.
 
         Returns:
             CLI confirmation text for the created user.
 
         Raises:
             PermissionError: If the caller lacks user administration permission.
-            ValueError: If role or password validation fails.
+            ValueError: If the argument count, role, or password confirmation
+                is invalid.
+            RegistrationInvalidUsernameError: If the username is invalid.
+            RegistrationUsernameAlreadyExistsError: If the username already
+                exists.
+            RegistrationPasswordCriteriaNotMetError: If the initial password
+                fails policy validation.
+            DatabaseError: If account persistence fails.
         """
-        # Gather inputs (use prompts for anything missing)
-        p = self._params
+        if len(self.params) > 5:
+            raise ValueError("Usage: registeruser <username> <role> <name> [email] [phone].")
+
+        p = self.params
         username = p[0] if len(p) >= 1 else input("Username: ")
         role_s = (p[1] if len(p) >= 2 else input("Role [employee/manager]: ")).strip().lower()
         name = (p[2] if len(p) >= 3 else input("Full name: ")).strip()
@@ -48,9 +57,9 @@ class AuthRegisterUser(EventDrainingCommand[RegisterUserUseCase]):
         confirm = getpass.getpass("Confirm password: ")
         validate_passwords(password, confirm)
 
-        rec = self._run_and_drain(
-            self._use_case,
-            lambda: self._use_case.execute(
+        rec = self.command_bus.dispatch(
+            key=REGISTER_USER,
+            command=RegisterUserCommand(
                 username=username,
                 role=role,
                 name=name,

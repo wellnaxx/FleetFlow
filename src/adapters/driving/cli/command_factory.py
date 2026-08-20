@@ -40,9 +40,7 @@ _CONTAINER_COMMANDS: dict[str, CommandBuilder] = {
     "login": lambda container, params: AuthLogin(params, container.command_bus),
     "logout": lambda container, params: AuthLogout(params, container.command_bus),
     "whoami": lambda container, params: AuthWhoAmI(params, container.query_bus),
-    "registeruser": lambda container, params: AuthRegisterUser(
-        params, container.auth_cases.register_user, container.event_collector
-    ),
+    "registeruser": lambda container, params: AuthRegisterUser(params, container.command_bus),
     "changepassword": lambda container, params: AuthChangePassword(params, container.command_bus),
     "resetpassword": lambda container, params: AuthResetPassword(
         params, container.auth_cases.reset_password, container.event_collector

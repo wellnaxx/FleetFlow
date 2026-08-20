@@ -7,6 +7,7 @@ from src.adapters.driving.cli.command_factory import CommandFactory
 from src.adapters.driving.cli.commands.auth_change_password import AuthChangePassword
 from src.adapters.driving.cli.commands.auth_login import AuthLogin
 from src.adapters.driving.cli.commands.auth_logout import AuthLogout
+from src.adapters.driving.cli.commands.auth_register import AuthRegisterUser
 from src.adapters.driving.cli.commands.auth_whoami import AuthWhoAmI
 from src.adapters.driving.cli.commands.get_fleet_overview import GetFleetOverview
 from src.adapters.driving.cli.commands.view_audits import ViewAuditLogs
@@ -104,7 +105,7 @@ class CommandFactoryShould(unittest.TestCase):
                 "registeruser alice employee Alice",
                 "registeruser",
                 ["alice", "employee", "Alice"],
-                container.auth_cases.register_user,
+                container.command_bus,
             ),
             ("changepassword", "changepassword", [], container.command_bus),
             ("resetpassword alice", "resetpassword", ["alice"], container.auth_cases.reset_password),
@@ -222,6 +223,16 @@ class CommandFactoryShould(unittest.TestCase):
 
         self.assertIsInstance(command, AuthLogout)
         self.assertEqual(command.params, ())
+        self.assertIs(command.command_bus, container.command_bus)
+
+    def test_register_user_receives_registered_command_bus(self) -> None:
+        """Build registration with the container command bus."""
+        factory, container = self.make_factory()
+
+        command = cast(AuthRegisterUser, factory.create("registeruser alice employee Alice"))
+
+        self.assertIsInstance(command, AuthRegisterUser)
+        self.assertEqual(command.params, ("alice", "employee", "Alice"))
         self.assertIs(command.command_bus, container.command_bus)
 
     def test_view_audit_logs_receives_registered_query_bus(self) -> None:

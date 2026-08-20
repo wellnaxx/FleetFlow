@@ -4,7 +4,6 @@ import unittest
 from datetime import datetime
 from unittest.mock import MagicMock
 
-from src.application.commands.auth.register_user import RegisterUserCommand
 from src.application.commands.auth.reset_password import ResetUserPasswordCommand
 from src.application.commands.packages.create_package import CreatePackageCommand
 from src.application.commands.packages.remove_package import RemovePackageCommand
@@ -14,7 +13,6 @@ from src.application.commands.routes.create_route import CreateRouteCommand
 from src.application.commands.routes.remove_route import RemoveRouteCommand
 from src.application.commands.state.load_world import LoadWorldCommand
 from src.application.commands.state.save_world import SaveWorldCommand
-from src.application.handlers.commands.auth.register_user import RegisterUserCommandHandler
 from src.application.handlers.commands.auth.reset_password import ResetUserPasswordCommandHandler
 from src.application.handlers.commands.packages.create_package import CreatePackageCommandHandler
 from src.application.handlers.commands.packages.remove_package import RemovePackageCommandHandler
@@ -26,38 +24,12 @@ from src.application.handlers.commands.routes.create_route import CreateRouteCom
 from src.application.handlers.commands.routes.remove_route import RemoveRouteCommandHandler
 from src.application.handlers.commands.state.load_world import LoadWorldCommandHandler
 from src.application.handlers.commands.state.save_world import SaveWorldCommandHandler
-from src.domain.enums.auth import Role
 
 NOW = datetime(2026, 8, 6, 12, 30)
 
 
 class CommandHandlersShould(unittest.TestCase):
     """Verify that command handlers delegate once with the intended arguments."""
-
-    def test_register_user_delegates_all_account_fields(self) -> None:
-        use_case = MagicMock()
-        expected = object()
-        use_case.execute.return_value = expected
-        command = RegisterUserCommand(
-            username="manager",
-            role=Role.MANAGER,
-            name="Alex Smith",
-            email="alex@example.com",
-            phone_number="0412345678",
-            password="secret",
-        )
-
-        result = RegisterUserCommandHandler(use_case).execute(command)
-
-        self.assertIs(result, expected)
-        use_case.execute.assert_called_once_with(
-            username="manager",
-            role=Role.MANAGER,
-            name="Alex Smith",
-            email="alex@example.com",
-            phone_number="0412345678",
-            password="secret",
-        )
 
     def test_reset_password_selects_administrative_flow(self) -> None:
         use_case = MagicMock()

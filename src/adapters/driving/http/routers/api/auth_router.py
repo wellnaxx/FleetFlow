@@ -19,7 +19,6 @@ from src.adapters.driving.http.dependencies.message_buses import (
     get_command_bus,
 )
 from src.adapters.driving.http.dependencies.use_cases import (
-    get_register_user_use_case,
     get_reset_password_use_case,
 )
 from src.adapters.driving.http.schemas.auth import (
@@ -34,12 +33,12 @@ from src.application.commands.auth.change_password import CHANGE_OWN_PASSWORD, C
 from src.application.commands.auth.login import LOGIN, LoginCommand
 from src.application.commands.auth.logout import LOGOUT, LogoutCommand
 from src.application.eventing.collector import EventCollector
+from src.application.commands.auth.register_user import REGISTER_USER, RegisterUserCommand
 from src.application.exceptions.application_errors import (
     AuthenticationError,
     ValidationError,
 )
 from src.application.models.user_record import UserRecord
-from src.application.use_cases.auth.register_user import RegisterUserUseCase
 from src.application.use_cases.auth.reset_password import ResetPasswordUseCase
 from src.composition.runtime import get_user_repository
 from src.domain.enums.auth import Role
@@ -114,15 +113,14 @@ def _token_response(record: UserRecord) -> TokenResponse:
 @auth_router.post("/register", status_code=status.HTTP_201_CREATED)
 def register(
     request: RegisterUserRequest,
-    use_case: Annotated[RegisterUserUseCase, Depends(get_register_user_use_case)],
-    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
+    command_bus: Annotated[CommandBus, Depends(get_authenticated_command_bus)],
 ) -> CurrentUserResponse:
     """Register a new user account.
 
     Args:
         request: Registration request body.
-        use_case: Use case for registering users, injected by FastAPI.
-        event_collector: Collector used to publish registration events.
+        command_bus: Authenticated command bus injected by FastAPI. The
+            registered executor owns registration-event publication.
 
     Returns:
         A response model representing the newly registered user.
@@ -135,10 +133,9 @@ def register(
             * 500 - Database operation failure.
     """
 
-    record = execute_and_drain_events(
-        recorder=use_case,
-        event_collector=event_collector,
-        action=lambda: use_case.execute(
+    record = command_bus.dispatch(
+        key=REGISTER_USER,
+        command=RegisterUserCommand(
             username=request.username,
             role=request.role,
             name=request.name,

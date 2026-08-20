@@ -18,6 +18,7 @@ from src.adapters.driving.http.routers.api.auth_router import (
 from src.application.commands.auth.change_password import CHANGE_OWN_PASSWORD, ChangeOwnPasswordCommand
 from src.application.commands.auth.login import LOGIN, LoginCommand
 from src.application.commands.auth.logout import LOGOUT, LogoutCommand
+from src.application.commands.auth.register_user import REGISTER_USER, RegisterUserCommand
 from src.application.exceptions.application_errors import AuthenticationError, ValidationError
 from src.application.models.current_user_principal import CurrentUserPrincipal
 from src.application.models.user_record import UserRecord
@@ -103,11 +104,9 @@ class AuthRouterShould(unittest.TestCase):
         token_mocks["create_refresh_token"].assert_not_called()
 
     def test_register_returns_created_user(self) -> None:
-        use_case = MagicMock()
-        event_collector = MagicMock()
-        use_case.execute.return_value = self._record(user_id=2, username="bob", role=Role.EMPLOYEE.value)
-        self.app.dependency_overrides[auth_router_module.get_register_user_use_case] = lambda: use_case
-        self.app.dependency_overrides[auth_router_module.get_event_collector] = lambda: event_collector
+        command_bus = MagicMock(spec=CommandBus)
+        command_bus.dispatch.return_value = self._record(user_id=2, username="bob", role=Role.EMPLOYEE.value)
+        self.app.dependency_overrides[auth_router_module.get_authenticated_command_bus] = lambda: command_bus
 
         response = self.client.post(
             "/auth/register",
@@ -123,20 +122,21 @@ class AuthRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()["username"], "bob")
-        use_case.execute.assert_called_once_with(
-            username="bob",
-            role=Role.EMPLOYEE,
-            name="Bob",
-            email="",
-            phone_number="",
-            password="Secret123!",
-        )
-        event_collector.drain.assert_called_once_with((use_case,))
+        command_bus.dispatch.assert_called_once()
+        self.assertIs(command_bus.dispatch.call_args.kwargs["key"], REGISTER_USER)
+        command = command_bus.dispatch.call_args.kwargs["command"]
+        self.assertIsInstance(command, RegisterUserCommand)
+        self.assertEqual(command.username, "bob")
+        self.assertIs(command.role, Role.EMPLOYEE)
+        self.assertEqual(command.name, "Bob")
+        self.assertEqual(command.email, "")
+        self.assertEqual(command.phone_number, "")
+        self.assertEqual(command.password, "Secret123!")
 
     def test_register_returns_forbidden_for_permission_error(self) -> None:
-        use_case = MagicMock()
-        use_case.execute.side_effect = PermissionError("Missing permission: ADMIN_USER")
-        self.app.dependency_overrides[auth_router_module.get_register_user_use_case] = lambda: use_case
+        command_bus = MagicMock(spec=CommandBus)
+        command_bus.dispatch.side_effect = PermissionError("Missing permission: ADMIN_USER")
+        self.app.dependency_overrides[auth_router_module.get_authenticated_command_bus] = lambda: command_bus
 
         response = self.client.post(
             "/auth/register",
@@ -150,12 +150,11 @@ class AuthRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"], "Missing permission: ADMIN_USER")
+        command_bus.dispatch.assert_called_once()
 
     def test_change_password_changes_current_user_password(self) -> None:
         command_bus = MagicMock(spec=CommandBus)
-        self.app.dependency_overrides[auth_router_module.get_authenticated_command_bus] = (
-            lambda: command_bus
-        )
+        self.app.dependency_overrides[auth_router_module.get_authenticated_command_bus] = lambda: command_bus
 
         response = self.client.post(
             "/auth/change-password",
@@ -176,9 +175,7 @@ class AuthRouterShould(unittest.TestCase):
     def test_change_password_returns_bad_request_for_invalid_password(self) -> None:
         command_bus = MagicMock(spec=CommandBus)
         command_bus.dispatch.side_effect = AuthenticationError("Old password incorrect.")
-        self.app.dependency_overrides[auth_router_module.get_authenticated_command_bus] = (
-            lambda: command_bus
-        )
+        self.app.dependency_overrides[auth_router_module.get_authenticated_command_bus] = lambda: command_bus
 
         response = self.client.post(
             "/auth/change-password",
@@ -195,9 +192,7 @@ class AuthRouterShould(unittest.TestCase):
     def test_change_password_returns_forbidden_for_permission_error(self) -> None:
         command_bus = MagicMock(spec=CommandBus)
         command_bus.dispatch.side_effect = PermissionError("Unauthenticated")
-        self.app.dependency_overrides[auth_router_module.get_authenticated_command_bus] = (
-            lambda: command_bus
-        )
+        self.app.dependency_overrides[auth_router_module.get_authenticated_command_bus] = lambda: command_bus
 
         response = self.client.post(
             "/auth/change-password",
@@ -313,9 +308,7 @@ class AuthRouterShould(unittest.TestCase):
 
     def test_logout_dispatches_logout_command(self) -> None:
         command_bus = MagicMock(spec=CommandBus)
-        self.app.dependency_overrides[auth_router_module.get_authenticated_command_bus] = (
-            lambda: command_bus
-        )
+        self.app.dependency_overrides[auth_router_module.get_authenticated_command_bus] = lambda: command_bus
 
         response = self.client.post("/auth/logout")
 
@@ -327,9 +320,7 @@ class AuthRouterShould(unittest.TestCase):
     def test_logout_returns_forbidden_for_command_bus_permission_error(self) -> None:
         command_bus = MagicMock(spec=CommandBus)
         command_bus.dispatch.side_effect = PermissionError("Authenticated user has no username.")
-        self.app.dependency_overrides[auth_router_module.get_authenticated_command_bus] = (
-            lambda: command_bus
-        )
+        self.app.dependency_overrides[auth_router_module.get_authenticated_command_bus] = lambda: command_bus
 
         response = self.client.post("/auth/logout")
 
@@ -340,9 +331,7 @@ class AuthRouterShould(unittest.TestCase):
     def test_logout_returns_generic_error_for_database_failure(self) -> None:
         command_bus = MagicMock(spec=CommandBus)
         command_bus.dispatch.side_effect = DatabaseError.write_failed(Exception("boom"))
-        self.app.dependency_overrides[auth_router_module.get_authenticated_command_bus] = (
-            lambda: command_bus
-        )
+        self.app.dependency_overrides[auth_router_module.get_authenticated_command_bus] = lambda: command_bus
 
         response = self.client.post("/auth/logout")
 

@@ -57,7 +57,7 @@ class MessageBusCompositionShould(unittest.TestCase):
         expected: tuple[tuple[object, type[object], object], ...] = (
             (subject.LOGIN, subject.EventDrainingExecutor, self.auth_cases.login),
             (subject.LOGOUT, subject.EventDrainingExecutor, self.auth_cases.logout),
-            (subject.REGISTER_USER, subject.RegisterUserCommandHandler, self.auth_cases.register_user),
+            (subject.REGISTER_USER, subject.EventDrainingExecutor, self.auth_cases.register_user),
             (
                 subject.CHANGE_OWN_PASSWORD,
                 subject.EventDrainingExecutor,

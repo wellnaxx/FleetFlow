@@ -3,8 +3,11 @@ from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from src.application.commands.auth.register_user import RegisterUserCommand
+from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.enums.user_registration_rejection_reasons import UserRegistrationRejectionReason
-from src.application.events.auth_events import UserRegistered, UserRegistrationRejected
+from src.application.events.auth_events import AuthorizationDenied, UserRegistered, UserRegistrationRejected
 from src.application.exceptions.password_errors import (
     RegistrationInvalidUsernameError,
     RegistrationPasswordCriteriaNotMetError,
@@ -24,12 +27,14 @@ class RegisterUserUseCase_Should(unittest.TestCase):
         use_case = RegisterUserUseCase(auth, manager_authz(), clock=lambda: occurred_at)
 
         result = use_case.execute(
-            username="alice",
-            role=Role.MANAGER,
-            name="Alice",
-            email="alice@example.com",
-            phone_number="0412345678",
-            password="TempPass123",
+            RegisterUserCommand(
+                username="alice",
+                role=Role.MANAGER,
+                name="Alice",
+                email="alice@example.com",
+                phone_number="0412345678",
+                password="TempPass123",
+            )
         )
 
         self.assertIs(result, record)
@@ -55,16 +60,24 @@ class RegisterUserUseCase_Should(unittest.TestCase):
 
         with self.assertRaises(PermissionError) as ctx:
             use_case.execute(
-                username="alice",
-                role=Role.EMPLOYEE,
-                name="Alice",
-                email="alice@example.com",
-                phone_number="0412345678",
-                password="TempPass123",
+                RegisterUserCommand(
+                    username="alice",
+                    role=Role.EMPLOYEE,
+                    name="Alice",
+                    email="alice@example.com",
+                    phone_number="0412345678",
+                    password="TempPass123",
+                )
             )
 
         self.assertIn("ADMIN_USER", str(ctx.exception))
         auth.register_user.assert_not_called()
+        event = use_case.pending_events[0]
+        self.assertIsInstance(event, AuthorizationDenied)
+        assert isinstance(event, AuthorizationDenied)
+        self.assertIs(event.attempted_operation, AuthorizationOperation.USER_REGISTER)
+        self.assertIs(event.target_resource_type, AuditResourceType.USER)
+        self.assertEqual(event.target_resource_id, "alice")
 
     def test_records_invalid_username_rejection_event(self) -> None:
         auth = MagicMock()
@@ -74,12 +87,14 @@ class RegisterUserUseCase_Should(unittest.TestCase):
 
         with self.assertRaises(RegistrationInvalidUsernameError):
             use_case.execute(
-                username=" ",
-                role=Role.EMPLOYEE,
-                name="Alice",
-                email="alice@example.com",
-                phone_number="0412345678",
-                password="TempPass123",
+                RegisterUserCommand(
+                    username=" ",
+                    role=Role.EMPLOYEE,
+                    name="Alice",
+                    email="alice@example.com",
+                    phone_number="0412345678",
+                    password="TempPass123",
+                )
             )
 
         self._assert_registration_rejection(
@@ -97,12 +112,14 @@ class RegisterUserUseCase_Should(unittest.TestCase):
 
         with self.assertRaises(RegistrationUsernameAlreadyExistsError):
             use_case.execute(
-                username="alice",
-                role=Role.EMPLOYEE,
-                name="Alice",
-                email="alice@example.com",
-                phone_number="0412345678",
-                password="TempPass123",
+                RegisterUserCommand(
+                    username="alice",
+                    role=Role.EMPLOYEE,
+                    name="Alice",
+                    email="alice@example.com",
+                    phone_number="0412345678",
+                    password="TempPass123",
+                )
             )
 
         self._assert_registration_rejection(
@@ -123,12 +140,14 @@ class RegisterUserUseCase_Should(unittest.TestCase):
 
         with self.assertRaises(RegistrationPasswordCriteriaNotMetError):
             use_case.execute(
-                username="alice",
-                role=Role.EMPLOYEE,
-                name="Alice",
-                email="alice@example.com",
-                phone_number="0412345678",
-                password="TempPass123",
+                RegisterUserCommand(
+                    username="alice",
+                    role=Role.EMPLOYEE,
+                    name="Alice",
+                    email="alice@example.com",
+                    phone_number="0412345678",
+                    password="TempPass123",
+                )
             )
 
         self._assert_registration_rejection(

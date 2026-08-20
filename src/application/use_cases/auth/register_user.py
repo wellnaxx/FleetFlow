@@ -24,6 +24,7 @@ from src.domain.enums.auth import Permission, Role
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from src.application.commands.auth.register_user import RegisterUserCommand
     from src.application.services.auth_service import AuthService
 
 logger = logging.getLogger(__name__)
@@ -31,15 +32,20 @@ logger = logging.getLogger(__name__)
 
 def _username_resource_id(
     _self: RegisterUserUseCase,
-    username: str,
-    role: Role,  # noqa: ARG001
-    name: str,  # noqa: ARG001
-    email: str,  # noqa: ARG001
-    phone_number: str,  # noqa: ARG001
-    password: str,  # noqa: ARG001
+    command: RegisterUserCommand,
 ) -> str | None:
-    """Resolve the audit target resource id for a registration attempt."""
-    return normalize_username(username) or None
+    """Resolve the normalized username targeted by a registration command.
+
+    Args:
+        _self: Decorated registration use case. Unused because the target is
+            carried entirely by the command.
+        command: Registration request whose username identifies the target.
+
+    Returns:
+        Normalized username, or ``None`` when normalization produces an empty
+        value.
+    """
+    return normalize_username(command.username) or None
 
 
 class RegisterUserUseCase(AuthorizedUseCase[UserRecord]):
@@ -68,24 +74,11 @@ class RegisterUserUseCase(AuthorizedUseCase[UserRecord]):
         target_resource_type=AuditResourceType.USER,
         target_resource_id_resolver=_username_resource_id,
     )
-    def execute(
-        self,
-        username: str,
-        role: Role,
-        name: str,
-        email: str,
-        phone_number: str,
-        password: str,
-    ) -> UserRecord:
+    def execute(self, command: RegisterUserCommand) -> UserRecord:
         """Register a new user account.
 
         Args:
-            username: Unique login name.
-            role: Role assigned to the new user.
-            name: Human-readable display name.
-            email: Optional email address.
-            phone_number: Optional phone number.
-            password: Plain-text password to hash before storage.
+            command: Account identity, profile, role, and initial password.
 
         Returns:
             The persisted user record.
@@ -100,12 +93,12 @@ class RegisterUserUseCase(AuthorizedUseCase[UserRecord]):
 
         try:
             record = self._auth.register_user(
-                username=username,
-                role=role,
-                name=name,
-                email=email,
-                phone_number=phone_number,
-                password=password,
+                username=command.username,
+                role=command.role,
+                name=command.name,
+                email=command.email,
+                phone_number=command.phone_number,
+                password=command.password,
             )
         except (
             RegistrationInvalidUsernameError,
@@ -115,7 +108,7 @@ class RegisterUserUseCase(AuthorizedUseCase[UserRecord]):
             self._record_registration_rejection(exc, occurred_at)
             raise
         else:
-            self._record_event(
+            self.record_event(
                 UserRegistered(
                     user_id=record.user_id,
                     username=record.username,
@@ -133,7 +126,14 @@ class RegisterUserUseCase(AuthorizedUseCase[UserRecord]):
         exc: RegistrationRejectedMixin,
         occurred_at: datetime,
     ) -> None:
-        self._record_event(
+        """Record the typed failure metadata carried by a registration error.
+
+        Args:
+            exc: Registration failure containing the normalized username and
+                rejection reason safe for audit publication.
+            occurred_at: Business timestamp shared by the attempted workflow.
+        """
+        self.record_event(
             UserRegistrationRejected(
                 username=exc.username,
                 reason=exc.reason,
