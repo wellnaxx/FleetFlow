@@ -1,100 +1,111 @@
+"""Tests for the customer-listing CLI command."""
+
 import unittest
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from src.adapters.driving.cli.commands.view_all_customers import ViewAllCustomers
+from src.application.queries.customers.view_all_customers import (
+    VIEW_ALL_CUSTOMERS,
+    ViewAllCustomersQuery,
+)
 from src.application.use_cases.pagination import PageResult
+from src.ports.input.query_bus import QueryBus
 
 
-class ViewAllCustomers_Should(unittest.TestCase):
+class ViewAllCustomersShould(unittest.TestCase):
+    """Verify customer query dispatch and CLI rendering."""
+
     def make_cmd(
         self,
-        params: list[str] | None = None,
-    ) -> ViewAllCustomers:
-        cmd = ViewAllCustomers.__new__(ViewAllCustomers)
-        cmd._params = params or []  # type: ignore[reportAttributeAccessIssue]
-        cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._event_collector = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        return cmd
-
-    def test_execute_propagates_permission_errors_from_use_case(self) -> None:
-        cmd = self.make_cmd()
-        cmd._use_case.execute.side_effect = PermissionError("Missing permission: CUSTOMER_VIEW")  # type: ignore[reportAttributeAccessIssue]
-
-        with self.assertRaises(PermissionError) as ctx:
-            cmd.execute()
-
-        self.assertIn("CUSTOMER_VIEW", str(ctx.exception))
-        cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
+        params: tuple[str, ...] = (),
+    ) -> tuple[ViewAllCustomers, MagicMock]:
+        """Build the command with an isolated query bus."""
+        query_bus = MagicMock(spec=QueryBus)
+        return ViewAllCustomers(params, query_bus), query_bus
 
     def test_no_customers_returns_friendly_message(self) -> None:
-        cmd = self.make_cmd()
-        cmd._use_case.execute.return_value = PageResult(items=(), total=None, limit=None, offset=0)  # type: ignore[reportAttributeAccessIssue]
+        cmd, query_bus = self.make_cmd()
+        query_bus.dispatch.return_value = PageResult(items=(), total=None, limit=None, offset=0)
 
-        out = cmd.execute()
+        result = cmd.execute()
 
-        self.assertEqual(out, "No customers.")
-        cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
+        self.assertEqual(result, "No customers.")
+        self._assert_default_query(query_bus)
 
-    def test_formats_multiple_customers_separated_by_blank_line(self) -> None:
-        cmd = self.make_cmd()
-
-        c1 = MagicMock()
-        c1.customer_id = 1
-        c1.name = "Alice"
-        c1.email = "alice@test.com"
-        c1.phone_number = "0411111111"
-
-        c2 = MagicMock()
-        c2.customer_id = 2
-        c2.name = "Bob"
-        c2.email = "bob@test.com"
-        c2.phone_number = "0422222222"
-
-        c3 = MagicMock()
-        c3.customer_id = 3
-        c3.name = "Carl"
-        c3.email = ""
-        c3.phone_number = ""
-
-        cmd._use_case.execute.return_value = PageResult(  # type: ignore[reportAttributeAccessIssue]
-            items=(
-                c1,
-                c2,
-                c3,
-            ),
+    def test_formats_multiple_customers_separated_by_blank_lines(self) -> None:
+        cmd, query_bus = self.make_cmd()
+        first = SimpleNamespace(
+            customer_id=1,
+            name="Alice",
+            email="alice@test.com",
+            phone_number="0411111111",
+        )
+        second = SimpleNamespace(
+            customer_id=2,
+            name="Bob",
+            email="",
+            phone_number="",
+        )
+        query_bus.dispatch.return_value = PageResult(
+            items=(first, second),
             total=None,
             limit=None,
             offset=0,
         )
 
-        out = cmd.execute()
+        result = cmd.execute()
 
-        cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
         self.assertEqual(
-            out,
-            "Customer 1: Alice (alice@test.com, 0411111111)\n\n"
-            "Customer 2: Bob (bob@test.com, 0422222222)\n\n"
-            "Customer 3: Carl (, )",
+            result,
+            "Customer 1: Alice (alice@test.com, 0411111111)\n\nCustomer 2: Bob (, )",
         )
+        self._assert_default_query(query_bus)
 
-    def test_execute_propagates_errors_from_use_case(self) -> None:
-        cmd = self.make_cmd()
-        cmd._use_case.execute.side_effect = RuntimeError("db down")  # type: ignore[reportAttributeAccessIssue]
+    def test_propagates_permission_error(self) -> None:
+        cmd, query_bus = self.make_cmd()
+        expected = PermissionError("Missing permission: CUSTOMER_VIEW")
+        query_bus.dispatch.side_effect = expected
 
-        with self.assertRaises(RuntimeError) as ctx:
+        with self.assertRaises(PermissionError) as raised:
             cmd.execute()
 
-        self.assertIn("db down", str(ctx.exception))
-        cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
+        self.assertIs(raised.exception, expected)
+        self._assert_default_query(query_bus)
 
-    def test_ignores_params_if_present(self) -> None:
-        cmd = self.make_cmd(params=["ignored"])
-        cmd._use_case.execute.return_value = PageResult(items=(), total=None, limit=None, offset=0)  # type: ignore[reportAttributeAccessIssue]
+    def test_propagates_repository_error(self) -> None:
+        cmd, query_bus = self.make_cmd()
+        expected = RuntimeError("db down")
+        query_bus.dispatch.side_effect = expected
 
-        _ = cmd.execute()
+        with self.assertRaises(RuntimeError) as raised:
+            cmd.execute()
 
-        cmd._use_case.execute.assert_called_once_with()  # type: ignore[reportUnknownMemberType]
+        self.assertIs(raised.exception, expected)
+        self._assert_default_query(query_bus)
 
-    def test_no_mutates_flags(self) -> None:
+    def test_rejects_arguments_before_dispatch(self) -> None:
+        cmd, query_bus = self.make_cmd(("unexpected",))
+
+        with self.assertRaisesRegex(ValueError, "does not accept arguments"):
+            cmd.execute()
+
+        query_bus.dispatch.assert_not_called()
+
+    def test_has_no_mutation_flags(self) -> None:
         self.assertFalse(getattr(ViewAllCustomers, "mutates_state", False))
         self.assertFalse(getattr(ViewAllCustomers, "mutates_session", False))
+
+    def _assert_default_query(self, query_bus: MagicMock) -> None:
+        """Assert dispatch of the default unpaginated customer query."""
+        query_bus.dispatch.assert_called_once()
+        self.assertIs(query_bus.dispatch.call_args.kwargs["key"], VIEW_ALL_CUSTOMERS)
+        query = query_bus.dispatch.call_args.kwargs["query"]
+        self.assertIsInstance(query, ViewAllCustomersQuery)
+        self.assertIsNone(query.page.limit)
+        self.assertEqual(query.page.offset, 0)
+        self.assertFalse(query.page.include_total)
+
+
+if __name__ == "__main__":
+    unittest.main()

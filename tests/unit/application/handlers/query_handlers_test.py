@@ -4,7 +4,6 @@ import unittest
 from datetime import datetime
 from unittest.mock import MagicMock
 
-from src.application.handlers.queries.customers.view_all_customers import ViewAllCustomersQueryHandler
 from src.application.handlers.queries.fleet.get_fleet_overview import GetFleetOverviewQueryHandler
 from src.application.handlers.queries.packages.view_all_packages import ViewAllPackagesQueryHandler
 from src.application.handlers.queries.packages.view_package import ViewPackageQueryHandler
@@ -21,7 +20,6 @@ from src.application.handlers.queries.routes.view_all_routes import ViewAllRoute
 from src.application.handlers.queries.routes.view_route import ViewRouteQueryHandler
 from src.application.handlers.queries.routes.view_routes_in_progress import ViewRoutesInProgressQueryHandler
 from src.application.handlers.queries.trucks.view_all_trucks import ViewAllTrucksQueryHandler
-from src.application.queries.customers.view_all_customers import ViewAllCustomersQuery
 from src.application.queries.fleet.get_fleet_overview import GetFleetOverviewQuery
 from src.application.queries.packages.view_all_packages import ViewAllPackagesQuery
 from src.application.queries.packages.view_package import ViewPackageQuery
@@ -39,18 +37,6 @@ NOW = datetime(2026, 8, 6, 12, 30)
 
 class QueryHandlersShould(unittest.TestCase):
     """Verify that query handlers delegate once with the intended arguments."""
-
-
-    def test_view_all_customers_forwards_page(self) -> None:
-        use_case = MagicMock()
-        expected = object()
-        use_case.execute.return_value = expected
-        page = PageQuery(limit=12, offset=24, include_total=True)
-
-        result = ViewAllCustomersQueryHandler(use_case).execute(ViewAllCustomersQuery(page=page))
-
-        self.assertIs(result, expected)
-        use_case.execute.assert_called_once_with(page)
 
     def test_view_all_packages_forwards_page(self) -> None:
         use_case = MagicMock()

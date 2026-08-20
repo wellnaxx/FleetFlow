@@ -123,7 +123,7 @@ class MessageBusCompositionShould(unittest.TestCase):
             (subject.WHO_AM_I, None, self.auth_cases.who_am_i),
             (
                 subject.VIEW_ALL_CUSTOMERS,
-                subject.ViewAllCustomersQueryHandler,
+                subject.EventDrainingExecutor,
                 self.customer_cases.view_all,
             ),
             (

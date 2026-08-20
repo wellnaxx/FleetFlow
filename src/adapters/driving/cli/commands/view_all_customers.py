@@ -1,10 +1,13 @@
 """CLI command for listing customers."""
 
-from src.adapters.driving.cli.commands.base_command.event_draining_command import EventDrainingCommand
-from src.application.use_cases.customers.view_all_customers import ViewAllCustomersUseCase
+from src.adapters.driving.cli.commands.base_command.query_bus_command import QueryBusCommand
+from src.application.queries.customers.view_all_customers import (
+    VIEW_ALL_CUSTOMERS,
+    ViewAllCustomersQuery,
+)
 
 
-class ViewAllCustomers(EventDrainingCommand[ViewAllCustomersUseCase]):
+class ViewAllCustomers(QueryBusCommand):
     """Render all customers."""
 
     def execute(self) -> str:
@@ -14,9 +17,17 @@ class ViewAllCustomers(EventDrainingCommand[ViewAllCustomersUseCase]):
             CLI listing of customers, or an empty-state message.
 
         Raises:
+            ValueError: If command arguments are supplied.
             PermissionError: If the caller lacks customer view permission.
+            DatabaseError: If customer retrieval fails.
         """
-        customers = self._run_and_drain(self._use_case, self._use_case.execute).items
+        if self.params:
+            raise ValueError("viewallcustomers does not accept arguments.")
+
+        customers = self.query_bus.dispatch(
+            key=VIEW_ALL_CUSTOMERS,
+            query=ViewAllCustomersQuery(),
+        ).items
         return (
             "\n\n".join(f"Customer {c.customer_id}: {c.name} ({c.email}, {c.phone_number})" for c in customers)
             if customers

@@ -11,6 +11,7 @@ from src.adapters.driving.cli.commands.auth_register import AuthRegisterUser
 from src.adapters.driving.cli.commands.auth_reset_password import AuthResetPassword
 from src.adapters.driving.cli.commands.auth_whoami import AuthWhoAmI
 from src.adapters.driving.cli.commands.get_fleet_overview import GetFleetOverview
+from src.adapters.driving.cli.commands.view_all_customers import ViewAllCustomers
 from src.adapters.driving.cli.commands.view_audits import ViewAuditLogs
 
 
@@ -125,7 +126,7 @@ class CommandFactoryShould(unittest.TestCase):
                 [],
                 container.package_cases.view_unassigned,
             ),
-            ("viewallcustomers", "viewallcustomers", [], container.customer_cases.view_all),
+            ("viewallcustomers", "viewallcustomers", [], container.query_bus),
             (
                 'createroute "SYD" "MEL" "2025-10-12" "06:00"',
                 "createroute",
@@ -254,6 +255,16 @@ class CommandFactoryShould(unittest.TestCase):
 
         self.assertIsInstance(command, ViewAuditLogs)
         self.assertEqual(command.params, ("--limit", "10"))
+        self.assertIs(command.query_bus, container.query_bus)
+
+    def test_view_all_customers_receives_registered_query_bus(self) -> None:
+        """Build customer listing with the container query bus."""
+        factory, container = self.make_factory()
+
+        command = cast(ViewAllCustomers, factory.create("viewallcustomers"))
+
+        self.assertIsInstance(command, ViewAllCustomers)
+        self.assertEqual(command.params, ())
         self.assertIs(command.query_bus, container.query_bus)
 
     def test_get_fleet_overview_receives_registered_use_case_and_collector(self) -> None:
