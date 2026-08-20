@@ -65,7 +65,7 @@ class MessageBusCompositionShould(unittest.TestCase):
             ),
             (
                 subject.RESET_USER_PASSWORD,
-                subject.ResetUserPasswordCommandHandler,
+                subject.EventDrainingExecutor,
                 self.auth_cases.reset_password,
             ),
             (subject.CREATE_PACKAGE, subject.CreatePackageCommandHandler, self.package_cases.create),

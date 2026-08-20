@@ -5,7 +5,6 @@ from typing import Annotated
 from fastapi import Depends
 
 from src.adapters.driving.http.dependencies.auth import AuthenticatedHTTPPrincipal, get_current_user
-from src.application.use_cases.auth.reset_password import ResetPasswordUseCase
 from src.application.use_cases.customers.view_all_customers import ViewAllCustomersUseCase
 from src.application.use_cases.fleet.get_overview import GetFleetOverviewUseCase
 from src.application.use_cases.packages.create_package import CreatePackageUseCase
@@ -29,25 +28,6 @@ from src.application.use_cases.state.load_world import LoadWorldStateUseCase
 from src.application.use_cases.state.save_world import SaveWorldStateUseCase
 from src.application.use_cases.trucks.view_all_trucks import ViewAllTrucksUseCase
 from src.composition.container import Container
-def get_reset_password_use_case(
-    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
-    auth_service: Annotated[AuthService, Depends(get_auth_service)],
-    container: Annotated[Container, Depends(get_container)],
-) -> ResetPasswordUseCase:
-    """Build the password-reset use case for the authenticated request.
-
-    Args:
-        principal: Authenticated HTTP principal carrying request-scoped authorization.
-        auth_service: Shared authentication service.
-        container: Application dependency container.
-
-    Returns:
-        Administrative password-reset use case bound to request-scoped authorization.
-
-    Raises:
-        HTTPException: Raised by `get_current_user` when authentication fails.
-    """
-    return ResetPasswordUseCase(auth=auth_service, authz=principal.authz, clock=container.clock)
 from src.composition.runtime import get_container
 
 

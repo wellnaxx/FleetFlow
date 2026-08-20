@@ -4,6 +4,7 @@ import logging
 from collections.abc import Callable
 from datetime import datetime
 
+from src.application.commands.auth.reset_password import ResetUserPasswordCommand
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.enums.user_password_reset_rejection_reasons import UserPasswordResetRejectionReason
@@ -43,12 +44,11 @@ class ResetPasswordUseCase(AuthorizedUseCase[None]):
         self._auth = auth
         self._clock = clock
 
-    def execute(self, username: str, new_password: str) -> None:
+    def execute(self, command: ResetUserPasswordCommand) -> None:
         """Reset the target user's password.
 
         Args:
-            username: Login name of the account to update.
-            new_password: Replacement plain-text password.
+            command: Target username and replacement plain-text password.
 
         Raises:
             PermissionError: If the caller is unauthenticated or lacks
@@ -59,7 +59,7 @@ class ResetPasswordUseCase(AuthorizedUseCase[None]):
             DatabaseError: If password persistence fails.
         """
         occurred_at = self._clock()
-        normalized_username = normalize_username(username)
+        normalized_username = normalize_username(command.username)
         if self.authz.current_user is None or not self.authz.has(Permission.ADMIN_USER):
             record_authorization_denied(
                 self,
@@ -74,10 +74,10 @@ class ResetPasswordUseCase(AuthorizedUseCase[None]):
             raise PermissionError("Missing permission: ADMIN_USER")
 
         if not normalized_username:
-            self._record_event(
+            self.record_event(
                 UserPasswordResetRejected(
                     user_id=None,
-                    username=username,
+                    username=command.username,
                     reason=UserPasswordResetRejectionReason.INVALID_USERNAME,
                     occurred_at=occurred_at,
                 )
@@ -85,7 +85,7 @@ class ResetPasswordUseCase(AuthorizedUseCase[None]):
             raise ValidationError("Username must be a non-empty string.")
 
         try:
-            record = self._auth.reset_password(normalized_username, new_password)
+            record = self._auth.reset_password(normalized_username, command.new_password)
         except (
             PasswordResetUserNotFoundError,
             PasswordResetCriteriaNotMetError,
@@ -93,7 +93,7 @@ class ResetPasswordUseCase(AuthorizedUseCase[None]):
             self._record_password_reset_rejection(exc, occurred_at)
             raise
 
-        self._record_event(
+        self.record_event(
             UserPasswordReset(
                 user_id=record.user_id,
                 username=record.username,
@@ -103,7 +103,15 @@ class ResetPasswordUseCase(AuthorizedUseCase[None]):
         logger.info("Password reset completed for user %r.", normalized_username)
 
     def _target_user_id(self, username: str) -> int | None:
-        """Return the principal id when the reset targets that same account."""
+        """Resolve a target id when the reset names the current principal.
+
+        Args:
+            username: Normalized username targeted by the reset attempt.
+
+        Returns:
+            Current principal's user id when its normalized username matches
+            the target; otherwise ``None``.
+        """
         current_user = self.authz.current_user
         if current_user is None:
             return None
@@ -121,7 +129,7 @@ class ResetPasswordUseCase(AuthorizedUseCase[None]):
             exc: Authentication-service failure carrying audit metadata.
             occurred_at: Business timestamp shared by the attempted workflow.
         """
-        self._record_event(
+        self.record_event(
             UserPasswordResetRejected(
                 user_id=exc.user_id,
                 username=exc.username,

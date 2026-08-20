@@ -4,6 +4,7 @@ import unittest
 from datetime import datetime
 from unittest.mock import MagicMock
 
+from src.application.commands.auth.reset_password import ResetUserPasswordCommand
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.events.auth_events import AuthorizationDenied, UserPasswordReset, UserPasswordResetRejected
@@ -38,7 +39,7 @@ class ResetPasswordUseCaseShould(unittest.TestCase):
         auth.reset_password.return_value = _user_record(42, "alice")
         use_case = ResetPasswordUseCase(auth, manager_authz(), clock=lambda: NOW)
 
-        result = use_case.execute(username="  ALICE  ", new_password="NewSecret123")
+        result = use_case.execute(ResetUserPasswordCommand(username="  ALICE  ", new_password="NewSecret123"))
 
         self.assertIsNone(result)
         auth.reset_password.assert_called_once_with("alice", "NewSecret123")
@@ -55,7 +56,7 @@ class ResetPasswordUseCaseShould(unittest.TestCase):
         use_case = ResetPasswordUseCase(auth, manager_authz(), clock=lambda: NOW)
 
         with self.assertRaisesRegex(ValidationError, "non-empty"):
-            use_case.execute(username="   ", new_password="NewSecret123")
+            use_case.execute(ResetUserPasswordCommand(username="   ", new_password="NewSecret123"))
 
         auth.reset_password.assert_not_called()
         event = use_case.pending_events[0]
@@ -70,7 +71,7 @@ class ResetPasswordUseCaseShould(unittest.TestCase):
         use_case = ResetPasswordUseCase(auth, AuthorizationService(None), clock=lambda: NOW)
 
         with self.assertRaisesRegex(PermissionError, "Unauthenticated"):
-            use_case.execute(username="alice", new_password="NewSecret123")
+            use_case.execute(ResetUserPasswordCommand(username="alice", new_password="NewSecret123"))
 
         auth.reset_password.assert_not_called()
         event = use_case.pending_events[0]
@@ -86,7 +87,7 @@ class ResetPasswordUseCaseShould(unittest.TestCase):
         use_case = ResetPasswordUseCase(auth, AuthorizationService(None), clock=lambda: NOW)
 
         with self.assertRaisesRegex(PermissionError, "Unauthenticated"):
-            use_case.execute(username="   ", new_password="NewSecret123")
+            use_case.execute(ResetUserPasswordCommand(username="   ", new_password="NewSecret123"))
 
         auth.reset_password.assert_not_called()
         self.assertEqual(len(use_case.pending_events), 1)
@@ -97,7 +98,7 @@ class ResetPasswordUseCaseShould(unittest.TestCase):
         use_case = ResetPasswordUseCase(auth, employee_authz(), clock=lambda: NOW)
 
         with self.assertRaisesRegex(PermissionError, "ADMIN_USER"):
-            use_case.execute(username="employee", new_password="NewSecret123")
+            use_case.execute(ResetUserPasswordCommand(username="employee", new_password="NewSecret123"))
 
         auth.reset_password.assert_not_called()
         event = use_case.pending_events[0]
@@ -116,7 +117,7 @@ class ResetPasswordUseCaseShould(unittest.TestCase):
         use_case = ResetPasswordUseCase(auth, manager_authz(), clock=lambda: NOW)
 
         with self.assertRaises(PasswordResetCriteriaNotMetError) as raised:
-            use_case.execute(username="alice", new_password="weak")
+            use_case.execute(ResetUserPasswordCommand(username="alice", new_password="weak"))
 
         self.assertIs(raised.exception, expected)
         event = use_case.pending_events[0]

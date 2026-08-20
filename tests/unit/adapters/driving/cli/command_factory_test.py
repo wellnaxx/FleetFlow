@@ -8,6 +8,7 @@ from src.adapters.driving.cli.commands.auth_change_password import AuthChangePas
 from src.adapters.driving.cli.commands.auth_login import AuthLogin
 from src.adapters.driving.cli.commands.auth_logout import AuthLogout
 from src.adapters.driving.cli.commands.auth_register import AuthRegisterUser
+from src.adapters.driving.cli.commands.auth_reset_password import AuthResetPassword
 from src.adapters.driving.cli.commands.auth_whoami import AuthWhoAmI
 from src.adapters.driving.cli.commands.get_fleet_overview import GetFleetOverview
 from src.adapters.driving.cli.commands.view_audits import ViewAuditLogs
@@ -108,7 +109,7 @@ class CommandFactoryShould(unittest.TestCase):
                 container.command_bus,
             ),
             ("changepassword", "changepassword", [], container.command_bus),
-            ("resetpassword alice", "resetpassword", ["alice"], container.auth_cases.reset_password),
+            ("resetpassword alice", "resetpassword", ["alice"], container.command_bus),
             (
                 'createpackage "SYD" "MEL" 5 "Alice"',
                 "createpackage",
@@ -233,6 +234,16 @@ class CommandFactoryShould(unittest.TestCase):
 
         self.assertIsInstance(command, AuthRegisterUser)
         self.assertEqual(command.params, ("alice", "employee", "Alice"))
+        self.assertIs(command.command_bus, container.command_bus)
+
+    def test_reset_password_receives_registered_command_bus(self) -> None:
+        """Build administrative reset with the container command bus."""
+        factory, container = self.make_factory()
+
+        command = cast(AuthResetPassword, factory.create("resetpassword alice"))
+
+        self.assertIsInstance(command, AuthResetPassword)
+        self.assertEqual(command.params, ("alice",))
         self.assertIs(command.command_bus, container.command_bus)
 
     def test_view_audit_logs_receives_registered_query_bus(self) -> None:

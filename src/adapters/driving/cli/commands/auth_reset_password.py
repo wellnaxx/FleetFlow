@@ -2,13 +2,13 @@
 
 import getpass
 
-from src.adapters.driving.cli.commands.base_command.event_draining_command import EventDrainingCommand
+from src.adapters.driving.cli.commands.base_command.command_bus_command import CommandBusCommand
 from src.adapters.driving.cli.commands.validation_helpers import validate_passwords
+from src.application.commands.auth.reset_password import RESET_USER_PASSWORD, ResetUserPasswordCommand
 from src.application.services.auth_normalization import normalize_username
-from src.application.use_cases.auth.reset_password import ResetPasswordUseCase
 
 
-class AuthResetPassword(EventDrainingCommand[ResetPasswordUseCase]):
+class AuthResetPassword(CommandBusCommand):
     """Run the administrator-only password-reset workflow.
 
     Usage:
@@ -19,7 +19,7 @@ class AuthResetPassword(EventDrainingCommand[ResetPasswordUseCase]):
     autosaves_state = False
 
     def execute(self) -> str:
-        """Prompt for and reset the target user's password.
+        """Prompt for a replacement password and dispatch an admin reset.
 
         Returns:
             Password-reset confirmation text.
@@ -28,11 +28,14 @@ class AuthResetPassword(EventDrainingCommand[ResetPasswordUseCase]):
             PermissionError: If the caller lacks user administration access.
             ValueError: If exactly one username is not supplied or password
                 confirmation validation fails.
+            ValidationError: If the target or replacement password is invalid.
+            NotFoundError: If the target account does not exist.
+            DatabaseError: If password persistence fails.
         """
-        if len(self._params) != 1:
+        if len(self.params) != 1:
             raise ValueError("Usage: resetpassword <username>.")
 
-        username = normalize_username(self._params[0])
+        username = normalize_username(self.params[0])
         if not username:
             raise ValueError("Username must be a non-empty string.")
 
@@ -40,8 +43,11 @@ class AuthResetPassword(EventDrainingCommand[ResetPasswordUseCase]):
         confirmation = getpass.getpass("Confirm new password: ")
         validate_passwords(new_password, confirmation)
 
-        self._run_and_drain(
-            self._use_case,
-            lambda: self._use_case.execute(username=username, new_password=new_password),
+        self.command_bus.dispatch(
+            key=RESET_USER_PASSWORD,
+            command=ResetUserPasswordCommand(
+                username=username,
+                new_password=new_password,
+            ),
         )
         return f"Password reset for '{username}'."

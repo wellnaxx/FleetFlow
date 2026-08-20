@@ -13,13 +13,9 @@ from src.adapters.driving.http.dependencies.auth import (
     get_current_user,
     principal_from_token,
 )
-from src.adapters.driving.http.dependencies.eventing import execute_and_drain_events, get_event_collector
 from src.adapters.driving.http.dependencies.message_buses import (
     get_authenticated_command_bus,
     get_command_bus,
-)
-from src.adapters.driving.http.dependencies.use_cases import (
-    get_reset_password_use_case,
 )
 from src.adapters.driving.http.schemas.auth import (
     ChangeOwnPasswordRequest,
@@ -32,14 +28,13 @@ from src.adapters.driving.http.schemas.auth import (
 from src.application.commands.auth.change_password import CHANGE_OWN_PASSWORD, ChangeOwnPasswordCommand
 from src.application.commands.auth.login import LOGIN, LoginCommand
 from src.application.commands.auth.logout import LOGOUT, LogoutCommand
-from src.application.eventing.collector import EventCollector
 from src.application.commands.auth.register_user import REGISTER_USER, RegisterUserCommand
+from src.application.commands.auth.reset_password import RESET_USER_PASSWORD, ResetUserPasswordCommand
 from src.application.exceptions.application_errors import (
     AuthenticationError,
     ValidationError,
 )
 from src.application.models.user_record import UserRecord
-from src.application.use_cases.auth.reset_password import ResetPasswordUseCase
 from src.composition.runtime import get_user_repository
 from src.domain.enums.auth import Role
 from src.ports.input.command_bus import CommandBus
@@ -222,16 +217,15 @@ def change_password(
 def reset_password(
     username: str,
     request: ResetUserPasswordRequest,
-    use_case: Annotated[ResetPasswordUseCase, Depends(get_reset_password_use_case)],
-    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
+    command_bus: Annotated[CommandBus, Depends(get_authenticated_command_bus)],
 ) -> None:
     """Reset another user's password. This endpoint is intended for admin use.
 
     Args:
         username: Username of the user whose password should be reset.
         request: New password request body.
-        use_case: Administrative password-reset use case injected by FastAPI.
-        event_collector: Collector used to publish password-reset events.
+        command_bus: Authenticated command bus injected by FastAPI. The
+            registered executor owns password-reset event publication.
 
     Returns:
         None
@@ -243,10 +237,12 @@ def reset_password(
             * 404 - Target user does not exist.
             * 500 - Database operation failure.
     """
-    execute_and_drain_events(
-        recorder=use_case,
-        event_collector=event_collector,
-        action=lambda: use_case.execute(username=username, new_password=request.new_password),
+    command_bus.dispatch(
+        key=RESET_USER_PASSWORD,
+        command=ResetUserPasswordCommand(
+            username=username,
+            new_password=request.new_password,
+        ),
     )
 
 

@@ -4,7 +4,6 @@ import unittest
 from datetime import datetime
 from unittest.mock import MagicMock
 
-from src.application.commands.auth.reset_password import ResetUserPasswordCommand
 from src.application.commands.packages.create_package import CreatePackageCommand
 from src.application.commands.packages.remove_package import RemovePackageCommand
 from src.application.commands.routes.assign_packages_to_route import AssignPackagesToRouteCommand
@@ -13,7 +12,6 @@ from src.application.commands.routes.create_route import CreateRouteCommand
 from src.application.commands.routes.remove_route import RemoveRouteCommand
 from src.application.commands.state.load_world import LoadWorldCommand
 from src.application.commands.state.save_world import SaveWorldCommand
-from src.application.handlers.commands.auth.reset_password import ResetUserPasswordCommandHandler
 from src.application.handlers.commands.packages.create_package import CreatePackageCommandHandler
 from src.application.handlers.commands.packages.remove_package import RemovePackageCommandHandler
 from src.application.handlers.commands.routes.assign_packages_to_route import (
@@ -30,16 +28,6 @@ NOW = datetime(2026, 8, 6, 12, 30)
 
 class CommandHandlersShould(unittest.TestCase):
     """Verify that command handlers delegate once with the intended arguments."""
-
-    def test_reset_password_selects_administrative_flow(self) -> None:
-        use_case = MagicMock()
-
-        result = ResetUserPasswordCommandHandler(use_case).execute(
-            ResetUserPasswordCommand(username="employee", new_password="new")
-        )
-
-        self.assertIsNone(result)
-        use_case.execute.assert_called_once_with(username="employee", new_password="new")
 
     def test_create_package_delegates_delivery_and_customer_fields(self) -> None:
         use_case = MagicMock()
