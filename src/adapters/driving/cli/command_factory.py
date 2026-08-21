@@ -52,9 +52,7 @@ _CONTAINER_COMMANDS: dict[str, CommandBuilder] = {
     "viewallpackages": lambda container, params: ViewAllPackages(
         params, container.package_cases.view_all, container.event_collector
     ),
-    "removepackage": lambda container, params: RemovePackage(
-        params, container.package_cases.remove, container.event_collector
-    ),
+    "removepackage": lambda container, params: RemovePackage(params, container.command_bus),
     "viewunassignedpackages": lambda container, params: ViewUnassignedPackages(
         params, container.package_cases.view_unassigned, container.event_collector
     ),

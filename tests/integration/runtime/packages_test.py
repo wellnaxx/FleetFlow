@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 
 from src.adapters.driven.persistence.memory.package_repository import InMemoryPackageRepository
 from src.adapters.driven.persistence.memory.unit_of_work import InMemoryUnitOfWork
+from src.application.commands.packages.remove_package import RemovePackageCommand
 from src.application.use_cases.packages.remove_package import RemovePackageUseCase
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
@@ -48,7 +49,7 @@ class RuntimePackageRemovalIntegrationTests(unittest.TestCase):
             package_repo,
             unit_of_work,
             manager_authz(),
-        ).execute(package.package_id)
+        ).execute(RemovePackageCommand(package_id=package.package_id))
 
         self.assertIs(result.package, package)
         self.assertIs(result.customer, customer)

@@ -6,7 +6,6 @@ from src.adapters.driving.http.dependencies.eventing import execute_and_drain_ev
 from src.adapters.driving.http.dependencies.message_buses import get_authenticated_command_bus
 from src.adapters.driving.http.dependencies.use_cases import (
     get_find_suitable_routes_for_package_use_case,
-    get_remove_package_use_case,
     get_view_all_packages_use_case,
     get_view_package_use_case,
     get_view_unassigned_packages_use_case,
@@ -18,9 +17,9 @@ from src.adapters.driving.http.schemas.packages import (
     PackageSuitableRouteResponse,
 )
 from src.application.commands.packages.create_package import CREATE_PACKAGE, CreatePackageCommand
+from src.application.commands.packages.remove_package import REMOVE_PACKAGE, RemovePackageCommand
 from src.application.eventing.collector import EventCollector
 from src.application.exceptions.application_errors import ConflictError
-from src.application.use_cases.packages.remove_package import RemovePackageUseCase
 from src.application.use_cases.packages.view_all_packages import ViewAllPackagesUseCase
 from src.application.use_cases.packages.view_package import ViewPackageUseCase
 from src.application.use_cases.packages.view_unassigned_packages import ViewUnassignedPackagesUseCase
@@ -207,16 +206,15 @@ def find_suitable_routes_for_package(
 @packages_router.delete("/{package_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_package(
     package_id: int,
-    use_case: Annotated[RemovePackageUseCase, Depends(get_remove_package_use_case)],
-    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
+    command_bus: Annotated[CommandBus, Depends(get_authenticated_command_bus)],
 ) -> None:
     """Delete a package by its ID.
 
     Args:
         package_id: The ID of the package to delete.
-        use_case: The use case for removing a package, injected by FastAPI.
-        event_collector: Collector used to publish authorization plus package,
-            customer, and route events.
+        command_bus: Authenticated command bus injected by FastAPI. The
+            registered executor owns authorization and domain-event
+            publication.
 
     Returns:
         None
@@ -229,16 +227,9 @@ def delete_package(
             * 500 - Database operation failure.
     """
     try:
-        result = execute_and_drain_events(
-            recorder=use_case,
-            event_collector=event_collector,
-            action=lambda: use_case.execute(package_id=package_id),
+        command_bus.dispatch(
+            key=REMOVE_PACKAGE,
+            command=RemovePackageCommand(package_id=package_id),
         )
     except (DomainConflictError, EntityNotFoundError) as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    else:
-        event_collector.drain(
-            (result.package, result.customer)
-            if result.route is None
-            else (result.package, result.customer, result.route)
-        )

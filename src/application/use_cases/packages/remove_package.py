@@ -19,6 +19,7 @@ from src.domain.exceptions import DomainConflictError, EntityNotFoundError
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from src.application.commands.packages.remove_package import RemovePackageCommand
     from src.domain.entities.delivery_package import DeliveryPackage
     from src.ports.output.package_repository import PackageRepositoryPort
     from src.ports.output.unit_of_work import UnitOfWorkPort
@@ -28,10 +29,10 @@ logger = logging.getLogger(__name__)
 
 def _resolve_package_target_id(
     _self: RemovePackageUseCase,
-    package_id: int,
+    command: RemovePackageCommand,
 ) -> int | None:
-    """Resolve the audit target resource id for a package-removal attempt."""
-    return package_id
+    """Resolve the audit target resource id for a package-removal command."""
+    return command.package_id
 
 
 class RemovePackageUseCase(AuthorizedUseCase[RemovePackageResult]):
@@ -64,11 +65,11 @@ class RemovePackageUseCase(AuthorizedUseCase[RemovePackageResult]):
         target_resource_type=AuditResourceType.PACKAGE,
         target_resource_id_resolver=_resolve_package_target_id,
     )
-    def execute(self, package_id: int) -> RemovePackageResult:
+    def execute(self, command: RemovePackageCommand) -> RemovePackageResult:
         """Remove a package by id.
 
         Args:
-            package_id: Identifier of the package to remove.
+            command: Package-removal request containing the target identifier.
 
         Returns:
             Removal result containing the removed package, its customer, and
@@ -81,6 +82,7 @@ class RemovePackageUseCase(AuthorizedUseCase[RemovePackageResult]):
             DomainConflictError: If route-package assignment state is inconsistent.
             EntityNotFoundError: If customer-package ownership state is inconsistent.
         """
+        package_id = command.package_id
         package = self._get_package(package_id)
         route = package.route
         customer = package.customer
@@ -120,6 +122,10 @@ class RemovePackageUseCase(AuthorizedUseCase[RemovePackageResult]):
             raise
 
         logger.info("Removed package %d.", package_id)
+        self.track_domain_recorder(package)
+        self.track_domain_recorder(customer)
+        if route is not None:
+            self.track_domain_recorder(route)
         return RemovePackageResult(package, customer, route)
 
     def _get_package(self, package_id: int) -> DeliveryPackage:

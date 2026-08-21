@@ -5,7 +5,6 @@ from typing import Annotated
 from fastapi import Depends
 
 from src.adapters.driving.http.dependencies.auth import AuthenticatedHTTPPrincipal, get_current_user
-from src.application.use_cases.packages.remove_package import RemovePackageUseCase
 from src.application.use_cases.packages.view_all_packages import ViewAllPackagesUseCase
 from src.application.use_cases.packages.view_package import ViewPackageUseCase
 from src.application.use_cases.packages.view_unassigned_packages import ViewUnassignedPackagesUseCase
@@ -83,25 +82,6 @@ def get_view_unassigned_packages_use_case(
         HTTPException: Raised by `get_current_user` when authentication fails.
     """
     return ViewUnassignedPackagesUseCase(container.package_repo, authz=principal.authz)
-
-
-def get_remove_package_use_case(
-    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
-    container: Annotated[Container, Depends(get_container)],
-) -> RemovePackageUseCase:
-    """Build the package-removal use case for the authenticated request.
-
-    Args:
-        principal: Authenticated HTTP principal carrying request-scoped authorization.
-        container: Application dependency container.
-
-    Returns:
-        Package-removal use case bound to the package repository and unit of work.
-
-    Raises:
-        HTTPException: Raised by `get_current_user` when authentication fails.
-    """
-    return RemovePackageUseCase(container.package_repo, container.unit_of_work, authz=principal.authz)
 
 
 def get_create_route_use_case(

@@ -12,6 +12,7 @@ from src.adapters.driving.cli.commands.auth_reset_password import AuthResetPassw
 from src.adapters.driving.cli.commands.auth_whoami import AuthWhoAmI
 from src.adapters.driving.cli.commands.create_package import CreatePackage
 from src.adapters.driving.cli.commands.get_fleet_overview import GetFleetOverview
+from src.adapters.driving.cli.commands.remove_package import RemovePackage
 from src.adapters.driving.cli.commands.view_all_customers import ViewAllCustomers
 from src.adapters.driving.cli.commands.view_audits import ViewAuditLogs
 
@@ -120,7 +121,7 @@ class CommandFactoryShould(unittest.TestCase):
             ),
             ("viewpackage 42", "viewpackage", ["42"], container.package_cases.view),
             ("viewallpackages", "viewallpackages", [], container.package_cases.view_all),
-            ("removepackage 42", "removepackage", ["42"], container.package_cases.remove),
+            ("removepackage 42", "removepackage", ["42"], container.command_bus),
             (
                 "viewunassignedpackages",
                 "viewunassignedpackages",
@@ -256,6 +257,16 @@ class CommandFactoryShould(unittest.TestCase):
 
         self.assertIsInstance(command, CreatePackage)
         self.assertEqual(command.params, ("SYD", "MEL", "5", "Alice"))
+        self.assertIs(command.command_bus, container.command_bus)
+
+    def test_remove_package_receives_registered_command_bus(self) -> None:
+        """Build package removal with the container command bus."""
+        factory, container = self.make_factory()
+
+        command = cast(RemovePackage, factory.create("removepackage 42"))
+
+        self.assertIsInstance(command, RemovePackage)
+        self.assertEqual(command.params, ("42",))
         self.assertIs(command.command_bus, container.command_bus)
 
     def test_view_audit_logs_receives_registered_query_bus(self) -> None:

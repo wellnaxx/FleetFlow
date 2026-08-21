@@ -11,7 +11,6 @@ from src.adapters.driving.cli.commands.find_suitable_routes_for_package import (
 from src.adapters.driving.cli.commands.find_suitable_trucks_for_route import (
     FindSuitableTrucksForRoute,
 )
-from src.adapters.driving.cli.commands.remove_package import RemovePackage
 from src.adapters.driving.cli.commands.remove_route import RemoveRoute
 from src.adapters.driving.cli.commands.view_all_packages import ViewAllPackages
 from src.adapters.driving.cli.commands.view_all_routes import ViewAllRoutes
@@ -86,7 +85,6 @@ class AuthorizedCommandEventDrainShould(unittest.TestCase):
         for command_type, params in (
             (ViewPackage, ("1",)),
             (FindSuitableTrucksForRoute, ("1",)),
-            (RemovePackage, ("1",)),
             (RemoveRoute, ("1",)),
         ):
             with self.subTest(command=command_type.__name__):

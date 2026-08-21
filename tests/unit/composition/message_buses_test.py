@@ -69,7 +69,7 @@ class MessageBusCompositionShould(unittest.TestCase):
                 self.auth_cases.reset_password,
             ),
             (subject.CREATE_PACKAGE, subject.EventDrainingExecutor, self.package_cases.create),
-            (subject.REMOVE_PACKAGE, subject.RemovePackageCommandHandler, self.package_cases.remove),
+            (subject.REMOVE_PACKAGE, subject.EventDrainingExecutor, self.package_cases.remove),
             (subject.CREATE_ROUTE, subject.CreateRouteCommandHandler, self.route_cases.create),
             (subject.REMOVE_ROUTE, subject.RemoveRouteCommandHandler, self.route_cases.remove),
             (

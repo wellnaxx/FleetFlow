@@ -1,8 +1,15 @@
 import unittest
 from datetime import datetime
+from typing import cast
 from unittest.mock import MagicMock
 
+from src.application.commands.packages.remove_package import RemovePackageCommand
+from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
+from src.application.eventing.recorder_scope import bind_event_recorder_scope
+from src.application.events.auth_events import AuthorizationDenied
 from src.application.exceptions.application_errors import NotFoundError
+from src.application.services.authorization_service import AuthorizationService
 from src.application.use_cases.packages.remove_package import RemovePackageUseCase
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
@@ -29,11 +36,31 @@ class RemovePackageUseCase_Should(unittest.TestCase):
             clock=lambda: self.now,
         )
 
+    def test_rejects_unauthenticated_request_before_repository_access(self) -> None:
+        use_case = RemovePackageUseCase(
+            self.mock_packages,
+            self.unit_of_work,
+            AuthorizationService(current_user=None),
+            clock=lambda: self.now,
+        )
+
+        with self.assertRaisesRegex(PermissionError, "Unauthenticated"):
+            use_case.execute(RemovePackageCommand(package_id=42))
+
+        self.mock_packages.get_by_id.assert_not_called()
+        self.unit_of_work.__enter__.assert_not_called()
+        self.assertEqual(len(use_case.pending_events), 1)
+        event = cast(AuthorizationDenied, use_case.pending_events[0])
+        self.assertIsInstance(event, AuthorizationDenied)
+        self.assertIs(event.attempted_operation, AuthorizationOperation.PACKAGE_REMOVE)
+        self.assertIs(event.target_resource_type, AuditResourceType.PACKAGE)
+        self.assertEqual(event.target_resource_id, "42")
+
     def test_raises_when_package_not_found(self) -> None:
         self.mock_packages.get_by_id.return_value = None
 
         with self.assertRaises(NotFoundError) as ctx:
-            self.use_case.execute(42)
+            self.use_case.execute(RemovePackageCommand(package_id=42))
 
         self.assertIn("Package with ID 42 not found", str(ctx.exception))
         self.mock_packages.get_by_id.assert_called_once_with(42)
@@ -47,7 +74,8 @@ class RemovePackageUseCase_Should(unittest.TestCase):
         package.route_id = None
         self.mock_packages.get_by_id.return_value = package
 
-        result = self.use_case.execute(42)
+        with bind_event_recorder_scope() as scope:
+            result = self.use_case.execute(RemovePackageCommand(package_id=42))
 
         self.assertIs(result.package, package)
         self.assertIs(result.customer, package.customer)
@@ -56,6 +84,7 @@ class RemovePackageUseCase_Should(unittest.TestCase):
         package.customer.remove_package.assert_called_once_with(package)
         self.unit_of_work.packages.remove.assert_called_once_with(42)
         self.unit_of_work.commit.assert_called_once_with()
+        self.assertEqual(scope.event_recorders(), (scope, package, package.customer))
 
     def test_detaches_from_route_before_removal(self) -> None:
         route = MagicMock()
@@ -65,7 +94,8 @@ class RemovePackageUseCase_Should(unittest.TestCase):
         package.route_id = 7
         self.mock_packages.get_by_id.return_value = package
 
-        result = self.use_case.execute(42)
+        with bind_event_recorder_scope() as scope:
+            result = self.use_case.execute(RemovePackageCommand(package_id=42))
 
         self.assertIs(result.package, package)
         self.assertIs(result.customer, package.customer)
@@ -79,6 +109,7 @@ class RemovePackageUseCase_Should(unittest.TestCase):
         package.customer.remove_package.assert_called_once_with(package)
         self.unit_of_work.packages.remove.assert_called_once_with(42)
         self.unit_of_work.commit.assert_called_once_with()
+        self.assertEqual(scope.event_recorders(), (scope, package, package.customer, route))
 
     def test_removal_event_preserves_pre_detach_route_id(self) -> None:
         customer = Customer(ContactInfo("Dan", "dan@e.com", "0484568777"), customer_id=1)
@@ -95,7 +126,7 @@ class RemovePackageUseCase_Should(unittest.TestCase):
         package.clear_events()
         self.mock_packages.get_by_id.return_value = package
 
-        result = self.use_case.execute(42)
+        result = self.use_case.execute(RemovePackageCommand(package_id=42))
 
         self.assertIs(result.package, package)
         self.assertIs(result.customer, customer)
@@ -122,7 +153,7 @@ class RemovePackageUseCase_Should(unittest.TestCase):
         self.mock_packages.get_by_id.return_value = package
 
         with self.assertRaises(DomainConflictError) as ctx:
-            self.use_case.execute(42)
+            self.use_case.execute(RemovePackageCommand(package_id=42))
 
         self.assertIn("customer unlink failed", str(ctx.exception))
         package.customer.remove_package.assert_called_once_with(package)
@@ -139,7 +170,7 @@ class RemovePackageUseCase_Should(unittest.TestCase):
         self.mock_packages.get_by_id.return_value = package
 
         with self.assertRaises(DomainConflictError) as ctx:
-            self.use_case.execute(42)
+            self.use_case.execute(RemovePackageCommand(package_id=42))
 
         self.assertIn("Package is not assigned to this route", str(ctx.exception))
         route.detach_package.assert_called_once_with(
@@ -158,7 +189,7 @@ class RemovePackageUseCase_Should(unittest.TestCase):
         self.mock_packages.get_by_id.return_value = package
 
         with self.assertRaises(DomainConflictError) as ctx:
-            self.use_case.execute(42)
+            self.use_case.execute(RemovePackageCommand(package_id=42))
 
         self.assertIn("Package 42 is assigned to route 7, but route is not hydrated.", str(ctx.exception))
         package.customer.remove_package.assert_not_called()
@@ -179,7 +210,7 @@ class RemovePackageUseCase_Should(unittest.TestCase):
         self.unit_of_work.packages.remove.side_effect = RuntimeError("write failed")
 
         with self.assertRaisesRegex(RuntimeError, "write failed"):
-            self.use_case.execute(42)
+            self.use_case.execute(RemovePackageCommand(package_id=42))
 
         package.restore_state.assert_called_once_with(package_snapshot)
         package.restore_event_checkpoint.assert_called_once_with(3)

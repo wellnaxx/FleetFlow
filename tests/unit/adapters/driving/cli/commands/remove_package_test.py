@@ -1,142 +1,88 @@
+"""Tests for the command-bus-backed remove-package CLI adapter."""
+
 import unittest
-from types import SimpleNamespace
-from typing import cast
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 from src.adapters.driving.cli.commands.remove_package import RemovePackage
+from src.application.commands.packages.remove_package import REMOVE_PACKAGE, RemovePackageCommand
+from src.ports.input.command_bus import CommandBus
 
 
-def _collector_mock(command: RemovePackage) -> MagicMock:
-    """Return the command's injected collector as its test-double type."""
-    return cast(MagicMock, command._event_collector)  # pyright: ignore[reportPrivateUsage]
+class RemovePackageShould(unittest.TestCase):
+    """Verify package-id parsing, dispatch, rendering, and failures."""
 
+    def setUp(self) -> None:
+        """Create an isolated command bus for each test."""
+        self.command_bus = MagicMock(spec=CommandBus)
 
-class TestRemovePackage_Should(unittest.TestCase):
-    def make_cmd(self, params: list[str]) -> RemovePackage:
-        cmd = RemovePackage.__new__(RemovePackage)
-        cmd._params = params  # type: ignore[reportAttributeAccessIssue]
-        cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._event_collector = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        return cmd
+    def make_command(self, params: list[str]) -> RemovePackage:
+        """Build the adapter with raw parameters and the mocked bus."""
+        return RemovePackage(params, self.command_bus)
 
-    def test_execute_propagates_permission_errors_from_use_case(self) -> None:
-        cmd = self.make_cmd(["42"])
-        cmd._use_case.execute.side_effect = PermissionError("Missing permission: PACKAGE_REMOVE")  # type: ignore[reportAttributeAccessIssue]
+    def test_mutates_and_autosaves_state(self) -> None:
+        self.assertTrue(RemovePackage.mutates_state)
+        self.assertTrue(RemovePackage.autosaves_state)
 
-        with self.assertRaises(PermissionError) as ctx:
-            cmd.execute()
+    def test_dispatches_remove_command_and_renders_confirmation(self) -> None:
+        command = self.make_command(["42"])
 
-        self.assertIn("PACKAGE_REMOVE", str(ctx.exception))
-        cmd._use_case.execute.assert_called_once_with(42)  # type: ignore[reportUnknownMemberType]
+        result = command.execute()
 
-    @patch("src.adapters.driving.cli.commands.remove_package.validate_params_exact")
-    @patch("src.adapters.driving.cli.commands.remove_package.try_parse_int")
-    def test_no_params_command(
-        self,
-        mock_try_parse: MagicMock,
-        mock_validate: MagicMock,
-    ) -> None:
-        cmd = self.make_cmd([])
-        mock_validate.side_effect = ValueError("Expected 1 parameter(s).")
-
-        with self.assertRaises(ValueError) as ctx:
-            cmd.execute()
-
-        self.assertIn("Expected 1 parameter(s).", str(ctx.exception))
-        mock_validate.assert_called_once_with([], 1)
-        mock_try_parse.assert_not_called()
-        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
-
-    @patch("src.adapters.driving.cli.commands.remove_package.validate_params_exact")
-    @patch("src.adapters.driving.cli.commands.remove_package.try_parse_int")
-    def test_str_params_command(
-        self,
-        mock_try_parse: MagicMock,
-        mock_validate: MagicMock,
-    ) -> None:
-        cmd = self.make_cmd(["str"])
-        mock_try_parse.side_effect = ValueError("Parameter 'str' is not a valid integer.")
-
-        with self.assertRaises(ValueError) as ctx:
-            cmd.execute()
-
-        self.assertIn("Parameter 'str' is not a valid integer.", str(ctx.exception))
-        mock_validate.assert_called_once_with(["str"], 1)
-        mock_try_parse.assert_called_once_with("str", "package_id")
-        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
-
-    @patch("src.adapters.driving.cli.commands.remove_package.validate_params_exact")
-    @patch("src.adapters.driving.cli.commands.remove_package.try_parse_int")
-    def test_removed_package_command(
-        self,
-        mock_try_parse: MagicMock,
-        mock_validate: MagicMock,
-    ) -> None:
-        cmd = self.make_cmd(["42"])
-        mock_try_parse.return_value = 42
-        package = SimpleNamespace(package_id=42)
-        customer = MagicMock()
-        route = MagicMock()
-        cmd._use_case.execute.return_value = SimpleNamespace(  # type: ignore[reportAttributeAccessIssue]
-            package=package,
-            customer=customer,
-            route=route,
+        self.command_bus.dispatch.assert_called_once_with(
+            key=REMOVE_PACKAGE,
+            command=RemovePackageCommand(package_id=42),
         )
-
-        result = cmd.execute()
-
         self.assertEqual(result, "Package 42 removed.")
-        mock_validate.assert_called_once_with(["42"], 1)
-        mock_try_parse.assert_called_once_with("42", "package_id")
-        cmd._use_case.execute.assert_called_once_with(42)  # type: ignore[reportUnknownMemberType]
-        self.assertEqual(
-            _collector_mock(cmd).drain.call_args_list,
-            [call((cmd._use_case,)), call((package, customer, route))],  # pyright: ignore[reportPrivateUsage]
+
+    def test_propagates_permission_error_from_command_bus(self) -> None:
+        self.command_bus.dispatch.side_effect = PermissionError("Missing permission: PACKAGE_REMOVE")
+        command = self.make_command(["42"])
+
+        with self.assertRaisesRegex(PermissionError, "PACKAGE_REMOVE"):
+            command.execute()
+
+        self.command_bus.dispatch.assert_called_once_with(
+            key=REMOVE_PACKAGE,
+            command=RemovePackageCommand(package_id=42),
         )
 
-    @patch("src.adapters.driving.cli.commands.remove_package.validate_params_exact")
     @patch("src.adapters.driving.cli.commands.remove_package.try_parse_int")
-    def test_removed_package_without_route_drains_package_and_customer_only(
-        self,
-        mock_try_parse: MagicMock,
-        mock_validate: MagicMock,
-    ) -> None:
-        cmd = self.make_cmd(["42"])
-        mock_try_parse.return_value = 42
-        package = SimpleNamespace(package_id=42)
-        customer = MagicMock()
-        cmd._use_case.execute.return_value = SimpleNamespace(  # type: ignore[reportAttributeAccessIssue]
-            package=package,
-            customer=customer,
-            route=None,
-        )
-
-        result = cmd.execute()
-
-        self.assertEqual(result, "Package 42 removed.")
-        mock_validate.assert_called_once_with(["42"], 1)
-        mock_try_parse.assert_called_once_with("42", "package_id")
-        cmd._use_case.execute.assert_called_once_with(42)  # type: ignore[reportUnknownMemberType]
-        self.assertEqual(
-            _collector_mock(cmd).drain.call_args_list,
-            [call((cmd._use_case,)), call((package, customer))],  # pyright: ignore[reportPrivateUsage]
-        )
-
     @patch("src.adapters.driving.cli.commands.remove_package.validate_params_exact")
-    @patch("src.adapters.driving.cli.commands.remove_package.try_parse_int")
-    def test_downstream_use_case_error_propagates(
+    def test_parameter_count_failure_prevents_parsing_and_dispatch(
         self,
-        mock_try_parse: MagicMock,
-        mock_validate: MagicMock,
+        validate: MagicMock,
+        parse_int: MagicMock,
     ) -> None:
-        cmd = self.make_cmd(["42"])
-        mock_try_parse.return_value = 42
-        cmd._use_case.execute.side_effect = ValueError("Package with ID 42 not found")  # type: ignore[reportAttributeAccessIssue]
+        validate.side_effect = ValueError("Expected 1 parameter(s).")
+        command = self.make_command([])
 
-        with self.assertRaises(ValueError) as ctx:
-            cmd.execute()
+        with self.assertRaisesRegex(ValueError, "Expected 1 parameter"):
+            command.execute()
 
-        self.assertIn("Package with ID 42 not found", str(ctx.exception))
-        mock_validate.assert_called_once_with(["42"], 1)
-        mock_try_parse.assert_called_once_with("42", "package_id")
-        cmd._use_case.execute.assert_called_once_with(42)  # type: ignore[reportUnknownMemberType]
+        validate.assert_called_once_with((), 1)
+        parse_int.assert_not_called()
+        self.command_bus.dispatch.assert_not_called()
+
+    @patch("src.adapters.driving.cli.commands.remove_package.try_parse_int")
+    def test_invalid_integer_prevents_dispatch(self, parse_int: MagicMock) -> None:
+        parse_int.side_effect = ValueError("Parameter 'str' is not a valid integer.")
+        command = self.make_command(["str"])
+
+        with self.assertRaisesRegex(ValueError, "not a valid integer"):
+            command.execute()
+
+        parse_int.assert_called_once_with("str", "package_id")
+        self.command_bus.dispatch.assert_not_called()
+
+    def test_propagates_command_bus_failure(self) -> None:
+        self.command_bus.dispatch.side_effect = RuntimeError("write failed")
+        command = self.make_command(["42"])
+
+        with self.assertRaisesRegex(RuntimeError, "write failed"):
+            command.execute()
+
+        self.command_bus.dispatch.assert_called_once()
+
+
+if __name__ == "__main__":
+    unittest.main()
