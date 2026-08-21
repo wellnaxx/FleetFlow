@@ -4,19 +4,20 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
 
-from src.adapters.driving.http.dependencies.eventing import execute_and_drain_events, get_event_collector
-from src.adapters.driving.http.dependencies.use_cases import get_fleet_overview_use_case
+from src.adapters.driving.http.dependencies.message_buses import get_authenticated_query_bus
 from src.adapters.driving.http.schemas.fleet import FleetOverviewResponse
-from src.application.eventing.collector import EventCollector
-from src.application.use_cases.fleet.get_overview import GetFleetOverviewUseCase
+from src.application.queries.fleet.get_fleet_overview import (
+    GET_FLEET_OVERVIEW,
+    GetFleetOverviewQuery,
+)
+from src.ports.input.query_bus import QueryBus
 
 fleet_router = APIRouter(prefix="/fleet", tags=["fleet"])
 
 
 @fleet_router.get("/overview", status_code=status.HTTP_200_OK)
 def get_fleet_overview(
-    use_case: Annotated[GetFleetOverviewUseCase, Depends(get_fleet_overview_use_case)],
-    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
+    query_bus: Annotated[QueryBus, Depends(get_authenticated_query_bus)],
     active_route_limit: Annotated[
         int,
         Query(
@@ -29,8 +30,8 @@ def get_fleet_overview(
     """Return an authorized point-in-time fleet operations overview.
 
     Args:
-        use_case: Fleet-overview use case bound to the authenticated principal.
-        event_collector: Collector used to publish authorization events.
+        query_bus: Authenticated query bus injected by FastAPI. The registered
+            executor owns authorization-event publication.
         active_route_limit: Maximum active-route projections to include.
 
     Returns:
@@ -43,10 +44,9 @@ def get_fleet_overview(
         RuntimeError: If persisted active-route scheduling data cannot be
             projected.
     """
-    result = execute_and_drain_events(
-        recorder=use_case,
-        event_collector=event_collector,
-        action=lambda: use_case.execute(active_route_limit=active_route_limit),
+    result = query_bus.dispatch(
+        key=GET_FLEET_OVERVIEW,
+        query=GetFleetOverviewQuery(active_route_limit=active_route_limit),
     )
 
     return FleetOverviewResponse.from_overview(result)

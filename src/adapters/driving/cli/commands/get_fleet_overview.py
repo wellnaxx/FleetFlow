@@ -2,24 +2,27 @@
 
 from typing import Final
 
-from src.adapters.driving.cli.commands.base_command.event_draining_command import EventDrainingCommand
+from src.adapters.driving.cli.commands.base_command.query_bus_command import QueryBusCommand
 from src.adapters.driving.cli.commands.validation_helpers import try_parse_int, validate_params_count
 from src.adapters.driving.cli.rendering.fleet_overview_renderer import render_fleet_overview
-from src.application.use_cases.fleet.get_overview import GetFleetOverviewUseCase
+from src.application.queries.fleet.get_fleet_overview import (
+    GET_FLEET_OVERVIEW,
+    GetFleetOverviewQuery,
+)
 from src.shared.validation import require_positive_int
 
 DEFAULT_ACTIVE_ROUTE_LIMIT: Final[int] = 10
 
 
-class GetFleetOverview(EventDrainingCommand[GetFleetOverviewUseCase]):
+class GetFleetOverview(QueryBusCommand):
     """Parse overview options, execute the use case, and render its projection."""
 
     def execute(self) -> str:
         """Return the current fleet overview as CLI text.
 
         The optional positional argument controls the number of active routes
-        included in the result. Authorization events are drained after both
-        successful and failed use-case execution.
+        included in the result. The registered query executor owns scoped
+        authorization-event publication.
 
         Returns:
             Rendered fleet overview.
@@ -48,9 +51,9 @@ class GetFleetOverview(EventDrainingCommand[GetFleetOverviewUseCase]):
         if active_route_limit > 100:
             raise ValueError("active_route_limit must be less than or equal to 100.")
 
-        fleet_overview = self._run_and_drain(
-            recorder=self.use_case,
-            action=lambda: self.use_case.execute(active_route_limit=active_route_limit),
+        fleet_overview = self.query_bus.dispatch(
+            key=GET_FLEET_OVERVIEW,
+            query=GetFleetOverviewQuery(active_route_limit=active_route_limit),
         )
 
         return render_fleet_overview(fleet_overview)

@@ -4,7 +4,6 @@ import unittest
 from datetime import datetime
 from unittest.mock import MagicMock
 
-from src.application.handlers.queries.fleet.get_fleet_overview import GetFleetOverviewQueryHandler
 from src.application.handlers.queries.packages.view_all_packages import ViewAllPackagesQueryHandler
 from src.application.handlers.queries.packages.view_package import ViewPackageQueryHandler
 from src.application.handlers.queries.packages.view_unassigned_packages import (
@@ -20,7 +19,6 @@ from src.application.handlers.queries.routes.view_all_routes import ViewAllRoute
 from src.application.handlers.queries.routes.view_route import ViewRouteQueryHandler
 from src.application.handlers.queries.routes.view_routes_in_progress import ViewRoutesInProgressQueryHandler
 from src.application.handlers.queries.trucks.view_all_trucks import ViewAllTrucksQueryHandler
-from src.application.queries.fleet.get_fleet_overview import GetFleetOverviewQuery
 from src.application.queries.packages.view_all_packages import ViewAllPackagesQuery
 from src.application.queries.packages.view_package import ViewPackageQuery
 from src.application.queries.packages.view_unassigned_packages import ViewUnassignedPackagesQuery
@@ -70,16 +68,6 @@ class QueryHandlersShould(unittest.TestCase):
 
         self.assertIs(result, expected)
         use_case.execute.assert_called_once_with(page)
-
-    def test_get_fleet_overview_forwards_active_route_limit(self) -> None:
-        use_case = MagicMock()
-        expected = object()
-        use_case.execute.return_value = expected
-
-        result = GetFleetOverviewQueryHandler(use_case).execute(GetFleetOverviewQuery(active_route_limit=25))
-
-        self.assertIs(result, expected)
-        use_case.execute.assert_called_once_with(25)
 
     def test_view_package_forwards_identifier(self) -> None:
         use_case = MagicMock()

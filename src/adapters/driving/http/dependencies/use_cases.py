@@ -5,7 +5,6 @@ from typing import Annotated
 from fastapi import Depends
 
 from src.adapters.driving.http.dependencies.auth import AuthenticatedHTTPPrincipal, get_current_user
-from src.application.use_cases.fleet.get_overview import GetFleetOverviewUseCase
 from src.application.use_cases.packages.create_package import CreatePackageUseCase
 from src.application.use_cases.packages.remove_package import RemovePackageUseCase
 from src.application.use_cases.packages.view_all_packages import ViewAllPackagesUseCase
@@ -385,28 +384,4 @@ def get_load_world_state_use_case(
         container.world_state_gateway,
         container.world_state_persistence,
         authz=principal.authz,
-    )
-
-
-def get_fleet_overview_use_case(
-    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
-    container: Annotated[Container, Depends(get_container)],
-) -> GetFleetOverviewUseCase:
-    """Build the fleet-overview use case for the authenticated request.
-
-    Args:
-        principal: Authenticated HTTP principal carrying request-scoped authorization.
-        container: Application dependency container.
-
-    Returns:
-        Fleet-overview use case bound to the configured query adapter and
-        application clock.
-
-    Raises:
-        HTTPException: Raised by `get_current_user` when authentication fails.
-    """
-    return GetFleetOverviewUseCase(
-        container.fleet_overview_query,
-        authz=principal.authz,
-        clock=container.clock,
     )

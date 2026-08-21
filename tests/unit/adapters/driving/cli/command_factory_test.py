@@ -167,7 +167,7 @@ class CommandFactoryShould(unittest.TestCase):
                 "getfleetoverview 25",
                 "getfleetoverview",
                 ["25"],
-                container.fleet_cases.get_overview,
+                container.query_bus,
             ),
         ]
 
@@ -267,13 +267,12 @@ class CommandFactoryShould(unittest.TestCase):
         self.assertEqual(command.params, ())
         self.assertIs(command.query_bus, container.query_bus)
 
-    def test_get_fleet_overview_receives_registered_use_case_and_collector(self) -> None:
-        """Build the fleet command from its typed container use-case group."""
+    def test_get_fleet_overview_receives_registered_query_bus(self) -> None:
+        """Build the fleet command with the container query bus."""
         factory, container = self.make_factory()
 
         command = cast(GetFleetOverview, factory.create("getfleetoverview 25"))
 
         self.assertIsInstance(command, GetFleetOverview)
         self.assertEqual(command.params, ("25",))
-        self.assertIs(command.use_case, container.fleet_cases.get_overview)
-        self.assertIs(command.event_collector, container.event_collector)
+        self.assertIs(command.query_bus, container.query_bus)

@@ -6,6 +6,7 @@ from datetime import datetime
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.exceptions.application_errors import ValidationError
+from src.application.queries.fleet.get_fleet_overview import GetFleetOverviewQuery
 from src.application.results.fleet_overview import FleetOverview
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
@@ -46,12 +47,12 @@ class GetFleetOverviewUseCase(AuthorizedUseCase[FleetOverview]):
         target_resource_type=AuditResourceType.FLEET,
         target_resource_id_resolver=None,
     )
-    def execute(self, active_route_limit: int = 10) -> FleetOverview:
+    def execute(self, query: GetFleetOverviewQuery) -> FleetOverview:
         """Return the fleet overview evaluated at the current business time.
 
         Args:
-            active_route_limit: Maximum active-route projections to include,
-                from 1 through 100. Defaults to 10.
+            query: Fleet-overview query carrying the maximum active-route
+                projection count.
 
         Returns:
             Point-in-time package, route, truck, and active-route summary.
@@ -68,7 +69,7 @@ class GetFleetOverviewUseCase(AuthorizedUseCase[FleetOverview]):
         try:
             return self._overview_query.get_overview(
                 generated_at=self._clock(),
-                active_route_limit=active_route_limit,
+                active_route_limit=query.active_route_limit,
             )
         except (TypeError, ValueError) as exc:
             raise ValidationError(str(exc)) from exc

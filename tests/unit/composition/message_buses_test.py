@@ -128,7 +128,7 @@ class MessageBusCompositionShould(unittest.TestCase):
             ),
             (
                 subject.GET_FLEET_OVERVIEW,
-                subject.GetFleetOverviewQueryHandler,
+                subject.EventDrainingExecutor,
                 self.fleet_cases.get_overview,
             ),
             (

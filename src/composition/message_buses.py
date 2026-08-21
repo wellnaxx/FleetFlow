@@ -34,7 +34,6 @@ from src.application.handlers.commands.routes.create_route import CreateRouteCom
 from src.application.handlers.commands.routes.remove_route import RemoveRouteCommandHandler
 from src.application.handlers.commands.state.load_world import LoadWorldCommandHandler
 from src.application.handlers.commands.state.save_world import SaveWorldCommandHandler
-from src.application.handlers.queries.fleet.get_fleet_overview import GetFleetOverviewQueryHandler
 from src.application.handlers.queries.packages.view_all_packages import ViewAllPackagesQueryHandler
 from src.application.handlers.queries.packages.view_package import ViewPackageQueryHandler
 from src.application.handlers.queries.packages.view_unassigned_packages import (
@@ -222,7 +221,13 @@ def build_query_bus(
     )
 
     # Cross-aggregate fleet reporting queries
-    bus.register(GET_FLEET_OVERVIEW, GetFleetOverviewQueryHandler(fleet_cases.get_overview))
+    bus.register(
+        GET_FLEET_OVERVIEW,
+        EventDrainingExecutor(
+            delegate=fleet_cases.get_overview,
+            event_collector=event_collector,
+        ),
+    )
 
     # Package-facing queries
     bus.register(VIEW_ALL_PACKAGES, ViewAllPackagesQueryHandler(package_cases.view_all))

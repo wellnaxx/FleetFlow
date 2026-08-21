@@ -9,6 +9,7 @@ from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.events.auth_events import AuthorizationDenied
 from src.application.exceptions.application_errors import ValidationError
+from src.application.queries.fleet.get_fleet_overview import GetFleetOverviewQuery
 from src.application.results.fleet_overview import FleetOverview
 from src.application.services.authorization_service import AuthorizationService
 from src.application.use_cases.fleet.get_overview import GetFleetOverviewUseCase
@@ -36,7 +37,7 @@ class GetFleetOverviewUseCaseShould(unittest.TestCase):
 
     def test_uses_default_limit_and_one_clock_value(self) -> None:
         """Use one generation timestamp and the documented default limit."""
-        result = self.use_case.execute()
+        result = self.use_case.execute(GetFleetOverviewQuery())
 
         self.assertIs(result, self.overview)
         self.clock.assert_called_once_with()
@@ -47,7 +48,7 @@ class GetFleetOverviewUseCaseShould(unittest.TestCase):
 
     def test_delegates_explicit_limit(self) -> None:
         """Pass caller-selected limits to the overview query unchanged."""
-        result = self.use_case.execute(active_route_limit=25)
+        result = self.use_case.execute(GetFleetOverviewQuery(active_route_limit=25))
 
         self.assertIs(result, self.overview)
         self.query.get_overview.assert_called_once_with(
@@ -64,7 +65,7 @@ class GetFleetOverviewUseCaseShould(unittest.TestCase):
                 clock = MagicMock(return_value=GENERATED_AT)
                 use_case = GetFleetOverviewUseCase(query, authz, clock=clock)
 
-                self.assertIs(use_case.execute(), self.overview)
+                self.assertIs(use_case.execute(GetFleetOverviewQuery()), self.overview)
                 clock.assert_called_once_with()
 
     def test_records_unauthenticated_denial_without_querying(self) -> None:
@@ -76,7 +77,7 @@ class GetFleetOverviewUseCaseShould(unittest.TestCase):
         )
 
         with self.assertRaisesRegex(PermissionError, "Unauthenticated"):
-            use_case.execute()
+            use_case.execute(GetFleetOverviewQuery())
 
         self.query.get_overview.assert_not_called()
         self.clock.assert_called_once_with()
@@ -95,7 +96,7 @@ class GetFleetOverviewUseCaseShould(unittest.TestCase):
         use_case = GetFleetOverviewUseCase(self.query, authz, clock=self.clock)
 
         with self.assertRaisesRegex(PermissionError, "FLEET_OVERVIEW_VIEW"):
-            use_case.execute()
+            use_case.execute(GetFleetOverviewQuery())
 
         authz.has.assert_called_once_with(Permission.FLEET_OVERVIEW_VIEW)
         self.query.get_overview.assert_not_called()
@@ -114,7 +115,7 @@ class GetFleetOverviewUseCaseShould(unittest.TestCase):
                 self.query.get_overview.side_effect = error
 
                 with self.assertRaisesRegex(ValidationError, str(error)) as raised:
-                    self.use_case.execute(active_route_limit=101)
+                    self.use_case.execute(GetFleetOverviewQuery(active_route_limit=101))
 
                 self.assertIs(raised.exception.__cause__, error)
                 self.clock.assert_called_once_with()
@@ -135,7 +136,7 @@ class GetFleetOverviewUseCaseShould(unittest.TestCase):
                 self.clock.side_effect = error
 
                 with self.assertRaisesRegex(ValidationError, str(error)) as raised:
-                    self.use_case.execute()
+                    self.use_case.execute(GetFleetOverviewQuery())
 
                 self.assertIs(raised.exception.__cause__, error)
                 self.query.get_overview.assert_not_called()
@@ -148,7 +149,7 @@ class GetFleetOverviewUseCaseShould(unittest.TestCase):
         self.query.get_overview.side_effect = error
 
         with self.assertRaisesRegex(RuntimeError, "database unavailable") as raised:
-            self.use_case.execute()
+            self.use_case.execute(GetFleetOverviewQuery())
 
         self.assertIs(raised.exception, error)
 
