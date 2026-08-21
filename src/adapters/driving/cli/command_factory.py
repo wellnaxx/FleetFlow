@@ -45,11 +45,7 @@ _CONTAINER_COMMANDS: dict[str, CommandBuilder] = {
     "resetpassword": lambda container, params: AuthResetPassword(params, container.command_bus),
     "save": lambda container, params: SaveState(params, container.state_cases.save, container.event_collector),
     "load": lambda container, params: LoadState(params, container.state_cases.load, container.event_collector),
-    "createpackage": lambda container, params: CreatePackage(
-        params,
-        container.package_cases.create,
-        container.event_collector,
-    ),
+    "createpackage": lambda container, params: CreatePackage(params, container.command_bus),
     "viewpackage": lambda container, params: ViewPackage(
         params, container.package_cases.view, container.event_collector
     ),

@@ -2,6 +2,7 @@
 
 import logging
 
+from src.application.commands.packages.create_package import CreatePackageCommand
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.services.authorization_service import AuthorizationService, requires
@@ -38,18 +39,12 @@ class CreatePackageUseCase(AuthorizedUseCase[DeliveryPackage]):
         target_resource_type=AuditResourceType.PACKAGE,
         target_resource_id_resolver=None,
     )
-    def execute(
-        self, start: str, end: str, weight: float, name: str, email: str = "", phone: str = ""
-    ) -> DeliveryPackage:
+    def execute(self, command: CreatePackageCommand) -> DeliveryPackage:
         """Create and persist a delivery package.
 
         Args:
-            start: Pickup location code.
-            end: Delivery location code.
-            weight: Package weight in kilograms.
-            name: Customer name.
-            email: Optional customer email address.
-            phone: Optional customer phone number.
+            command: Delivery locations, package weight, and customer contact
+                information for the package request.
 
         Returns:
             The newly created delivery package.
@@ -64,20 +59,30 @@ class CreatePackageUseCase(AuthorizedUseCase[DeliveryPackage]):
             EntityNotFoundError: If package ownership transfer detects that the package is missing
                 from the previous customer's active collection.
         """
-        start_code = LocationCode(start)
-        end_code = LocationCode(end)
+        start_code = LocationCode(command.start)
+        end_code = LocationCode(command.end)
 
-        customer = self._customers.find_existing_customer(name, email, phone)
+        customer = self._customers.find_existing_customer(
+            command.name,
+            command.email,
+            command.phone,
+        )
         if customer is None:
-            customer = self._customers.create(name, email, phone)
+            customer = self._customers.create(
+                command.name,
+                command.email,
+                command.phone,
+            )
 
         package = self._packages.create(
             start_location=start_code,
             end_location=end_code,
-            weight=weight,
+            weight=command.weight,
             customer=customer,
         )
         customer.add_package(package)
+        self.track_domain_recorder(package)
+        self.track_domain_recorder(customer)
         logger.info(
             "Created package %d from %s to %s for customer %d.",
             package.package_id,

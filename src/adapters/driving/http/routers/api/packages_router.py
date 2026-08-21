@@ -3,8 +3,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from src.adapters.driving.http.dependencies.eventing import execute_and_drain_events, get_event_collector
+from src.adapters.driving.http.dependencies.message_buses import get_authenticated_command_bus
 from src.adapters.driving.http.dependencies.use_cases import (
-    get_create_package_use_case,
     get_find_suitable_routes_for_package_use_case,
     get_remove_package_use_case,
     get_view_all_packages_use_case,
@@ -17,9 +17,9 @@ from src.adapters.driving.http.schemas.packages import (
     PackageResponse,
     PackageSuitableRouteResponse,
 )
+from src.application.commands.packages.create_package import CREATE_PACKAGE, CreatePackageCommand
 from src.application.eventing.collector import EventCollector
 from src.application.exceptions.application_errors import ConflictError
-from src.application.use_cases.packages.create_package import CreatePackageUseCase
 from src.application.use_cases.packages.remove_package import RemovePackageUseCase
 from src.application.use_cases.packages.view_all_packages import ViewAllPackagesUseCase
 from src.application.use_cases.packages.view_package import ViewPackageUseCase
@@ -29,6 +29,7 @@ from src.application.use_cases.routes.find_suitable_routes_for_package import (
     FindSuitableRoutesForPackageUseCase,
 )
 from src.domain.exceptions import DomainConflictError, EntityNotFoundError
+from src.ports.input.command_bus import CommandBus
 
 packages_router = APIRouter(prefix="/packages", tags=["packages"])
 
@@ -36,16 +37,14 @@ packages_router = APIRouter(prefix="/packages", tags=["packages"])
 @packages_router.post("", status_code=status.HTTP_201_CREATED)
 def create_package(
     request: PackageCreateRequest,
-    use_case: Annotated[CreatePackageUseCase, Depends(get_create_package_use_case)],
-    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
+    command_bus: Annotated[CommandBus, Depends(get_authenticated_command_bus)],
 ) -> PackageResponse:
     """Create a new package delivery request.
 
     Args:
         request: The package creation request data.
-        use_case: The use case for creating a package, injected by FastAPI.
-        event_collector: Collector used to publish use-case authorization events
-            and package/customer domain events.
+        command_bus: Authenticated command bus injected by FastAPI. The
+            registered executor owns application and domain-event publication.
 
     Returns:
         A response model representing the newly created package.
@@ -58,10 +57,9 @@ def create_package(
             * 500 - Database operation failure.
     """
     try:
-        package = execute_and_drain_events(
-            recorder=use_case,
-            event_collector=event_collector,
-            action=lambda: use_case.execute(
+        package = command_bus.dispatch(
+            key=CREATE_PACKAGE,
+            command=CreatePackageCommand(
                 start=request.start_location,
                 end=request.end_location,
                 weight=request.weight,
@@ -73,7 +71,6 @@ def create_package(
     except (ConflictError, DomainConflictError, EntityNotFoundError) as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
-    event_collector.drain((package, package.customer))
     return PackageResponse.from_package(package)
 
 

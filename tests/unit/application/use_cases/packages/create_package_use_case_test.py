@@ -1,7 +1,14 @@
 import unittest
 from collections.abc import Callable
+from typing import cast
 from unittest.mock import MagicMock
 
+from src.application.commands.packages.create_package import CreatePackageCommand
+from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
+from src.application.eventing.recorder_scope import bind_event_recorder_scope
+from src.application.events.auth_events import AuthorizationDenied
+from src.application.services.authorization_service import AuthorizationService
 from src.application.use_cases.packages.create_package import CreatePackageUseCase
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
@@ -37,9 +44,28 @@ class CreatePackageUseCaseLayerTests(unittest.TestCase):
         self.packages = MagicMock()
         self.use_case = CreatePackageUseCase(self.customers, self.packages, manager_authz())
 
+    def test_execute_rejects_unauthenticated_request_before_repository_access(self) -> None:
+        use_case = CreatePackageUseCase(
+            self.customers,
+            self.packages,
+            AuthorizationService(current_user=None),
+        )
+
+        with self.assertRaisesRegex(PermissionError, "Unauthenticated"):
+            use_case.execute(CreatePackageCommand(start="SYD", end="MEL", weight=10.0, name="Alice"))
+
+        self.customers.find_existing_customer.assert_not_called()
+        self.packages.create.assert_not_called()
+        self.assertEqual(len(use_case.pending_events), 1)
+        event = cast(AuthorizationDenied, use_case.pending_events[0])
+        self.assertIsInstance(event, AuthorizationDenied)
+        self.assertIs(event.attempted_operation, AuthorizationOperation.PACKAGE_CREATE)
+        self.assertIs(event.target_resource_type, AuditResourceType.PACKAGE)
+        self.assertIsNone(event.target_resource_id)
+
     def test_execute_raises_for_invalid_start_location(self) -> None:
         with self.assertRaises(DomainValidationError) as ctx:
-            self.use_case.execute("", "MEL", 10.0, "Alice")
+            self.use_case.execute(CreatePackageCommand(start="", end="MEL", weight=10.0, name="Alice"))
 
         self.assertIn("Location code cannot be blank.", str(ctx.exception))
         self.customers.find_existing_customer.assert_not_called()
@@ -47,7 +73,7 @@ class CreatePackageUseCaseLayerTests(unittest.TestCase):
 
     def test_execute_raises_for_invalid_end_location(self) -> None:
         with self.assertRaises(DomainValidationError) as ctx:
-            self.use_case.execute("SYD", "", 10.0, "Alice")
+            self.use_case.execute(CreatePackageCommand(start="SYD", end="", weight=10.0, name="Alice"))
 
         self.assertIn("Location code cannot be blank.", str(ctx.exception))
         self.customers.find_existing_customer.assert_not_called()
@@ -58,7 +84,17 @@ class CreatePackageUseCaseLayerTests(unittest.TestCase):
         self.customers.find_existing_customer.return_value = customer
         self.packages.create.side_effect = package_factory(42)
 
-        package = self.use_case.execute("SYD", "MEL", 12.5, "Alice", "alice@example.com", "0412345678")
+        with bind_event_recorder_scope() as scope:
+            package = self.use_case.execute(
+                CreatePackageCommand(
+                    start="SYD",
+                    end="MEL",
+                    weight=12.5,
+                    name="Alice",
+                    email="alice@example.com",
+                    phone="0412345678",
+                )
+            )
 
         self.customers.find_existing_customer.assert_called_once_with(
             "Alice", "alice@example.com", "0412345678"
@@ -75,6 +111,7 @@ class CreatePackageUseCaseLayerTests(unittest.TestCase):
         self.assertEqual(package.package_id, 42)
         self.assertIs(package.customer, customer)
         self.assertEqual(package.status, ItemStatus.TODO)
+        self.assertEqual(scope.event_recorders(), (scope, package, customer))
 
     def test_execute_creates_customer_when_missing(self) -> None:
         customer = MagicMock()
@@ -82,7 +119,16 @@ class CreatePackageUseCaseLayerTests(unittest.TestCase):
         self.customers.create.return_value = customer
         self.packages.create.side_effect = package_factory(7)
 
-        package = self.use_case.execute("SYD", "MEL", 3.5, "Alice", "alice@example.com", "0412345678")
+        package = self.use_case.execute(
+            CreatePackageCommand(
+                start="SYD",
+                end="MEL",
+                weight=3.5,
+                name="Alice",
+                email="alice@example.com",
+                phone="0412345678",
+            )
+        )
 
         self.customers.find_existing_customer.assert_called_once_with(
             "Alice", "alice@example.com", "0412345678"

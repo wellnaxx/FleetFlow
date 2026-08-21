@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from src.adapters.driving.http.exception_handlers import register_exception_handlers
 from src.adapters.driving.http.routers.api import packages_router as packages_router_module
 from src.adapters.driving.http.routers.api.packages_router import packages_router
+from src.application.commands.packages.create_package import CREATE_PACKAGE, CreatePackageCommand
 from src.application.exceptions.application_errors import NotFoundError, ValidationError
 from src.application.results.find_suitable_packages_for_route_result import SuitableRouteForPackage
 from src.application.results.remove_package_result import RemovePackageResult
@@ -18,6 +19,7 @@ from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.exceptions import DomainValidationError
 from src.domain.value_objects.contact_info import ContactInfo
 from src.domain.value_objects.location_code import LocationCode
+from src.ports.input.command_bus import CommandBus
 
 
 class PackagesRouterShould(unittest.TestCase):
@@ -33,12 +35,12 @@ class PackagesRouterShould(unittest.TestCase):
         self.app.dependency_overrides.clear()
 
     def test_create_package_returns_created_package(self) -> None:
-        use_case = MagicMock()
-        event_collector = MagicMock()
+        command_bus = MagicMock(spec=CommandBus)
         package = self._package()
-        use_case.execute.return_value = package
-        self.app.dependency_overrides[packages_router_module.get_create_package_use_case] = lambda: use_case
-        self.app.dependency_overrides[packages_router_module.get_event_collector] = lambda: event_collector
+        command_bus.dispatch.return_value = package
+        self.app.dependency_overrides[packages_router_module.get_authenticated_command_bus] = lambda: (
+            command_bus
+        )
 
         response = self.client.post(
             "/packages",
@@ -55,25 +57,25 @@ class PackagesRouterShould(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()["package_id"], 1)
         self.assertIsNone(response.json()["route_id"])
-        use_case.execute.assert_called_once_with(
-            start="SYD",
-            end="MEL",
-            weight=12.5,
-            name="Alice",
-            email="",
-            phone="",
+        command_bus.dispatch.assert_called_once_with(
+            key=CREATE_PACKAGE,
+            command=CreatePackageCommand(
+                start="SYD",
+                end="MEL",
+                weight=12.5,
+                name="Alice",
+                email="",
+                phone="",
+            ),
         )
-        self.assertEqual(
-            event_collector.drain.call_args_list,
-            [call((use_case,)), call((package, package.customer))],
-        )
+        self.event_collector.drain.assert_not_called()
 
     def test_create_package_returns_bad_request_for_invalid_input(self) -> None:
-        use_case = MagicMock()
-        event_collector = MagicMock()
-        use_case.execute.side_effect = DomainValidationError("Invalid start location: BAD")
-        self.app.dependency_overrides[packages_router_module.get_create_package_use_case] = lambda: use_case
-        self.app.dependency_overrides[packages_router_module.get_event_collector] = lambda: event_collector
+        command_bus = MagicMock(spec=CommandBus)
+        command_bus.dispatch.side_effect = DomainValidationError("Invalid start location: BAD")
+        self.app.dependency_overrides[packages_router_module.get_authenticated_command_bus] = lambda: (
+            command_bus
+        )
 
         response = self.client.post(
             "/packages",
@@ -87,14 +89,15 @@ class PackagesRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["detail"], "Invalid start location: BAD")
-        event_collector.drain.assert_called_once_with((use_case,))
+        command_bus.dispatch.assert_called_once()
+        self.event_collector.drain.assert_not_called()
 
     def test_create_package_returns_forbidden_for_permission_error(self) -> None:
-        use_case = MagicMock()
-        event_collector = MagicMock()
-        use_case.execute.side_effect = PermissionError("Missing permission: PACKAGE_CREATE")
-        self.app.dependency_overrides[packages_router_module.get_create_package_use_case] = lambda: use_case
-        self.app.dependency_overrides[packages_router_module.get_event_collector] = lambda: event_collector
+        command_bus = MagicMock(spec=CommandBus)
+        command_bus.dispatch.side_effect = PermissionError("Missing permission: PACKAGE_CREATE")
+        self.app.dependency_overrides[packages_router_module.get_authenticated_command_bus] = lambda: (
+            command_bus
+        )
 
         response = self.client.post(
             "/packages",
@@ -108,7 +111,8 @@ class PackagesRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"], "Missing permission: PACKAGE_CREATE")
-        event_collector.drain.assert_called_once_with((use_case,))
+        command_bus.dispatch.assert_called_once()
+        self.event_collector.drain.assert_not_called()
 
     def test_list_packages_returns_paginated_package_responses(self) -> None:
         use_case = MagicMock()

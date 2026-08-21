@@ -1,11 +1,11 @@
 """CLI command for creating delivery packages."""
 
-from src.adapters.driving.cli.commands.base_command.event_draining_command import EventDrainingCommand
+from src.adapters.driving.cli.commands.base_command.command_bus_command import CommandBusCommand
 from src.adapters.driving.cli.commands.validation_helpers import try_parse_float, validate_params_count
-from src.application.use_cases.packages.create_package import CreatePackageUseCase
+from src.application.commands.packages.create_package import CREATE_PACKAGE, CreatePackageCommand
 
 
-class CreatePackage(EventDrainingCommand[CreatePackageUseCase]):
+class CreatePackage(CommandBusCommand):
     """Create a package and publish use-case and entity events."""
 
     mutates_state = True
@@ -20,8 +20,8 @@ class CreatePackage(EventDrainingCommand[CreatePackageUseCase]):
         Raises:
             PermissionError: If the caller lacks package creation permission.
             ValueError: If parameter validation or package creation fails.
-            Exception: Propagates event-publication failures after successful
-                use-case execution.
+            DatabaseError: If customer or package persistence fails.
+            DomainError: If package or customer invariants are violated.
         """
         validate_params_count(self._params, 4, 6)
 
@@ -32,9 +32,9 @@ class CreatePackage(EventDrainingCommand[CreatePackageUseCase]):
         email = self._params[4] if len(self._params) > 4 else ""
         phone = self._params[5] if len(self._params) > 5 else ""
 
-        package = self._run_and_drain(
-            self._use_case,
-            lambda: self._use_case.execute(
+        package = self.command_bus.dispatch(
+            key=CREATE_PACKAGE,
+            command=CreatePackageCommand(
                 start=start,
                 end=end,
                 weight=weight,
@@ -43,8 +43,6 @@ class CreatePackage(EventDrainingCommand[CreatePackageUseCase]):
                 phone=phone,
             ),
         )
-
-        self._event_collector.drain((package, package.customer))
 
         return (
             f"Package {package.package_id} was created for customer {name} "

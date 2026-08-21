@@ -1,212 +1,115 @@
+"""Tests for the command-bus-backed create-package CLI adapter."""
+
 import unittest
 from types import SimpleNamespace
-from typing import cast
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 from src.adapters.driving.cli.commands.create_package import CreatePackage
+from src.application.commands.packages.create_package import CREATE_PACKAGE, CreatePackageCommand
+from src.ports.input.command_bus import CommandBus
 
 
-def _parse_float(value: str, _field_name: str = "value") -> float:
-    return float(value)
+class CreatePackageShould(unittest.TestCase):
+    """Verify CLI parsing, dispatch, error propagation, and rendering."""
 
+    def setUp(self) -> None:
+        """Create an isolated command bus for each test."""
+        self.command_bus = MagicMock(spec=CommandBus)
 
-def _collector_mock(command: CreatePackage) -> MagicMock:
-    """Return the command's injected collector as its test-double type."""
-    return cast(MagicMock, command._event_collector)  # pyright: ignore[reportPrivateUsage]
+    def make_command(self, params: list[str]) -> CreatePackage:
+        """Build the adapter with raw parameters and the mocked bus."""
+        return CreatePackage(params, self.command_bus)
 
-
-def _use_case_mock(command: CreatePackage) -> MagicMock:
-    """Return the command's injected use case as its test-double type."""
-    return cast(MagicMock, command._use_case)  # pyright: ignore[reportPrivateUsage]
-
-
-class CreatePackage_Tests(unittest.TestCase):
-    def make_cmd(self, params: list[str]) -> CreatePackage:
-        cmd = CreatePackage.__new__(CreatePackage)
-        cmd._params = params  # type: ignore[reportAttributeAccessIssue]
-        cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._event_collector = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        return cmd
-
-    def test_mutates_state_true(self) -> None:
+    def test_mutates_and_autosaves_state(self) -> None:
         self.assertTrue(CreatePackage.mutates_state)
+        self.assertTrue(CreatePackage.autosaves_state)
 
-    def test_execute_propagates_permission_errors_from_use_case(self) -> None:
-        cmd = self.make_cmd(["A1", "B2", "12.5", "Alice"])
-        cmd._use_case.execute.side_effect = PermissionError("Missing permission: PACKAGE_CREATE")  # type: ignore[reportAttributeAccessIssue]
+    def test_dispatches_minimal_command_and_renders_result(self) -> None:
+        package = SimpleNamespace(package_id=123, customer=SimpleNamespace(customer_id=55))
+        self.command_bus.dispatch.return_value = package
+        command = self.make_command(["A1", "B2", "12.5", "Alice"])
 
-        with self.assertRaises(PermissionError) as ctx:
-            cmd.execute()
+        result = command.execute()
 
-        self.assertIn("PACKAGE_CREATE", str(ctx.exception))
-        cmd._use_case.execute.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
-            start="A1",
-            end="B2",
-            weight=12.5,
-            name="Alice",
-            email="",
-            phone="",
+        self.command_bus.dispatch.assert_called_once_with(
+            key=CREATE_PACKAGE,
+            command=CreatePackageCommand(
+                start="A1",
+                end="B2",
+                weight=12.5,
+                name="Alice",
+                email="",
+                phone="",
+            ),
         )
-        _collector_mock(cmd).drain.assert_called_once_with((_use_case_mock(cmd),))
-
-    @patch("src.adapters.driving.cli.commands.create_package.validate_params_count")
-    @patch("src.adapters.driving.cli.commands.create_package.try_parse_float")
-    def test_success_minimal_required_params(
-        self,
-        mock_parse_float: MagicMock,
-        mock_validate: MagicMock,
-    ) -> None:
-        mock_parse_float.side_effect = _parse_float
-        cmd = self.make_cmd(["A1", "B2", "12.5", "Alice"])
-
-        pkg = SimpleNamespace(package_id=123, customer=SimpleNamespace(customer_id=55))
-        cmd._use_case.execute.return_value = pkg  # type: ignore[reportAttributeAccessIssue]
-
-        result = cmd.execute()
-
-        mock_validate.assert_called_once_with(["A1", "B2", "12.5", "Alice"], 4, 6)
-        mock_parse_float.assert_called_once_with("12.5", "weight")
-        cmd._use_case.execute.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
-            start="A1",
-            end="B2",
-            weight=12.5,
-            name="Alice",
-            email="",
-            phone="",
-        )
-        self.assertEqual(result, "Package 123 was created for customer Alice (ID: 55) successfully.")
         self.assertEqual(
-            _collector_mock(cmd).drain.call_args_list,
-            [call((_use_case_mock(cmd),)), call((pkg, pkg.customer))],
+            result,
+            "Package 123 was created for customer Alice (ID: 55) successfully.",
         )
 
-    @patch("src.adapters.driving.cli.commands.create_package.validate_params_count")
-    @patch("src.adapters.driving.cli.commands.create_package.try_parse_float")
-    def test_success_with_all_params(
-        self,
-        mock_parse_float: MagicMock,
-        mock_validate: MagicMock,
-    ) -> None:
-        mock_parse_float.return_value = 7.0
-        cmd = self.make_cmd(["S1", "E9", "7", "Bob", "bob@ex.com", "0412345678"])
+    def test_dispatches_all_optional_contact_fields(self) -> None:
+        package = SimpleNamespace(package_id=999, customer=SimpleNamespace(customer_id=1))
+        self.command_bus.dispatch.return_value = package
+        command = self.make_command(["S1", "E9", "7", "Bob", "bob@ex.com", "0412345678"])
 
-        pkg = SimpleNamespace(package_id=999, customer=SimpleNamespace(customer_id=1))
-        cmd._use_case.execute.return_value = pkg  # type: ignore[reportAttributeAccessIssue]
+        result = command.execute()
 
-        result = cmd.execute()
-
-        mock_validate.assert_called_once_with(["S1", "E9", "7", "Bob", "bob@ex.com", "0412345678"], 4, 6)
-        mock_parse_float.assert_called_once_with("7", "weight")
-        cmd._use_case.execute.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
-            start="S1",
-            end="E9",
-            weight=7.0,
-            name="Bob",
-            email="bob@ex.com",
-            phone="0412345678",
+        self.command_bus.dispatch.assert_called_once_with(
+            key=CREATE_PACKAGE,
+            command=CreatePackageCommand(
+                start="S1",
+                end="E9",
+                weight=7.0,
+                name="Bob",
+                email="bob@ex.com",
+                phone="0412345678",
+            ),
         )
-        self.assertEqual(result, "Package 999 was created for customer Bob (ID: 1) successfully.")
         self.assertEqual(
-            _collector_mock(cmd).drain.call_args_list,
-            [call((_use_case_mock(cmd),)), call((pkg, pkg.customer))],
+            result,
+            "Package 999 was created for customer Bob (ID: 1) successfully.",
         )
 
-    @patch("src.adapters.driving.cli.commands.create_package.validate_params_count")
+    def test_propagates_permission_error_from_command_bus(self) -> None:
+        self.command_bus.dispatch.side_effect = PermissionError("Missing permission: PACKAGE_CREATE")
+        command = self.make_command(["A1", "B2", "12.5", "Alice"])
+
+        with self.assertRaisesRegex(PermissionError, "PACKAGE_CREATE"):
+            command.execute()
+
+        self.command_bus.dispatch.assert_called_once()
+
     @patch("src.adapters.driving.cli.commands.create_package.try_parse_float")
-    def test_weight_parse_failure_propagates(
-        self,
-        mock_parse_float: MagicMock,
-        mock_validate: MagicMock,
-    ) -> None:
-        mock_parse_float.side_effect = ValueError("not a number")
-        cmd = self.make_cmd(["A1", "B2", "x", "Alice"])
+    def test_weight_parse_failure_prevents_dispatch(self, parse_float: MagicMock) -> None:
+        parse_float.side_effect = ValueError("not a number")
+        command = self.make_command(["A1", "B2", "x", "Alice"])
 
-        with self.assertRaises(ValueError) as ctx:
-            cmd.execute()
+        with self.assertRaisesRegex(ValueError, "not a number"):
+            command.execute()
 
-        self.assertIn("not a number", str(ctx.exception))
-        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
-        _collector_mock(cmd).drain.assert_not_called()
+        parse_float.assert_called_once_with("x", "weight")
+        self.command_bus.dispatch.assert_not_called()
 
-    @patch("src.adapters.driving.cli.commands.create_package.validate_params_count")
-    @patch("src.adapters.driving.cli.commands.create_package.try_parse_float")
-    def test_downstream_use_case_error_propagates(
-        self,
-        mock_parse_float: MagicMock,
-        mock_validate: MagicMock,
-    ) -> None:
-        mock_parse_float.return_value = 2.5
-        cmd = self.make_cmd(["A1", "B2", "2.5", "Alice"])
-        cmd._use_case.execute.side_effect = RuntimeError("db error")  # type: ignore[reportAttributeAccessIssue]
+    def test_propagates_command_bus_failure(self) -> None:
+        self.command_bus.dispatch.side_effect = RuntimeError("db error")
+        command = self.make_command(["A1", "B2", "2.5", "Alice"])
 
-        with self.assertRaises(RuntimeError) as ctx:
-            cmd.execute()
+        with self.assertRaisesRegex(RuntimeError, "db error"):
+            command.execute()
 
-        self.assertIn("db error", str(ctx.exception))
-        cmd._use_case.execute.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
-            start="A1",
-            end="B2",
-            weight=2.5,
-            name="Alice",
-            email="",
-            phone="",
-        )
-        _collector_mock(cmd).drain.assert_called_once_with((_use_case_mock(cmd),))
+        self.command_bus.dispatch.assert_called_once()
 
     @patch("src.adapters.driving.cli.commands.create_package.validate_params_count")
-    @patch("src.adapters.driving.cli.commands.create_package.try_parse_float")
-    def test_use_case_event_publication_failure_prevents_entity_drain(
-        self,
-        mock_parse_float: MagicMock,
-        mock_validate: MagicMock,
-    ) -> None:
-        mock_parse_float.return_value = 2.5
-        cmd = self.make_cmd(["A1", "B2", "2.5", "Alice"])
+    def test_validates_supported_parameter_count(self, validate: MagicMock) -> None:
         package = SimpleNamespace(package_id=1, customer=SimpleNamespace(customer_id=2))
-        cmd._use_case.execute.return_value = package  # type: ignore[reportAttributeAccessIssue]
-        _collector_mock(cmd).drain.side_effect = RuntimeError("publisher failed")
+        self.command_bus.dispatch.return_value = package
+        params = ["S", "E", "1", "Name"]
+        command = self.make_command(params)
 
-        with self.assertRaisesRegex(RuntimeError, "publisher failed"):
-            cmd.execute()
+        command.execute()
 
-        _collector_mock(cmd).drain.assert_called_once_with((_use_case_mock(cmd),))
+        validate.assert_called_once_with(tuple(params), 4, 6)
 
-    @patch("src.adapters.driving.cli.commands.create_package.validate_params_count")
-    @patch("src.adapters.driving.cli.commands.create_package.try_parse_float")
-    def test_validate_called_with_min_max(
-        self,
-        mock_parse_float: MagicMock,
-        mock_validate: MagicMock,
-    ) -> None:
-        mock_parse_float.return_value = 1.0
-        params = ["S", "E", "1", "N"]
-        cmd = self.make_cmd(params)
-        pkg = SimpleNamespace(package_id=1, customer=SimpleNamespace(customer_id=1))
-        cmd._use_case.execute.return_value = pkg  # type: ignore[reportAttributeAccessIssue]
 
-        _ = cmd.execute()
-
-        mock_validate.assert_called_once_with(params, 4, 6)
-
-    @patch("src.adapters.driving.cli.commands.create_package.validate_params_count")
-    @patch("src.adapters.driving.cli.commands.create_package.try_parse_float")
-    def test_optional_email_phone_default_to_empty(
-        self,
-        mock_parse_float: MagicMock,
-        mock_validate: MagicMock,
-    ) -> None:
-        mock_parse_float.return_value = 4.2
-        cmd = self.make_cmd(["S", "E", "4.2", "Name"])
-        pkg = SimpleNamespace(package_id=5, customer=SimpleNamespace(customer_id=6))
-        cmd._use_case.execute.return_value = pkg  # type: ignore[reportAttributeAccessIssue]
-
-        _ = cmd.execute()
-
-        cmd._use_case.execute.assert_called_once_with(  # type: ignore[reportUnknownMemberType]
-            start="S",
-            end="E",
-            weight=4.2,
-            name="Name",
-            email="",
-            phone="",
-        )
+if __name__ == "__main__":
+    unittest.main()

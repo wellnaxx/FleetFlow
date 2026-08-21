@@ -10,6 +10,7 @@ from src.adapters.driving.cli.commands.auth_logout import AuthLogout
 from src.adapters.driving.cli.commands.auth_register import AuthRegisterUser
 from src.adapters.driving.cli.commands.auth_reset_password import AuthResetPassword
 from src.adapters.driving.cli.commands.auth_whoami import AuthWhoAmI
+from src.adapters.driving.cli.commands.create_package import CreatePackage
 from src.adapters.driving.cli.commands.get_fleet_overview import GetFleetOverview
 from src.adapters.driving.cli.commands.view_all_customers import ViewAllCustomers
 from src.adapters.driving.cli.commands.view_audits import ViewAuditLogs
@@ -115,7 +116,7 @@ class CommandFactoryShould(unittest.TestCase):
                 'createpackage "SYD" "MEL" 5 "Alice"',
                 "createpackage",
                 ["SYD", "MEL", "5", "Alice"],
-                container.package_cases.create,
+                container.command_bus,
             ),
             ("viewpackage 42", "viewpackage", ["42"], container.package_cases.view),
             ("viewallpackages", "viewallpackages", [], container.package_cases.view_all),
@@ -245,6 +246,16 @@ class CommandFactoryShould(unittest.TestCase):
 
         self.assertIsInstance(command, AuthResetPassword)
         self.assertEqual(command.params, ("alice",))
+        self.assertIs(command.command_bus, container.command_bus)
+
+    def test_create_package_receives_registered_command_bus(self) -> None:
+        """Build package creation with the container command bus."""
+        factory, container = self.make_factory()
+
+        command = cast(CreatePackage, factory.create("createpackage SYD MEL 5 Alice"))
+
+        self.assertIsInstance(command, CreatePackage)
+        self.assertEqual(command.params, ("SYD", "MEL", "5", "Alice"))
         self.assertIs(command.command_bus, container.command_bus)
 
     def test_view_audit_logs_receives_registered_query_bus(self) -> None:
