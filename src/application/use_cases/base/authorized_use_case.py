@@ -8,10 +8,11 @@ from src.application.use_cases.base.event_mixin import ApplicationEventRecorderM
 class AuthorizedUseCase[T](BaseUseCase[T], ApplicationEventRecorderMixin):
     """Base for permission-protected use cases that record application events.
 
-    Permission decorators record ``AuthorizationDenied`` on the use-case
-    instance. Driving adapters must therefore drain authorized use cases after
-    successful and failed execution. Subclasses must call ``super().__init__``
-    with their authorization service.
+    Permission decorators record ``AuthorizationDenied`` through the active
+    event-recorder scope when a message executor owns publication. Legacy
+    direct adapters execute without a scope and drain the use-case instance
+    explicitly. Subclasses must call ``super().__init__`` with their
+    authorization service.
     """
 
     def __init__(self, authz: AuthorizationService) -> None:
