@@ -14,6 +14,7 @@ from src.adapters.driving.cli.commands.create_package import CreatePackage
 from src.adapters.driving.cli.commands.get_fleet_overview import GetFleetOverview
 from src.adapters.driving.cli.commands.remove_package import RemovePackage
 from src.adapters.driving.cli.commands.view_all_customers import ViewAllCustomers
+from src.adapters.driving.cli.commands.view_all_packages import ViewAllPackages
 from src.adapters.driving.cli.commands.view_audits import ViewAuditLogs
 
 
@@ -120,7 +121,7 @@ class CommandFactoryShould(unittest.TestCase):
                 container.command_bus,
             ),
             ("viewpackage 42", "viewpackage", ["42"], container.package_cases.view),
-            ("viewallpackages", "viewallpackages", [], container.package_cases.view_all),
+            ("viewallpackages", "viewallpackages", [], container.query_bus),
             ("removepackage 42", "removepackage", ["42"], container.command_bus),
             (
                 "viewunassignedpackages",
@@ -268,6 +269,16 @@ class CommandFactoryShould(unittest.TestCase):
         self.assertIsInstance(command, RemovePackage)
         self.assertEqual(command.params, ("42",))
         self.assertIs(command.command_bus, container.command_bus)
+
+    def test_view_all_packages_receives_registered_query_bus(self) -> None:
+        """Build package listing with the container query bus."""
+        factory, container = self.make_factory()
+
+        command = cast(ViewAllPackages, factory.create("viewallpackages"))
+
+        self.assertIsInstance(command, ViewAllPackages)
+        self.assertEqual(command.params, ())
+        self.assertIs(command.query_bus, container.query_bus)
 
     def test_view_audit_logs_receives_registered_query_bus(self) -> None:
         """Build the migrated audit command with the container query bus."""

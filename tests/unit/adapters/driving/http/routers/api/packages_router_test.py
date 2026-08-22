@@ -11,6 +11,7 @@ from src.adapters.driving.http.routers.api.packages_router import packages_route
 from src.application.commands.packages.create_package import CREATE_PACKAGE, CreatePackageCommand
 from src.application.commands.packages.remove_package import REMOVE_PACKAGE, RemovePackageCommand
 from src.application.exceptions.application_errors import NotFoundError, ValidationError
+from src.application.queries.packages.view_all_packages import VIEW_ALL_PACKAGES, ViewAllPackagesQuery
 from src.application.results.find_suitable_packages_for_route_result import SuitableRouteForPackage
 from src.application.use_cases.pagination import PageQuery, PageResult
 from src.domain.entities.customer import Customer
@@ -20,6 +21,7 @@ from src.domain.exceptions import DomainConflictError, DomainValidationError
 from src.domain.value_objects.contact_info import ContactInfo
 from src.domain.value_objects.location_code import LocationCode
 from src.ports.input.command_bus import CommandBus
+from src.ports.input.query_bus import QueryBus
 
 
 class PackagesRouterShould(unittest.TestCase):
@@ -28,7 +30,11 @@ class PackagesRouterShould(unittest.TestCase):
         self.app.include_router(packages_router)
         register_exception_handlers(self.app)
         self.event_collector = MagicMock()
+        self.query_bus = MagicMock(spec=QueryBus)
         self.app.dependency_overrides[packages_router_module.get_event_collector] = lambda: self.event_collector
+        self.app.dependency_overrides[packages_router_module.get_authenticated_query_bus] = lambda: (
+            self.query_bus
+        )
         self.client = TestClient(self.app)
 
     def tearDown(self) -> None:
@@ -115,15 +121,12 @@ class PackagesRouterShould(unittest.TestCase):
         self.event_collector.drain.assert_not_called()
 
     def test_list_packages_returns_paginated_package_responses(self) -> None:
-        use_case = MagicMock()
-        use_case.execute.return_value = PageResult(
+        self.query_bus.dispatch.return_value = PageResult(
             items=(self._package(package_id=2, with_route=True),),
             total=12,
             limit=1,
             offset=2,
         )
-        self.app.dependency_overrides[packages_router_module.get_view_all_packages_use_case] = lambda: use_case
-
         response = self.client.get("/packages?limit=1&offset=2&include_total=true")
 
         self.assertEqual(response.status_code, 200)
@@ -132,37 +135,41 @@ class PackagesRouterShould(unittest.TestCase):
         self.assertEqual(response.json()["count"], 1)
         self.assertEqual(response.json()["limit"], 1)
         self.assertEqual(response.json()["offset"], 2)
-        use_case.execute.assert_called_once_with(PageQuery(limit=1, offset=2, include_total=True))
-        self.event_collector.drain.assert_called_once_with((use_case,))
+        self.query_bus.dispatch.assert_called_once_with(
+            key=VIEW_ALL_PACKAGES,
+            query=ViewAllPackagesQuery(page=PageQuery(limit=1, offset=2, include_total=True)),
+        )
+        self.event_collector.drain.assert_not_called()
 
     def test_list_packages_preserves_unpaginated_limit(self) -> None:
-        use_case = MagicMock()
-        use_case.execute.return_value = PageResult(
+        self.query_bus.dispatch.return_value = PageResult(
             items=(self._package(package_id=2),),
             total=None,
             limit=None,
             offset=0,
         )
-        self.app.dependency_overrides[packages_router_module.get_view_all_packages_use_case] = lambda: use_case
-
         response = self.client.get("/packages")
 
         self.assertEqual(response.status_code, 200)
         self.assertIsNone(response.json()["limit"])
         self.assertEqual(response.json()["count"], 1)
-        use_case.execute.assert_called_once_with(PageQuery(limit=50, offset=0, include_total=False))
+        self.query_bus.dispatch.assert_called_once_with(
+            key=VIEW_ALL_PACKAGES,
+            query=ViewAllPackagesQuery(page=PageQuery(limit=50, offset=0, include_total=False)),
+        )
 
     def test_list_packages_returns_forbidden_for_permission_error(self) -> None:
-        use_case = MagicMock()
-        use_case.execute.side_effect = PermissionError("Missing permission: PACKAGE_VIEW_ALL")
-        self.app.dependency_overrides[packages_router_module.get_view_all_packages_use_case] = lambda: use_case
+        self.query_bus.dispatch.side_effect = PermissionError("Missing permission: PACKAGE_VIEW_ALL")
 
         response = self.client.get("/packages")
 
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"], "Missing permission: PACKAGE_VIEW_ALL")
-        use_case.execute.assert_called_once_with(PageQuery(limit=50, offset=0, include_total=False))
-        self.event_collector.drain.assert_called_once_with((use_case,))
+        self.query_bus.dispatch.assert_called_once_with(
+            key=VIEW_ALL_PACKAGES,
+            query=ViewAllPackagesQuery(page=PageQuery(limit=50, offset=0, include_total=False)),
+        )
+        self.event_collector.drain.assert_not_called()
 
     def test_list_unassigned_packages_returns_page_without_total_by_default(self) -> None:
         use_case = MagicMock()
@@ -187,23 +194,20 @@ class PackagesRouterShould(unittest.TestCase):
         self.event_collector.drain.assert_called_once_with((use_case,))
 
     def test_list_packages_rejects_invalid_pagination_params(self) -> None:
-        use_case = MagicMock()
-        self.app.dependency_overrides[packages_router_module.get_view_all_packages_use_case] = lambda: use_case
-
         response = self.client.get("/packages?limit=0&offset=-1")
 
         self.assertEqual(response.status_code, 422)
-        use_case.execute.assert_not_called()
+        self.query_bus.dispatch.assert_not_called()
 
     def test_list_packages_returns_bad_request_for_pagination_validation_error(self) -> None:
-        use_case = MagicMock()
-        use_case.execute.side_effect = ValidationError("Offset cannot be used without a limit.")
-        self.app.dependency_overrides[packages_router_module.get_view_all_packages_use_case] = lambda: use_case
+        self.query_bus.dispatch.side_effect = ValidationError("Offset cannot be used without a limit.")
 
         response = self.client.get("/packages")
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["detail"], "Offset cannot be used without a limit.")
+        self.query_bus.dispatch.assert_called_once()
+        self.event_collector.drain.assert_not_called()
 
     def test_get_package_returns_package_response(self) -> None:
         use_case = MagicMock()

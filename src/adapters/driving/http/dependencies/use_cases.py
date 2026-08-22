@@ -5,7 +5,6 @@ from typing import Annotated
 from fastapi import Depends
 
 from src.adapters.driving.http.dependencies.auth import AuthenticatedHTTPPrincipal, get_current_user
-from src.application.use_cases.packages.view_all_packages import ViewAllPackagesUseCase
 from src.application.use_cases.packages.view_package import ViewPackageUseCase
 from src.application.use_cases.packages.view_unassigned_packages import ViewUnassignedPackagesUseCase
 from src.application.use_cases.routes.assign_packages_to_route import AssignPackagesToRouteUseCase
@@ -44,25 +43,6 @@ def get_view_package_use_case(
         HTTPException: Raised by `get_current_user` when authentication fails.
     """
     return ViewPackageUseCase(container.package_repo, authz=principal.authz)
-
-
-def get_view_all_packages_use_case(
-    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
-    container: Annotated[Container, Depends(get_container)],
-) -> ViewAllPackagesUseCase:
-    """Build the package-listing use case for the authenticated request.
-
-    Args:
-        principal: Authenticated HTTP principal carrying request-scoped authorization.
-        container: Application dependency container.
-
-    Returns:
-        Package-listing use case bound to the package repository.
-
-    Raises:
-        HTTPException: Raised by `get_current_user` when authentication fails.
-    """
-    return ViewAllPackagesUseCase(container.package_repo, authz=principal.authz)
 
 
 def get_view_unassigned_packages_use_case(

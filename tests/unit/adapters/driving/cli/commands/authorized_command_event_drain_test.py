@@ -12,7 +12,6 @@ from src.adapters.driving.cli.commands.find_suitable_trucks_for_route import (
     FindSuitableTrucksForRoute,
 )
 from src.adapters.driving.cli.commands.remove_route import RemoveRoute
-from src.adapters.driving.cli.commands.view_all_packages import ViewAllPackages
 from src.adapters.driving.cli.commands.view_all_routes import ViewAllRoutes
 from src.adapters.driving.cli.commands.view_all_trucks import ViewAllTrucks
 from src.adapters.driving.cli.commands.view_package import ViewPackage
@@ -28,7 +27,6 @@ class AuthorizedCommandEventDrainShould(unittest.TestCase):
     def test_drain_read_and_search_use_cases_after_success(self) -> None:
         page = PageResult[object](items=(), total=None, limit=None, offset=0)
         cases: tuple[tuple[type[Any], tuple[str, ...], object], ...] = (
-            (ViewAllPackages, (), page),
             (ViewUnassignedPackages, (), page),
             (ViewAllRoutes, (), page),
             (ViewAllTrucks, (), list[object]()),
