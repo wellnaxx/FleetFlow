@@ -16,6 +16,7 @@ from src.adapters.driving.cli.commands.remove_package import RemovePackage
 from src.adapters.driving.cli.commands.view_all_customers import ViewAllCustomers
 from src.adapters.driving.cli.commands.view_all_packages import ViewAllPackages
 from src.adapters.driving.cli.commands.view_audits import ViewAuditLogs
+from src.adapters.driving.cli.commands.view_package import ViewPackage
 
 
 class CommandFactoryShould(unittest.TestCase):
@@ -120,7 +121,7 @@ class CommandFactoryShould(unittest.TestCase):
                 ["SYD", "MEL", "5", "Alice"],
                 container.command_bus,
             ),
-            ("viewpackage 42", "viewpackage", ["42"], container.package_cases.view),
+            ("viewpackage 42", "viewpackage", ["42"], container.query_bus),
             ("viewallpackages", "viewallpackages", [], container.query_bus),
             ("removepackage 42", "removepackage", ["42"], container.command_bus),
             (
@@ -278,6 +279,16 @@ class CommandFactoryShould(unittest.TestCase):
 
         self.assertIsInstance(command, ViewAllPackages)
         self.assertEqual(command.params, ())
+        self.assertIs(command.query_bus, container.query_bus)
+
+    def test_view_package_receives_registered_query_bus(self) -> None:
+        """Build package lookup with the container query bus."""
+        factory, container = self.make_factory()
+
+        command = cast(ViewPackage, factory.create("viewpackage 42"))
+
+        self.assertIsInstance(command, ViewPackage)
+        self.assertEqual(command.params, ("42",))
         self.assertIs(command.query_bus, container.query_bus)
 
     def test_view_audit_logs_receives_registered_query_bus(self) -> None:

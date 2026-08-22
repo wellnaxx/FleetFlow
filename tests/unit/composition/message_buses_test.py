@@ -136,7 +136,7 @@ class MessageBusCompositionShould(unittest.TestCase):
                 subject.EventDrainingExecutor,
                 self.package_cases.view_all,
             ),
-            (subject.VIEW_PACKAGE, subject.ViewPackageQueryHandler, self.package_cases.view),
+            (subject.VIEW_PACKAGE, subject.EventDrainingExecutor, self.package_cases.view),
             (
                 subject.VIEW_UNASSIGNED_PACKAGES,
                 subject.ViewUnassignedPackagesQueryHandler,

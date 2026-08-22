@@ -14,7 +14,6 @@ from src.adapters.driving.cli.commands.find_suitable_trucks_for_route import (
 from src.adapters.driving.cli.commands.remove_route import RemoveRoute
 from src.adapters.driving.cli.commands.view_all_routes import ViewAllRoutes
 from src.adapters.driving.cli.commands.view_all_trucks import ViewAllTrucks
-from src.adapters.driving.cli.commands.view_package import ViewPackage
 from src.adapters.driving.cli.commands.view_route import ViewRoute
 from src.adapters.driving.cli.commands.view_routes_in_progress import ViewRoutesInProgress
 from src.adapters.driving.cli.commands.view_unassigned_packages import ViewUnassignedPackages
@@ -51,12 +50,8 @@ class AuthorizedCommandEventDrainShould(unittest.TestCase):
                 collector.drain.assert_called_once_with((use_case,))
 
     def test_drain_single_entity_view_use_cases_after_success(self) -> None:
-        package = MagicMock()
         route = MagicMock()
-        cases = (
-            (ViewPackage, ("1",), package),
-            (ViewRoute, ("1",), route),
-        )
+        cases = ((ViewRoute, ("1",), route),)
 
         for command_type, params, result in cases:
             with self.subTest(command=command_type.__name__):
@@ -65,15 +60,9 @@ class AuthorizedCommandEventDrainShould(unittest.TestCase):
                 use_case.execute.return_value = result
                 command = command_type(params, use_case, collector)
 
-                with (
-                    patch(
-                        "src.adapters.driving.cli.commands.view_package.render_package_info",
-                        return_value="package",
-                    ),
-                    patch(
-                        "src.adapters.driving.cli.commands.view_route.render_route_info",
-                        return_value="route",
-                    ),
+                with patch(
+                    "src.adapters.driving.cli.commands.view_route.render_route_info",
+                    return_value="route",
                 ):
                     command.execute()
 
@@ -81,7 +70,6 @@ class AuthorizedCommandEventDrainShould(unittest.TestCase):
 
     def test_best_effort_drain_authorization_denials(self) -> None:
         for command_type, params in (
-            (ViewPackage, ("1",)),
             (FindSuitableTrucksForRoute, ("1",)),
             (RemoveRoute, ("1",)),
         ):

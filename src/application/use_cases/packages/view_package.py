@@ -13,19 +13,20 @@ from src.domain.entities.delivery_package import DeliveryPackage
 from src.domain.enums.auth import Permission
 
 if TYPE_CHECKING:
+    from src.application.queries.packages.view_package import ViewPackageQuery
     from src.ports.output.package_repository import PackageRepositoryPort
 
 
 def _resolve_package_target_id(
     _self: ViewPackageUseCase,
-    package_id: int,
+    query: ViewPackageQuery,
 ) -> int | None:
-    """Resolve the audit target resource id for a package view attempt."""
-    return package_id
+    """Resolve the audit target resource id for a package-view query."""
+    return query.package_id
 
 
 class ViewPackageUseCase(AuthorizedUseCase[DeliveryPackage]):
-    """Fetch one package by id."""
+    """Retrieve one package through the published application query."""
 
     def __init__(self, packages: PackageRepositoryPort, authz: AuthorizationService) -> None:
         """Initialize the use case.
@@ -43,11 +44,11 @@ class ViewPackageUseCase(AuthorizedUseCase[DeliveryPackage]):
         target_resource_type=AuditResourceType.PACKAGE,
         target_resource_id_resolver=_resolve_package_target_id,
     )
-    def execute(self, package_id: int) -> DeliveryPackage:
+    def execute(self, query: ViewPackageQuery) -> DeliveryPackage:
         """Return one package by id.
 
         Args:
-            package_id: Identifier of the package to fetch.
+            query: Package lookup query containing the target identifier.
 
         Returns:
             The matching package entity.
@@ -55,7 +56,9 @@ class ViewPackageUseCase(AuthorizedUseCase[DeliveryPackage]):
         Raises:
             PermissionError: If the caller lacks package view permission.
             NotFoundError: If the package does not exist.
+            DatabaseError: If package retrieval fails.
         """
+        package_id = query.package_id
         package = self._packages.get_by_id(package_id)
         if not package:
             raise NotFoundError(f"Package with ID {package_id} not found.")

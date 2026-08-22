@@ -9,7 +9,6 @@ from src.adapters.driving.http.dependencies.message_buses import (
 )
 from src.adapters.driving.http.dependencies.use_cases import (
     get_find_suitable_routes_for_package_use_case,
-    get_view_package_use_case,
     get_view_unassigned_packages_use_case,
 )
 from src.adapters.driving.http.schemas.packages import (
@@ -23,7 +22,7 @@ from src.application.commands.packages.remove_package import REMOVE_PACKAGE, Rem
 from src.application.eventing.collector import EventCollector
 from src.application.exceptions.application_errors import ConflictError
 from src.application.queries.packages.view_all_packages import VIEW_ALL_PACKAGES, ViewAllPackagesQuery
-from src.application.use_cases.packages.view_package import ViewPackageUseCase
+from src.application.queries.packages.view_package import VIEW_PACKAGE, ViewPackageQuery
 from src.application.use_cases.packages.view_unassigned_packages import ViewUnassignedPackagesUseCase
 from src.application.use_cases.pagination import PageQuery
 from src.application.use_cases.routes.find_suitable_routes_for_package import (
@@ -145,15 +144,14 @@ def list_unassigned_packages(
 @packages_router.get("/{package_id}", status_code=status.HTTP_200_OK)
 def get_package(
     package_id: int,
-    use_case: Annotated[ViewPackageUseCase, Depends(get_view_package_use_case)],
-    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
+    query_bus: Annotated[QueryBus, Depends(get_authenticated_query_bus)],
 ) -> PackageResponse:
     """Get a specific package by its ID.
 
     Args:
         package_id: The ID of the package to retrieve.
-        use_case: The use case for viewing a specific package, injected by FastAPI.
-        event_collector: Collector used to publish authorization events.
+        query_bus: Authenticated query bus injected by FastAPI. The registered
+            executor owns authorization-event publication.
 
     Returns:
         A response model representing the requested package.
@@ -164,10 +162,9 @@ def get_package(
             * 404 - Package not found.
             * 500 - Database operation failure.
     """
-    package = execute_and_drain_events(
-        recorder=use_case,
-        event_collector=event_collector,
-        action=lambda: use_case.execute(package_id=package_id),
+    package = query_bus.dispatch(
+        key=VIEW_PACKAGE,
+        query=ViewPackageQuery(package_id=package_id),
     )
     return PackageResponse.from_package(package)
 

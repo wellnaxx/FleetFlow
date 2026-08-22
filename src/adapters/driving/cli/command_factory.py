@@ -46,9 +46,7 @@ _CONTAINER_COMMANDS: dict[str, CommandBuilder] = {
     "save": lambda container, params: SaveState(params, container.state_cases.save, container.event_collector),
     "load": lambda container, params: LoadState(params, container.state_cases.load, container.event_collector),
     "createpackage": lambda container, params: CreatePackage(params, container.command_bus),
-    "viewpackage": lambda container, params: ViewPackage(
-        params, container.package_cases.view, container.event_collector
-    ),
+    "viewpackage": lambda container, params: ViewPackage(params, container.query_bus),
     "viewallpackages": lambda container, params: ViewAllPackages(params, container.query_bus),
     "removepackage": lambda container, params: RemovePackage(params, container.command_bus),
     "viewunassignedpackages": lambda container, params: ViewUnassignedPackages(

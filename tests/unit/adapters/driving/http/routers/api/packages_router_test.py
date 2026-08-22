@@ -12,6 +12,7 @@ from src.application.commands.packages.create_package import CREATE_PACKAGE, Cre
 from src.application.commands.packages.remove_package import REMOVE_PACKAGE, RemovePackageCommand
 from src.application.exceptions.application_errors import NotFoundError, ValidationError
 from src.application.queries.packages.view_all_packages import VIEW_ALL_PACKAGES, ViewAllPackagesQuery
+from src.application.queries.packages.view_package import VIEW_PACKAGE, ViewPackageQuery
 from src.application.results.find_suitable_packages_for_route_result import SuitableRouteForPackage
 from src.application.use_cases.pagination import PageQuery, PageResult
 from src.domain.entities.customer import Customer
@@ -210,27 +211,30 @@ class PackagesRouterShould(unittest.TestCase):
         self.event_collector.drain.assert_not_called()
 
     def test_get_package_returns_package_response(self) -> None:
-        use_case = MagicMock()
-        use_case.execute.return_value = self._package(package_id=4)
-        self.app.dependency_overrides[packages_router_module.get_view_package_use_case] = lambda: use_case
+        self.query_bus.dispatch.return_value = self._package(package_id=4)
 
         response = self.client.get("/packages/4")
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["package_id"], 4)
-        use_case.execute.assert_called_once_with(package_id=4)
-        self.event_collector.drain.assert_called_once_with((use_case,))
+        self.query_bus.dispatch.assert_called_once_with(
+            key=VIEW_PACKAGE,
+            query=ViewPackageQuery(package_id=4),
+        )
+        self.event_collector.drain.assert_not_called()
 
     def test_get_package_returns_not_found_for_missing_package(self) -> None:
-        use_case = MagicMock()
-        use_case.execute.side_effect = NotFoundError("Package with ID 4 not found")
-        self.app.dependency_overrides[packages_router_module.get_view_package_use_case] = lambda: use_case
+        self.query_bus.dispatch.side_effect = NotFoundError("Package with ID 4 not found")
 
         response = self.client.get("/packages/4")
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["detail"], "Package with ID 4 not found")
-        self.event_collector.drain.assert_called_once_with((use_case,))
+        self.query_bus.dispatch.assert_called_once_with(
+            key=VIEW_PACKAGE,
+            query=ViewPackageQuery(package_id=4),
+        )
+        self.event_collector.drain.assert_not_called()
 
     def test_find_suitable_routes_for_package_returns_route_options(self) -> None:
         use_case = MagicMock()

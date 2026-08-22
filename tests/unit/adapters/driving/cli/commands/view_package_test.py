@@ -1,96 +1,88 @@
+"""Tests for the query-bus-backed package-detail CLI adapter."""
+
 import unittest
 from unittest.mock import MagicMock, patch
 
 from src.adapters.driving.cli.commands.view_package import ViewPackage
+from src.application.exceptions.application_errors import NotFoundError
+from src.application.queries.packages.view_package import VIEW_PACKAGE, ViewPackageQuery
+from src.ports.input.query_bus import QueryBus
 
 
-class TestViewPackage_Should(unittest.TestCase):
-    def make_cmd(self, params: list[str]) -> ViewPackage:
-        cmd = ViewPackage.__new__(ViewPackage)
-        cmd._params = params  # type: ignore[reportAttributeAccessIssue]
-        cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._event_collector = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        return cmd
+class ViewPackageShould(unittest.TestCase):
+    """Verify package-id parsing, query dispatch, rendering, and failures."""
 
-    def test_execute_propagates_permission_errors_from_use_case(self) -> None:
-        cmd = self.make_cmd(["123"])
-        cmd._use_case.execute.side_effect = PermissionError("Missing permission: PACKAGE_VIEW")  # type: ignore[reportAttributeAccessIssue]
+    def setUp(self) -> None:
+        """Create an isolated query bus for each test."""
+        self.query_bus = MagicMock(spec=QueryBus)
 
-        with self.assertRaises(PermissionError) as context:
-            cmd.execute()
+    def make_command(self, params: tuple[str, ...]) -> ViewPackage:
+        """Build the adapter with raw parameters and the mocked bus."""
+        return ViewPackage(params, self.query_bus)
 
-        self.assertIn("PACKAGE_VIEW", str(context.exception))
-        cmd._use_case.execute.assert_called_once_with(123)  # type: ignore[reportUnknownMemberType]
-
-    @patch("src.adapters.driving.cli.commands.view_package.validate_params_exact")
-    @patch("src.adapters.driving.cli.commands.view_package.try_parse_int")
     @patch("src.adapters.driving.cli.commands.view_package.render_package_info")
-    def test_successful_execution(
-        self,
-        mock_render: MagicMock,
-        mock_try_parse: MagicMock,
-        mock_validate: MagicMock,
-    ) -> None:
-        cmd = self.make_cmd(["123"])
-        mock_try_parse.return_value = 123
+    def test_dispatches_query_and_renders_package(self, render: MagicMock) -> None:
+        package = MagicMock()
+        self.query_bus.dispatch.return_value = package
+        render.return_value = "Package 123 details"
 
-        mock_package = MagicMock()
-        mock_render.return_value = "Package 123 details"
-        cmd._use_case.execute.return_value = mock_package  # type: ignore[reportAttributeAccessIssue]
+        result = self.make_command(("123",)).execute()
 
-        result = cmd.execute()
-
-        mock_validate.assert_called_once_with(["123"], 1)
-        mock_try_parse.assert_called_once_with("123", "package_id")
-        cmd._use_case.execute.assert_called_once_with(123)  # type: ignore[reportUnknownMemberType]
-        mock_render.assert_called_once_with(mock_package)
+        self.query_bus.dispatch.assert_called_once_with(
+            key=VIEW_PACKAGE,
+            query=ViewPackageQuery(package_id=123),
+        )
+        render.assert_called_once_with(package)
         self.assertEqual(result, "Package 123 details")
 
-    @patch("src.adapters.driving.cli.commands.view_package.validate_params_exact")
+    def test_propagates_permission_error_from_query_bus(self) -> None:
+        self.query_bus.dispatch.side_effect = PermissionError("Missing permission: PACKAGE_VIEW")
+
+        with self.assertRaisesRegex(PermissionError, "PACKAGE_VIEW"):
+            self.make_command(("123",)).execute()
+
+        self.query_bus.dispatch.assert_called_once_with(
+            key=VIEW_PACKAGE,
+            query=ViewPackageQuery(package_id=123),
+        )
+
     @patch("src.adapters.driving.cli.commands.view_package.try_parse_int")
-    def test_package_not_found(
+    @patch("src.adapters.driving.cli.commands.view_package.validate_params_exact")
+    def test_parameter_count_failure_prevents_parsing_and_dispatch(
         self,
-        mock_try_parse: MagicMock,
-        mock_validate: MagicMock,
+        validate: MagicMock,
+        parse_int: MagicMock,
     ) -> None:
-        cmd = self.make_cmd(["999"])
-        mock_try_parse.return_value = 999
-        cmd._use_case.execute.side_effect = ValueError("Package with ID 999 not found")  # type: ignore[reportAttributeAccessIssue]
+        validate.side_effect = ValueError("Expected 1 parameter(s).")
 
-        with self.assertRaises(ValueError) as context:
-            cmd.execute()
+        with self.assertRaisesRegex(ValueError, "Expected 1 parameter"):
+            self.make_command(()).execute()
 
-        self.assertIn("Package with ID 999 not found", str(context.exception))
-        mock_validate.assert_called_once_with(["999"], 1)
-        mock_try_parse.assert_called_once_with("999", "package_id")
-        cmd._use_case.execute.assert_called_once_with(999)  # type: ignore[reportUnknownMemberType]
+        validate.assert_called_once_with((), 1)
+        parse_int.assert_not_called()
+        self.query_bus.dispatch.assert_not_called()
 
-    @patch("src.adapters.driving.cli.commands.view_package.validate_params_exact")
-    def test_invalid_parameter_count(self, mock_validate: MagicMock) -> None:
-        cmd = self.make_cmd([])
-        mock_validate.side_effect = ValueError("Expected 1 parameter(s).")
-
-        with self.assertRaises(ValueError) as context:
-            cmd.execute()
-
-        self.assertIn("Expected 1 parameter(s).", str(context.exception))
-        mock_validate.assert_called_once_with([], 1)
-        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
-
-    @patch("src.adapters.driving.cli.commands.view_package.validate_params_exact")
     @patch("src.adapters.driving.cli.commands.view_package.try_parse_int")
-    def test_invalid_parameter_type(
-        self,
-        mock_try_parse: MagicMock,
-        mock_validate: MagicMock,
-    ) -> None:
-        cmd = self.make_cmd(["abc"])
-        mock_try_parse.side_effect = ValueError("Parameter 'abc' is not a valid integer.")
+    def test_invalid_identifier_prevents_dispatch(self, parse_int: MagicMock) -> None:
+        parse_int.side_effect = ValueError("Parameter 'abc' is not a valid integer.")
 
-        with self.assertRaises(ValueError) as context:
-            cmd.execute()
+        with self.assertRaisesRegex(ValueError, "not a valid integer"):
+            self.make_command(("abc",)).execute()
 
-        self.assertIn("Parameter 'abc' is not a valid integer.", str(context.exception))
-        mock_validate.assert_called_once_with(["abc"], 1)
-        mock_try_parse.assert_called_once_with("abc", "package_id")
-        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
+        parse_int.assert_called_once_with("abc", "package_id")
+        self.query_bus.dispatch.assert_not_called()
+
+    def test_propagates_not_found_error_from_query_bus(self) -> None:
+        self.query_bus.dispatch.side_effect = NotFoundError("Package with ID 999 not found")
+
+        with self.assertRaisesRegex(NotFoundError, "Package with ID 999 not found"):
+            self.make_command(("999",)).execute()
+
+        self.query_bus.dispatch.assert_called_once_with(
+            key=VIEW_PACKAGE,
+            query=ViewPackageQuery(package_id=999),
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

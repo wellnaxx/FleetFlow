@@ -32,7 +32,6 @@ from src.application.handlers.commands.routes.create_route import CreateRouteCom
 from src.application.handlers.commands.routes.remove_route import RemoveRouteCommandHandler
 from src.application.handlers.commands.state.load_world import LoadWorldCommandHandler
 from src.application.handlers.commands.state.save_world import SaveWorldCommandHandler
-from src.application.handlers.queries.packages.view_package import ViewPackageQueryHandler
 from src.application.handlers.queries.packages.view_unassigned_packages import (
     ViewUnassignedPackagesQueryHandler,
 )
@@ -246,7 +245,13 @@ def build_query_bus(
             event_collector=event_collector,
         ),
     )
-    bus.register(VIEW_PACKAGE, ViewPackageQueryHandler(package_cases.view))
+    bus.register(
+        VIEW_PACKAGE,
+        EventDrainingExecutor(
+            delegate=package_cases.view,
+            event_collector=event_collector,
+        ),
+    )
     bus.register(VIEW_UNASSIGNED_PACKAGES, ViewUnassignedPackagesQueryHandler(package_cases.view_unassigned))
 
     # Route-facing queries
