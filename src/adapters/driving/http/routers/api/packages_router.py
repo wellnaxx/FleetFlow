@@ -9,7 +9,6 @@ from src.adapters.driving.http.dependencies.message_buses import (
 )
 from src.adapters.driving.http.dependencies.use_cases import (
     get_find_suitable_routes_for_package_use_case,
-    get_view_unassigned_packages_use_case,
 )
 from src.adapters.driving.http.schemas.packages import (
     PackageCreateRequest,
@@ -23,7 +22,10 @@ from src.application.eventing.collector import EventCollector
 from src.application.exceptions.application_errors import ConflictError
 from src.application.queries.packages.view_all_packages import VIEW_ALL_PACKAGES, ViewAllPackagesQuery
 from src.application.queries.packages.view_package import VIEW_PACKAGE, ViewPackageQuery
-from src.application.use_cases.packages.view_unassigned_packages import ViewUnassignedPackagesUseCase
+from src.application.queries.packages.view_unassigned_packages import (
+    VIEW_UNASSIGNED_PACKAGES,
+    ViewUnassignedPackagesQuery,
+)
 from src.application.use_cases.pagination import PageQuery
 from src.application.use_cases.routes.find_suitable_routes_for_package import (
     FindSuitableRoutesForPackageUseCase,
@@ -109,8 +111,7 @@ def list_packages(
 
 @packages_router.get("/unassigned", status_code=status.HTTP_200_OK)
 def list_unassigned_packages(
-    use_case: Annotated[ViewUnassignedPackagesUseCase, Depends(get_view_unassigned_packages_use_case)],
-    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
+    query_bus: Annotated[QueryBus, Depends(get_authenticated_query_bus)],
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
     include_total: bool = False,
@@ -118,8 +119,8 @@ def list_unassigned_packages(
     """List all unassigned packages.
 
     Args:
-        use_case: Use case for listing unassigned packages, injected by FastAPI.
-        event_collector: Collector used to publish authorization events.
+        query_bus: Authenticated query bus injected by FastAPI. The registered
+            executor owns authorization-event publication.
         limit: Maximum number of packages to return.
         offset: Number of packages to skip.
         include_total: Whether to include the total package count.
@@ -133,10 +134,11 @@ def list_unassigned_packages(
             * 403 - Insufficient permissions.
             * 500 - Database operation failure.
     """
-    result = execute_and_drain_events(
-        recorder=use_case,
-        event_collector=event_collector,
-        action=lambda: use_case.execute(PageQuery(limit=limit, offset=offset, include_total=include_total)),
+    result = query_bus.dispatch(
+        key=VIEW_UNASSIGNED_PACKAGES,
+        query=ViewUnassignedPackagesQuery(
+            page=PageQuery(limit=limit, offset=offset, include_total=include_total)
+        ),
     )
     return PackagePageResponse.from_page(result)
 

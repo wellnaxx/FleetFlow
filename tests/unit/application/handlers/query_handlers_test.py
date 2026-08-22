@@ -4,9 +4,6 @@ import unittest
 from datetime import datetime
 from unittest.mock import MagicMock
 
-from src.application.handlers.queries.packages.view_unassigned_packages import (
-    ViewUnassignedPackagesQueryHandler,
-)
 from src.application.handlers.queries.routes.find_suitable_routes_for_package import (
     FindSuitableRoutesForPackageQueryHandler,
 )
@@ -17,7 +14,6 @@ from src.application.handlers.queries.routes.view_all_routes import ViewAllRoute
 from src.application.handlers.queries.routes.view_route import ViewRouteQueryHandler
 from src.application.handlers.queries.routes.view_routes_in_progress import ViewRoutesInProgressQueryHandler
 from src.application.handlers.queries.trucks.view_all_trucks import ViewAllTrucksQueryHandler
-from src.application.queries.packages.view_unassigned_packages import ViewUnassignedPackagesQuery
 from src.application.queries.routes.find_suitable_routes_for_package import FindSuitableRoutesForPackageQuery
 from src.application.queries.routes.find_suitable_trucks_for_route import FindSuitableTrucksForRouteQuery
 from src.application.queries.routes.view_all_routes import ViewAllRoutesQuery
@@ -31,17 +27,6 @@ NOW = datetime(2026, 8, 6, 12, 30)
 
 class QueryHandlersShould(unittest.TestCase):
     """Verify that query handlers delegate once with the intended arguments."""
-
-    def test_view_unassigned_packages_forwards_page(self) -> None:
-        use_case = MagicMock()
-        expected = object()
-        use_case.execute.return_value = expected
-        page = PageQuery(limit=12, offset=24, include_total=True)
-
-        result = ViewUnassignedPackagesQueryHandler(use_case).execute(ViewUnassignedPackagesQuery(page=page))
-
-        self.assertIs(result, expected)
-        use_case.execute.assert_called_once_with(page)
 
     def test_view_all_routes_forwards_page(self) -> None:
         use_case = MagicMock()

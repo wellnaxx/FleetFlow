@@ -16,7 +16,6 @@ from src.adapters.driving.cli.commands.view_all_routes import ViewAllRoutes
 from src.adapters.driving.cli.commands.view_all_trucks import ViewAllTrucks
 from src.adapters.driving.cli.commands.view_route import ViewRoute
 from src.adapters.driving.cli.commands.view_routes_in_progress import ViewRoutesInProgress
-from src.adapters.driving.cli.commands.view_unassigned_packages import ViewUnassignedPackages
 from src.application.use_cases.pagination import PageResult
 
 
@@ -26,7 +25,6 @@ class AuthorizedCommandEventDrainShould(unittest.TestCase):
     def test_drain_read_and_search_use_cases_after_success(self) -> None:
         page = PageResult[object](items=(), total=None, limit=None, offset=0)
         cases: tuple[tuple[type[Any], tuple[str, ...], object], ...] = (
-            (ViewUnassignedPackages, (), page),
             (ViewAllRoutes, (), page),
             (ViewAllTrucks, (), list[object]()),
             (ViewRoutesInProgress, (), list[object]()),

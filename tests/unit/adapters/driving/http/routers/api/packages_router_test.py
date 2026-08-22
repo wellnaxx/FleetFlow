@@ -13,6 +13,10 @@ from src.application.commands.packages.remove_package import REMOVE_PACKAGE, Rem
 from src.application.exceptions.application_errors import NotFoundError, ValidationError
 from src.application.queries.packages.view_all_packages import VIEW_ALL_PACKAGES, ViewAllPackagesQuery
 from src.application.queries.packages.view_package import VIEW_PACKAGE, ViewPackageQuery
+from src.application.queries.packages.view_unassigned_packages import (
+    VIEW_UNASSIGNED_PACKAGES,
+    ViewUnassignedPackagesQuery,
+)
 from src.application.results.find_suitable_packages_for_route_result import SuitableRouteForPackage
 from src.application.use_cases.pagination import PageQuery, PageResult
 from src.domain.entities.customer import Customer
@@ -173,15 +177,11 @@ class PackagesRouterShould(unittest.TestCase):
         self.event_collector.drain.assert_not_called()
 
     def test_list_unassigned_packages_returns_page_without_total_by_default(self) -> None:
-        use_case = MagicMock()
-        use_case.execute.return_value = PageResult(
+        self.query_bus.dispatch.return_value = PageResult(
             items=(self._package(package_id=3),),
             total=None,
             limit=1,
             offset=2,
-        )
-        self.app.dependency_overrides[packages_router_module.get_view_unassigned_packages_use_case] = lambda: (
-            use_case
         )
 
         response = self.client.get("/packages/unassigned?limit=1&offset=2")
@@ -191,8 +191,34 @@ class PackagesRouterShould(unittest.TestCase):
         self.assertEqual(response.json()["count"], 1)
         self.assertEqual(response.json()["limit"], 1)
         self.assertEqual(response.json()["offset"], 2)
-        use_case.execute.assert_called_once_with(PageQuery(limit=1, offset=2, include_total=False))
-        self.event_collector.drain.assert_called_once_with((use_case,))
+        self.query_bus.dispatch.assert_called_once_with(
+            key=VIEW_UNASSIGNED_PACKAGES,
+            query=ViewUnassignedPackagesQuery(page=PageQuery(limit=1, offset=2, include_total=False)),
+        )
+        self.event_collector.drain.assert_not_called()
+
+    def test_list_unassigned_packages_returns_forbidden_for_permission_error(self) -> None:
+        self.query_bus.dispatch.side_effect = PermissionError("Missing permission: PACKAGE_VIEW_UNASSIGNED")
+
+        response = self.client.get("/packages/unassigned")
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["detail"], "Missing permission: PACKAGE_VIEW_UNASSIGNED")
+        self.query_bus.dispatch.assert_called_once_with(
+            key=VIEW_UNASSIGNED_PACKAGES,
+            query=ViewUnassignedPackagesQuery(page=PageQuery(limit=50, offset=0, include_total=False)),
+        )
+        self.event_collector.drain.assert_not_called()
+
+    def test_list_unassigned_packages_returns_bad_request_for_pagination_error(self) -> None:
+        self.query_bus.dispatch.side_effect = ValidationError("Offset cannot be used without a limit.")
+
+        response = self.client.get("/packages/unassigned")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["detail"], "Offset cannot be used without a limit.")
+        self.query_bus.dispatch.assert_called_once()
+        self.event_collector.drain.assert_not_called()
 
     def test_list_packages_rejects_invalid_pagination_params(self) -> None:
         response = self.client.get("/packages?limit=0&offset=-1")

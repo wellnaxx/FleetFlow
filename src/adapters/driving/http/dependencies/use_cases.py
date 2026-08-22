@@ -5,7 +5,6 @@ from typing import Annotated
 from fastapi import Depends
 
 from src.adapters.driving.http.dependencies.auth import AuthenticatedHTTPPrincipal, get_current_user
-from src.application.use_cases.packages.view_unassigned_packages import ViewUnassignedPackagesUseCase
 from src.application.use_cases.routes.assign_packages_to_route import AssignPackagesToRouteUseCase
 from src.application.use_cases.routes.assign_truck_to_route import AssignTruckToRouteUseCase
 from src.application.use_cases.routes.create_route import CreateRouteUseCase
@@ -23,25 +22,6 @@ from src.application.use_cases.state.save_world import SaveWorldStateUseCase
 from src.application.use_cases.trucks.view_all_trucks import ViewAllTrucksUseCase
 from src.composition.container import Container
 from src.composition.runtime import get_container
-
-
-def get_view_unassigned_packages_use_case(
-    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
-    container: Annotated[Container, Depends(get_container)],
-) -> ViewUnassignedPackagesUseCase:
-    """Build the unassigned-package listing use case for the authenticated request.
-
-    Args:
-        principal: Authenticated HTTP principal carrying request-scoped authorization.
-        container: Application dependency container.
-
-    Returns:
-        Unassigned-package listing use case bound to the package repository.
-
-    Raises:
-        HTTPException: Raised by `get_current_user` when authentication fails.
-    """
-    return ViewUnassignedPackagesUseCase(container.package_repo, authz=principal.authz)
 
 
 def get_create_route_use_case(

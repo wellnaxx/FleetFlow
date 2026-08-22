@@ -17,6 +17,7 @@ from src.adapters.driving.cli.commands.view_all_customers import ViewAllCustomer
 from src.adapters.driving.cli.commands.view_all_packages import ViewAllPackages
 from src.adapters.driving.cli.commands.view_audits import ViewAuditLogs
 from src.adapters.driving.cli.commands.view_package import ViewPackage
+from src.adapters.driving.cli.commands.view_unassigned_packages import ViewUnassignedPackages
 
 
 class CommandFactoryShould(unittest.TestCase):
@@ -128,7 +129,7 @@ class CommandFactoryShould(unittest.TestCase):
                 "viewunassignedpackages",
                 "viewunassignedpackages",
                 [],
-                container.package_cases.view_unassigned,
+                container.query_bus,
             ),
             ("viewallcustomers", "viewallcustomers", [], container.query_bus),
             (
@@ -289,6 +290,16 @@ class CommandFactoryShould(unittest.TestCase):
 
         self.assertIsInstance(command, ViewPackage)
         self.assertEqual(command.params, ("42",))
+        self.assertIs(command.query_bus, container.query_bus)
+
+    def test_view_unassigned_packages_receives_registered_query_bus(self) -> None:
+        """Build unassigned-package listing with the container query bus."""
+        factory, container = self.make_factory()
+
+        command = cast(ViewUnassignedPackages, factory.create("viewunassignedpackages"))
+
+        self.assertIsInstance(command, ViewUnassignedPackages)
+        self.assertEqual(command.params, ())
         self.assertIs(command.query_bus, container.query_bus)
 
     def test_view_audit_logs_receives_registered_query_bus(self) -> None:
