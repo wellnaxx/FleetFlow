@@ -1,235 +1,110 @@
+"""Tests for the command-bus-backed truck-assignment CLI adapter."""
+
 import unittest
 from datetime import datetime
-from typing import cast
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 from src.adapters.driving.cli.commands.assign_truck_to_route import AssignTruckToRoute
+from src.application.commands.routes.assign_truck_to_route import (
+    ASSIGN_TRUCK_TO_ROUTE,
+    AssignTruckToRouteCommand,
+)
+from src.application.results.assign_truck_to_route_result import AssignTruckToRouteResult
+from src.ports.input.command_bus import CommandBus
 
 
-def _collector_mock(command: AssignTruckToRoute) -> MagicMock:
-    """Return the command's injected collector as its test-double type."""
-    return cast(MagicMock, command._event_collector)  # pyright: ignore[reportPrivateUsage]
+class AssignTruckToRouteShould(unittest.TestCase):
+    """Verify parsing, deterministic command dispatch, rendering, and failures."""
 
+    def setUp(self) -> None:
+        """Create an isolated command bus for each test."""
+        self.command_bus = MagicMock(spec=CommandBus)
 
-def _use_case_mock(command: AssignTruckToRoute) -> MagicMock:
-    """Return the command's injected use case as its test-double type."""
-    return cast(MagicMock, command._use_case)  # pyright: ignore[reportPrivateUsage]
+    def make_command(self, params: tuple[str, ...]) -> AssignTruckToRoute:
+        """Build the adapter with raw parameters and the mocked bus."""
+        return AssignTruckToRoute(params, self.command_bus)
 
-
-class AssignTruckToRoute_Should(unittest.TestCase):
-    def make_cmd(self, params: list[str]) -> AssignTruckToRoute:
-        cmd = AssignTruckToRoute.__new__(AssignTruckToRoute)
-        cmd._params = tuple(params)  # type: ignore[reportAttributeAccessIssue]
-        cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._event_collector = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        return cmd
-
-    def test_mutates_state_true(self) -> None:
+    def test_mutates_and_autosaves_state(self) -> None:
         self.assertTrue(AssignTruckToRoute.mutates_state)
+        self.assertTrue(AssignTruckToRoute.autosaves_state)
 
     @patch("src.adapters.driving.cli.commands.assign_truck_to_route.datetime")
-    def test_execute_propagates_permission_errors_from_use_case(self, mock_dt: MagicMock) -> None:
-        fixed_now = datetime(2025, 10, 12, 6, 0)
-        mock_dt.now.return_value = fixed_now
-        cmd = self.make_cmd(["11", "22"])
-        cmd._use_case.execute.side_effect = PermissionError("Missing permission: ROUTE_ASSIGN_TRUCK")  # type: ignore[reportAttributeAccessIssue]
-
-        with self.assertRaises(PermissionError) as ctx:
-            cmd.execute()
-
-        self.assertIn("ROUTE_ASSIGN_TRUCK", str(ctx.exception))
-        cmd._use_case.execute.assert_called_once_with(11, 22, fixed_now)  # type: ignore[reportUnknownMemberType]
-        _collector_mock(cmd).drain.assert_called_once_with((_use_case_mock(cmd),))
-
-    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.datetime")
-    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
-    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.try_parse_int")
-    def test_execute_success(
+    def test_dispatches_timed_assignment_command_and_renders_confirmation(
         self,
-        mock_parse: MagicMock,
-        mock_validate: MagicMock,
-        mock_dt: MagicMock,
+        datetime_mock: MagicMock,
     ) -> None:
-        fixed_now = datetime(2025, 10, 12, 6, 0)
-        mock_dt.now.return_value = fixed_now
-        mock_parse.side_effect = [11, 22]
-
-        cmd = self.make_cmd(["11", "22"])
+        now = datetime(2025, 10, 12, 6, 0)
+        datetime_mock.now.return_value = now
         route = MagicMock()
-        cmd._use_case.execute.return_value = MagicMock(route_id=22, route=route)  # type: ignore[reportAttributeAccessIssue]
+        self.command_bus.dispatch.return_value = AssignTruckToRouteResult(
+            route_id=22,
+            truck_id=11,
+            route=route,
+        )
 
-        result = cmd.execute()
+        result = self.make_command(("11", "22")).execute()
 
-        mock_validate.assert_called_once_with(("11", "22"), 2)
-        self.assertEqual(mock_parse.call_args_list, [call("11", "truck_id"), call("22", "route_id")])
-        cmd._use_case.execute.assert_called_once_with(11, 22, fixed_now)  # type: ignore[reportUnknownMemberType]
-        self.assertEqual(
-            _collector_mock(cmd).drain.call_args_list,
-            [call((_use_case_mock(cmd),)), call((route,))],
+        self.command_bus.dispatch.assert_called_once_with(
+            key=ASSIGN_TRUCK_TO_ROUTE,
+            command=AssignTruckToRouteCommand(truck_id=11, route_id=22, now=now),
         )
         self.assertEqual(result, "Assigned truck 11 to route 22.")
 
     @patch("src.adapters.driving.cli.commands.assign_truck_to_route.datetime")
-    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
-    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.try_parse_int")
-    def test_execute_message_uses_returned_route_id(
-        self,
-        mock_parse: MagicMock,
-        mock_validate: MagicMock,
-        mock_dt: MagicMock,
-    ) -> None:
-        mock_dt.now.return_value = datetime(2025, 10, 12, 6, 0)
-        mock_parse.side_effect = [5, 7]
+    def test_confirmation_uses_route_id_returned_by_workflow(self, datetime_mock: MagicMock) -> None:
+        datetime_mock.now.return_value = datetime(2025, 10, 12, 6, 0)
+        self.command_bus.dispatch.return_value = AssignTruckToRouteResult(
+            route_id=999,
+            truck_id=5,
+            route=MagicMock(),
+        )
 
-        cmd = self.make_cmd(["5", "7"])
-        route = MagicMock()
-        cmd._use_case.execute.return_value = MagicMock(route_id=999, route=route)  # type: ignore[reportAttributeAccessIssue]
-
-        result = cmd.execute()
+        result = self.make_command(("5", "7")).execute()
 
         self.assertEqual(result, "Assigned truck 5 to route 999.")
-        self.assertEqual(
-            _collector_mock(cmd).drain.call_args_list,
-            [call((_use_case_mock(cmd),)), call((route,))],
-        )
 
-    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
-    def test_execute_raises_when_param_count_invalid(self, mock_validate: MagicMock) -> None:
-        mock_validate.side_effect = ValueError("expected exactly 2 params")
-        cmd = self.make_cmd(["only_one"])
+    def test_rejects_incorrect_parameter_count_without_dispatching(self) -> None:
+        with self.assertRaises(ValueError):
+            self.make_command(("11",)).execute()
 
-        with self.assertRaises(ValueError) as ctx:
-            cmd.execute()
+        self.command_bus.dispatch.assert_not_called()
 
-        self.assertIn("expected exactly 2 params", str(ctx.exception))
-        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
+    def test_rejects_invalid_truck_id_without_dispatching(self) -> None:
+        with self.assertRaisesRegex(ValueError, "truck_id"):
+            self.make_command(("truck", "22")).execute()
 
-    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
-    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.try_parse_int")
-    def test_execute_raises_when_truck_id_parse_fails(
-        self,
-        mock_parse: MagicMock,
-        mock_validate: MagicMock,
-    ) -> None:
-        mock_parse.side_effect = ValueError("not an int")
-        cmd = self.make_cmd(["truckX", "2"])
+        self.command_bus.dispatch.assert_not_called()
 
-        with self.assertRaises(ValueError) as ctx:
-            cmd.execute()
+    def test_rejects_invalid_route_id_without_dispatching(self) -> None:
+        with self.assertRaisesRegex(ValueError, "route_id"):
+            self.make_command(("11", "route")).execute()
 
-        self.assertIn("not an int", str(ctx.exception))
-        mock_validate.assert_called_once_with(("truckX", "2"), 2)
-        mock_parse.assert_called_once_with("truckX", "truck_id")
-        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
-
-    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
-    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.try_parse_int")
-    def test_execute_raises_when_route_id_parse_fails(
-        self,
-        mock_parse: MagicMock,
-        mock_validate: MagicMock,
-    ) -> None:
-        mock_parse.side_effect = [13, ValueError("bad route id")]
-        cmd = self.make_cmd(["13", "routeY"])
-
-        with self.assertRaises(ValueError) as ctx:
-            cmd.execute()
-
-        self.assertIn("bad route id", str(ctx.exception))
-        mock_validate.assert_called_once_with(("13", "routeY"), 2)
-        self.assertEqual(mock_parse.call_args_list, [call("13", "truck_id"), call("routeY", "route_id")])
-        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
+        self.command_bus.dispatch.assert_not_called()
 
     @patch("src.adapters.driving.cli.commands.assign_truck_to_route.datetime")
-    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
-    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.try_parse_int")
-    def test_execute_propagates_use_case_errors(
-        self,
-        mock_parse: MagicMock,
-        mock_validate: MagicMock,
-        mock_dt: MagicMock,
-    ) -> None:
-        fixed_now = datetime(2025, 10, 12, 6, 0)
-        mock_dt.now.return_value = fixed_now
-        mock_parse.side_effect = [3, 4]
+    def test_propagates_permission_error_from_command_bus(self, datetime_mock: MagicMock) -> None:
+        now = datetime(2025, 10, 12, 6, 0)
+        datetime_mock.now.return_value = now
+        self.command_bus.dispatch.side_effect = PermissionError("Missing permission: ROUTE_ASSIGN_TRUCK")
 
-        cmd = self.make_cmd(["3", "4"])
-        cmd._use_case.execute.side_effect = ValueError("precondition failed")  # type: ignore[reportAttributeAccessIssue]
+        with self.assertRaisesRegex(PermissionError, "ROUTE_ASSIGN_TRUCK"):
+            self.make_command(("11", "22")).execute()
 
-        with self.assertRaises(ValueError) as ctx:
-            cmd.execute()
-
-        self.assertIn("precondition failed", str(ctx.exception))
-        cmd._use_case.execute.assert_called_once_with(3, 4, fixed_now)  # type: ignore[reportUnknownMemberType]
-        _collector_mock(cmd).drain.assert_called_once_with((_use_case_mock(cmd),))
-
-    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.datetime")
-    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
-    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.try_parse_int")
-    def test_execute_propagates_use_case_event_publication_failure_before_route_drain(
-        self,
-        mock_parse: MagicMock,
-        mock_validate: MagicMock,
-        mock_dt: MagicMock,
-    ) -> None:
-        fixed_now = datetime(2025, 10, 12, 6, 0)
-        mock_dt.now.return_value = fixed_now
-        mock_parse.side_effect = [11, 22]
-        cmd = self.make_cmd(["11", "22"])
-        route = MagicMock()
-        cmd._use_case.execute.return_value = MagicMock(route_id=22, route=route)  # type: ignore[reportAttributeAccessIssue]
-        _collector_mock(cmd).drain.side_effect = RuntimeError("publisher failed")
-
-        with self.assertRaisesRegex(RuntimeError, "publisher failed"):
-            cmd.execute()
-
-        _collector_mock(cmd).drain.assert_called_once_with((_use_case_mock(cmd),))
-
-    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.datetime")
-    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
-    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.try_parse_int")
-    def test_execute_uses_try_parse_int_for_both_params(
-        self,
-        mock_parse: MagicMock,
-        mock_validate: MagicMock,
-        mock_dt: MagicMock,
-    ) -> None:
-        mock_dt.now.return_value = datetime(2025, 10, 12, 6, 0)
-        mock_parse.side_effect = [10, 20]
-
-        cmd = self.make_cmd(["10", "20"])
-        route = MagicMock()
-        cmd._use_case.execute.return_value = MagicMock(route_id=20, route=route)  # type: ignore[reportAttributeAccessIssue]
-
-        _ = cmd.execute()
-
-        self.assertEqual(mock_parse.call_args_list, [call("10", "truck_id"), call("20", "route_id")])
-        cmd._use_case.execute.assert_called_once()  # type: ignore[reportUnknownMemberType]
-        self.assertEqual(
-            _collector_mock(cmd).drain.call_args_list,
-            [call((_use_case_mock(cmd),)), call((route,))],
+        self.command_bus.dispatch.assert_called_once_with(
+            key=ASSIGN_TRUCK_TO_ROUTE,
+            command=AssignTruckToRouteCommand(truck_id=11, route_id=22, now=now),
         )
 
     @patch("src.adapters.driving.cli.commands.assign_truck_to_route.datetime")
-    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.validate_params_exact")
-    @patch("src.adapters.driving.cli.commands.assign_truck_to_route.try_parse_int")
-    def test_validate_called_with_exact_two(
-        self,
-        mock_parse: MagicMock,
-        mock_validate: MagicMock,
-        mock_dt: MagicMock,
-    ) -> None:
-        mock_dt.now.return_value = datetime(2025, 10, 12, 6, 0)
-        mock_parse.side_effect = [1, 2]
+    def test_propagates_command_bus_failure(self, datetime_mock: MagicMock) -> None:
+        datetime_mock.now.return_value = datetime(2025, 10, 12, 6, 0)
+        self.command_bus.dispatch.side_effect = RuntimeError("assignment failed")
 
-        cmd = self.make_cmd(["1", "2"])
-        route = MagicMock()
-        cmd._use_case.execute.return_value = MagicMock(route_id=2, route=route)  # type: ignore[reportAttributeAccessIssue]
+        with self.assertRaisesRegex(RuntimeError, "assignment failed"):
+            self.make_command(("11", "22")).execute()
 
-        _ = cmd.execute()
+        self.command_bus.dispatch.assert_called_once()
 
-        mock_validate.assert_called_once_with(("1", "2"), 2)
-        self.assertEqual(
-            _collector_mock(cmd).drain.call_args_list,
-            [call((_use_case_mock(cmd),)), call((route,))],
-        )
+
+if __name__ == "__main__":
+    unittest.main()

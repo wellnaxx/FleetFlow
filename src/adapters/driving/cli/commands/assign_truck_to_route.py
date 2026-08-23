@@ -1,14 +1,17 @@
-"""CLI command for assigning a truck to a route."""
+"""Command-bus-backed CLI command for assigning a truck to a route."""
 
 from datetime import datetime
 
-from src.adapters.driving.cli.commands.base_command.event_draining_command import EventDrainingCommand
+from src.adapters.driving.cli.commands.base_command.command_bus_command import CommandBusCommand
 from src.adapters.driving.cli.commands.validation_helpers import try_parse_int, validate_params_exact
-from src.application.use_cases.routes.assign_truck_to_route import AssignTruckToRouteUseCase
+from src.application.commands.routes.assign_truck_to_route import (
+    ASSIGN_TRUCK_TO_ROUTE,
+    AssignTruckToRouteCommand,
+)
 
 
-class AssignTruckToRoute(EventDrainingCommand[AssignTruckToRouteUseCase]):
-    """Assign a truck and publish use-case and route events."""
+class AssignTruckToRoute(CommandBusCommand):
+    """Assign a truck to a route at the current business-local time."""
 
     mutates_state = True
     autosaves_state = True
@@ -22,8 +25,10 @@ class AssignTruckToRoute(EventDrainingCommand[AssignTruckToRouteUseCase]):
         Raises:
             PermissionError: If the caller lacks truck-assignment permission.
             ValueError: If parameters are invalid or assignment fails.
-            Exception: Propagates event-publication failures after successful
-                use-case execution.
+            NotFoundError: If the target route or truck does not exist.
+            ConflictError: If the route or truck cannot accept the assignment.
+            DatabaseError: If assignment persistence or event publication
+                fails.
         """
         validate_params_exact(self._params, 2)
 
@@ -31,11 +36,13 @@ class AssignTruckToRoute(EventDrainingCommand[AssignTruckToRouteUseCase]):
         route_id = try_parse_int(self._params[1], "route_id")
         now = datetime.now()
 
-        result = self._run_and_drain(
-            self._use_case,
-            lambda: self._use_case.execute(truck_id, route_id, now),
+        result = self.command_bus.dispatch(
+            key=ASSIGN_TRUCK_TO_ROUTE,
+            command=AssignTruckToRouteCommand(
+                truck_id=truck_id,
+                route_id=route_id,
+                now=now,
+            ),
         )
-
-        self._event_collector.drain((result.route,))
 
         return f"Assigned truck {truck_id} to route {result.route_id}."

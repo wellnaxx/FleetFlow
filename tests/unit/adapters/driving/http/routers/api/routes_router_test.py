@@ -12,6 +12,10 @@ from src.application.commands.routes.assign_packages_to_route import (
     ASSIGN_PACKAGES_TO_ROUTE,
     AssignPackagesToRouteCommand,
 )
+from src.application.commands.routes.assign_truck_to_route import (
+    ASSIGN_TRUCK_TO_ROUTE,
+    AssignTruckToRouteCommand,
+)
 from src.application.exceptions.application_errors import ConflictError, NotFoundError, ValidationError
 from src.application.results.assign_packages_to_route_result import (
     AssignPackagesToRouteResult,
@@ -370,88 +374,74 @@ class RoutesRouterShould(unittest.TestCase):
         self.command_bus.dispatch.assert_not_called()
 
     def test_assign_truck_to_route_returns_assignment_response(self) -> None:
-        use_case = MagicMock()
-        event_collector = MagicMock()
         route = self._route(route_id=81)
-        use_case.execute.return_value = AssignTruckToRouteResult(
+        self.command_bus.dispatch.return_value = AssignTruckToRouteResult(
             route_id=81,
             truck_id=7,
             route=route,
         )
-        self.app.dependency_overrides[routes_router_module.get_assign_truck_to_route_use_case] = lambda: (
-            use_case
-        )
-        self.app.dependency_overrides[routes_router_module.get_event_collector] = lambda: event_collector
 
         response = self.client.patch("/routes/81/truck", json={"truck_id": 7})
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"route_id": 81, "truck_id": 7})
-        use_case.execute.assert_called_once_with(truck_id=7, route_id=81, now=ANY)
-        self.assertEqual(
-            event_collector.drain.call_args_list,
-            [call((use_case,)), call((route,))],
+        self.command_bus.dispatch.assert_called_once_with(
+            key=ASSIGN_TRUCK_TO_ROUTE,
+            command=AssignTruckToRouteCommand(truck_id=7, route_id=81, now=ANY),
         )
+        self.event_collector.drain.assert_not_called()
 
     def test_assign_truck_to_route_returns_conflict_for_unsuitable_truck(self) -> None:
-        use_case = MagicMock()
-        event_collector = MagicMock()
-        use_case.execute.side_effect = ConflictError("Truck 7 is not suitable for route 81.")
-        self.app.dependency_overrides[routes_router_module.get_assign_truck_to_route_use_case] = lambda: (
-            use_case
-        )
-        self.app.dependency_overrides[routes_router_module.get_event_collector] = lambda: event_collector
+        self.command_bus.dispatch.side_effect = ConflictError("Truck 7 is not suitable for route 81.")
 
         response = self.client.patch("/routes/81/truck", json={"truck_id": 7})
 
         self.assertEqual(response.status_code, 409)
         self.assertEqual(response.json()["detail"], "Truck 7 is not suitable for route 81.")
-        event_collector.drain.assert_called_once_with((use_case,))
+        self.command_bus.dispatch.assert_called_once_with(
+            key=ASSIGN_TRUCK_TO_ROUTE,
+            command=AssignTruckToRouteCommand(truck_id=7, route_id=81, now=ANY),
+        )
+        self.event_collector.drain.assert_not_called()
 
     def test_assign_truck_to_route_returns_not_found_for_missing_truck_or_route(self) -> None:
-        use_case = MagicMock()
-        event_collector = MagicMock()
-        use_case.execute.side_effect = NotFoundError("Truck with ID 7 not found")
-        self.app.dependency_overrides[routes_router_module.get_assign_truck_to_route_use_case] = lambda: (
-            use_case
-        )
-        self.app.dependency_overrides[routes_router_module.get_event_collector] = lambda: event_collector
+        self.command_bus.dispatch.side_effect = NotFoundError("Truck with ID 7 not found")
 
         response = self.client.patch("/routes/81/truck", json={"truck_id": 7})
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["detail"], "Truck with ID 7 not found")
-        event_collector.drain.assert_called_once_with((use_case,))
+        self.command_bus.dispatch.assert_called_once_with(
+            key=ASSIGN_TRUCK_TO_ROUTE,
+            command=AssignTruckToRouteCommand(truck_id=7, route_id=81, now=ANY),
+        )
+        self.event_collector.drain.assert_not_called()
 
     def test_assign_truck_to_route_returns_generic_error_for_database_failure(self) -> None:
-        use_case = MagicMock()
-        event_collector = MagicMock()
-        use_case.execute.side_effect = DatabaseError.write_failed(Exception("boom"))
-        self.app.dependency_overrides[routes_router_module.get_assign_truck_to_route_use_case] = lambda: (
-            use_case
-        )
-        self.app.dependency_overrides[routes_router_module.get_event_collector] = lambda: event_collector
+        self.command_bus.dispatch.side_effect = DatabaseError.write_failed(Exception("boom"))
 
         response = self.client.patch("/routes/81/truck", json={"truck_id": 7})
 
         self.assertEqual(response.status_code, 500)
         self.assertEqual(response.json()["detail"], "Database operation failed.")
-        event_collector.drain.assert_called_once_with((use_case,))
+        self.command_bus.dispatch.assert_called_once_with(
+            key=ASSIGN_TRUCK_TO_ROUTE,
+            command=AssignTruckToRouteCommand(truck_id=7, route_id=81, now=ANY),
+        )
+        self.event_collector.drain.assert_not_called()
 
     def test_assign_truck_to_route_returns_forbidden_for_permission_error(self) -> None:
-        use_case = MagicMock()
-        event_collector = MagicMock()
-        use_case.execute.side_effect = PermissionError("Missing permission: ROUTE_ASSIGN_TRUCK")
-        self.app.dependency_overrides[routes_router_module.get_assign_truck_to_route_use_case] = lambda: (
-            use_case
-        )
-        self.app.dependency_overrides[routes_router_module.get_event_collector] = lambda: event_collector
+        self.command_bus.dispatch.side_effect = PermissionError("Missing permission: ROUTE_ASSIGN_TRUCK")
 
         response = self.client.patch("/routes/81/truck", json={"truck_id": 7})
 
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"], "Missing permission: ROUTE_ASSIGN_TRUCK")
-        event_collector.drain.assert_called_once_with((use_case,))
+        self.command_bus.dispatch.assert_called_once_with(
+            key=ASSIGN_TRUCK_TO_ROUTE,
+            command=AssignTruckToRouteCommand(truck_id=7, route_id=81, now=ANY),
+        )
+        self.event_collector.drain.assert_not_called()
 
     def test_find_suitable_trucks_for_route_returns_truck_responses(self) -> None:
         use_case = MagicMock()

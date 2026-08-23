@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from datetime import datetime
 
+    from src.application.commands.routes.assign_truck_to_route import AssignTruckToRouteCommand
     from src.domain.entities.delivery_route import DeliveryRoute
     from src.domain.entities.truck import Truck
     from src.domain.value_objects.location_code import LocationCode
@@ -29,12 +30,10 @@ if TYPE_CHECKING:
 
 def _resolve_route_target_id(
     _self: AssignTruckToRouteUseCase,
-    truck_id: int,  # noqa: ARG001
-    route_id: int,
-    now: datetime,  # noqa: ARG001
+    command: AssignTruckToRouteCommand,
 ) -> int:
     """Resolve the audit target resource id for a truck-to-route assignment attempt."""
-    return route_id
+    return command.route_id
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,7 +53,12 @@ class _RouteSuitabilityProbe:
 
 
 class AssignTruckToRouteUseCase(AuthorizedUseCase[AssignTruckToRouteResult]):
-    """Assign a truck to a route after suitability checks."""
+    """Assign a truck through the published application command contract.
+
+    The workflow authorizes the target route, checks truck suitability,
+    persists both sides of the assignment atomically, and tracks the route so
+    the message executor can publish its assignment events.
+    """
 
     def __init__(
         self,
@@ -83,13 +87,12 @@ class AssignTruckToRouteUseCase(AuthorizedUseCase[AssignTruckToRouteResult]):
         target_resource_type=AuditResourceType.ROUTE,
         target_resource_id_resolver=_resolve_route_target_id,
     )
-    def execute(self, truck_id: int, route_id: int, now: datetime) -> AssignTruckToRouteResult:
+    def execute(self, command: AssignTruckToRouteCommand) -> AssignTruckToRouteResult:
         """Assign a truck to a route.
 
         Args:
-            truck_id: Identifier of the truck to assign.
-            route_id: Identifier of the route to update.
-            now: Clock value used when scheduling an unscheduled route.
+            command: Truck and route identifiers together with the business
+                time used for suitability and scheduling decisions.
 
         Returns:
             A summary of the successful truck assignment.
@@ -101,6 +104,9 @@ class AssignTruckToRouteUseCase(AuthorizedUseCase[AssignTruckToRouteResult]):
             ConflictError: If the selected route already has a truck assigned
                 or the selected truck is not suitable for the route.
         """
+        truck_id = command.truck_id
+        route_id = command.route_id
+        now = command.now
         route = self._get_route(route_id)
         truck = self._get_truck(truck_id, route_id)
 
@@ -109,6 +115,7 @@ class AssignTruckToRouteUseCase(AuthorizedUseCase[AssignTruckToRouteResult]):
         self._assign_and_persist(route=route, truck=truck, now=now)
 
         logger.info("Assigned truck %d to route %d.", truck.vehicle_id, route.route_id)
+        self.track_domain_recorder(route)
         return AssignTruckToRouteResult(route_id=route.route_id, truck_id=truck.vehicle_id, route=route)
 
     def _get_route(self, route_id: int) -> DeliveryRoute:

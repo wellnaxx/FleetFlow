@@ -24,7 +24,6 @@ from src.application.commands.routes.remove_route import REMOVE_ROUTE
 from src.application.commands.state.load_world import LOAD_WORLD
 from src.application.commands.state.save_world import SAVE_WORLD
 from src.application.eventing.collector import EventCollector
-from src.application.handlers.commands.routes.assign_truck_to_route import AssignTruckToRouteCommandHandler
 from src.application.handlers.commands.routes.create_route import CreateRouteCommandHandler
 from src.application.handlers.commands.routes.remove_route import RemoveRouteCommandHandler
 from src.application.handlers.commands.state.load_world import LoadWorldCommandHandler
@@ -161,7 +160,13 @@ def build_command_bus(
             event_collector=event_collector,
         ),
     )
-    bus.register(ASSIGN_TRUCK_TO_ROUTE, AssignTruckToRouteCommandHandler(route_cases.assign_truck))
+    bus.register(
+        ASSIGN_TRUCK_TO_ROUTE,
+        EventDrainingExecutor(
+            delegate=route_cases.assign_truck,
+            event_collector=event_collector,
+        ),
+    )
 
     # World state management
     bus.register(LOAD_WORLD, LoadWorldCommandHandler(state_cases.load))

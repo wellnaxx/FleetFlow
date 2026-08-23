@@ -1,9 +1,16 @@
 import unittest
 from datetime import datetime
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import MagicMock
 
+from src.application.commands.routes.assign_truck_to_route import AssignTruckToRouteCommand
+from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
+from src.application.eventing.recorder_scope import bind_event_recorder_scope
+from src.application.events.auth_events import AuthorizationDenied
 from src.application.exceptions.application_errors import ConflictError, NotFoundError
+from src.application.services.authorization_service import AuthorizationService
 from src.application.use_cases.routes.assign_truck_to_route import (
     AssignTruckToRouteUseCase,
 )
@@ -33,7 +40,13 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         self.mock_routes.get_by_id.return_value = None
 
         with self.assertRaises(NotFoundError) as ctx:
-            self.use_case.execute(11, 22, now=datetime(2025, 10, 12, 6, 0))
+            self.use_case.execute(
+                AssignTruckToRouteCommand(
+                    truck_id=11,
+                    route_id=22,
+                    now=datetime(2025, 10, 12, 6, 0),
+                )
+            )
 
         self.assertIn("Route with ID 22 not found", str(ctx.exception))
         self.mock_routes.get_by_id.assert_called_once_with(22)
@@ -49,7 +62,13 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         self.mock_vehicles.find_by_id.return_value = None
 
         with self.assertRaises(NotFoundError) as ctx:
-            self.use_case.execute(11, 22, now=datetime(2025, 10, 12, 6, 0))
+            self.use_case.execute(
+                AssignTruckToRouteCommand(
+                    truck_id=11,
+                    route_id=22,
+                    now=datetime(2025, 10, 12, 6, 0),
+                )
+            )
 
         self.assertIn("Truck with ID 11 not found", str(ctx.exception))
         self.mock_routes.get_by_id.assert_called_once_with(22)
@@ -92,7 +111,7 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         self.mock_vehicles.find_by_id.return_value = truck
         self.mock_vehicles.is_suitable_for_route.return_value = (True, "")
 
-        result = self.use_case.execute(11, 22, now=fixed_now)
+        result = self.use_case.execute(AssignTruckToRouteCommand(truck_id=11, route_id=22, now=fixed_now))
 
         self.assertEqual(result.route_id, 22)
         self.assertEqual(result.truck_id, 11)
@@ -133,7 +152,7 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         self.mock_vehicles.find_by_id.return_value = truck
         self.mock_vehicles.is_suitable_for_route.return_value = (True, "")
 
-        result = self.use_case.execute(11, 22, now=fixed_now)
+        result = self.use_case.execute(AssignTruckToRouteCommand(truck_id=11, route_id=22, now=fixed_now))
 
         self.assertEqual(result.route_id, 22)
         self.assertEqual(result.truck_id, 11)
@@ -173,7 +192,7 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         self.mock_vehicles.is_suitable_for_route.return_value = (False, "range too short")
 
         with self.assertRaises(ConflictError) as ctx:
-            self.use_case.execute(11, 22, now=fixed_now)
+            self.use_case.execute(AssignTruckToRouteCommand(truck_id=11, route_id=22, now=fixed_now))
 
         self.assertIn("Truck 11 is not suitable for route 22: range too short", str(ctx.exception))
         route.schedule.assert_not_called()
@@ -211,7 +230,7 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         self.mock_vehicles.find_by_id.return_value = truck
         self.mock_vehicles.is_suitable_for_route.return_value = (True, "")
 
-        result = self.use_case.execute(11, 22, now=fixed_now)
+        result = self.use_case.execute(AssignTruckToRouteCommand(truck_id=11, route_id=22, now=fixed_now))
 
         self.assertEqual(result.route_id, 22)
         self.assertEqual(result.truck_id, 11)
@@ -236,7 +255,7 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         self.mock_uow_routes.update_state.side_effect = error
 
         with self.assertRaises(RuntimeError) as ctx:
-            self.use_case.execute(11, 22, now=fixed_now)
+            self.use_case.execute(AssignTruckToRouteCommand(truck_id=11, route_id=22, now=fixed_now))
 
         self.assertIs(ctx.exception, error)
         self.assertIsNone(route.departure_time)
@@ -261,7 +280,13 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         self.mock_routes.get_by_id.return_value = route
 
         with self.assertRaises(ConflictError) as ctx:
-            self.use_case.execute(11, 22, now=datetime(2025, 10, 12, 6, 0))
+            self.use_case.execute(
+                AssignTruckToRouteCommand(
+                    truck_id=11,
+                    route_id=22,
+                    now=datetime(2025, 10, 12, 6, 0),
+                )
+            )
 
         self.assertIn("Route 22 already has truck 7 assigned", str(ctx.exception))
         self.mock_vehicles.find_by_id.assert_called_once_with(11)
@@ -271,3 +296,54 @@ class AssignTruckToRouteUseCase_Should(unittest.TestCase):
         self.mock_uow_trucks.update_state.assert_not_called()
         self.mock_unit_of_work.__enter__.assert_not_called()
         self.mock_unit_of_work.commit.assert_not_called()
+
+    def test_records_targeted_authorization_denial_before_repository_access(self) -> None:
+        use_case = AssignTruckToRouteUseCase(
+            self.mock_routes,
+            self.mock_vehicles,
+            self.mock_unit_of_work,
+            AuthorizationService(None),
+        )
+        command = AssignTruckToRouteCommand(
+            truck_id=11,
+            route_id=22,
+            now=datetime(2025, 10, 12, 6, 0),
+        )
+
+        with self.assertRaisesRegex(PermissionError, "Unauthenticated"):
+            use_case.execute(command)
+
+        self.mock_routes.get_by_id.assert_not_called()
+        self.assertEqual(len(use_case.pending_events), 1)
+        event = cast(AuthorizationDenied, use_case.pending_events[0])
+        self.assertIsInstance(event, AuthorizationDenied)
+        self.assertIs(event.attempted_operation, AuthorizationOperation.ROUTE_ASSIGN_TRUCK)
+        self.assertIs(event.target_resource_type, AuditResourceType.ROUTE)
+        self.assertEqual(event.target_resource_id, "22")
+
+    def test_tracks_mutated_route_in_execution_scope_after_success(self) -> None:
+        fixed_now = datetime(2025, 10, 12, 6, 0)
+        route = SimpleNamespace(
+            route_id=22,
+            departure_time=datetime(2025, 10, 13, 6, 0),
+            start_location="SYD",
+            truck=None,
+        )
+        route.total_assigned_weight = MagicMock(return_value=0.0)
+        route.schedule = MagicMock()
+        route.snapshot_state = MagicMock(return_value=object())
+        route.restore_state = MagicMock()
+        route.event_checkpoint = MagicMock(return_value=0)
+        route.restore_event_checkpoint = MagicMock()
+        truck = MagicMock(vehicle_id=11)
+        route.assign_truck = MagicMock(
+            side_effect=lambda assigned_truck, *, occurred_at: setattr(route, "truck", assigned_truck)  # pyright: ignore[reportUnknownLambdaType]
+        )
+        self.mock_routes.get_by_id.return_value = route
+        self.mock_vehicles.find_by_id.return_value = truck
+        self.mock_vehicles.is_suitable_for_route.return_value = (True, "")
+
+        with bind_event_recorder_scope() as scope:
+            self.use_case.execute(AssignTruckToRouteCommand(truck_id=11, route_id=22, now=fixed_now))
+
+        self.assertEqual(scope.event_recorders(), (scope, route))

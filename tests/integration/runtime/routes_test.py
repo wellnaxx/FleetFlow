@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 
 from src.adapters.driven.persistence.memory.route_repository import InMemoryRouteRepository
 from src.adapters.driven.persistence.memory.unit_of_work import InMemoryUnitOfWork
+from src.application.commands.routes.assign_truck_to_route import AssignTruckToRouteCommand
 from src.application.results.assign_truck_to_route_result import AssignTruckToRouteResult
 from src.application.use_cases.routes.assign_truck_to_route import AssignTruckToRouteUseCase
 from src.application.use_cases.routes.create_route import CreateRouteUseCase
@@ -90,9 +91,11 @@ class RuntimeRoutesIntegrationTests(unittest.TestCase):
         unit_of_work = InMemoryUnitOfWork(route_repo, MagicMock(), truck_repo)
 
         result = AssignTruckToRouteUseCase(route_repo, vehicles, unit_of_work, authz).execute(
-            5,
-            route.route_id,
-            now=datetime(2025, 1, 1, 10, 0),
+            AssignTruckToRouteCommand(
+                truck_id=5,
+                route_id=route.route_id,
+                now=datetime(2025, 1, 1, 10, 0),
+            )
         )
 
         self.assertEqual(result, AssignTruckToRouteResult(route_id=route.route_id, truck_id=5, route=route))

@@ -5,7 +5,6 @@ from typing import Annotated
 from fastapi import Depends
 
 from src.adapters.driving.http.dependencies.auth import AuthenticatedHTTPPrincipal, get_current_user
-from src.application.use_cases.routes.assign_truck_to_route import AssignTruckToRouteUseCase
 from src.application.use_cases.routes.create_route import CreateRouteUseCase
 from src.application.use_cases.routes.find_suitable_routes_for_package import (
     FindSuitableRoutesForPackageUseCase,
@@ -116,30 +115,6 @@ def get_remove_route_use_case(
         HTTPException: Raised by `get_current_user` when authentication fails.
     """
     return RemoveRouteUseCase(container.route_repo, container.unit_of_work, authz=principal.authz)
-
-
-def get_assign_truck_to_route_use_case(
-    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
-    container: Annotated[Container, Depends(get_container)],
-) -> AssignTruckToRouteUseCase:
-    """Build the truck-to-route assignment use case for the authenticated request.
-
-    Args:
-        principal: Authenticated HTTP principal carrying request-scoped authorization.
-        container: Application dependency container.
-
-    Returns:
-        Truck-to-route assignment use case bound to route, fleet, and unit-of-work dependencies.
-
-    Raises:
-        HTTPException: Raised by `get_current_user` when authentication fails.
-    """
-    return AssignTruckToRouteUseCase(
-        container.route_repo,
-        container.vehicle_manager,
-        container.unit_of_work,
-        authz=principal.authz,
-    )
 
 
 def get_find_suitable_trucks_for_route_use_case(

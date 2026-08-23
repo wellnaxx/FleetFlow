@@ -79,7 +79,7 @@ class MessageBusCompositionShould(unittest.TestCase):
             ),
             (
                 subject.ASSIGN_TRUCK_TO_ROUTE,
-                subject.AssignTruckToRouteCommandHandler,
+                subject.EventDrainingExecutor,
                 self.route_cases.assign_truck,
             ),
             (subject.LOAD_WORLD, subject.LoadWorldCommandHandler, self.state_cases.load),

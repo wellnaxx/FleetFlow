@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 from src.adapters.driving.cli.command_factory import CommandFactory
 from src.adapters.driving.cli.commands.assign_packages_to_route import AssignPackagesToRoute
+from src.adapters.driving.cli.commands.assign_truck_to_route import AssignTruckToRoute
 from src.adapters.driving.cli.commands.auth_change_password import AuthChangePassword
 from src.adapters.driving.cli.commands.auth_login import AuthLogin
 from src.adapters.driving.cli.commands.auth_logout import AuthLogout
@@ -147,7 +148,7 @@ class CommandFactoryShould(unittest.TestCase):
                 "assigntrucktoroute 11 22",
                 "assigntrucktoroute",
                 ["11", "22"],
-                container.route_cases.assign_truck,
+                container.command_bus,
             ),
             (
                 "findsuitabletrucksforroute 15",
@@ -281,6 +282,16 @@ class CommandFactoryShould(unittest.TestCase):
 
         self.assertIsInstance(command, AssignPackagesToRoute)
         self.assertEqual(command.params, ("5", "42", "43"))
+        self.assertIs(command.command_bus, container.command_bus)
+
+    def test_assign_truck_to_route_receives_registered_command_bus(self) -> None:
+        """Build route truck assignment with the container command bus."""
+        factory, container = self.make_factory()
+
+        command = cast(AssignTruckToRoute, factory.create("assigntrucktoroute 11 22"))
+
+        self.assertIsInstance(command, AssignTruckToRoute)
+        self.assertEqual(command.params, ("11", "22"))
         self.assertIs(command.command_bus, container.command_bus)
 
     def test_view_all_packages_receives_registered_query_bus(self) -> None:
