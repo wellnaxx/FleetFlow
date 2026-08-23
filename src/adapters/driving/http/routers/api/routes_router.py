@@ -4,8 +4,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from src.adapters.driving.http.dependencies.eventing import execute_and_drain_events, get_event_collector
+from src.adapters.driving.http.dependencies.message_buses import get_authenticated_command_bus
 from src.adapters.driving.http.dependencies.use_cases import (
-    get_assign_packages_to_route_use_case,
     get_assign_truck_to_route_use_case,
     get_create_route_use_case,
     get_find_suitable_trucks_for_route_use_case,
@@ -25,9 +25,12 @@ from src.adapters.driving.http.schemas.routes import (
     RouteResponse,
 )
 from src.adapters.driving.http.schemas.trucks import TruckResponse
+from src.application.commands.routes.assign_packages_to_route import (
+    ASSIGN_PACKAGES_TO_ROUTE,
+    AssignPackagesToRouteCommand,
+)
 from src.application.eventing.collector import EventCollector
 from src.application.use_cases.pagination import PageQuery
-from src.application.use_cases.routes.assign_packages_to_route import AssignPackagesToRouteUseCase
 from src.application.use_cases.routes.assign_truck_to_route import AssignTruckToRouteUseCase
 from src.application.use_cases.routes.create_route import CreateRouteUseCase
 from src.application.use_cases.routes.find_suitable_trucks_for_route import FindSuitableTrucksForRouteUseCase
@@ -35,6 +38,7 @@ from src.application.use_cases.routes.remove_route import RemoveRouteUseCase
 from src.application.use_cases.routes.view_all_routes import ViewAllRoutesUseCase
 from src.application.use_cases.routes.view_route import ViewRouteUseCase
 from src.application.use_cases.routes.view_routes_in_progress import ViewRoutesInProgressUseCase
+from src.ports.input.command_bus import CommandBus
 
 routes_router = APIRouter(prefix="/routes", tags=["routes"])
 
@@ -211,17 +215,15 @@ def delete_route(
 def assign_packages_to_route(
     route_id: int,
     request: AssignPackagesToRouteRequest,
-    use_case: Annotated[AssignPackagesToRouteUseCase, Depends(get_assign_packages_to_route_use_case)],
-    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
+    command_bus: Annotated[CommandBus, Depends(get_authenticated_command_bus)],
 ) -> AssignPackagesToRouteResponse:
     """Assign packages to a delivery route.
 
     Args:
         route_id: Identifier of the route receiving packages.
         request: Package identifiers to assign.
-        use_case: Use case for assigning packages to a route, injected by FastAPI.
-        event_collector: Collector used to publish use-case authorization events
-            and route package-assignment events.
+        command_bus: Authenticated command bus injected by FastAPI. The
+            registered executor owns application and domain-event publication.
 
     Returns:
         Per-package assignment successes and errors.
@@ -232,14 +234,13 @@ def assign_packages_to_route(
             * 404 - Route not found.
             * 500 - Database operation failure.
     """
-    result = execute_and_drain_events(
-        recorder=use_case,
-        event_collector=event_collector,
-        action=lambda: use_case.execute(route_id=route_id, package_ids=request.package_ids),
+    result = command_bus.dispatch(
+        key=ASSIGN_PACKAGES_TO_ROUTE,
+        command=AssignPackagesToRouteCommand(
+            route_id=route_id,
+            package_ids=tuple(request.package_ids),
+        ),
     )
-
-    if result.successes:
-        event_collector.drain((result.successes[0].route,))
 
     return AssignPackagesToRouteResponse.from_result(result)
 

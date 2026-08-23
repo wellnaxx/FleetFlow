@@ -1,12 +1,15 @@
-"""CLI command for assigning packages to routes."""
+"""Command-bus-backed CLI command for assigning packages to routes."""
 
-from src.adapters.driving.cli.commands.base_command.event_draining_command import EventDrainingCommand
+from src.adapters.driving.cli.commands.base_command.command_bus_command import CommandBusCommand
 from src.adapters.driving.cli.commands.validation_helpers import try_parse_int, validate_params_count
-from src.application.use_cases.routes.assign_packages_to_route import AssignPackagesToRouteUseCase
+from src.application.commands.routes.assign_packages_to_route import (
+    ASSIGN_PACKAGES_TO_ROUTE,
+    AssignPackagesToRouteCommand,
+)
 
 
-class AssignPackagesToRoute(EventDrainingCommand[AssignPackagesToRouteUseCase]):
-    """Attach packages to a route and publish application and domain events."""
+class AssignPackagesToRoute(CommandBusCommand):
+    """Attach one or more packages to a route."""
 
     mutates_state = True
     autosaves_state = True
@@ -20,21 +23,22 @@ class AssignPackagesToRoute(EventDrainingCommand[AssignPackagesToRouteUseCase]):
         Raises:
             PermissionError: If the caller lacks package-assignment permission.
             ValueError: If route id or package ids are invalid CLI values.
-            Exception: Propagates event-publication failures after successful
-                use-case execution.
+            NotFoundError: If the target route does not exist.
+            DatabaseError: If assignment persistence or event publication
+                fails.
         """
         validate_params_count(self._params, 2)
 
         route_id = try_parse_int(self._params[0], "route_id")
         package_ids = [try_parse_int(pid, "package_id") for pid in self._params[1:]]
 
-        result = self._run_and_drain(
-            self._use_case,
-            lambda: self._use_case.execute(route_id, package_ids),
+        result = self.command_bus.dispatch(
+            key=ASSIGN_PACKAGES_TO_ROUTE,
+            command=AssignPackagesToRouteCommand(
+                route_id=route_id,
+                package_ids=tuple(package_ids),
+            ),
         )
-
-        if result.successes:
-            self._event_collector.drain((result.successes[0].route,))
 
         success_lines = [
             f"Assigned package {s.package_id} to route {s.route_id}. ETA: {s.eta_text}"

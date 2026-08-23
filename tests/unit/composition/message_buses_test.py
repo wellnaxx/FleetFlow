@@ -74,7 +74,7 @@ class MessageBusCompositionShould(unittest.TestCase):
             (subject.REMOVE_ROUTE, subject.RemoveRouteCommandHandler, self.route_cases.remove),
             (
                 subject.ASSIGN_PACKAGES_TO_ROUTE,
-                subject.AssignPackagesToRouteCommandHandler,
+                subject.EventDrainingExecutor,
                 self.route_cases.assign_packages,
             ),
             (

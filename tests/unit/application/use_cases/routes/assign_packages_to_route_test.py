@@ -1,15 +1,22 @@
 import unittest
 from datetime import datetime
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import MagicMock
 
 from src.adapters.driven.persistence.database.errors import DatabaseError
+from src.application.commands.routes.assign_packages_to_route import AssignPackagesToRouteCommand
+from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
+from src.application.eventing.recorder_scope import bind_event_recorder_scope
+from src.application.events.auth_events import AuthorizationDenied
 from src.application.exceptions.application_errors import NotFoundError
 from src.application.results.assign_packages_to_route_result import (
     AssignPackagesToRouteResult,
     PackageAssignmentError,
     PackageAssignmentSuccess,
 )
+from src.application.services.authorization_service import AuthorizationService
 from src.application.use_cases.routes.assign_packages_to_route import AssignPackagesToRouteUseCase
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
@@ -56,10 +63,29 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
         self.mock_routes.get_by_id.return_value = None
 
         with self.assertRaises(NotFoundError) as ctx:
-            self.use_case.execute(7, [8, 9])
+            self.use_case.execute(AssignPackagesToRouteCommand(route_id=7, package_ids=(8, 9)))
 
         self.assertIn("Route with ID 7 not found.", str(ctx.exception))
         self.mock_packages.get_by_id.assert_not_called()
+
+    def test_records_targeted_authorization_denial_before_repository_access(self) -> None:
+        use_case = AssignPackagesToRouteUseCase(
+            self.mock_routes,
+            self.mock_packages,
+            AuthorizationService(None),
+            clock=lambda: self.now,
+        )
+
+        with self.assertRaisesRegex(PermissionError, "Unauthenticated"):
+            use_case.execute(AssignPackagesToRouteCommand(route_id=7, package_ids=(8,)))
+
+        self.mock_routes.get_by_id.assert_not_called()
+        self.assertEqual(len(use_case.pending_events), 1)
+        event = cast(AuthorizationDenied, use_case.pending_events[0])
+        self.assertIsInstance(event, AuthorizationDenied)
+        self.assertIs(event.attempted_operation, AuthorizationOperation.ROUTE_ASSIGN_PACKAGES)
+        self.assertIs(event.target_resource_type, AuditResourceType.ROUTE)
+        self.assertEqual(event.target_resource_id, "7")
 
     def test_returns_success_for_single_package(self) -> None:
         route = self._make_route(route_id=7, departure_time=None)
@@ -68,7 +94,7 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
         self.mock_routes.get_by_id.return_value = route
         self.mock_packages.get_by_id.return_value = package
 
-        result = self.use_case.execute(7, [8])
+        result = self.use_case.execute(AssignPackagesToRouteCommand(route_id=7, package_ids=(8,)))
 
         self.assertEqual(
             result,
@@ -95,7 +121,7 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
         self.mock_routes.get_by_id.return_value = route
         self.mock_packages.get_by_id.return_value = package
 
-        result = self.use_case.execute(7, [8])
+        result = self.use_case.execute(AssignPackagesToRouteCommand(route_id=7, package_ids=(8,)))
 
         self.assertEqual(result.successes[0].eta_text, "2025-10-01 18:00")
         route.assign_package.assert_called_once_with(package, now=self.now, occurred_at=self.now)
@@ -109,7 +135,7 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
         self.mock_routes.get_by_id.return_value = route
         self.mock_packages.get_by_id.return_value = package
 
-        result = self.use_case.execute(7, [8, 8, 8])
+        result = self.use_case.execute(AssignPackagesToRouteCommand(route_id=7, package_ids=(8, 8, 8)))
 
         self.assertEqual(len(result.successes), 1)
         self.assertEqual(len(result.errors), 0)
@@ -122,7 +148,7 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
         self.mock_routes.get_by_id.return_value = route
         self.mock_packages.get_by_id.return_value = None
 
-        result = self.use_case.execute(7, [8])
+        result = self.use_case.execute(AssignPackagesToRouteCommand(route_id=7, package_ids=(8,)))
 
         self.assertEqual(result.successes, [])
         self.assertEqual(
@@ -139,7 +165,7 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
         self.mock_routes.get_by_id.return_value = route
         self.mock_packages.get_by_id.return_value = package
 
-        result = self.use_case.execute(7, [8])
+        result = self.use_case.execute(AssignPackagesToRouteCommand(route_id=7, package_ids=(8,)))
 
         self.assertEqual(result.successes, [])
         self.assertEqual(
@@ -155,7 +181,7 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
         self.mock_routes.get_by_id.return_value = route
         self.mock_packages.get_by_id.return_value = package
 
-        result = self.use_case.execute(7, [8])
+        result = self.use_case.execute(AssignPackagesToRouteCommand(route_id=7, package_ids=(8,)))
 
         self.assertEqual(result.successes, [])
         self.assertEqual(
@@ -178,7 +204,7 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
         self.mock_routes.get_by_id.return_value = route
         self.mock_packages.get_by_id.return_value = package
 
-        result = self.use_case.execute(7, [8])
+        result = self.use_case.execute(AssignPackagesToRouteCommand(route_id=7, package_ids=(8,)))
 
         self.assertEqual(result.successes, [])
         self.assertEqual(
@@ -195,7 +221,7 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
         self.mock_routes.get_by_id.return_value = route
         self.mock_packages.get_by_id.side_effect = [package_ok, package_bad]
 
-        result = self.use_case.execute(7, [8, 9])
+        result = self.use_case.execute(AssignPackagesToRouteCommand(route_id=7, package_ids=(8, 9)))
 
         self.assertEqual(
             result,
@@ -226,7 +252,7 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
         self.mock_routes.get_by_id.return_value = route
         self.mock_packages.get_by_id.return_value = package
 
-        result = self.use_case.execute(7, [8])
+        result = self.use_case.execute(AssignPackagesToRouteCommand(route_id=7, package_ids=(8,)))
 
         self.assertEqual(result.successes[0].eta_text, "N/A")
 
@@ -241,7 +267,7 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
         self.mock_packages.update_state.side_effect = error
 
         with self.assertRaises(DatabaseError) as ctx:
-            self.use_case.execute(7, [8])
+            self.use_case.execute(AssignPackagesToRouteCommand(route_id=7, package_ids=(8,)))
 
         self.assertIs(ctx.exception, error)
         self.assertEqual(route.packages, ())
@@ -249,3 +275,24 @@ class AssignPackagesToRouteUseCase_Should(unittest.TestCase):
         self.assertIsNone(package.route)
         self.assertIsNone(package.route_id)
         self.assertIsNone(package.expected_arrival)
+
+    def test_tracks_successfully_mutated_route_in_execution_scope(self) -> None:
+        route = self._make_route(route_id=7, departure_time=None)
+        package = self._make_package(8)
+        self.mock_routes.get_by_id.return_value = route
+        self.mock_packages.get_by_id.return_value = package
+
+        with bind_event_recorder_scope() as scope:
+            self.use_case.execute(AssignPackagesToRouteCommand(route_id=7, package_ids=(8,)))
+
+        self.assertEqual(scope.event_recorders(), (scope, route))
+
+    def test_does_not_track_route_when_every_assignment_fails(self) -> None:
+        route = self._make_route(route_id=7, departure_time=None)
+        self.mock_routes.get_by_id.return_value = route
+        self.mock_packages.get_by_id.return_value = None
+
+        with bind_event_recorder_scope() as scope:
+            self.use_case.execute(AssignPackagesToRouteCommand(route_id=7, package_ids=(8,)))
+
+        self.assertEqual(scope.event_recorders(), (scope,))

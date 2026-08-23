@@ -23,6 +23,7 @@ from src.domain.exceptions import DomainConflictError, DomainValidationError
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from src.application.commands.routes.assign_packages_to_route import AssignPackagesToRouteCommand
     from src.domain.entities.delivery_package import DeliveryPackage
     from src.domain.entities.delivery_route import DeliveryRoute
     from src.ports.output.package_repository import PackageRepositoryPort
@@ -33,15 +34,19 @@ logger = logging.getLogger(__name__)
 
 def _resolve_route_target_id(
     _self: AssignPackagesToRouteUseCase,
-    route_id: int,
-    package_ids: list[int],  # noqa: ARG001
+    command: AssignPackagesToRouteCommand,
 ) -> int | None:
     """Resolve the audit target resource id for a package-assignment-to-route attempt."""
-    return route_id
+    return command.route_id
 
 
 class AssignPackagesToRouteUseCase(AuthorizedUseCase[AssignPackagesToRouteResult]):
-    """Assign one or more packages to a route."""
+    """Assign packages through the published application command contract.
+
+    The workflow authorizes the target route, applies each unique package id
+    independently, persists successful state changes, and tracks the mutated
+    route so the message executor can publish its domain events once.
+    """
 
     def __init__(
         self,
@@ -69,12 +74,11 @@ class AssignPackagesToRouteUseCase(AuthorizedUseCase[AssignPackagesToRouteResult
         target_resource_type=AuditResourceType.ROUTE,
         target_resource_id_resolver=_resolve_route_target_id,
     )
-    def execute(self, route_id: int, package_ids: list[int]) -> AssignPackagesToRouteResult:
+    def execute(self, command: AssignPackagesToRouteCommand) -> AssignPackagesToRouteResult:
         """Assign packages to the requested route.
 
         Args:
-            route_id: Identifier of the target route.
-            package_ids: Package ids to assign.
+            command: Target route and immutable package identifiers to process.
 
         Returns:
             A result object describing successful assignments and per-package
@@ -85,11 +89,12 @@ class AssignPackagesToRouteUseCase(AuthorizedUseCase[AssignPackagesToRouteResult
             DatabaseError: If the package assignment persistence fails.
             NotFoundError: If the target route does not exist.
         """
+        route_id = command.route_id
         route = self._get_route(route_id)
         result = AssignPackagesToRouteResult(successes=[], errors=[])
         now = self._clock()
 
-        for package_id in self._unique_package_ids(package_ids):
+        for package_id in self._unique_package_ids(command.package_ids):
             package = self._packages.get_by_id(package_id)
             if package is None:
                 result.errors.append(self._missing_package_error(package_id, route_id))
@@ -111,6 +116,8 @@ class AssignPackagesToRouteUseCase(AuthorizedUseCase[AssignPackagesToRouteResult
             len(result.successes),
             len(result.errors),
         )
+        if result.successes:
+            self.track_domain_recorder(route)
         return result
 
     def _get_route(self, route_id: int) -> DeliveryRoute:
@@ -120,7 +127,7 @@ class AssignPackagesToRouteUseCase(AuthorizedUseCase[AssignPackagesToRouteResult
             raise NotFoundError(f"Route with ID {route_id} not found.")
         return route
 
-    def _unique_package_ids(self, package_ids: list[int]) -> list[int]:
+    def _unique_package_ids(self, package_ids: tuple[int, ...]) -> list[int]:
         seen_package_ids: set[int] = set()
         unique_package_ids: list[int] = []
 

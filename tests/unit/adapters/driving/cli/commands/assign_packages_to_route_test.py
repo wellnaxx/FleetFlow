@@ -1,55 +1,39 @@
+"""Tests for the command-bus-backed route package-assignment adapter."""
+
 import unittest
-from typing import cast
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock
 
 from src.adapters.driving.cli.commands.assign_packages_to_route import AssignPackagesToRoute
+from src.application.commands.routes.assign_packages_to_route import (
+    ASSIGN_PACKAGES_TO_ROUTE,
+    AssignPackagesToRouteCommand,
+)
 from src.application.results.assign_packages_to_route_result import (
     AssignPackagesToRouteResult,
     PackageAssignmentError,
     PackageAssignmentSuccess,
 )
+from src.ports.input.command_bus import CommandBus
 
 
-def _parse_int(value: str, _field_name: str = "value") -> int:
-    return int(value)
+class AssignPackagesToRouteShould(unittest.TestCase):
+    """Verify parsing, typed dispatch, result rendering, and failures."""
 
+    def setUp(self) -> None:
+        """Create an isolated command bus for each test."""
+        self.command_bus = MagicMock(spec=CommandBus)
 
-def _collector_mock(command: AssignPackagesToRoute) -> MagicMock:
-    """Return the command's injected collector as its test-double type."""
-    return cast(MagicMock, command._event_collector)  # pyright: ignore[reportPrivateUsage]
+    def make_command(self, params: tuple[str, ...]) -> AssignPackagesToRoute:
+        """Build the adapter with raw parameters and the mocked bus."""
+        return AssignPackagesToRoute(params, self.command_bus)
 
+    def test_mutates_and_autosaves_state(self) -> None:
+        self.assertTrue(AssignPackagesToRoute.mutates_state)
+        self.assertTrue(AssignPackagesToRoute.autosaves_state)
 
-def _use_case_mock(command: AssignPackagesToRoute) -> MagicMock:
-    """Return the command's injected use case as its test-double type."""
-    return cast(MagicMock, command._use_case)  # pyright: ignore[reportPrivateUsage]
-
-
-class AssignPackageToRoute_Should(unittest.TestCase):
-    def make_cmd(self, params: list[str]) -> AssignPackagesToRoute:
-        cmd = AssignPackagesToRoute.__new__(AssignPackagesToRoute)
-        cmd._params = tuple(params)  # type: ignore[reportAttributeAccessIssue]
-        cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._event_collector = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        return cmd
-
-    def test_execute_propagates_permission_errors_from_use_case(self) -> None:
-        cmd = self.make_cmd(["5", "42"])
-        _use_case_mock(cmd).execute.side_effect = PermissionError("Missing permission: ROUTE_ASSIGN_PACKAGE")
-
-        with self.assertRaises(PermissionError) as ctx:
-            cmd.execute()
-
-        self.assertIn("ROUTE_ASSIGN_PACKAGE", str(ctx.exception))
-        _use_case_mock(cmd).execute.assert_called_once_with(5, [42])
-        _collector_mock(cmd).drain.assert_called_once_with((_use_case_mock(cmd),))
-
-    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.validate_params_count")
-    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.try_parse_int")
-    def test_execute_success_single_package(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
-        mock_parse.side_effect = _parse_int
-        cmd = self.make_cmd(["5", "42"])
+    def test_dispatches_assignment_command_and_renders_single_success(self) -> None:
         route = MagicMock()
-        _use_case_mock(cmd).execute.return_value = AssignPackagesToRouteResult(
+        self.command_bus.dispatch.return_value = AssignPackagesToRouteResult(
             successes=[
                 PackageAssignmentSuccess(
                     package_id=42,
@@ -61,243 +45,109 @@ class AssignPackageToRoute_Should(unittest.TestCase):
             errors=[],
         )
 
-        result = cmd.execute()
+        result = self.make_command(("5", "42")).execute()
 
-        mock_validate.assert_called_once_with(("5", "42"), 2)
-        self.assertEqual(mock_parse.call_args_list, [call("5", "route_id"), call("42", "package_id")])
-        _use_case_mock(cmd).execute.assert_called_once_with(5, [42])
-        self.assertEqual(
-            _collector_mock(cmd).drain.call_args_list,
-            [call((_use_case_mock(cmd),)), call((route,))],
+        self.command_bus.dispatch.assert_called_once_with(
+            key=ASSIGN_PACKAGES_TO_ROUTE,
+            command=AssignPackagesToRouteCommand(route_id=5, package_ids=(42,)),
         )
         self.assertEqual(result, "Assigned package 42 to route 5. ETA: N/A (route unscheduled)")
 
-    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.validate_params_count")
-    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.try_parse_int")
-    def test_execute_success_multiple_packages(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
-        mock_parse.side_effect = _parse_int
-        cmd = self.make_cmd(["7", "8", "9", "10"])
+    def test_renders_multiple_successes_and_errors_in_result_order(self) -> None:
         route = MagicMock()
-        _use_case_mock(cmd).execute.return_value = AssignPackagesToRouteResult(
+        self.command_bus.dispatch.return_value = AssignPackagesToRouteResult(
             successes=[
-                PackageAssignmentSuccess(package_id=8, route_id=7, eta_text="2025-10-01 18:00", route=route),
-                PackageAssignmentSuccess(package_id=9, route_id=7, eta_text="2025-10-01 19:00", route=route),
-                PackageAssignmentSuccess(package_id=10, route_id=7, eta_text="N/A", route=route),
-            ],
-            errors=[],
-        )
-
-        result = cmd.execute()
-
-        mock_validate.assert_called_once_with(("7", "8", "9", "10"), 2)
-        self.assertEqual(
-            mock_parse.call_args_list,
-            [call("7", "route_id"), call("8", "package_id"), call("9", "package_id"), call("10", "package_id")],
-        )
-        _use_case_mock(cmd).execute.assert_called_once_with(7, [8, 9, 10])
-        self.assertEqual(
-            _collector_mock(cmd).drain.call_args_list,
-            [call((_use_case_mock(cmd),)), call((route,))],
-        )
-        self.assertEqual(
-            result,
-            "\n".join(
-                [
-                    "Assigned package 8 to route 7. ETA: 2025-10-01 18:00",
-                    "Assigned package 9 to route 7. ETA: 2025-10-01 19:00",
-                    "Assigned package 10 to route 7. ETA: N/A",
-                ]
-            ),
-        )
-
-    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.validate_params_count")
-    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.try_parse_int")
-    def test_execute_formats_successes_and_errors(
-        self, mock_parse: MagicMock, mock_validate: MagicMock
-    ) -> None:
-        mock_parse.side_effect = _parse_int
-        cmd = self.make_cmd(["7", "8", "9"])
-        route = MagicMock()
-        _use_case_mock(cmd).execute.return_value = AssignPackagesToRouteResult(
-            successes=[
-                PackageAssignmentSuccess(package_id=8, route_id=7, eta_text="2025-10-01 18:00", route=route),
+                PackageAssignmentSuccess(
+                    package_id=8,
+                    route_id=7,
+                    eta_text="2025-10-01 18:00",
+                    route=route,
+                ),
+                PackageAssignmentSuccess(
+                    package_id=9,
+                    route_id=7,
+                    eta_text="N/A",
+                    route=route,
+                ),
             ],
             errors=[
                 PackageAssignmentError(
-                    package_id=9,
-                    message="Package 9 is already on route 2.",
+                    package_id=10,
+                    message="Package 10 not found.",
                 )
             ],
         )
 
-        result = cmd.execute()
+        result = self.make_command(("7", "8", "9", "10")).execute()
 
+        self.command_bus.dispatch.assert_called_once_with(
+            key=ASSIGN_PACKAGES_TO_ROUTE,
+            command=AssignPackagesToRouteCommand(route_id=7, package_ids=(8, 9, 10)),
+        )
         self.assertEqual(
             result,
-            "Assigned package 8 to route 7. ETA: 2025-10-01 18:00\n\n"
-            "Failed:\n- Package 9 is already on route 2.",
-        )
-        self.assertEqual(
-            _collector_mock(cmd).drain.call_args_list,
-            [call((_use_case_mock(cmd),)), call((route,))],
+            "Assigned package 8 to route 7. ETA: 2025-10-01 18:00\n"
+            "Assigned package 9 to route 7. ETA: N/A\n\n"
+            "Failed:\n- Package 10 not found.",
         )
 
-    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.validate_params_count")
-    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.try_parse_int")
-    def test_execute_drains_only_use_case_when_all_assignments_fail(
-        self,
-        mock_parse: MagicMock,
-        mock_validate: MagicMock,
-    ) -> None:
-        mock_parse.side_effect = _parse_int
-        cmd = self.make_cmd(["7", "8"])
-        _use_case_mock(cmd).execute.return_value = AssignPackagesToRouteResult(
+    def test_renders_only_errors(self) -> None:
+        self.command_bus.dispatch.return_value = AssignPackagesToRouteResult(
             successes=[],
             errors=[PackageAssignmentError(package_id=8, message="Package 8 not found.")],
         )
 
-        result = cmd.execute()
+        result = self.make_command(("7", "8")).execute()
 
         self.assertEqual(result, "Failed:\n- Package 8 not found.")
-        _collector_mock(cmd).drain.assert_called_once_with((_use_case_mock(cmd),))
 
-    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.validate_params_count")
-    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.try_parse_int")
-    def test_execute_returns_empty_string_when_result_has_no_messages(
-        self,
-        mock_parse: MagicMock,
-        mock_validate: MagicMock,
-    ) -> None:
-        mock_parse.side_effect = _parse_int
-        cmd = self.make_cmd(["1", "2"])
-        _use_case_mock(cmd).execute.return_value = AssignPackagesToRouteResult(
+    def test_returns_empty_text_for_empty_result(self) -> None:
+        self.command_bus.dispatch.return_value = AssignPackagesToRouteResult(
             successes=[],
             errors=[],
         )
 
-        result = cmd.execute()
+        result = self.make_command(("7", "8")).execute()
 
         self.assertEqual(result, "")
-        _collector_mock(cmd).drain.assert_called_once_with((_use_case_mock(cmd),))
 
-    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.validate_params_count")
-    def test_execute_raises_when_params_count_invalid(self, mock_validate: MagicMock) -> None:
-        mock_validate.side_effect = ValueError("invalid params count")
-        cmd = self.make_cmd(["only_one_param"])
+    def test_rejects_too_few_arguments_without_dispatching(self) -> None:
+        with self.assertRaises(ValueError):
+            self.make_command(("7",)).execute()
 
-        with self.assertRaises(ValueError) as ctx:
-            cmd.execute()
+        self.command_bus.dispatch.assert_not_called()
 
-        self.assertIn("invalid params count", str(ctx.exception))
-        _use_case_mock(cmd).execute.assert_not_called()
+    def test_rejects_invalid_route_id_without_dispatching(self) -> None:
+        with self.assertRaisesRegex(ValueError, "route_id"):
+            self.make_command(("route", "8")).execute()
 
-    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.validate_params_count")
-    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.try_parse_int")
-    def test_execute_raises_when_route_parse_fails(
-        self,
-        mock_parse: MagicMock,
-        mock_validate: MagicMock,
-    ) -> None:
-        mock_parse.side_effect = ValueError("not an int")
-        cmd = self.make_cmd(["routeX", "2"])
+        self.command_bus.dispatch.assert_not_called()
 
-        with self.assertRaises(ValueError) as ctx:
-            cmd.execute()
+    def test_rejects_invalid_package_id_without_dispatching(self) -> None:
+        with self.assertRaisesRegex(ValueError, "package_id"):
+            self.make_command(("7", "package")).execute()
 
-        self.assertIn("not an int", str(ctx.exception))
-        mock_validate.assert_called_once_with(("routeX", "2"), 2)
-        mock_parse.assert_called_once_with("routeX", "route_id")
-        _use_case_mock(cmd).execute.assert_not_called()
+        self.command_bus.dispatch.assert_not_called()
 
-    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.validate_params_count")
-    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.try_parse_int")
-    def test_execute_raises_when_any_package_parse_fails(
-        self,
-        mock_parse: MagicMock,
-        mock_validate: MagicMock,
-    ) -> None:
-        mock_parse.side_effect = [7, ValueError("bad package id")]
-        cmd = self.make_cmd(["7", "p1"])
+    def test_propagates_permission_error_from_command_bus(self) -> None:
+        self.command_bus.dispatch.side_effect = PermissionError("Missing permission: ROUTE_ASSIGN_PACKAGE")
 
-        with self.assertRaises(ValueError) as ctx:
-            cmd.execute()
+        with self.assertRaisesRegex(PermissionError, "ROUTE_ASSIGN_PACKAGE"):
+            self.make_command(("5", "42")).execute()
 
-        self.assertIn("bad package id", str(ctx.exception))
-        self.assertEqual(mock_parse.call_args_list, [call("7", "route_id"), call("p1", "package_id")])
-        _use_case_mock(cmd).execute.assert_not_called()
-
-    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.validate_params_count")
-    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.try_parse_int")
-    def test_execute_propagates_use_case_errors(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
-        mock_parse.side_effect = _parse_int
-        cmd = self.make_cmd(["3", "4"])
-        _use_case_mock(cmd).execute.side_effect = ValueError("constraints fail")
-
-        with self.assertRaises(ValueError) as ctx:
-            cmd.execute()
-
-        self.assertIn("constraints fail", str(ctx.exception))
-        _use_case_mock(cmd).execute.assert_called_once_with(3, [4])
-        _collector_mock(cmd).drain.assert_called_once_with((_use_case_mock(cmd),))
-
-    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.validate_params_count")
-    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.try_parse_int")
-    def test_execute_propagates_use_case_event_publication_failure_before_route_drain(
-        self,
-        mock_parse: MagicMock,
-        mock_validate: MagicMock,
-    ) -> None:
-        mock_parse.side_effect = _parse_int
-        cmd = self.make_cmd(["5", "42"])
-        route = MagicMock()
-        _use_case_mock(cmd).execute.return_value = AssignPackagesToRouteResult(
-            successes=[
-                PackageAssignmentSuccess(
-                    package_id=42,
-                    route_id=5,
-                    eta_text="N/A",
-                    route=route,
-                )
-            ],
-            errors=[],
+        self.command_bus.dispatch.assert_called_once_with(
+            key=ASSIGN_PACKAGES_TO_ROUTE,
+            command=AssignPackagesToRouteCommand(route_id=5, package_ids=(42,)),
         )
-        _collector_mock(cmd).drain.side_effect = RuntimeError("publisher failed")
 
-        with self.assertRaisesRegex(RuntimeError, "publisher failed"):
-            cmd.execute()
+    def test_propagates_command_bus_failure(self) -> None:
+        self.command_bus.dispatch.side_effect = RuntimeError("assignment failed")
 
-        _collector_mock(cmd).drain.assert_called_once_with((_use_case_mock(cmd),))
+        with self.assertRaisesRegex(RuntimeError, "assignment failed"):
+            self.make_command(("5", "42")).execute()
 
-    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.validate_params_count")
-    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.try_parse_int")
-    def test_execute_calls_validate_with_required_min_params(
-        self,
-        mock_parse: MagicMock,
-        mock_validate: MagicMock,
-    ) -> None:
-        mock_parse.side_effect = _parse_int
-        cmd = self.make_cmd(["1", "2"])
-        _use_case_mock(cmd).execute.return_value = AssignPackagesToRouteResult(successes=[], errors=[])
+        self.command_bus.dispatch.assert_called_once()
 
-        _ = cmd.execute()
 
-        mock_validate.assert_called_once_with(("1", "2"), 2)
-
-    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.validate_params_count")
-    @patch("src.adapters.driving.cli.commands.assign_packages_to_route.try_parse_int")
-    def test_execute_uses_try_parse_int_for_every_param(
-        self,
-        mock_parse: MagicMock,
-        mock_validate: MagicMock,
-    ) -> None:
-        mock_parse.side_effect = [10, 20, 30]
-        cmd = self.make_cmd(["10", "20", "30"])
-        _use_case_mock(cmd).execute.return_value = AssignPackagesToRouteResult(successes=[], errors=[])
-
-        cmd.execute()
-
-        self.assertEqual(
-            mock_parse.call_args_list,
-            [call("10", "route_id"), call("20", "package_id"), call("30", "package_id")],
-        )
-        _use_case_mock(cmd).execute.assert_called_once_with(10, [20, 30])
+if __name__ == "__main__":
+    unittest.main()
