@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from src.adapters.driving.http.dependencies.eventing import execute_and_drain_events, get_event_collector
 from src.adapters.driving.http.dependencies.message_buses import get_authenticated_command_bus
 from src.adapters.driving.http.dependencies.use_cases import (
-    get_create_route_use_case,
     get_find_suitable_trucks_for_route_use_case,
     get_remove_route_use_case,
     get_view_all_routes_use_case,
@@ -32,9 +31,9 @@ from src.application.commands.routes.assign_truck_to_route import (
     ASSIGN_TRUCK_TO_ROUTE,
     AssignTruckToRouteCommand,
 )
+from src.application.commands.routes.create_route import CREATE_ROUTE, CreateRouteCommand
 from src.application.eventing.collector import EventCollector
 from src.application.use_cases.pagination import PageQuery
-from src.application.use_cases.routes.create_route import CreateRouteUseCase
 from src.application.use_cases.routes.find_suitable_trucks_for_route import FindSuitableTrucksForRouteUseCase
 from src.application.use_cases.routes.remove_route import RemoveRouteUseCase
 from src.application.use_cases.routes.view_all_routes import ViewAllRoutesUseCase
@@ -48,16 +47,14 @@ routes_router = APIRouter(prefix="/routes", tags=["routes"])
 @routes_router.post("/", status_code=status.HTTP_201_CREATED)
 def create_route(
     request: RouteCreateRequest,
-    use_case: Annotated[CreateRouteUseCase, Depends(get_create_route_use_case)],
-    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
+    command_bus: Annotated[CommandBus, Depends(get_authenticated_command_bus)],
 ) -> RouteResponse:
     """Create a new delivery route.
 
     Args:
         request: The request body containing route creation details.
-        use_case: Use case for creating a route, injected by FastAPI.
-        event_collector: Collector used to publish use-case authorization events
-            and route creation events.
+        command_bus: Authenticated command bus injected by FastAPI. The
+            registered executor owns application and domain-event publication.
 
     Returns:
         The created route details.
@@ -68,16 +65,13 @@ def create_route(
             * 403 - Insufficient permissions.
             * 500 - Database operation failure.
     """
-    route = execute_and_drain_events(
-        recorder=use_case,
-        event_collector=event_collector,
-        action=lambda: use_case.execute(
-            locations=request.locations,
+    route = command_bus.dispatch(
+        key=CREATE_ROUTE,
+        command=CreateRouteCommand(
+            locations=tuple(request.locations),
             departure_time=request.departure_time,
         ),
     )
-
-    event_collector.drain((route,))
     return RouteResponse.from_route(route)
 
 

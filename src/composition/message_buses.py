@@ -24,7 +24,6 @@ from src.application.commands.routes.remove_route import REMOVE_ROUTE
 from src.application.commands.state.load_world import LOAD_WORLD
 from src.application.commands.state.save_world import SAVE_WORLD
 from src.application.eventing.collector import EventCollector
-from src.application.handlers.commands.routes.create_route import CreateRouteCommandHandler
 from src.application.handlers.commands.routes.remove_route import RemoveRouteCommandHandler
 from src.application.handlers.commands.state.load_world import LoadWorldCommandHandler
 from src.application.handlers.commands.state.save_world import SaveWorldCommandHandler
@@ -151,7 +150,13 @@ def build_command_bus(
     )
 
     # Route management
-    bus.register(CREATE_ROUTE, CreateRouteCommandHandler(route_cases.create))
+    bus.register(
+        CREATE_ROUTE,
+        EventDrainingExecutor(
+            delegate=route_cases.create,
+            event_collector=event_collector,
+        ),
+    )
     bus.register(REMOVE_ROUTE, RemoveRouteCommandHandler(route_cases.remove))
     bus.register(
         ASSIGN_PACKAGES_TO_ROUTE,

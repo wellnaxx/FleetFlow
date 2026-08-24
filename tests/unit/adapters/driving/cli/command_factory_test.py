@@ -13,6 +13,7 @@ from src.adapters.driving.cli.commands.auth_register import AuthRegisterUser
 from src.adapters.driving.cli.commands.auth_reset_password import AuthResetPassword
 from src.adapters.driving.cli.commands.auth_whoami import AuthWhoAmI
 from src.adapters.driving.cli.commands.create_package import CreatePackage
+from src.adapters.driving.cli.commands.create_route import CreateRoute
 from src.adapters.driving.cli.commands.get_fleet_overview import GetFleetOverview
 from src.adapters.driving.cli.commands.remove_package import RemovePackage
 from src.adapters.driving.cli.commands.view_all_customers import ViewAllCustomers
@@ -138,7 +139,7 @@ class CommandFactoryShould(unittest.TestCase):
                 'createroute "SYD" "MEL" "2025-10-12" "06:00"',
                 "createroute",
                 ["SYD", "MEL", "2025-10-12", "06:00"],
-                container.route_cases.create,
+                container.command_bus,
             ),
             ("viewroute 42", "viewroute", ["42"], container.route_cases.view),
             ("viewallroutes", "viewallroutes", [], container.route_cases.view_all),
@@ -292,6 +293,16 @@ class CommandFactoryShould(unittest.TestCase):
 
         self.assertIsInstance(command, AssignTruckToRoute)
         self.assertEqual(command.params, ("11", "22"))
+        self.assertIs(command.command_bus, container.command_bus)
+
+    def test_create_route_receives_registered_command_bus(self) -> None:
+        """Build route creation with the container command bus."""
+        factory, container = self.make_factory()
+
+        command = cast(CreateRoute, factory.create("createroute SYD MEL"))
+
+        self.assertIsInstance(command, CreateRoute)
+        self.assertEqual(command.params, ("SYD", "MEL"))
         self.assertIs(command.command_bus, container.command_bus)
 
     def test_view_all_packages_receives_registered_query_bus(self) -> None:

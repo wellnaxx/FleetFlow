@@ -51,9 +51,7 @@ _CONTAINER_COMMANDS: dict[str, CommandBuilder] = {
     "removepackage": lambda container, params: RemovePackage(params, container.command_bus),
     "viewunassignedpackages": lambda container, params: ViewUnassignedPackages(params, container.query_bus),
     "viewallcustomers": lambda container, params: ViewAllCustomers(params, container.query_bus),
-    "createroute": lambda container, params: CreateRoute(
-        params, container.route_cases.create, container.event_collector
-    ),
+    "createroute": lambda container, params: CreateRoute(params, container.command_bus),
     "viewroute": lambda container, params: ViewRoute(
         params, container.route_cases.view, container.event_collector
     ),

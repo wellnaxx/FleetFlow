@@ -1,10 +1,16 @@
 import unittest
 from datetime import datetime
+from typing import cast
 from unittest.mock import MagicMock
 
+from src.application.commands.routes.create_route import CreateRouteCommand
+from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
+from src.application.eventing.recorder_scope import bind_event_recorder_scope
+from src.application.events.auth_events import AuthorizationDenied
+from src.application.services.authorization_service import AuthorizationService
 from src.application.use_cases.routes.create_route import CreateRouteUseCase
 from src.domain.exceptions import DomainValidationError
-from src.domain.value_objects.location_code import LocationCode
 from tests.unit.application.use_cases.authz_helpers import manager_authz
 
 
@@ -18,21 +24,27 @@ class CreateRouteUseCase_Should(unittest.TestCase):
         fake_route = MagicMock()
         self.mock_routes.create.return_value = fake_route
 
-        locations = [LocationCode("SYD"), LocationCode("MEL"), LocationCode("ADL")]
-        result = self.use_case.execute(locations, departure)
+        command = CreateRouteCommand(
+            locations=("SYD", "MEL", "ADL"),
+            departure_time=departure,
+        )
+        result = self.use_case.execute(command)
 
         self.assertIs(result, fake_route)
-        self.mock_routes.create.assert_called_once_with(locations=locations, departure_time=departure)
+        self.mock_routes.create.assert_called_once_with(
+            locations=("SYD", "MEL", "ADL"),
+            departure_time=departure,
+        )
 
     def test_raises_when_fewer_than_two_locations(self) -> None:
         self.mock_routes.create.side_effect = DomainValidationError("A route must have at least two locations.")
 
         with self.assertRaises(DomainValidationError) as ctx:
-            self.use_case.execute([LocationCode("SYD")], None)
+            self.use_case.execute(CreateRouteCommand(locations=("SYD",)))
 
         self.assertIn("at least two locations", str(ctx.exception))
         self.mock_routes.create.assert_called_once_with(
-            locations=[LocationCode("SYD")],
+            locations=("SYD",),
             departure_time=None,
         )
 
@@ -40,11 +52,11 @@ class CreateRouteUseCase_Should(unittest.TestCase):
         self.mock_routes.create.side_effect = DomainValidationError("Invalid location code: BAD.")
 
         with self.assertRaises(DomainValidationError) as ctx:
-            self.use_case.execute([LocationCode("SYD"), LocationCode("BAD"), LocationCode("MEL")], None)
+            self.use_case.execute(CreateRouteCommand(locations=("SYD", "BAD", "MEL")))
 
         self.assertIn("Invalid location code: BAD", str(ctx.exception))
         self.mock_routes.create.assert_called_once_with(
-            locations=[LocationCode("SYD"), LocationCode("BAD"), LocationCode("MEL")],
+            locations=("SYD", "BAD", "MEL"),
             departure_time=None,
         )
 
@@ -52,8 +64,34 @@ class CreateRouteUseCase_Should(unittest.TestCase):
         fake_route = MagicMock()
         self.mock_routes.create.return_value = fake_route
 
-        locations = [LocationCode("A"), LocationCode("B"), LocationCode("C")]
-        result = self.use_case.execute(locations, None)
+        result = self.use_case.execute(CreateRouteCommand(locations=("A", "B", "C")))
 
         self.assertIs(result, fake_route)
-        self.mock_routes.create.assert_called_once_with(locations=locations, departure_time=None)
+        self.mock_routes.create.assert_called_once_with(
+            locations=("A", "B", "C"),
+            departure_time=None,
+        )
+
+    def test_records_authorization_denial_before_repository_access(self) -> None:
+        use_case = CreateRouteUseCase(self.mock_routes, AuthorizationService(None))
+
+        with self.assertRaisesRegex(PermissionError, "Unauthenticated"):
+            use_case.execute(CreateRouteCommand(locations=("SYD", "MEL")))
+
+        self.mock_routes.create.assert_not_called()
+        self.assertEqual(len(use_case.pending_events), 1)
+        event = cast(AuthorizationDenied, use_case.pending_events[0])
+        self.assertIsInstance(event, AuthorizationDenied)
+        self.assertIs(event.attempted_operation, AuthorizationOperation.ROUTE_CREATE)
+        self.assertIs(event.target_resource_type, AuditResourceType.ROUTE)
+        self.assertIsNone(event.target_resource_id)
+
+    def test_tracks_persisted_route_in_execution_scope(self) -> None:
+        route = MagicMock()
+        self.mock_routes.create.return_value = route
+
+        with bind_event_recorder_scope() as scope:
+            result = self.use_case.execute(CreateRouteCommand(locations=("SYD", "MEL")))
+
+        self.assertIs(result, route)
+        self.assertEqual(scope.event_recorders(), (scope, route))

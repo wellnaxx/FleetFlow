@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 from src.adapters.driven.persistence.memory.route_repository import InMemoryRouteRepository
 from src.adapters.driven.persistence.memory.unit_of_work import InMemoryUnitOfWork
 from src.application.commands.routes.assign_truck_to_route import AssignTruckToRouteCommand
+from src.application.commands.routes.create_route import CreateRouteCommand
 from src.application.results.assign_truck_to_route_result import AssignTruckToRouteResult
 from src.application.use_cases.routes.assign_truck_to_route import AssignTruckToRouteUseCase
 from src.application.use_cases.routes.create_route import CreateRouteUseCase
@@ -68,7 +69,7 @@ class RuntimeRoutesIntegrationTests(unittest.TestCase):
         create_route = CreateRouteUseCase(route_repo, authz)
         remove_route = RemoveRouteUseCase(route_repo, unit_of_work, authz)
 
-        route = create_route.execute([LocationCode("SYD"), LocationCode("MEL")], None)
+        route = create_route.execute(CreateRouteCommand(locations=("SYD", "MEL")))
         self.assertIs(route_repo.get_by_id(route.route_id), route)
 
         removed = remove_route.execute(route.route_id)
@@ -81,7 +82,7 @@ class RuntimeRoutesIntegrationTests(unittest.TestCase):
     def test_assign_truck_schedules_route_and_links_truck(self) -> None:
         route_repo = InMemoryRouteRepository()
         authz = manager_authz()
-        route = CreateRouteUseCase(route_repo, authz).execute([LocationCode("SYD"), LocationCode("MEL")], None)
+        route = CreateRouteUseCase(route_repo, authz).execute(CreateRouteCommand(locations=("SYD", "MEL")))
 
         truck = _FakeTruck(vehicle_id=5, capacity=10.0, current_location=LocationCode("SYD"))
         vehicles = MagicMock()

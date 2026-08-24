@@ -1,34 +1,18 @@
 """Unit tests for command-to-use-case argument adaptation."""
 
 import unittest
-from datetime import datetime
 from unittest.mock import MagicMock
 
-from src.application.commands.routes.create_route import CreateRouteCommand
 from src.application.commands.routes.remove_route import RemoveRouteCommand
 from src.application.commands.state.load_world import LoadWorldCommand
 from src.application.commands.state.save_world import SaveWorldCommand
-from src.application.handlers.commands.routes.create_route import CreateRouteCommandHandler
 from src.application.handlers.commands.routes.remove_route import RemoveRouteCommandHandler
 from src.application.handlers.commands.state.load_world import LoadWorldCommandHandler
 from src.application.handlers.commands.state.save_world import SaveWorldCommandHandler
 
-NOW = datetime(2026, 8, 6, 12, 30)
-
 
 class CommandHandlersShould(unittest.TestCase):
     """Verify that command handlers delegate once with the intended arguments."""
-
-    def test_create_route_delegates_immutable_path_and_departure(self) -> None:
-        use_case = MagicMock()
-        expected = object()
-        use_case.execute.return_value = expected
-        command = CreateRouteCommand(locations=("SYD", "CBR", "MEL"), departure_time=NOW)
-
-        result = CreateRouteCommandHandler(use_case).execute(command)
-
-        self.assertIs(result, expected)
-        use_case.execute.assert_called_once_with(("SYD", "CBR", "MEL"), NOW)
 
     def test_remove_route_delegates_identifier_and_returns_route(self) -> None:
         use_case = MagicMock()

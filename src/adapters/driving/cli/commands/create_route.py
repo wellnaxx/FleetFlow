@@ -1,16 +1,15 @@
-"""CLI command for creating delivery routes."""
+"""Command-bus-backed CLI command for creating delivery routes."""
 
-from src.adapters.driving.cli.commands.base_command.event_draining_command import EventDrainingCommand
+from src.adapters.driving.cli.commands.base_command.command_bus_command import CommandBusCommand
 from src.adapters.driving.cli.commands.validation_helpers import (
     parse_departure_from_tail,
     validate_params_count,
 )
-from src.application.use_cases.routes.create_route import CreateRouteUseCase
-from src.domain.value_objects.location_code import LocationCode
+from src.application.commands.routes.create_route import CREATE_ROUTE, CreateRouteCommand
 
 
-class CreateRoute(EventDrainingCommand[CreateRouteUseCase]):
-    """Create a route and publish use-case and route events.
+class CreateRoute(CommandBusCommand):
+    """Create a route through the application command bus.
 
     Usage:
         createroute <LOC1> <LOC2> [LOC3 ...] [YYYY-MM-DD HH:MM]
@@ -34,21 +33,21 @@ class CreateRoute(EventDrainingCommand[CreateRouteUseCase]):
         Raises:
             PermissionError: If the caller lacks route creation permission.
             ValueError: If parameter validation or route creation fails.
-            Exception: Propagates event-publication failures after successful
-                use-case execution.
+            DatabaseError: If route persistence or event publication fails.
+            DomainValidationError: If the route path or departure is invalid.
         """
         validate_params_count(self._params, 2)
         loc_tokens, departure = parse_departure_from_tail(list(self._params))
-        locations = [LocationCode(token) for token in loc_tokens]
-        route = self._run_and_drain(
-            self._use_case,
-            lambda: self._use_case.execute(locations, departure),
+        route = self.command_bus.dispatch(
+            key=CREATE_ROUTE,
+            command=CreateRouteCommand(
+                locations=tuple(loc_tokens),
+                departure_time=departure,
+            ),
         )
-
-        self._event_collector.drain((route,))
 
         dep_str = "(unscheduled)" if departure is None else departure.strftime("%Y-%m-%d %H:%M")
         return (
-            f"Route {route.route_id} created: {' -> '.join(locations)} "
+            f"Route {route.route_id} created: {' -> '.join(loc_tokens)} "
             f"| Departure: {dep_str} | Distance: {route.total_distance_km} km"
         )

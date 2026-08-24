@@ -16,6 +16,7 @@ from src.application.commands.routes.assign_truck_to_route import (
     ASSIGN_TRUCK_TO_ROUTE,
     AssignTruckToRouteCommand,
 )
+from src.application.commands.routes.create_route import CREATE_ROUTE, CreateRouteCommand
 from src.application.exceptions.application_errors import ConflictError, NotFoundError, ValidationError
 from src.application.results.assign_packages_to_route_result import (
     AssignPackagesToRouteResult,
@@ -139,12 +140,8 @@ class RoutesRouterShould(unittest.TestCase):
         self.assertEqual(response.json()["detail"], "Offset cannot be used without a limit.")
 
     def test_create_route_returns_created_route(self) -> None:
-        use_case = MagicMock()
-        event_collector = MagicMock()
         route = self._route(route_id=31)
-        use_case.execute.return_value = route
-        self.app.dependency_overrides[routes_router_module.get_create_route_use_case] = lambda: use_case
-        self.app.dependency_overrides[routes_router_module.get_event_collector] = lambda: event_collector
+        self.command_bus.dispatch.return_value = route
 
         response = self.client.post(
             "/routes/",
@@ -153,18 +150,14 @@ class RoutesRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()["route_id"], 31)
-        use_case.execute.assert_called_once_with(locations=["SYD", "MEL"], departure_time=None)
-        self.assertEqual(
-            event_collector.drain.call_args_list,
-            [call((use_case,)), call((route,))],
+        self.command_bus.dispatch.assert_called_once_with(
+            key=CREATE_ROUTE,
+            command=CreateRouteCommand(locations=("SYD", "MEL")),
         )
+        self.event_collector.drain.assert_not_called()
 
     def test_create_route_returns_bad_request_for_invalid_route(self) -> None:
-        use_case = MagicMock()
-        event_collector = MagicMock()
-        use_case.execute.side_effect = DomainValidationError("Invalid location code: BAD.")
-        self.app.dependency_overrides[routes_router_module.get_create_route_use_case] = lambda: use_case
-        self.app.dependency_overrides[routes_router_module.get_event_collector] = lambda: event_collector
+        self.command_bus.dispatch.side_effect = DomainValidationError("Invalid location code: BAD.")
 
         response = self.client.post(
             "/routes/",
@@ -173,14 +166,14 @@ class RoutesRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["detail"], "Invalid location code: BAD.")
-        event_collector.drain.assert_called_once_with((use_case,))
+        self.command_bus.dispatch.assert_called_once_with(
+            key=CREATE_ROUTE,
+            command=CreateRouteCommand(locations=("BAD", "MEL")),
+        )
+        self.event_collector.drain.assert_not_called()
 
     def test_create_route_returns_forbidden_for_permission_error(self) -> None:
-        use_case = MagicMock()
-        event_collector = MagicMock()
-        use_case.execute.side_effect = PermissionError("Missing permission: ROUTE_CREATE")
-        self.app.dependency_overrides[routes_router_module.get_create_route_use_case] = lambda: use_case
-        self.app.dependency_overrides[routes_router_module.get_event_collector] = lambda: event_collector
+        self.command_bus.dispatch.side_effect = PermissionError("Missing permission: ROUTE_CREATE")
 
         response = self.client.post(
             "/routes/",
@@ -189,7 +182,11 @@ class RoutesRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"], "Missing permission: ROUTE_CREATE")
-        event_collector.drain.assert_called_once_with((use_case,))
+        self.command_bus.dispatch.assert_called_once_with(
+            key=CREATE_ROUTE,
+            command=CreateRouteCommand(locations=("SYD", "MEL")),
+        )
+        self.event_collector.drain.assert_not_called()
 
     def test_list_in_progress_routes_returns_position_responses(self) -> None:
         use_case = MagicMock()
