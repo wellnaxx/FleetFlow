@@ -1,8 +1,15 @@
 import unittest
 from datetime import datetime
+from typing import cast
 from unittest.mock import MagicMock, call
 
+from src.application.commands.routes.remove_route import RemoveRouteCommand
+from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
+from src.application.eventing.recorder_scope import bind_event_recorder_scope
+from src.application.events.auth_events import AuthorizationDenied
 from src.application.exceptions.application_errors import NotFoundError
+from src.application.services.authorization_service import AuthorizationService
 from src.application.use_cases.routes.remove_route import RemoveRouteUseCase
 from src.domain.entities.customer import Customer
 from src.domain.entities.delivery_package import DeliveryPackage
@@ -41,7 +48,7 @@ class RemoveRouteUseCase_Should(unittest.TestCase):
         self.mock_routes.get_by_id.return_value = None
 
         with self.assertRaises(NotFoundError) as ctx:
-            self.use_case.execute(42)
+            self.use_case.execute(RemoveRouteCommand(route_id=42))
 
         self.assertIn("Route with ID 42 not found", str(ctx.exception))
         self.mock_routes.get_by_id.assert_called_once_with(42)
@@ -58,7 +65,7 @@ class RemoveRouteUseCase_Should(unittest.TestCase):
         route.packages = []
         self.mock_routes.get_by_id.return_value = route
 
-        result = self.use_case.execute(42)
+        result = self.use_case.execute(RemoveRouteCommand(route_id=42))
 
         self.assertIs(result, route)
         self.mock_routes.get_by_id.assert_called_once_with(42)
@@ -81,7 +88,7 @@ class RemoveRouteUseCase_Should(unittest.TestCase):
         route.packages = []
         self.mock_routes.get_by_id.return_value = route
 
-        result = self.use_case.execute(42)
+        result = self.use_case.execute(RemoveRouteCommand(route_id=42))
 
         self.assertIs(result, route)
         route.release_truck.assert_called_once_with(
@@ -103,7 +110,7 @@ class RemoveRouteUseCase_Should(unittest.TestCase):
         self.mock_routes.get_by_id.return_value = route
 
         with self.assertRaises(RuntimeError) as ctx:
-            self.use_case.execute(42)
+            self.use_case.execute(RemoveRouteCommand(route_id=42))
 
         self.assertIn("truck release failed", str(ctx.exception))
         route.release_truck.assert_called_once_with(
@@ -126,7 +133,7 @@ class RemoveRouteUseCase_Should(unittest.TestCase):
         route.packages = [package1, package2]
         self.mock_routes.get_by_id.return_value = route
 
-        self.use_case.execute(42)
+        self.use_case.execute(RemoveRouteCommand(route_id=42))
 
         route.detach_package.assert_any_call(
             package1,
@@ -160,7 +167,7 @@ class RemoveRouteUseCase_Should(unittest.TestCase):
         self.mock_routes.get_by_id.return_value = route
 
         with self.assertRaises(ValueError) as ctx:
-            self.use_case.execute(42)
+            self.use_case.execute(RemoveRouteCommand(route_id=42))
 
         self.assertIn("detach failed", str(ctx.exception))
         route.detach_package.assert_called_once_with(
@@ -185,7 +192,7 @@ class RemoveRouteUseCase_Should(unittest.TestCase):
         route.clear_events()
         self.mock_routes.get_by_id.return_value = route
 
-        removed = self.use_case.execute(42)
+        removed = self.use_case.execute(RemoveRouteCommand(route_id=42))
 
         self.assertIs(removed, route)
         self.assertEqual(route.packages, ())
@@ -216,7 +223,7 @@ class RemoveRouteUseCase_Should(unittest.TestCase):
         self.mock_uow_routes.remove.side_effect = error
 
         with self.assertRaises(RuntimeError) as ctx:
-            self.use_case.execute(42)
+            self.use_case.execute(RemoveRouteCommand(route_id=42))
 
         self.assertIs(ctx.exception, error)
         self.assertEqual(route.packages, (package,))
@@ -227,3 +234,36 @@ class RemoveRouteUseCase_Should(unittest.TestCase):
         self.assertEqual(len(route.pending_events), 1)
         self.assertIsInstance(route.pending_events[0], PackageAssignedToRoute)
         self.assertFalse(any(isinstance(event, RouteRemoved) for event in route.pending_events))
+
+    def test_tracks_removed_route_in_execution_scope(self) -> None:
+        route = MagicMock()
+        route.route_id = 42
+        route.truck = None
+        route.packages = []
+        self.mock_routes.get_by_id.return_value = route
+
+        with bind_event_recorder_scope() as scope:
+            result = self.use_case.execute(RemoveRouteCommand(route_id=42))
+
+        self.assertIs(result, route)
+        self.assertEqual(scope.event_recorders(), (scope, route))
+
+    def test_records_targeted_authorization_denial_before_repository_access(self) -> None:
+        use_case = RemoveRouteUseCase(
+            self.mock_routes,
+            self.mock_unit_of_work,
+            AuthorizationService(None),
+            clock=lambda: self.now,
+        )
+
+        with self.assertRaisesRegex(PermissionError, "Unauthenticated"):
+            use_case.execute(RemoveRouteCommand(route_id=42))
+
+        self.mock_routes.get_by_id.assert_not_called()
+        self.mock_unit_of_work.__enter__.assert_not_called()
+        self.assertEqual(len(use_case.pending_events), 1)
+        event = cast(AuthorizationDenied, use_case.pending_events[0])
+        self.assertIsInstance(event, AuthorizationDenied)
+        self.assertIs(event.attempted_operation, AuthorizationOperation.ROUTE_REMOVE)
+        self.assertIs(event.target_resource_type, AuditResourceType.ROUTE)
+        self.assertEqual(event.target_resource_id, "42")

@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from src.application.commands.routes.remove_route import RemoveRouteCommand
     from src.domain.entities.delivery_package import DeliveryPackage, DeliveryPackageStateSnapshot
     from src.domain.entities.delivery_route import RouteStateSnapshot
     from src.domain.entities.truck import Truck, TruckStateSnapshot
@@ -31,10 +32,10 @@ if TYPE_CHECKING:
 
 def _resolve_route_target_id(
     _self: RemoveRouteUseCase,
-    route_id: int,
-) -> str | None:
+    command: RemoveRouteCommand,
+) -> int | None:
     """Resolve the audit target resource id for a route-removal attempt."""
-    return str(route_id)
+    return command.route_id
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,7 +48,7 @@ class _RouteRemovalSnapshot:
 
 
 class RemoveRouteUseCase(AuthorizedUseCase[DeliveryRoute]):
-    """Remove a route and detach its packages and truck."""
+    """Remove a route through the published application command contract."""
 
     def __init__(
         self,
@@ -77,11 +78,11 @@ class RemoveRouteUseCase(AuthorizedUseCase[DeliveryRoute]):
         target_resource_type=AuditResourceType.ROUTE,
         target_resource_id_resolver=_resolve_route_target_id,
     )
-    def execute(self, route_id: int) -> DeliveryRoute:
+    def execute(self, command: RemoveRouteCommand) -> DeliveryRoute:
         """Remove a route by id.
 
         Args:
-            route_id: Identifier of the route to remove.
+            command: Route-removal request containing the target identifier.
 
         Returns:
             The removed route entity.
@@ -91,6 +92,7 @@ class RemoveRouteUseCase(AuthorizedUseCase[DeliveryRoute]):
             DatabaseError: If the route removal persistence fails.
             NotFoundError: If the route does not exist.
         """
+        route_id = command.route_id
         route = self._get_route(route_id)
         snapshot = self._snapshot_removal_state(route)
         package_count = len(route.packages)
@@ -120,6 +122,7 @@ class RemoveRouteUseCase(AuthorizedUseCase[DeliveryRoute]):
             package_count,
             truck_id,
         )
+        self.track_domain_recorder(route)
         return route
 
     def _get_route(self, route_id: int) -> DeliveryRoute:

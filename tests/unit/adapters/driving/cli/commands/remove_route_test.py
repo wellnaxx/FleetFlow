@@ -1,109 +1,81 @@
+"""Tests for the command-bus-backed remove-route CLI adapter."""
+
 import unittest
-from typing import cast
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 from src.adapters.driving.cli.commands.remove_route import RemoveRoute
+from src.application.commands.routes.remove_route import REMOVE_ROUTE, RemoveRouteCommand
+from src.ports.input.command_bus import CommandBus
 
 
-def _collector_mock(command: RemoveRoute) -> MagicMock:
-    """Return the command's injected collector as its test-double type."""
-    return cast(MagicMock, command._event_collector)  # pyright: ignore[reportPrivateUsage]
+class RemoveRouteShould(unittest.TestCase):
+    """Verify route-id parsing, command dispatch, rendering, and failures."""
 
+    def setUp(self) -> None:
+        """Create an isolated command bus for each test."""
+        self.command_bus = MagicMock(spec=CommandBus)
 
-class TestRemoveRoute_Should(unittest.TestCase):
-    def make_cmd(self, params: list[str]) -> RemoveRoute:
-        cmd = RemoveRoute.__new__(RemoveRoute)
-        cmd._params = tuple(params)  # type: ignore[reportAttributeAccessIssue]
-        cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._event_collector = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        return cmd
+    def make_command(self, params: tuple[str, ...]) -> RemoveRoute:
+        """Build the adapter with raw parameters and the mocked bus."""
+        return RemoveRoute(params, self.command_bus)
 
-    def test_execute_propagates_permission_errors_from_use_case(self) -> None:
-        cmd = self.make_cmd(["42"])
-        cmd._use_case.execute.side_effect = PermissionError("Missing permission: ROUTE_REMOVE")  # type: ignore[reportAttributeAccessIssue]
+    def test_mutates_and_autosaves_state(self) -> None:
+        self.assertTrue(RemoveRoute.mutates_state)
+        self.assertTrue(RemoveRoute.autosaves_state)
 
-        with self.assertRaises(PermissionError) as ctx:
-            cmd.execute()
+    def test_dispatches_remove_command_and_renders_confirmation(self) -> None:
+        result = self.make_command(("42",)).execute()
 
-        self.assertIn("ROUTE_REMOVE", str(ctx.exception))
-        cmd._use_case.execute.assert_called_once_with(42)  # type: ignore[reportUnknownMemberType]
-
-    @patch("src.adapters.driving.cli.commands.remove_route.validate_params_exact")
-    @patch("src.adapters.driving.cli.commands.remove_route.try_parse_int")
-    def test_no_params_command(
-        self,
-        mock_parse: MagicMock,
-        mock_validate: MagicMock,
-    ) -> None:
-        cmd = self.make_cmd([])
-        mock_validate.side_effect = ValueError("Expected 1 parameter(s).")
-
-        with self.assertRaises(ValueError) as ctx:
-            cmd.execute()
-
-        self.assertIn("Expected 1 parameter(s).", str(ctx.exception))
-        mock_validate.assert_called_once_with((), 1)
-        mock_parse.assert_not_called()
-        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
-
-    @patch("src.adapters.driving.cli.commands.remove_route.validate_params_exact")
-    @patch("src.adapters.driving.cli.commands.remove_route.try_parse_int")
-    def test_str_params_command(
-        self,
-        mock_parse: MagicMock,
-        mock_validate: MagicMock,
-    ) -> None:
-        cmd = self.make_cmd(["str"])
-        mock_parse.side_effect = ValueError("Parameter 'str' is not a valid integer.")
-
-        with self.assertRaises(ValueError) as ctx:
-            cmd.execute()
-
-        self.assertIn("Parameter 'str' is not a valid integer.", str(ctx.exception))
-        mock_validate.assert_called_once_with(("str",), 1)
-        mock_parse.assert_called_once_with("str", "route_id")
-        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
-
-    @patch("src.adapters.driving.cli.commands.remove_route.validate_params_exact")
-    @patch("src.adapters.driving.cli.commands.remove_route.try_parse_int")
-    def test_removed_route_command(
-        self,
-        mock_parse: MagicMock,
-        mock_validate: MagicMock,
-    ) -> None:
-        cmd = self.make_cmd(["42"])
-        mock_parse.return_value = 42
-
-        route = MagicMock()
-        route.route_id = 42
-        cmd._use_case.execute.return_value = route  # type: ignore[reportAttributeAccessIssue]
-
-        result = cmd.execute()
-
+        self.command_bus.dispatch.assert_called_once_with(
+            key=REMOVE_ROUTE,
+            command=RemoveRouteCommand(route_id=42),
+        )
         self.assertEqual(result, "Route 42 removed.")
-        mock_validate.assert_called_once_with(("42",), 1)
-        mock_parse.assert_called_once_with("42", "route_id")
-        cmd._use_case.execute.assert_called_once_with(42)  # type: ignore[reportUnknownMemberType]
-        self.assertEqual(
-            _collector_mock(cmd).drain.call_args_list,
-            [call((cmd._use_case,)), call((route,))],  # pyright: ignore[reportPrivateUsage]
+
+    def test_propagates_permission_error_from_command_bus(self) -> None:
+        self.command_bus.dispatch.side_effect = PermissionError("Missing permission: ROUTE_REMOVE")
+
+        with self.assertRaisesRegex(PermissionError, "ROUTE_REMOVE"):
+            self.make_command(("42",)).execute()
+
+        self.command_bus.dispatch.assert_called_once_with(
+            key=REMOVE_ROUTE,
+            command=RemoveRouteCommand(route_id=42),
         )
 
-    @patch("src.adapters.driving.cli.commands.remove_route.validate_params_exact")
     @patch("src.adapters.driving.cli.commands.remove_route.try_parse_int")
-    def test_downstream_use_case_error_propagates(
+    @patch("src.adapters.driving.cli.commands.remove_route.validate_params_exact")
+    def test_parameter_count_failure_prevents_parsing_and_dispatch(
         self,
-        mock_parse: MagicMock,
-        mock_validate: MagicMock,
+        validate_params: MagicMock,
+        parse_int: MagicMock,
     ) -> None:
-        cmd = self.make_cmd(["42"])
-        mock_parse.return_value = 42
-        cmd._use_case.execute.side_effect = ValueError("Route with ID 42 not found")  # type: ignore[reportAttributeAccessIssue]
+        validate_params.side_effect = ValueError("Expected 1 parameter(s).")
 
-        with self.assertRaises(ValueError) as ctx:
-            cmd.execute()
+        with self.assertRaisesRegex(ValueError, "Expected 1 parameter"):
+            self.make_command(()).execute()
 
-        self.assertIn("Route with ID 42 not found", str(ctx.exception))
-        mock_validate.assert_called_once_with(("42",), 1)
-        mock_parse.assert_called_once_with("42", "route_id")
-        cmd._use_case.execute.assert_called_once_with(42)  # type: ignore[reportUnknownMemberType]
+        validate_params.assert_called_once_with((), 1)
+        parse_int.assert_not_called()
+        self.command_bus.dispatch.assert_not_called()
+
+    def test_invalid_route_id_prevents_dispatch(self) -> None:
+        with self.assertRaisesRegex(ValueError, "route_id"):
+            self.make_command(("route",)).execute()
+
+        self.command_bus.dispatch.assert_not_called()
+
+    def test_propagates_command_bus_failure(self) -> None:
+        self.command_bus.dispatch.side_effect = RuntimeError("delete failed")
+
+        with self.assertRaisesRegex(RuntimeError, "delete failed"):
+            self.make_command(("42",)).execute()
+
+        self.command_bus.dispatch.assert_called_once_with(
+            key=REMOVE_ROUTE,
+            command=RemoveRouteCommand(route_id=42),
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

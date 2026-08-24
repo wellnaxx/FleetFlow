@@ -22,6 +22,7 @@ from src.adapters.driving.cli.commands.find_suitable_trucks_for_route import (
 )
 from src.adapters.driving.cli.commands.get_fleet_overview import GetFleetOverview
 from src.adapters.driving.cli.commands.remove_package import RemovePackage
+from src.adapters.driving.cli.commands.remove_route import RemoveRoute
 from src.adapters.driving.cli.commands.view_all_customers import ViewAllCustomers
 from src.adapters.driving.cli.commands.view_all_packages import ViewAllPackages
 from src.adapters.driving.cli.commands.view_audits import ViewAuditLogs
@@ -150,7 +151,7 @@ class CommandFactoryShould(unittest.TestCase):
             ("viewroute 42", "viewroute", ["42"], container.route_cases.view),
             ("viewallroutes", "viewallroutes", [], container.route_cases.view_all),
             ("viewroutesinprogress", "viewroutesinprogress", [], container.route_cases.view_in_progress),
-            ("removeroute 42", "removeroute", ["42"], container.route_cases.remove),
+            ("removeroute 42", "removeroute", ["42"], container.command_bus),
             (
                 "assigntrucktoroute 11 22",
                 "assigntrucktoroute",
@@ -278,6 +279,16 @@ class CommandFactoryShould(unittest.TestCase):
         command = cast(RemovePackage, factory.create("removepackage 42"))
 
         self.assertIsInstance(command, RemovePackage)
+        self.assertEqual(command.params, ("42",))
+        self.assertIs(command.command_bus, container.command_bus)
+
+    def test_remove_route_receives_registered_command_bus(self) -> None:
+        """Build route removal with the container command bus."""
+        factory, container = self.make_factory()
+
+        command = cast(RemoveRoute, factory.create("removeroute 42"))
+
+        self.assertIsInstance(command, RemoveRoute)
         self.assertEqual(command.params, ("42",))
         self.assertIs(command.command_bus, container.command_bus)
 

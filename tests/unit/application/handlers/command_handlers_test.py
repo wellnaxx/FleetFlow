@@ -3,26 +3,14 @@
 import unittest
 from unittest.mock import MagicMock
 
-from src.application.commands.routes.remove_route import RemoveRouteCommand
 from src.application.commands.state.load_world import LoadWorldCommand
 from src.application.commands.state.save_world import SaveWorldCommand
-from src.application.handlers.commands.routes.remove_route import RemoveRouteCommandHandler
 from src.application.handlers.commands.state.load_world import LoadWorldCommandHandler
 from src.application.handlers.commands.state.save_world import SaveWorldCommandHandler
 
 
 class CommandHandlersShould(unittest.TestCase):
     """Verify that command handlers delegate once with the intended arguments."""
-
-    def test_remove_route_delegates_identifier_and_returns_route(self) -> None:
-        use_case = MagicMock()
-        expected = object()
-        use_case.execute.return_value = expected
-
-        result = RemoveRouteCommandHandler(use_case).execute(RemoveRouteCommand(route_id=8))
-
-        self.assertIs(result, expected)
-        use_case.execute.assert_called_once_with(8)
 
     def test_load_world_delegates_path_and_returns_resolved_path(self) -> None:
         use_case = MagicMock()

@@ -61,9 +61,7 @@ _CONTAINER_COMMANDS: dict[str, CommandBuilder] = {
     "viewroutesinprogress": lambda container, params: ViewRoutesInProgress(
         params, container.route_cases.view_in_progress, container.event_collector
     ),
-    "removeroute": lambda container, params: RemoveRoute(
-        params, container.route_cases.remove, container.event_collector
-    ),
+    "removeroute": lambda container, params: RemoveRoute(params, container.command_bus),
     "assigntrucktoroute": lambda container, params: AssignTruckToRoute(params, container.command_bus),
     "assignpackagestoroute": lambda container, params: AssignPackagesToRoute(params, container.command_bus),
     "findsuitabletrucksforroute": lambda container, params: FindSuitableTrucksForRoute(

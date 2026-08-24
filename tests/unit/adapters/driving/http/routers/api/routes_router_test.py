@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import ANY, MagicMock, call
+from unittest.mock import ANY, MagicMock
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -17,6 +17,7 @@ from src.application.commands.routes.assign_truck_to_route import (
     AssignTruckToRouteCommand,
 )
 from src.application.commands.routes.create_route import CREATE_ROUTE, CreateRouteCommand
+from src.application.commands.routes.remove_route import REMOVE_ROUTE, RemoveRouteCommand
 from src.application.exceptions.application_errors import ConflictError, NotFoundError, ValidationError
 from src.application.queries.routes.find_suitable_trucks_for_route import (
     FIND_SUITABLE_TRUCKS_FOR_ROUTE,
@@ -261,43 +262,40 @@ class RoutesRouterShould(unittest.TestCase):
         self.event_collector.drain.assert_called_once_with((use_case,))
 
     def test_delete_route_removes_route(self) -> None:
-        use_case = MagicMock()
-        event_collector = MagicMock()
-        route = self._route(route_id=61)
-        use_case.execute.return_value = route
-        self.app.dependency_overrides[routes_router_module.get_remove_route_use_case] = lambda: use_case
-        self.app.dependency_overrides[routes_router_module.get_event_collector] = lambda: event_collector
-
         response = self.client.delete("/routes/61")
 
         self.assertEqual(response.status_code, 204)
-        use_case.execute.assert_called_once_with(route_id=61)
-        self.assertEqual(
-            event_collector.drain.call_args_list,
-            [call((use_case,)), call((route,))],
+        self.command_bus.dispatch.assert_called_once_with(
+            key=REMOVE_ROUTE,
+            command=RemoveRouteCommand(route_id=61),
         )
+        self.event_collector.drain.assert_not_called()
 
     def test_delete_route_returns_not_found_for_missing_route(self) -> None:
-        use_case = MagicMock()
-        use_case.execute.side_effect = NotFoundError("Route with ID 61 not found")
-        self.app.dependency_overrides[routes_router_module.get_remove_route_use_case] = lambda: use_case
+        self.command_bus.dispatch.side_effect = NotFoundError("Route with ID 61 not found")
 
         response = self.client.delete("/routes/61")
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["detail"], "Route with ID 61 not found")
-        self.event_collector.drain.assert_called_once_with((use_case,))
+        self.command_bus.dispatch.assert_called_once_with(
+            key=REMOVE_ROUTE,
+            command=RemoveRouteCommand(route_id=61),
+        )
+        self.event_collector.drain.assert_not_called()
 
     def test_delete_route_returns_forbidden_for_permission_error(self) -> None:
-        use_case = MagicMock()
-        use_case.execute.side_effect = PermissionError("Missing permission: ROUTE_REMOVE")
-        self.app.dependency_overrides[routes_router_module.get_remove_route_use_case] = lambda: use_case
+        self.command_bus.dispatch.side_effect = PermissionError("Missing permission: ROUTE_REMOVE")
 
         response = self.client.delete("/routes/61")
 
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"], "Missing permission: ROUTE_REMOVE")
-        self.event_collector.drain.assert_called_once_with((use_case,))
+        self.command_bus.dispatch.assert_called_once_with(
+            key=REMOVE_ROUTE,
+            command=RemoveRouteCommand(route_id=61),
+        )
+        self.event_collector.drain.assert_not_called()
 
     def test_assign_packages_to_route_returns_nested_assignment_response(self) -> None:
         route = self._route(route_id=71)

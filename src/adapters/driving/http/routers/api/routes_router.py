@@ -9,7 +9,6 @@ from src.adapters.driving.http.dependencies.message_buses import (
     get_authenticated_query_bus,
 )
 from src.adapters.driving.http.dependencies.use_cases import (
-    get_remove_route_use_case,
     get_view_all_routes_use_case,
     get_view_route_use_case,
     get_view_routes_in_progress_use_case,
@@ -34,13 +33,13 @@ from src.application.commands.routes.assign_truck_to_route import (
     AssignTruckToRouteCommand,
 )
 from src.application.commands.routes.create_route import CREATE_ROUTE, CreateRouteCommand
+from src.application.commands.routes.remove_route import REMOVE_ROUTE, RemoveRouteCommand
 from src.application.eventing.collector import EventCollector
 from src.application.queries.routes.find_suitable_trucks_for_route import (
     FIND_SUITABLE_TRUCKS_FOR_ROUTE,
     FindSuitableTrucksForRouteQuery,
 )
 from src.application.use_cases.pagination import PageQuery
-from src.application.use_cases.routes.remove_route import RemoveRouteUseCase
 from src.application.use_cases.routes.view_all_routes import ViewAllRoutesUseCase
 from src.application.use_cases.routes.view_route import ViewRouteUseCase
 from src.application.use_cases.routes.view_routes_in_progress import ViewRoutesInProgressUseCase
@@ -185,16 +184,15 @@ def get_route(
 @routes_router.delete("/{route_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_route(
     route_id: int,
-    use_case: Annotated[RemoveRouteUseCase, Depends(get_remove_route_use_case)],
-    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
+    command_bus: Annotated[CommandBus, Depends(get_authenticated_command_bus)],
 ) -> None:
     """Remove one delivery route by id.
 
     Args:
         route_id: Identifier of the route to remove.
-        use_case: Use case for removing one route, injected by FastAPI.
-        event_collector: Collector used to publish authorization and route
-            removal events.
+        command_bus: Authenticated command bus injected by FastAPI. The
+            registered executor owns authorization and domain-event
+            publication.
 
     Returns:
         None.
@@ -205,12 +203,10 @@ def delete_route(
             * 404 - Route not found.
             * 500 - Database operation failure.
     """
-    route = execute_and_drain_events(
-        recorder=use_case,
-        event_collector=event_collector,
-        action=lambda: use_case.execute(route_id=route_id),
+    command_bus.dispatch(
+        key=REMOVE_ROUTE,
+        command=RemoveRouteCommand(route_id=route_id),
     )
-    event_collector.drain((route,))
 
 
 @routes_router.patch("/{route_id}/packages", status_code=status.HTTP_200_OK)

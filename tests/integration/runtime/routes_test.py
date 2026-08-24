@@ -7,6 +7,7 @@ from src.adapters.driven.persistence.memory.route_repository import InMemoryRout
 from src.adapters.driven.persistence.memory.unit_of_work import InMemoryUnitOfWork
 from src.application.commands.routes.assign_truck_to_route import AssignTruckToRouteCommand
 from src.application.commands.routes.create_route import CreateRouteCommand
+from src.application.commands.routes.remove_route import RemoveRouteCommand
 from src.application.results.assign_truck_to_route_result import AssignTruckToRouteResult
 from src.application.use_cases.routes.assign_truck_to_route import AssignTruckToRouteUseCase
 from src.application.use_cases.routes.create_route import CreateRouteUseCase
@@ -72,7 +73,7 @@ class RuntimeRoutesIntegrationTests(unittest.TestCase):
         route = create_route.execute(CreateRouteCommand(locations=("SYD", "MEL")))
         self.assertIs(route_repo.get_by_id(route.route_id), route)
 
-        removed = remove_route.execute(route.route_id)
+        removed = remove_route.execute(RemoveRouteCommand(route_id=route.route_id))
 
         self.assertIs(removed, route)
         self.assertIsNone(route_repo.get_by_id(route.route_id))
