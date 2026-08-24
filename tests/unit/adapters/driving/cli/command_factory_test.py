@@ -17,6 +17,9 @@ from src.adapters.driving.cli.commands.create_route import CreateRoute
 from src.adapters.driving.cli.commands.find_suitable_routes_for_package import (
     FindSuitableRoutesForPackage,
 )
+from src.adapters.driving.cli.commands.find_suitable_trucks_for_route import (
+    FindSuitableTrucksForRoute,
+)
 from src.adapters.driving.cli.commands.get_fleet_overview import GetFleetOverview
 from src.adapters.driving.cli.commands.remove_package import RemovePackage
 from src.adapters.driving.cli.commands.view_all_customers import ViewAllCustomers
@@ -158,7 +161,7 @@ class CommandFactoryShould(unittest.TestCase):
                 "findsuitabletrucksforroute 15",
                 "findsuitabletrucksforroute",
                 ["15"],
-                container.route_cases.find_suitable_trucks,
+                container.query_bus,
             ),
             (
                 "findsuitableroutesforpackage 77",
@@ -379,4 +382,17 @@ class CommandFactoryShould(unittest.TestCase):
 
         self.assertIsInstance(command, FindSuitableRoutesForPackage)
         self.assertEqual(command.params, ("77",))
+        self.assertIs(command.query_bus, container.query_bus)
+
+    def test_find_suitable_trucks_receives_registered_query_bus(self) -> None:
+        """Build suitable-truck lookup with the container query bus."""
+        factory, container = self.make_factory()
+
+        command = cast(
+            FindSuitableTrucksForRoute,
+            factory.create("findsuitabletrucksforroute 15"),
+        )
+
+        self.assertIsInstance(command, FindSuitableTrucksForRoute)
+        self.assertEqual(command.params, ("15",))
         self.assertIs(command.query_bus, container.query_bus)

@@ -67,7 +67,7 @@ _CONTAINER_COMMANDS: dict[str, CommandBuilder] = {
     "assigntrucktoroute": lambda container, params: AssignTruckToRoute(params, container.command_bus),
     "assignpackagestoroute": lambda container, params: AssignPackagesToRoute(params, container.command_bus),
     "findsuitabletrucksforroute": lambda container, params: FindSuitableTrucksForRoute(
-        params, container.route_cases.find_suitable_trucks, container.event_collector
+        params, container.query_bus
     ),
     "findsuitableroutesforpackage": lambda container, params: FindSuitableRoutesForPackage(
         params, container.query_bus

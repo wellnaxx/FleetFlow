@@ -13,20 +13,23 @@ from src.domain.entities.truck import Truck
 from src.domain.enums.auth import Permission
 
 if TYPE_CHECKING:
+    from src.application.queries.routes.find_suitable_trucks_for_route import (
+        FindSuitableTrucksForRouteQuery,
+    )
     from src.ports.output.route_repository import RouteRepositoryPort
     from src.ports.output.vehicle_manager import VehicleManagerPort
 
 
 def _resolve_route_target_id(
     _self: FindSuitableTrucksForRouteUseCase,
-    route_id: int,
-) -> str | None:
+    query: FindSuitableTrucksForRouteQuery,
+) -> int | None:
     """Resolve the audit target resource id for a finding suitable trucks for a route attempt."""
-    return str(route_id)
+    return query.route_id
 
 
 class FindSuitableTrucksForRouteUseCase(AuthorizedUseCase[list[Truck]]):
-    """Find trucks that can serve a route."""
+    """Find suitable trucks through the published application query contract."""
 
     def __init__(
         self, routes: RouteRepositoryPort, vehicles: VehicleManagerPort, authz: AuthorizationService
@@ -48,11 +51,11 @@ class FindSuitableTrucksForRouteUseCase(AuthorizedUseCase[list[Truck]]):
         target_resource_type=AuditResourceType.ROUTE,
         target_resource_id_resolver=_resolve_route_target_id,
     )
-    def execute(self, route_id: int) -> list[Truck]:
+    def execute(self, query: FindSuitableTrucksForRouteQuery) -> list[Truck]:
         """Return trucks that are currently suitable for a route.
 
         Args:
-            route_id: Identifier of the route to evaluate.
+            query: Route identifier to evaluate against available trucks.
 
         Returns:
             A list of suitable trucks.
@@ -62,6 +65,7 @@ class FindSuitableTrucksForRouteUseCase(AuthorizedUseCase[list[Truck]]):
             DatabaseError: If suitable truck persistence lookup fails.
             NotFoundError: If the route does not exist.
         """
+        route_id = query.route_id
         route = self._routes.get_by_id(route_id)
         if route is None:
             raise NotFoundError(f"Route with ID {route_id} not found")

@@ -18,6 +18,10 @@ from src.application.commands.routes.assign_truck_to_route import (
 )
 from src.application.commands.routes.create_route import CREATE_ROUTE, CreateRouteCommand
 from src.application.exceptions.application_errors import ConflictError, NotFoundError, ValidationError
+from src.application.queries.routes.find_suitable_trucks_for_route import (
+    FIND_SUITABLE_TRUCKS_FOR_ROUTE,
+    FindSuitableTrucksForRouteQuery,
+)
 from src.application.results.assign_packages_to_route_result import (
     AssignPackagesToRouteResult,
     PackageAssignmentError,
@@ -31,6 +35,7 @@ from src.domain.enums.truck_status import TruckStatus
 from src.domain.exceptions import DomainValidationError
 from src.domain.value_objects.location_code import LocationCode
 from src.ports.input.command_bus import CommandBus
+from src.ports.input.query_bus import QueryBus
 
 
 class RoutesRouterShould(unittest.TestCase):
@@ -40,10 +45,12 @@ class RoutesRouterShould(unittest.TestCase):
         register_exception_handlers(self.app)
         self.event_collector = MagicMock()
         self.command_bus = MagicMock(spec=CommandBus)
+        self.query_bus = MagicMock(spec=QueryBus)
         self.app.dependency_overrides[routes_router_module.get_event_collector] = lambda: self.event_collector
         self.app.dependency_overrides[routes_router_module.get_authenticated_command_bus] = lambda: (
             self.command_bus
         )
+        self.app.dependency_overrides[routes_router_module.get_authenticated_query_bus] = lambda: self.query_bus
         self.client = TestClient(self.app)
 
     def tearDown(self) -> None:
@@ -441,14 +448,10 @@ class RoutesRouterShould(unittest.TestCase):
         self.event_collector.drain.assert_not_called()
 
     def test_find_suitable_trucks_for_route_returns_truck_responses(self) -> None:
-        use_case = MagicMock()
         truck = Truck(vehicle_id=7, name="Scania", capacity=42000, max_range=8000)
         truck.current_location = LocationCode("SYD")
         truck.status = TruckStatus.FREE
-        use_case.execute.return_value = [truck]
-        self.app.dependency_overrides[routes_router_module.get_find_suitable_trucks_for_route_use_case] = (
-            lambda: use_case
-        )
+        self.query_bus.dispatch.return_value = [truck]
 
         response = self.client.get("/routes/91/suitable-trucks")
 
@@ -456,47 +459,50 @@ class RoutesRouterShould(unittest.TestCase):
         self.assertEqual(response.json()[0]["vehicle_id"], 7)
         self.assertEqual(response.json()[0]["name"], "Scania")
         self.assertEqual(response.json()[0]["current_location"], "SYD")
-        use_case.execute.assert_called_once_with(route_id=91)
-        self.event_collector.drain.assert_called_once_with((use_case,))
+        self.query_bus.dispatch.assert_called_once_with(
+            key=FIND_SUITABLE_TRUCKS_FOR_ROUTE,
+            query=FindSuitableTrucksForRouteQuery(route_id=91),
+        )
+        self.event_collector.drain.assert_not_called()
 
     def test_find_suitable_trucks_for_route_returns_not_found_for_missing_route(self) -> None:
-        use_case = MagicMock()
-        use_case.execute.side_effect = NotFoundError("Route with ID 91 not found")
-        self.app.dependency_overrides[routes_router_module.get_find_suitable_trucks_for_route_use_case] = (
-            lambda: use_case
-        )
+        self.query_bus.dispatch.side_effect = NotFoundError("Route with ID 91 not found")
 
         response = self.client.get("/routes/91/suitable-trucks")
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["detail"], "Route with ID 91 not found")
-        self.event_collector.drain.assert_called_once_with((use_case,))
+        self.query_bus.dispatch.assert_called_once_with(
+            key=FIND_SUITABLE_TRUCKS_FOR_ROUTE,
+            query=FindSuitableTrucksForRouteQuery(route_id=91),
+        )
+        self.event_collector.drain.assert_not_called()
 
     def test_find_suitable_trucks_for_route_returns_generic_error_for_database_failure(self) -> None:
-        use_case = MagicMock()
-        use_case.execute.side_effect = DatabaseError.read_failed(Exception("boom"))
-        self.app.dependency_overrides[routes_router_module.get_find_suitable_trucks_for_route_use_case] = (
-            lambda: use_case
-        )
+        self.query_bus.dispatch.side_effect = DatabaseError.read_failed(Exception("boom"))
 
         response = self.client.get("/routes/91/suitable-trucks")
 
         self.assertEqual(response.status_code, 500)
         self.assertEqual(response.json()["detail"], "Database operation failed.")
-        self.event_collector.drain.assert_called_once_with((use_case,))
+        self.query_bus.dispatch.assert_called_once_with(
+            key=FIND_SUITABLE_TRUCKS_FOR_ROUTE,
+            query=FindSuitableTrucksForRouteQuery(route_id=91),
+        )
+        self.event_collector.drain.assert_not_called()
 
     def test_find_suitable_trucks_for_route_returns_forbidden_for_permission_error(self) -> None:
-        use_case = MagicMock()
-        use_case.execute.side_effect = PermissionError("Missing permission: ROUTE_FIND_TRUCK_FOR")
-        self.app.dependency_overrides[routes_router_module.get_find_suitable_trucks_for_route_use_case] = (
-            lambda: use_case
-        )
+        self.query_bus.dispatch.side_effect = PermissionError("Missing permission: ROUTE_FIND_TRUCK_FOR")
 
         response = self.client.get("/routes/91/suitable-trucks")
 
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"], "Missing permission: ROUTE_FIND_TRUCK_FOR")
-        self.event_collector.drain.assert_called_once_with((use_case,))
+        self.query_bus.dispatch.assert_called_once_with(
+            key=FIND_SUITABLE_TRUCKS_FOR_ROUTE,
+            query=FindSuitableTrucksForRouteQuery(route_id=91),
+        )
+        self.event_collector.drain.assert_not_called()
 
     def _route(self, *, route_id: int) -> DeliveryRoute:
         return DeliveryRoute(LocationCode("SYD"), LocationCode("MEL"), route_id=route_id)

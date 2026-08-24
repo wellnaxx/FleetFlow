@@ -1,123 +1,105 @@
+"""Tests for the query-bus-backed suitable-truck CLI adapter."""
+
 import unittest
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-from src.adapters.driving.cli.commands.find_suitable_trucks_for_route import FindSuitableTrucksForRoute
+from src.adapters.driving.cli.commands.find_suitable_trucks_for_route import (
+    FindSuitableTrucksForRoute,
+)
+from src.application.queries.routes.find_suitable_trucks_for_route import (
+    FIND_SUITABLE_TRUCKS_FOR_ROUTE,
+    FindSuitableTrucksForRouteQuery,
+)
+from src.ports.input.query_bus import QueryBus
 
 
-class FindSuitableTrucksForRoute_Tests(unittest.TestCase):
-    def make_cmd(self, params: list[str]) -> FindSuitableTrucksForRoute:
-        cmd = FindSuitableTrucksForRoute.__new__(FindSuitableTrucksForRoute)
-        cmd._params = tuple(params)  # type: ignore[reportAttributeAccessIssue]
-        cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._event_collector = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        return cmd
+class FindSuitableTrucksForRouteShould(unittest.TestCase):
+    """Verify route-id parsing, query dispatch, rendering, and failures."""
 
-    def test_execute_propagates_permission_errors_from_use_case(self) -> None:
-        cmd = self.make_cmd(["15"])
-        cmd._use_case.execute.side_effect = PermissionError("Missing permission: ROUTE_FIND_TRUCK_FOR")  # type: ignore[reportAttributeAccessIssue]
+    def setUp(self) -> None:
+        """Create an isolated query bus for each test."""
+        self.query_bus = MagicMock(spec=QueryBus)
 
-        with self.assertRaises(PermissionError) as ctx:
-            cmd.execute()
+    def make_command(self, params: tuple[str, ...]) -> FindSuitableTrucksForRoute:
+        """Build the adapter with raw parameters and the mocked bus."""
+        return FindSuitableTrucksForRoute(params, self.query_bus)
 
-        self.assertIn("ROUTE_FIND_TRUCK_FOR", str(ctx.exception))
-        cmd._use_case.execute.assert_called_once_with(15)  # type: ignore[reportUnknownMemberType]
-        cmd._event_collector.drain.assert_called_once_with((cmd._use_case,))  # type: ignore[reportUnknownMemberType]
-
-    @patch("src.adapters.driving.cli.commands.find_suitable_trucks_for_route.validate_params_exact")
-    @patch("src.adapters.driving.cli.commands.find_suitable_trucks_for_route.try_parse_int")
-    def test_success_formats_table(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
-        mock_parse.return_value = 15
-        cmd = self.make_cmd(["15"])
-
-        trucks = [
-            SimpleNamespace(vehicle_id=1, name="Alpha", capacity=10.0, max_range=500, current_location="SYD"),
-            SimpleNamespace(vehicle_id=2, name="Bravo", capacity=7.5, max_range=350, current_location="MEL"),
-        ]
-        cmd._use_case.execute.return_value = trucks  # type: ignore[reportAttributeAccessIssue]
-
-        out = cmd.execute()
-
-        mock_validate.assert_called_once_with(("15",), 1)
-        mock_parse.assert_called_once_with("15", "route_id")
-        cmd._use_case.execute.assert_called_once_with(15)  # type: ignore[reportUnknownMemberType]
-        cmd._event_collector.drain.assert_called_once_with((cmd._use_case,))  # type: ignore[reportUnknownMemberType]
-
-        lines = out.splitlines()
-        self.assertEqual(lines[0], "ID | Name   | Capacity | Max Range | Current Location")
-        self.assertIn("1 | Alpha | 10.0 kg | 500 km | SYD", lines[1])
-        self.assertIn("2 | Bravo | 7.5 kg | 350 km | MEL", lines[2])
-
-    @patch("src.adapters.driving.cli.commands.find_suitable_trucks_for_route.validate_params_exact")
-    @patch("src.adapters.driving.cli.commands.find_suitable_trucks_for_route.try_parse_int")
-    def test_no_trucks_returns_friendly_message(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
-        mock_parse.return_value = 9
-        cmd = self.make_cmd(["9"])
-        cmd._use_case.execute.return_value = []  # type: ignore[reportAttributeAccessIssue]
-
-        out = cmd.execute()
-
-        mock_validate.assert_called_once_with(("9",), 1)
-        mock_parse.assert_called_once_with("9", "route_id")
-        cmd._use_case.execute.assert_called_once_with(9)  # type: ignore[reportUnknownMemberType]
-        self.assertEqual(out, "No suitable trucks found.")
-
-    @patch("src.adapters.driving.cli.commands.find_suitable_trucks_for_route.validate_params_exact")
-    @patch("src.adapters.driving.cli.commands.find_suitable_trucks_for_route.try_parse_int")
-    def test_missing_route_raises(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
-        mock_parse.return_value = 77
-        cmd = self.make_cmd(["77"])
-        cmd._use_case.execute.side_effect = ValueError("Route with ID 77 not found")  # type: ignore[reportAttributeAccessIssue]
-
-        with self.assertRaises(ValueError) as ctx:
-            cmd.execute()
-
-        self.assertIn("Route with ID 77 not found", str(ctx.exception))
-        mock_validate.assert_called_once_with(("77",), 1)
-        mock_parse.assert_called_once_with("77", "route_id")
-        cmd._use_case.execute.assert_called_once_with(77)  # type: ignore[reportUnknownMemberType]
-        cmd._event_collector.drain.assert_called_once_with((cmd._use_case,))  # type: ignore[reportUnknownMemberType]
-
-    @patch("src.adapters.driving.cli.commands.find_suitable_trucks_for_route.validate_params_exact")
-    @patch("src.adapters.driving.cli.commands.find_suitable_trucks_for_route.try_parse_int")
-    def test_parse_failure_bubbles_and_stops(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
-        mock_parse.side_effect = ValueError("not an int")
-        cmd = self.make_cmd(["x"])
-
-        with self.assertRaises(ValueError) as ctx:
-            cmd.execute()
-
-        self.assertIn("not an int", str(ctx.exception))
-        mock_validate.assert_called_once_with(("x",), 1)
-        mock_parse.assert_called_once_with("x", "route_id")
-        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
-
-    def test_validate_params_exact_called_with_one(self) -> None:
-        cmd = self.make_cmd(["123"])
-
-        with (
-            patch(
-                "src.adapters.driving.cli.commands.find_suitable_trucks_for_route.validate_params_exact"
-            ) as mock_validate,
-            patch(
-                "src.adapters.driving.cli.commands.find_suitable_trucks_for_route.try_parse_int",
-                return_value=123,
+    def test_dispatches_query_and_formats_truck_table(self) -> None:
+        self.query_bus.dispatch.return_value = [
+            SimpleNamespace(
+                vehicle_id=1,
+                name="Alpha",
+                capacity=10.0,
+                max_range=500,
+                current_location="SYD",
             ),
-        ):
-            cmd._use_case.execute.return_value = []  # type: ignore[reportAttributeAccessIssue]
-            _ = cmd.execute()
-            mock_validate.assert_called_once_with(("123",), 1)
+            SimpleNamespace(
+                vehicle_id=2,
+                name="Bravo",
+                capacity=7.5,
+                max_range=350,
+                current_location="MEL",
+            ),
+        ]
 
-    @patch("src.adapters.driving.cli.commands.find_suitable_trucks_for_route.validate_params_exact")
-    @patch("src.adapters.driving.cli.commands.find_suitable_trucks_for_route.try_parse_int")
-    def test_downstream_error_propagates(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
-        mock_parse.return_value = 5
-        cmd = self.make_cmd(["5"])
-        cmd._use_case.execute.side_effect = RuntimeError("db failure")  # type: ignore[reportAttributeAccessIssue]
+        result = self.make_command(("15",)).execute()
 
-        with self.assertRaises(RuntimeError) as ctx:
-            cmd.execute()
+        self.query_bus.dispatch.assert_called_once_with(
+            key=FIND_SUITABLE_TRUCKS_FOR_ROUTE,
+            query=FindSuitableTrucksForRouteQuery(route_id=15),
+        )
+        self.assertEqual(
+            result.splitlines(),
+            [
+                "ID | Name   | Capacity | Max Range | Current Location",
+                "1 | Alpha | 10.0 kg | 500 km | SYD",
+                "2 | Bravo | 7.5 kg | 350 km | MEL",
+            ],
+        )
 
-        self.assertIn("db failure", str(ctx.exception))
-        cmd._use_case.execute.assert_called_once_with(5)  # type: ignore[reportUnknownMemberType]
-        cmd._event_collector.drain.assert_called_once_with((cmd._use_case,))  # type: ignore[reportUnknownMemberType]
+    def test_returns_friendly_message_when_no_trucks_match(self) -> None:
+        self.query_bus.dispatch.return_value = []
+
+        result = self.make_command(("9",)).execute()
+
+        self.assertEqual(result, "No suitable trucks found.")
+        self.query_bus.dispatch.assert_called_once_with(
+            key=FIND_SUITABLE_TRUCKS_FOR_ROUTE,
+            query=FindSuitableTrucksForRouteQuery(route_id=9),
+        )
+
+    def test_rejects_incorrect_parameter_count_without_dispatching(self) -> None:
+        with self.assertRaises(ValueError):
+            self.make_command(()).execute()
+
+        self.query_bus.dispatch.assert_not_called()
+
+    def test_rejects_invalid_route_id_without_dispatching(self) -> None:
+        with self.assertRaisesRegex(ValueError, "route_id"):
+            self.make_command(("route",)).execute()
+
+        self.query_bus.dispatch.assert_not_called()
+
+    def test_propagates_permission_error_from_query_bus(self) -> None:
+        self.query_bus.dispatch.side_effect = PermissionError("Missing permission: ROUTE_FIND_TRUCK_FOR")
+
+        with self.assertRaisesRegex(PermissionError, "ROUTE_FIND_TRUCK_FOR"):
+            self.make_command(("15",)).execute()
+
+        self.query_bus.dispatch.assert_called_once_with(
+            key=FIND_SUITABLE_TRUCKS_FOR_ROUTE,
+            query=FindSuitableTrucksForRouteQuery(route_id=15),
+        )
+
+    def test_propagates_query_bus_failure(self) -> None:
+        self.query_bus.dispatch.side_effect = RuntimeError("db failure")
+
+        with self.assertRaisesRegex(RuntimeError, "db failure"):
+            self.make_command(("15",)).execute()
+
+        self.query_bus.dispatch.assert_called_once()
+
+
+if __name__ == "__main__":
+    unittest.main()

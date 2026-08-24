@@ -27,9 +27,6 @@ from src.application.eventing.collector import EventCollector
 from src.application.handlers.commands.routes.remove_route import RemoveRouteCommandHandler
 from src.application.handlers.commands.state.load_world import LoadWorldCommandHandler
 from src.application.handlers.commands.state.save_world import SaveWorldCommandHandler
-from src.application.handlers.queries.routes.find_suitable_trucks_for_route import (
-    FindSuitableTrucksForRouteQueryHandler,
-)
 from src.application.handlers.queries.routes.view_all_routes import ViewAllRoutesQueryHandler
 from src.application.handlers.queries.routes.view_route import ViewRouteQueryHandler
 from src.application.handlers.queries.routes.view_routes_in_progress import ViewRoutesInProgressQueryHandler
@@ -272,7 +269,11 @@ def build_query_bus(
     bus.register(VIEW_ROUTE, ViewRouteQueryHandler(route_cases.view))
     bus.register(VIEW_ROUTES_IN_PROGRESS, ViewRoutesInProgressQueryHandler(route_cases.view_in_progress))
     bus.register(
-        FIND_SUITABLE_TRUCKS_FOR_ROUTE, FindSuitableTrucksForRouteQueryHandler(route_cases.find_suitable_trucks)
+        FIND_SUITABLE_TRUCKS_FOR_ROUTE,
+        EventDrainingExecutor(
+            delegate=route_cases.find_suitable_trucks,
+            event_collector=event_collector,
+        ),
     )
     bus.register(
         FIND_SUITABLE_ROUTES_FOR_PACKAGE,

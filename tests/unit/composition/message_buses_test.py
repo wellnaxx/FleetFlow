@@ -151,7 +151,7 @@ class MessageBusCompositionShould(unittest.TestCase):
             ),
             (
                 subject.FIND_SUITABLE_TRUCKS_FOR_ROUTE,
-                subject.FindSuitableTrucksForRouteQueryHandler,
+                subject.EventDrainingExecutor,
                 self.route_cases.find_suitable_trucks,
             ),
             (
