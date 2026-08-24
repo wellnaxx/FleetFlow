@@ -14,6 +14,9 @@ from src.adapters.driving.cli.commands.auth_reset_password import AuthResetPassw
 from src.adapters.driving.cli.commands.auth_whoami import AuthWhoAmI
 from src.adapters.driving.cli.commands.create_package import CreatePackage
 from src.adapters.driving.cli.commands.create_route import CreateRoute
+from src.adapters.driving.cli.commands.find_suitable_routes_for_package import (
+    FindSuitableRoutesForPackage,
+)
 from src.adapters.driving.cli.commands.get_fleet_overview import GetFleetOverview
 from src.adapters.driving.cli.commands.remove_package import RemovePackage
 from src.adapters.driving.cli.commands.view_all_customers import ViewAllCustomers
@@ -161,7 +164,7 @@ class CommandFactoryShould(unittest.TestCase):
                 "findsuitableroutesforpackage 77",
                 "findsuitableroutesforpackage",
                 ["77"],
-                container.route_cases.find_suitable_routes,
+                container.query_bus,
             ),
             (
                 "assignpackagestoroute 5 42 43",
@@ -363,4 +366,17 @@ class CommandFactoryShould(unittest.TestCase):
 
         self.assertIsInstance(command, GetFleetOverview)
         self.assertEqual(command.params, ("25",))
+        self.assertIs(command.query_bus, container.query_bus)
+
+    def test_find_suitable_routes_receives_registered_query_bus(self) -> None:
+        """Build suitable-route lookup with the container query bus."""
+        factory, container = self.make_factory()
+
+        command = cast(
+            FindSuitableRoutesForPackage,
+            factory.create("findsuitableroutesforpackage 77"),
+        )
+
+        self.assertIsInstance(command, FindSuitableRoutesForPackage)
+        self.assertEqual(command.params, ("77",))
         self.assertIs(command.query_bus, container.query_bus)

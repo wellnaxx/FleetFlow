@@ -17,6 +17,9 @@ from src.domain.exceptions import DomainConflictError, DomainValidationError
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from src.application.queries.routes.find_suitable_routes_for_package import (
+        FindSuitableRoutesForPackageQuery,
+    )
     from src.ports.output.package_repository import PackageRepositoryPort
     from src.ports.output.route_repository import RouteRepositoryPort
 
@@ -27,14 +30,14 @@ def _sort_key(item: SuitableRouteForPackage) -> tuple[bool, datetime]:
 
 def _resolve_package_target_id(
     _self: FindSuitableRoutesForPackageUseCase,
-    package_id: int,
+    query: FindSuitableRoutesForPackageQuery,
 ) -> int | None:
     """Resolve the audit target resource id for a find-suitable-routes-for-package attempt."""
-    return package_id
+    return query.package_id
 
 
 class FindSuitableRoutesForPackageUseCase(AuthorizedUseCase[list[SuitableRouteForPackage]]):
-    """Find candidate routes that can accept a package."""
+    """Find suitable routes through the published application query contract."""
 
     def __init__(
         self,
@@ -64,11 +67,11 @@ class FindSuitableRoutesForPackageUseCase(AuthorizedUseCase[list[SuitableRouteFo
         target_resource_type=AuditResourceType.PACKAGE,
         target_resource_id_resolver=_resolve_package_target_id,
     )
-    def execute(self, package_id: int) -> list[SuitableRouteForPackage]:
+    def execute(self, query: FindSuitableRoutesForPackageQuery) -> list[SuitableRouteForPackage]:
         """Return suitable routes for a package ordered by ETA.
 
         Args:
-            package_id: Identifier of the package to place.
+            query: Package identifier to evaluate against available routes.
 
         Returns:
             Candidate routes ordered by the best available ETA.
@@ -76,7 +79,9 @@ class FindSuitableRoutesForPackageUseCase(AuthorizedUseCase[list[SuitableRouteFo
         Raises:
             PermissionError: If the caller lacks required package or route permissions.
             NotFoundError: If the package does not exist.
+            DatabaseError: If package or route retrieval fails.
         """
+        package_id = query.package_id
         package = self._packages.get_by_id(package_id)
         if package is None:
             raise NotFoundError(f"Package with ID {package_id} not found.")

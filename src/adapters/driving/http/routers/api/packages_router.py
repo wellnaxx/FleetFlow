@@ -2,13 +2,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from src.adapters.driving.http.dependencies.eventing import execute_and_drain_events, get_event_collector
 from src.adapters.driving.http.dependencies.message_buses import (
     get_authenticated_command_bus,
     get_authenticated_query_bus,
-)
-from src.adapters.driving.http.dependencies.use_cases import (
-    get_find_suitable_routes_for_package_use_case,
 )
 from src.adapters.driving.http.schemas.packages import (
     PackageCreateRequest,
@@ -18,7 +14,6 @@ from src.adapters.driving.http.schemas.packages import (
 )
 from src.application.commands.packages.create_package import CREATE_PACKAGE, CreatePackageCommand
 from src.application.commands.packages.remove_package import REMOVE_PACKAGE, RemovePackageCommand
-from src.application.eventing.collector import EventCollector
 from src.application.exceptions.application_errors import ConflictError
 from src.application.queries.packages.view_all_packages import VIEW_ALL_PACKAGES, ViewAllPackagesQuery
 from src.application.queries.packages.view_package import VIEW_PACKAGE, ViewPackageQuery
@@ -26,10 +21,11 @@ from src.application.queries.packages.view_unassigned_packages import (
     VIEW_UNASSIGNED_PACKAGES,
     ViewUnassignedPackagesQuery,
 )
-from src.application.use_cases.pagination import PageQuery
-from src.application.use_cases.routes.find_suitable_routes_for_package import (
-    FindSuitableRoutesForPackageUseCase,
+from src.application.queries.routes.find_suitable_routes_for_package import (
+    FIND_SUITABLE_ROUTES_FOR_PACKAGE,
+    FindSuitableRoutesForPackageQuery,
 )
+from src.application.use_cases.pagination import PageQuery
 from src.domain.exceptions import DomainConflictError, EntityNotFoundError
 from src.ports.input.command_bus import CommandBus
 from src.ports.input.query_bus import QueryBus
@@ -174,17 +170,14 @@ def get_package(
 @packages_router.get("/{package_id}/suitable-routes", status_code=status.HTTP_200_OK)
 def find_suitable_routes_for_package(
     package_id: int,
-    use_case: Annotated[
-        FindSuitableRoutesForPackageUseCase, Depends(get_find_suitable_routes_for_package_use_case)
-    ],
-    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
+    query_bus: Annotated[QueryBus, Depends(get_authenticated_query_bus)],
 ) -> list[PackageSuitableRouteResponse]:
     """Return routes that can currently carry the requested package.
 
     Args:
         package_id: Identifier of the package to place on a route.
-        use_case: Use case for finding suitable routes, injected by FastAPI.
-        event_collector: Collector used to publish authorization events.
+        query_bus: Authenticated query bus injected by FastAPI. The registered
+            executor owns authorization-event publication.
 
     Returns:
         Routes that can accept the requested package.
@@ -195,10 +188,9 @@ def find_suitable_routes_for_package(
             * 404 - Package not found.
             * 500 - Database operation failure.
     """
-    results = execute_and_drain_events(
-        recorder=use_case,
-        event_collector=event_collector,
-        action=lambda: use_case.execute(package_id=package_id),
+    results = query_bus.dispatch(
+        key=FIND_SUITABLE_ROUTES_FOR_PACKAGE,
+        query=FindSuitableRoutesForPackageQuery(package_id=package_id),
     )
     return [PackageSuitableRouteResponse.from_match(result) for result in results]
 

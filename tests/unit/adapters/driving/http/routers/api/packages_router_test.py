@@ -17,6 +17,10 @@ from src.application.queries.packages.view_unassigned_packages import (
     VIEW_UNASSIGNED_PACKAGES,
     ViewUnassignedPackagesQuery,
 )
+from src.application.queries.routes.find_suitable_routes_for_package import (
+    FIND_SUITABLE_ROUTES_FOR_PACKAGE,
+    FindSuitableRoutesForPackageQuery,
+)
 from src.application.results.find_suitable_packages_for_route_result import SuitableRouteForPackage
 from src.application.use_cases.pagination import PageQuery, PageResult
 from src.domain.entities.customer import Customer
@@ -34,9 +38,7 @@ class PackagesRouterShould(unittest.TestCase):
         self.app = FastAPI()
         self.app.include_router(packages_router)
         register_exception_handlers(self.app)
-        self.event_collector = MagicMock()
         self.query_bus = MagicMock(spec=QueryBus)
-        self.app.dependency_overrides[packages_router_module.get_event_collector] = lambda: self.event_collector
         self.app.dependency_overrides[packages_router_module.get_authenticated_query_bus] = lambda: (
             self.query_bus
         )
@@ -79,7 +81,6 @@ class PackagesRouterShould(unittest.TestCase):
                 phone="",
             ),
         )
-        self.event_collector.drain.assert_not_called()
 
     def test_create_package_returns_bad_request_for_invalid_input(self) -> None:
         command_bus = MagicMock(spec=CommandBus)
@@ -101,7 +102,6 @@ class PackagesRouterShould(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["detail"], "Invalid start location: BAD")
         command_bus.dispatch.assert_called_once()
-        self.event_collector.drain.assert_not_called()
 
     def test_create_package_returns_forbidden_for_permission_error(self) -> None:
         command_bus = MagicMock(spec=CommandBus)
@@ -123,7 +123,6 @@ class PackagesRouterShould(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"], "Missing permission: PACKAGE_CREATE")
         command_bus.dispatch.assert_called_once()
-        self.event_collector.drain.assert_not_called()
 
     def test_list_packages_returns_paginated_package_responses(self) -> None:
         self.query_bus.dispatch.return_value = PageResult(
@@ -144,7 +143,6 @@ class PackagesRouterShould(unittest.TestCase):
             key=VIEW_ALL_PACKAGES,
             query=ViewAllPackagesQuery(page=PageQuery(limit=1, offset=2, include_total=True)),
         )
-        self.event_collector.drain.assert_not_called()
 
     def test_list_packages_preserves_unpaginated_limit(self) -> None:
         self.query_bus.dispatch.return_value = PageResult(
@@ -174,7 +172,6 @@ class PackagesRouterShould(unittest.TestCase):
             key=VIEW_ALL_PACKAGES,
             query=ViewAllPackagesQuery(page=PageQuery(limit=50, offset=0, include_total=False)),
         )
-        self.event_collector.drain.assert_not_called()
 
     def test_list_unassigned_packages_returns_page_without_total_by_default(self) -> None:
         self.query_bus.dispatch.return_value = PageResult(
@@ -195,7 +192,6 @@ class PackagesRouterShould(unittest.TestCase):
             key=VIEW_UNASSIGNED_PACKAGES,
             query=ViewUnassignedPackagesQuery(page=PageQuery(limit=1, offset=2, include_total=False)),
         )
-        self.event_collector.drain.assert_not_called()
 
     def test_list_unassigned_packages_returns_forbidden_for_permission_error(self) -> None:
         self.query_bus.dispatch.side_effect = PermissionError("Missing permission: PACKAGE_VIEW_UNASSIGNED")
@@ -208,7 +204,6 @@ class PackagesRouterShould(unittest.TestCase):
             key=VIEW_UNASSIGNED_PACKAGES,
             query=ViewUnassignedPackagesQuery(page=PageQuery(limit=50, offset=0, include_total=False)),
         )
-        self.event_collector.drain.assert_not_called()
 
     def test_list_unassigned_packages_returns_bad_request_for_pagination_error(self) -> None:
         self.query_bus.dispatch.side_effect = ValidationError("Offset cannot be used without a limit.")
@@ -218,7 +213,6 @@ class PackagesRouterShould(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["detail"], "Offset cannot be used without a limit.")
         self.query_bus.dispatch.assert_called_once()
-        self.event_collector.drain.assert_not_called()
 
     def test_list_packages_rejects_invalid_pagination_params(self) -> None:
         response = self.client.get("/packages?limit=0&offset=-1")
@@ -234,7 +228,6 @@ class PackagesRouterShould(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["detail"], "Offset cannot be used without a limit.")
         self.query_bus.dispatch.assert_called_once()
-        self.event_collector.drain.assert_not_called()
 
     def test_get_package_returns_package_response(self) -> None:
         self.query_bus.dispatch.return_value = self._package(package_id=4)
@@ -247,7 +240,6 @@ class PackagesRouterShould(unittest.TestCase):
             key=VIEW_PACKAGE,
             query=ViewPackageQuery(package_id=4),
         )
-        self.event_collector.drain.assert_not_called()
 
     def test_get_package_returns_not_found_for_missing_package(self) -> None:
         self.query_bus.dispatch.side_effect = NotFoundError("Package with ID 4 not found")
@@ -260,12 +252,10 @@ class PackagesRouterShould(unittest.TestCase):
             key=VIEW_PACKAGE,
             query=ViewPackageQuery(package_id=4),
         )
-        self.event_collector.drain.assert_not_called()
 
     def test_find_suitable_routes_for_package_returns_route_options(self) -> None:
-        use_case = MagicMock()
         eta = datetime(2026, 5, 24, 10, 30)
-        use_case.execute.return_value = [
+        self.query_bus.dispatch.return_value = [
             SuitableRouteForPackage(
                 route_id=21,
                 start_location=LocationCode("SYD"),
@@ -275,10 +265,6 @@ class PackagesRouterShould(unittest.TestCase):
                 end_city=LocationCode("MEL"),
             )
         ]
-        self.app.dependency_overrides[packages_router_module.get_find_suitable_routes_for_package_use_case] = (
-            lambda: use_case
-        )
-
         response = self.client.get("/packages/4/suitable-routes")
 
         self.assertEqual(response.status_code, 200)
@@ -288,34 +274,34 @@ class PackagesRouterShould(unittest.TestCase):
         self.assertEqual(response.json()[0]["eta"], "2026-05-24T10:30:00")
         self.assertEqual(response.json()[0]["capacity_left"], 125.5)
         self.assertEqual(response.json()[0]["end_city"], "MEL")
-        use_case.execute.assert_called_once_with(package_id=4)
-        self.event_collector.drain.assert_called_once_with((use_case,))
+        self.query_bus.dispatch.assert_called_once_with(
+            key=FIND_SUITABLE_ROUTES_FOR_PACKAGE,
+            query=FindSuitableRoutesForPackageQuery(package_id=4),
+        )
 
     def test_find_suitable_routes_for_package_returns_not_found_for_missing_package(self) -> None:
-        use_case = MagicMock()
-        use_case.execute.side_effect = NotFoundError("Package with ID 4 not found.")
-        self.app.dependency_overrides[packages_router_module.get_find_suitable_routes_for_package_use_case] = (
-            lambda: use_case
-        )
+        self.query_bus.dispatch.side_effect = NotFoundError("Package with ID 4 not found.")
 
         response = self.client.get("/packages/4/suitable-routes")
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["detail"], "Package with ID 4 not found.")
-        self.event_collector.drain.assert_called_once_with((use_case,))
+        self.query_bus.dispatch.assert_called_once_with(
+            key=FIND_SUITABLE_ROUTES_FOR_PACKAGE,
+            query=FindSuitableRoutesForPackageQuery(package_id=4),
+        )
 
     def test_find_suitable_routes_for_package_returns_forbidden_for_permission_error(self) -> None:
-        use_case = MagicMock()
-        use_case.execute.side_effect = PermissionError("Missing permission: PACKAGE_FIND_ROUTE_FOR")
-        self.app.dependency_overrides[packages_router_module.get_find_suitable_routes_for_package_use_case] = (
-            lambda: use_case
-        )
+        self.query_bus.dispatch.side_effect = PermissionError("Missing permission: PACKAGE_FIND_ROUTE_FOR")
 
         response = self.client.get("/packages/4/suitable-routes")
 
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"], "Missing permission: PACKAGE_FIND_ROUTE_FOR")
-        self.event_collector.drain.assert_called_once_with((use_case,))
+        self.query_bus.dispatch.assert_called_once_with(
+            key=FIND_SUITABLE_ROUTES_FOR_PACKAGE,
+            query=FindSuitableRoutesForPackageQuery(package_id=4),
+        )
 
     def test_delete_package_removes_package(self) -> None:
         command_bus = MagicMock(spec=CommandBus)
@@ -330,7 +316,6 @@ class PackagesRouterShould(unittest.TestCase):
             key=REMOVE_PACKAGE,
             command=RemovePackageCommand(package_id=4),
         )
-        self.event_collector.drain.assert_not_called()
 
     def test_delete_package_returns_conflict_for_inconsistent_assignment(self) -> None:
         command_bus = MagicMock(spec=CommandBus)
@@ -344,7 +329,6 @@ class PackagesRouterShould(unittest.TestCase):
         self.assertEqual(response.status_code, 409)
         self.assertEqual(response.json()["detail"], "Package assignment is inconsistent")
         command_bus.dispatch.assert_called_once()
-        self.event_collector.drain.assert_not_called()
 
     def test_delete_package_returns_not_found_for_missing_package(self) -> None:
         command_bus = MagicMock(spec=CommandBus)
@@ -358,7 +342,6 @@ class PackagesRouterShould(unittest.TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["detail"], "Package with ID 4 not found")
         command_bus.dispatch.assert_called_once()
-        self.event_collector.drain.assert_not_called()
 
     def test_delete_package_returns_forbidden_for_permission_error(self) -> None:
         command_bus = MagicMock(spec=CommandBus)
@@ -372,7 +355,6 @@ class PackagesRouterShould(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"], "Missing permission: PACKAGE_REMOVE")
         command_bus.dispatch.assert_called_once()
-        self.event_collector.drain.assert_not_called()
 
     def _package(self, *, package_id: int = 1, with_route: bool = False) -> DeliveryPackage:
         package = DeliveryPackage(

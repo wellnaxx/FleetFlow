@@ -1,9 +1,17 @@
 import unittest
 from datetime import datetime
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import MagicMock
 
+from src.application.enums.audit_resource_types import AuditResourceType
+from src.application.enums.authorization_operations import AuthorizationOperation
+from src.application.events.auth_events import AuthorizationDenied
 from src.application.exceptions.application_errors import NotFoundError
+from src.application.queries.routes.find_suitable_routes_for_package import (
+    FindSuitableRoutesForPackageQuery,
+)
+from src.application.services.authorization_service import AuthorizationService
 from src.application.use_cases.routes.find_suitable_routes_for_package import (
     FindSuitableRoutesForPackageUseCase,
 )
@@ -27,7 +35,7 @@ class FindSuitableRoutesForPackageUseCase_Should(unittest.TestCase):
         self.mock_packages.get_by_id.return_value = None
 
         with self.assertRaises(NotFoundError) as ctx:
-            self.use_case.execute(42)
+            self.use_case.execute(FindSuitableRoutesForPackageQuery(package_id=42))
 
         self.assertIn("Package with ID 42 not found.", str(ctx.exception))
         self.mock_packages.get_by_id.assert_called_once_with(42)
@@ -60,7 +68,7 @@ class FindSuitableRoutesForPackageUseCase_Should(unittest.TestCase):
         self.mock_packages.get_by_id.return_value = package
         self.mock_routes.list_all.return_value = [route_no_eta, route_rejected, route_with_eta]
 
-        result = self.use_case.execute(7)
+        result = self.use_case.execute(FindSuitableRoutesForPackageQuery(package_id=7))
 
         self.assertEqual([item.route_id for item in result], [route_with_eta.route_id, route_no_eta.route_id])
         self.assertEqual(result[0].start_location, route_with_eta.start_location)
@@ -85,6 +93,29 @@ class FindSuitableRoutesForPackageUseCase_Should(unittest.TestCase):
         self.mock_packages.get_by_id.return_value = package
         self.mock_routes.list_all.return_value = [route1, route2]
 
-        result = self.use_case.execute(7)
+        result = self.use_case.execute(FindSuitableRoutesForPackageQuery(package_id=7))
 
         self.assertEqual(result, [])
+
+    def test_records_targeted_authorization_denial_before_repository_access(self) -> None:
+        use_case = FindSuitableRoutesForPackageUseCase(
+            self.mock_routes,
+            self.mock_packages,
+            AuthorizationService(None),
+            clock=lambda: self.now,
+        )
+
+        with self.assertRaisesRegex(PermissionError, "Unauthenticated"):
+            use_case.execute(FindSuitableRoutesForPackageQuery(package_id=42))
+
+        self.mock_packages.get_by_id.assert_not_called()
+        self.mock_routes.list_all.assert_not_called()
+        self.assertEqual(len(use_case.pending_events), 1)
+        event = cast(AuthorizationDenied, use_case.pending_events[0])
+        self.assertIsInstance(event, AuthorizationDenied)
+        self.assertIs(
+            event.attempted_operation,
+            AuthorizationOperation.PACKAGE_FIND_SUITABLE_ROUTES,
+        )
+        self.assertIs(event.target_resource_type, AuditResourceType.PACKAGE)
+        self.assertEqual(event.target_resource_id, "42")

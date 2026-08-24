@@ -4,9 +4,6 @@ import unittest
 from datetime import datetime
 from unittest.mock import MagicMock
 
-from src.application.handlers.queries.routes.find_suitable_routes_for_package import (
-    FindSuitableRoutesForPackageQueryHandler,
-)
 from src.application.handlers.queries.routes.find_suitable_trucks_for_route import (
     FindSuitableTrucksForRouteQueryHandler,
 )
@@ -14,7 +11,6 @@ from src.application.handlers.queries.routes.view_all_routes import ViewAllRoute
 from src.application.handlers.queries.routes.view_route import ViewRouteQueryHandler
 from src.application.handlers.queries.routes.view_routes_in_progress import ViewRoutesInProgressQueryHandler
 from src.application.handlers.queries.trucks.view_all_trucks import ViewAllTrucksQueryHandler
-from src.application.queries.routes.find_suitable_routes_for_package import FindSuitableRoutesForPackageQuery
 from src.application.queries.routes.find_suitable_trucks_for_route import FindSuitableTrucksForRouteQuery
 from src.application.queries.routes.view_all_routes import ViewAllRoutesQuery
 from src.application.queries.routes.view_route import ViewRouteQuery
@@ -38,18 +34,6 @@ class QueryHandlersShould(unittest.TestCase):
 
         self.assertIs(result, expected)
         use_case.execute.assert_called_once_with(page)
-
-    def test_find_suitable_routes_forwards_package_identifier(self) -> None:
-        use_case = MagicMock()
-        expected = object()
-        use_case.execute.return_value = expected
-
-        result = FindSuitableRoutesForPackageQueryHandler(use_case).execute(
-            FindSuitableRoutesForPackageQuery(package_id=4)
-        )
-
-        self.assertIs(result, expected)
-        use_case.execute.assert_called_once_with(4)
 
     def test_find_suitable_trucks_forwards_route_identifier(self) -> None:
         use_case = MagicMock()

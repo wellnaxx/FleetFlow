@@ -5,9 +5,6 @@ from datetime import datetime
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-from src.adapters.driving.cli.commands.find_suitable_routes_for_package import (
-    FindSuitableRoutesForPackage,
-)
 from src.adapters.driving.cli.commands.find_suitable_trucks_for_route import (
     FindSuitableTrucksForRoute,
 )
@@ -28,7 +25,6 @@ class AuthorizedCommandEventDrainShould(unittest.TestCase):
             (ViewAllRoutes, (), page),
             (ViewAllTrucks, (), list[object]()),
             (ViewRoutesInProgress, (), list[object]()),
-            (FindSuitableRoutesForPackage, ("1",), list[object]()),
             (FindSuitableTrucksForRoute, ("1",), list[object]()),
         )
 

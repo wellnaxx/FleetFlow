@@ -156,7 +156,7 @@ class MessageBusCompositionShould(unittest.TestCase):
             ),
             (
                 subject.FIND_SUITABLE_ROUTES_FOR_PACKAGE,
-                subject.FindSuitableRoutesForPackageQueryHandler,
+                subject.EventDrainingExecutor,
                 self.route_cases.find_suitable_routes,
             ),
             (subject.VIEW_ALL_TRUCKS, subject.ViewAllTrucksQueryHandler, self.truck_cases.view_all),

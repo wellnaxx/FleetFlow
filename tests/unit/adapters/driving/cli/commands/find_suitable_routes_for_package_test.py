@@ -1,39 +1,34 @@
-from __future__ import annotations
+"""Tests for the query-bus-backed suitable-route CLI adapter."""
 
 import unittest
 from datetime import datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-from src.adapters.driving.cli.commands.find_suitable_routes_for_package import FindSuitableRoutesForPackage
+from src.adapters.driving.cli.commands.find_suitable_routes_for_package import (
+    FindSuitableRoutesForPackage,
+)
+from src.application.queries.routes.find_suitable_routes_for_package import (
+    FIND_SUITABLE_ROUTES_FOR_PACKAGE,
+    FindSuitableRoutesForPackageQuery,
+)
 from src.application.results.find_suitable_packages_for_route_result import SuitableRouteForPackage
 from src.domain.value_objects.location_code import LocationCode
+from src.ports.input.query_bus import QueryBus
 
 
-class FindSuitableRoutesForPackage_Should(unittest.TestCase):
-    def make_cmd(self, params: list[str]) -> FindSuitableRoutesForPackage:
-        cmd = FindSuitableRoutesForPackage.__new__(FindSuitableRoutesForPackage)
-        cmd._params = tuple(params)  # type: ignore[reportAttributeAccessIssue]
-        cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._event_collector = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        return cmd
+class FindSuitableRoutesForPackageShould(unittest.TestCase):
+    """Verify package-id parsing, query dispatch, rendering, and failures."""
 
-    def test_execute_propagates_permission_errors_from_use_case(self) -> None:
-        cmd = self.make_cmd(["77"])
-        cmd._use_case.execute.side_effect = PermissionError("Missing permission: PACKAGE_FIND_ROUTE_FOR")  # type: ignore[reportAttributeAccessIssue]
+    def setUp(self) -> None:
+        """Create an isolated query bus for each test."""
+        self.query_bus = MagicMock(spec=QueryBus)
 
-        with self.assertRaises(PermissionError) as ctx:
-            cmd.execute()
+    def make_command(self, params: tuple[str, ...]) -> FindSuitableRoutesForPackage:
+        """Build the adapter with raw parameters and the mocked bus."""
+        return FindSuitableRoutesForPackage(params, self.query_bus)
 
-        self.assertIn("PACKAGE_FIND_ROUTE_FOR", str(ctx.exception))
-        cmd._use_case.execute.assert_called_once_with(77)  # type: ignore[reportUnknownMemberType]
-        cmd._event_collector.drain.assert_called_once_with((cmd._use_case,))  # type: ignore[reportUnknownMemberType]
-
-    @patch("src.adapters.driving.cli.commands.find_suitable_routes_for_package.validate_params_exact")
-    @patch("src.adapters.driving.cli.commands.find_suitable_routes_for_package.try_parse_int")
-    def test_success_mixed_matches_formats_lines(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
-        mock_parse.return_value = 77
-        cmd = self.make_cmd(["77"])
-        cmd._use_case.execute.return_value = [  # type: ignore[reportAttributeAccessIssue]
+    def test_dispatches_query_and_formats_mixed_matches(self) -> None:
+        self.query_bus.dispatch.return_value = [
             SuitableRouteForPackage(
                 route_id=10,
                 start_location=LocationCode("SYD"),
@@ -51,87 +46,63 @@ class FindSuitableRoutesForPackage_Should(unittest.TestCase):
                 end_city=LocationCode("MEL"),
             ),
         ]
-        result = cmd.execute()
 
-        mock_validate.assert_called_once_with(("77",), 1)
-        mock_parse.assert_called_once_with("77", "package_id")
-        cmd._use_case.execute.assert_called_once_with(77)  # type: ignore[reportUnknownMemberType]
-        cmd._event_collector.drain.assert_called_once_with((cmd._use_case,))  # type: ignore[reportUnknownMemberType]
+        result = self.make_command(("77",)).execute()
 
-        lines = result.splitlines()
-        self.assertEqual(len(lines), 2)
-        self.assertIn("Route 10: SYD -> MEL, ETA to MEL: 2025-10-12 06:00, Capacity left: 123.46kg", lines[0])
-        self.assertIn("Route 11: SYD -> MEL, ETA to MEL: N/A, Capacity left: No truck", lines[1])
+        self.query_bus.dispatch.assert_called_once_with(
+            key=FIND_SUITABLE_ROUTES_FOR_PACKAGE,
+            query=FindSuitableRoutesForPackageQuery(package_id=77),
+        )
+        self.assertEqual(
+            result.splitlines(),
+            [
+                "Route 10: SYD -> MEL, ETA to MEL: 2025-10-12 06:00, Capacity left: 123.46kg",
+                "Route 11: SYD -> MEL, ETA to MEL: N/A, Capacity left: No truck",
+            ],
+        )
 
-    @patch("src.adapters.driving.cli.commands.find_suitable_routes_for_package.validate_params_exact")
-    @patch("src.adapters.driving.cli.commands.find_suitable_routes_for_package.try_parse_int")
-    def test_no_matches_returns_friendly_message(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
-        mock_parse.return_value = 5
-        cmd = self.make_cmd(["5"])
-        cmd._use_case.execute.return_value = []  # type: ignore[reportAttributeAccessIssue]
+    def test_returns_friendly_message_when_no_routes_match(self) -> None:
+        self.query_bus.dispatch.return_value = []
 
-        result = cmd.execute()
+        result = self.make_command(("5",)).execute()
 
         self.assertEqual(result, "No suitable routes found.")
-        cmd._use_case.execute.assert_called_once_with(5)  # type: ignore[reportUnknownMemberType]
+        self.query_bus.dispatch.assert_called_once_with(
+            key=FIND_SUITABLE_ROUTES_FOR_PACKAGE,
+            query=FindSuitableRoutesForPackageQuery(package_id=5),
+        )
 
-    @patch("src.adapters.driving.cli.commands.find_suitable_routes_for_package.validate_params_exact")
-    @patch("src.adapters.driving.cli.commands.find_suitable_routes_for_package.try_parse_int")
-    def test_use_case_error_bubbles(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
-        mock_parse.return_value = 42
-        cmd = self.make_cmd(["42"])
-        cmd._use_case.execute.side_effect = ValueError("Package with ID 42 not found.")  # type: ignore[reportAttributeAccessIssue]
+    def test_rejects_incorrect_parameter_count_without_dispatching(self) -> None:
+        with self.assertRaises(ValueError):
+            self.make_command(()).execute()
 
-        with self.assertRaises(ValueError) as ctx:
-            cmd.execute()
+        self.query_bus.dispatch.assert_not_called()
 
-        self.assertIn("Package with ID 42 not found", str(ctx.exception))
-        cmd._use_case.execute.assert_called_once_with(42)  # type: ignore[reportUnknownMemberType]
+    def test_rejects_invalid_package_id_without_dispatching(self) -> None:
+        with self.assertRaisesRegex(ValueError, "package_id"):
+            self.make_command(("package",)).execute()
 
-    @patch("src.adapters.driving.cli.commands.find_suitable_routes_for_package.validate_params_exact")
-    @patch("src.adapters.driving.cli.commands.find_suitable_routes_for_package.try_parse_int")
-    def test_parse_failure_bubbles_and_stops(self, mock_parse: MagicMock, mock_validate: MagicMock) -> None:
-        mock_parse.side_effect = ValueError("not an int")
-        cmd = self.make_cmd(["x"])
+        self.query_bus.dispatch.assert_not_called()
 
-        with self.assertRaises(ValueError) as ctx:
-            cmd.execute()
+    def test_propagates_permission_error_from_query_bus(self) -> None:
+        self.query_bus.dispatch.side_effect = PermissionError("Missing permission: PACKAGE_FIND_ROUTE_FOR")
 
-        self.assertIn("not an int", str(ctx.exception))
-        cmd._use_case.execute.assert_not_called()  # type: ignore[reportUnknownMemberType]
+        with self.assertRaisesRegex(PermissionError, "PACKAGE_FIND_ROUTE_FOR"):
+            self.make_command(("77",)).execute()
 
-    def test_validate_params_exact_called_with_one(self, _unused_mock: object = None) -> None:
-        cmd = self.make_cmd(["123"])
-        with (
-            patch(
-                "src.adapters.driving.cli.commands.find_suitable_routes_for_package.validate_params_exact"
-            ) as mock_validate,
-            patch(
-                "src.adapters.driving.cli.commands.find_suitable_routes_for_package.try_parse_int",
-                return_value=123,
-            ),
-            patch.object(cmd._use_case, "execute", return_value=[]),  # type: ignore[reportPrivateUsage]
-        ):
-            _ = cmd.execute()
-            mock_validate.assert_called_once_with(("123",), 1)
+        self.query_bus.dispatch.assert_called_once_with(
+            key=FIND_SUITABLE_ROUTES_FOR_PACKAGE,
+            query=FindSuitableRoutesForPackageQuery(package_id=77),
+        )
 
-    @patch("src.adapters.driving.cli.commands.find_suitable_routes_for_package.validate_params_exact")
-    @patch("src.adapters.driving.cli.commands.find_suitable_routes_for_package.try_parse_int")
-    def test_capacity_left_is_formatted_to_two_decimals(
-        self, mock_parse: MagicMock, mock_validate: MagicMock
-    ) -> None:
-        mock_parse.return_value = 9
-        cmd = self.make_cmd(["9"])
-        cmd._use_case.execute.return_value = [  # type: ignore[reportAttributeAccessIssue]
-            SuitableRouteForPackage(
-                route_id=3,
-                start_location=LocationCode("A"),
-                end_location=LocationCode("B"),
-                eta=None,
-                capacity_left=1.2349,
-                end_city=LocationCode("PER"),
-            )
-        ]
+    def test_propagates_query_bus_failure(self) -> None:
+        self.query_bus.dispatch.side_effect = RuntimeError("route search failed")
 
-        out = cmd.execute()
-        self.assertIn("Capacity left: 1.23kg", out)
+        with self.assertRaisesRegex(RuntimeError, "route search failed"):
+            self.make_command(("77",)).execute()
+
+        self.query_bus.dispatch.assert_called_once()
+
+
+if __name__ == "__main__":
+    unittest.main()

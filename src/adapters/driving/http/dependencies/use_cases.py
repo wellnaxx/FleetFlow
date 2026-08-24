@@ -5,9 +5,6 @@ from typing import Annotated
 from fastapi import Depends
 
 from src.adapters.driving.http.dependencies.auth import AuthenticatedHTTPPrincipal, get_current_user
-from src.application.use_cases.routes.find_suitable_routes_for_package import (
-    FindSuitableRoutesForPackageUseCase,
-)
 from src.application.use_cases.routes.find_suitable_trucks_for_route import FindSuitableTrucksForRouteUseCase
 from src.application.use_cases.routes.remove_route import RemoveRouteUseCase
 from src.application.use_cases.routes.view_all_routes import ViewAllRoutesUseCase
@@ -116,29 +113,6 @@ def get_find_suitable_trucks_for_route_use_case(
     return FindSuitableTrucksForRouteUseCase(
         container.route_repo,
         container.vehicle_manager,
-        authz=principal.authz,
-    )
-
-
-def get_find_suitable_routes_for_package_use_case(
-    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
-    container: Annotated[Container, Depends(get_container)],
-) -> FindSuitableRoutesForPackageUseCase:
-    """Build the package-to-suitable-routes search use case for the authenticated request.
-
-    Args:
-        principal: Authenticated HTTP principal carrying request-scoped authorization.
-        container: Application dependency container.
-
-    Returns:
-        Suitable-route search use case bound to route and package repositories.
-
-    Raises:
-        HTTPException: Raised by `get_current_user` when authentication fails.
-    """
-    return FindSuitableRoutesForPackageUseCase(
-        container.route_repo,
-        container.package_repo,
         authz=principal.authz,
     )
 

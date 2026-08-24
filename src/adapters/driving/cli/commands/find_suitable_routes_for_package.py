@@ -1,13 +1,14 @@
-"""CLI command for finding suitable routes for a package."""
+"""Query-bus-backed CLI command for finding suitable routes for a package."""
 
-from src.adapters.driving.cli.commands.base_command.event_draining_command import EventDrainingCommand
+from src.adapters.driving.cli.commands.base_command.query_bus_command import QueryBusCommand
 from src.adapters.driving.cli.commands.validation_helpers import try_parse_int, validate_params_exact
-from src.application.use_cases.routes.find_suitable_routes_for_package import (
-    FindSuitableRoutesForPackageUseCase,
+from src.application.queries.routes.find_suitable_routes_for_package import (
+    FIND_SUITABLE_ROUTES_FOR_PACKAGE,
+    FindSuitableRoutesForPackageQuery,
 )
 
 
-class FindSuitableRoutesForPackage(EventDrainingCommand[FindSuitableRoutesForPackageUseCase]):
+class FindSuitableRoutesForPackage(QueryBusCommand):
     """Find candidate routes for the package's origin-to-destination."""
 
     def execute(self) -> str:
@@ -19,13 +20,15 @@ class FindSuitableRoutesForPackage(EventDrainingCommand[FindSuitableRoutesForPac
         Raises:
             PermissionError: If the caller lacks required view/search permissions.
             ValueError: If the package id is invalid or missing.
+            NotFoundError: If the package does not exist.
+            DatabaseError: If package or route retrieval fails.
         """
         validate_params_exact(self._params, 1)
         package_id = try_parse_int(self._params[0], "package_id")
 
-        matches = self._run_and_drain(
-            self._use_case,
-            lambda: self._use_case.execute(package_id),
+        matches = self.query_bus.dispatch(
+            key=FIND_SUITABLE_ROUTES_FOR_PACKAGE,
+            query=FindSuitableRoutesForPackageQuery(package_id=package_id),
         )
         if not matches:
             return "No suitable routes found."
