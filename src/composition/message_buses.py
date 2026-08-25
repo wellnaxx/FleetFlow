@@ -26,7 +26,6 @@ from src.application.commands.state.save_world import SAVE_WORLD
 from src.application.eventing.collector import EventCollector
 from src.application.handlers.commands.state.load_world import LoadWorldCommandHandler
 from src.application.handlers.commands.state.save_world import SaveWorldCommandHandler
-from src.application.handlers.queries.routes.view_all_routes import ViewAllRoutesQueryHandler
 from src.application.handlers.queries.routes.view_route import ViewRouteQueryHandler
 from src.application.handlers.queries.routes.view_routes_in_progress import ViewRoutesInProgressQueryHandler
 from src.application.handlers.queries.trucks.view_all_trucks import ViewAllTrucksQueryHandler
@@ -270,7 +269,13 @@ def build_query_bus(
     )
 
     # Route-facing queries
-    bus.register(VIEW_ALL_ROUTES, ViewAllRoutesQueryHandler(route_cases.view_all))
+    bus.register(
+        VIEW_ALL_ROUTES,
+        EventDrainingExecutor(
+            delegate=route_cases.view_all,
+            event_collector=event_collector,
+        ),
+    )
     bus.register(VIEW_ROUTE, ViewRouteQueryHandler(route_cases.view))
     bus.register(VIEW_ROUTES_IN_PROGRESS, ViewRoutesInProgressQueryHandler(route_cases.view_in_progress))
     bus.register(

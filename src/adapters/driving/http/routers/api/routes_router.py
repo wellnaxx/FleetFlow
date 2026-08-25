@@ -9,7 +9,6 @@ from src.adapters.driving.http.dependencies.message_buses import (
     get_authenticated_query_bus,
 )
 from src.adapters.driving.http.dependencies.use_cases import (
-    get_view_all_routes_use_case,
     get_view_route_use_case,
     get_view_routes_in_progress_use_case,
 )
@@ -39,8 +38,8 @@ from src.application.queries.routes.find_suitable_trucks_for_route import (
     FIND_SUITABLE_TRUCKS_FOR_ROUTE,
     FindSuitableTrucksForRouteQuery,
 )
+from src.application.queries.routes.view_all_routes import VIEW_ALL_ROUTES, ViewAllRoutesQuery
 from src.application.use_cases.pagination import PageQuery
-from src.application.use_cases.routes.view_all_routes import ViewAllRoutesUseCase
 from src.application.use_cases.routes.view_route import ViewRouteUseCase
 from src.application.use_cases.routes.view_routes_in_progress import ViewRoutesInProgressUseCase
 from src.ports.input.command_bus import CommandBus
@@ -82,8 +81,7 @@ def create_route(
 
 @routes_router.get("/", status_code=status.HTTP_200_OK)
 def list_routes(
-    use_case: Annotated[ViewAllRoutesUseCase, Depends(get_view_all_routes_use_case)],
-    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
+    query_bus: Annotated[QueryBus, Depends(get_authenticated_query_bus)],
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
     include_total: bool = False,
@@ -91,8 +89,8 @@ def list_routes(
     """List delivery routes with pagination.
 
     Args:
-        use_case: Use case for listing routes, injected by FastAPI.
-        event_collector: Collector used to publish authorization events.
+        query_bus: Authenticated query bus injected by FastAPI. The registered
+            executor owns authorization-event publication.
         limit: Maximum number of routes to return.
         offset: Number of routes to skip.
         include_total: Whether to include the total route count.
@@ -106,10 +104,11 @@ def list_routes(
             * 403 - Insufficient permissions.
             * 500 - Database operation failure.
     """
-    result = execute_and_drain_events(
-        recorder=use_case,
-        event_collector=event_collector,
-        action=lambda: use_case.execute(PageQuery(limit=limit, offset=offset, include_total=include_total)),
+    result = query_bus.dispatch(
+        key=VIEW_ALL_ROUTES,
+        query=ViewAllRoutesQuery(
+            page=PageQuery(limit=limit, offset=offset, include_total=include_total),
+        ),
     )
     return RoutePageResponse.from_page(result)
 

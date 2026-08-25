@@ -1,11 +1,11 @@
-"""CLI command for listing routes."""
+"""Query-bus-backed CLI command for listing routes."""
 
-from src.adapters.driving.cli.commands.base_command.event_draining_command import EventDrainingCommand
+from src.adapters.driving.cli.commands.base_command.query_bus_command import QueryBusCommand
 from src.adapters.driving.cli.rendering.route_info_renderer import render_route_info
-from src.application.use_cases.routes.view_all_routes import ViewAllRoutesUseCase
+from src.application.queries.routes.view_all_routes import VIEW_ALL_ROUTES, ViewAllRoutesQuery
 
 
-class ViewAllRoutes(EventDrainingCommand[ViewAllRoutesUseCase]):
+class ViewAllRoutes(QueryBusCommand):
     """Render all routes."""
 
     def execute(self) -> str:
@@ -16,6 +16,11 @@ class ViewAllRoutes(EventDrainingCommand[ViewAllRoutesUseCase]):
 
         Raises:
             PermissionError: If the caller lacks route listing permission.
+            DatabaseError: If route retrieval fails.
+            ValidationError: If the pagination contract is invalid.
         """
-        routes = self._run_and_drain(self._use_case, self._use_case.execute).items
+        routes = self.query_bus.dispatch(
+            key=VIEW_ALL_ROUTES,
+            query=ViewAllRoutesQuery(),
+        ).items
         return "\n\n".join(render_route_info(route) for route in routes) if routes else "No routes available."

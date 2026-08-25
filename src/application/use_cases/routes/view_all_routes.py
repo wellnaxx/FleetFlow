@@ -2,20 +2,17 @@
 
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.authorization_operations import AuthorizationOperation
+from src.application.queries.routes.view_all_routes import ViewAllRoutesQuery
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
-from src.application.use_cases.pagination import (
-    PageQuery,
-    PageResult,
-    execute_page_query,
-)
+from src.application.use_cases.pagination import PageResult, execute_page_query
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.enums.auth import Permission
 from src.ports.output.route_repository import RouteRepositoryPort
 
 
 class ViewAllRoutesUseCase(AuthorizedUseCase[PageResult[DeliveryRoute]]):
-    """List all routes from the repository."""
+    """List routes through the published application query contract."""
 
     def __init__(self, routes: RouteRepositoryPort, authz: AuthorizationService) -> None:
         """Initialize the use case.
@@ -33,11 +30,11 @@ class ViewAllRoutesUseCase(AuthorizedUseCase[PageResult[DeliveryRoute]]):
         target_resource_type=AuditResourceType.ROUTE,
         target_resource_id_resolver=None,
     )
-    def execute(self, query: PageQuery = PageQuery()) -> PageResult[DeliveryRoute]:
+    def execute(self, query: ViewAllRoutesQuery) -> PageResult[DeliveryRoute]:
         """Return all persisted routes.
 
         Args:
-            query: Pagination request. Defaults to a full uncounted list.
+            query: Route-listing request containing pagination selection.
 
         Returns:
             Route page result.
@@ -48,7 +45,7 @@ class ViewAllRoutesUseCase(AuthorizedUseCase[PageResult[DeliveryRoute]]):
             ValidationError: If pagination arguments are invalid.
         """
         return execute_page_query(
-            query=query,
+            query=query.page,
             list_all=self._routes.list_all,
             list_page=lambda limit, offset: self._routes.list_page(limit=limit, offset=offset),
             list_page_with_total=lambda limit, offset: self._routes.list_page_with_total(

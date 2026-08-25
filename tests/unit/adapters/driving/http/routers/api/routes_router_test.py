@@ -23,6 +23,7 @@ from src.application.queries.routes.find_suitable_trucks_for_route import (
     FIND_SUITABLE_TRUCKS_FOR_ROUTE,
     FindSuitableTrucksForRouteQuery,
 )
+from src.application.queries.routes.view_all_routes import VIEW_ALL_ROUTES, ViewAllRoutesQuery
 from src.application.results.assign_packages_to_route_result import (
     AssignPackagesToRouteResult,
     PackageAssignmentError,
@@ -58,14 +59,12 @@ class RoutesRouterShould(unittest.TestCase):
         self.app.dependency_overrides.clear()
 
     def test_list_routes_returns_paginated_route_responses_without_total(self) -> None:
-        use_case = MagicMock()
-        use_case.execute.return_value = PageResult(
+        self.query_bus.dispatch.return_value = PageResult(
             items=(self._route(route_id=21),),
             total=None,
             limit=1,
             offset=2,
         )
-        self.app.dependency_overrides[routes_router_module.get_view_all_routes_use_case] = lambda: use_case
 
         response = self.client.get("/routes/?limit=1&offset=2")
 
@@ -75,18 +74,21 @@ class RoutesRouterShould(unittest.TestCase):
         self.assertEqual(response.json()["limit"], 1)
         self.assertEqual(response.json()["offset"], 2)
         self.assertEqual(response.json()["items"][0]["route_id"], 21)
-        use_case.execute.assert_called_once_with(PageQuery(limit=1, offset=2, include_total=False))
-        self.event_collector.drain.assert_called_once_with((use_case,))
+        self.query_bus.dispatch.assert_called_once_with(
+            key=VIEW_ALL_ROUTES,
+            query=ViewAllRoutesQuery(
+                page=PageQuery(limit=1, offset=2, include_total=False),
+            ),
+        )
+        self.event_collector.drain.assert_not_called()
 
     def test_list_routes_includes_total_when_requested(self) -> None:
-        use_case = MagicMock()
-        use_case.execute.return_value = PageResult(
+        self.query_bus.dispatch.return_value = PageResult(
             items=(self._route(route_id=22),),
             total=12,
             limit=1,
             offset=2,
         )
-        self.app.dependency_overrides[routes_router_module.get_view_all_routes_use_case] = lambda: use_case
 
         response = self.client.get("/routes/?limit=1&offset=2&include_total=true")
 
@@ -96,17 +98,21 @@ class RoutesRouterShould(unittest.TestCase):
         self.assertEqual(response.json()["limit"], 1)
         self.assertEqual(response.json()["offset"], 2)
         self.assertEqual(response.json()["items"][0]["route_id"], 22)
-        use_case.execute.assert_called_once_with(PageQuery(limit=1, offset=2, include_total=True))
+        self.query_bus.dispatch.assert_called_once_with(
+            key=VIEW_ALL_ROUTES,
+            query=ViewAllRoutesQuery(
+                page=PageQuery(limit=1, offset=2, include_total=True),
+            ),
+        )
+        self.event_collector.drain.assert_not_called()
 
     def test_list_routes_preserves_unpaginated_limit(self) -> None:
-        use_case = MagicMock()
-        use_case.execute.return_value = PageResult(
+        self.query_bus.dispatch.return_value = PageResult(
             items=(self._route(route_id=23),),
             total=None,
             limit=None,
             offset=0,
         )
-        self.app.dependency_overrides[routes_router_module.get_view_all_routes_use_case] = lambda: use_case
 
         response = self.client.get("/routes/")
 
@@ -114,38 +120,50 @@ class RoutesRouterShould(unittest.TestCase):
         self.assertIsNone(response.json()["limit"])
         self.assertEqual(response.json()["count"], 1)
         self.assertEqual(response.json()["items"][0]["route_id"], 23)
-        use_case.execute.assert_called_once_with(PageQuery(limit=50, offset=0, include_total=False))
+        self.query_bus.dispatch.assert_called_once_with(
+            key=VIEW_ALL_ROUTES,
+            query=ViewAllRoutesQuery(
+                page=PageQuery(limit=50, offset=0, include_total=False),
+            ),
+        )
+        self.event_collector.drain.assert_not_called()
 
     def test_list_routes_returns_forbidden_for_permission_error(self) -> None:
-        use_case = MagicMock()
-        use_case.execute.side_effect = PermissionError("Missing permission: ROUTE_VIEW_ALL")
-        self.app.dependency_overrides[routes_router_module.get_view_all_routes_use_case] = lambda: use_case
+        self.query_bus.dispatch.side_effect = PermissionError("Missing permission: ROUTE_VIEW_ALL")
 
         response = self.client.get("/routes/")
 
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"], "Missing permission: ROUTE_VIEW_ALL")
-        use_case.execute.assert_called_once_with(PageQuery(limit=50, offset=0, include_total=False))
-        self.event_collector.drain.assert_called_once_with((use_case,))
+        self.query_bus.dispatch.assert_called_once_with(
+            key=VIEW_ALL_ROUTES,
+            query=ViewAllRoutesQuery(
+                page=PageQuery(limit=50, offset=0, include_total=False),
+            ),
+        )
+        self.event_collector.drain.assert_not_called()
 
     def test_list_routes_rejects_invalid_pagination_params(self) -> None:
-        use_case = MagicMock()
-        self.app.dependency_overrides[routes_router_module.get_view_all_routes_use_case] = lambda: use_case
-
         response = self.client.get("/routes/?limit=0&offset=-1")
 
         self.assertEqual(response.status_code, 422)
-        use_case.execute.assert_not_called()
+        self.query_bus.dispatch.assert_not_called()
+        self.event_collector.drain.assert_not_called()
 
     def test_list_routes_returns_bad_request_for_pagination_validation_error(self) -> None:
-        use_case = MagicMock()
-        use_case.execute.side_effect = ValidationError("Offset cannot be used without a limit.")
-        self.app.dependency_overrides[routes_router_module.get_view_all_routes_use_case] = lambda: use_case
+        self.query_bus.dispatch.side_effect = ValidationError("Offset cannot be used without a limit.")
 
         response = self.client.get("/routes/")
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["detail"], "Offset cannot be used without a limit.")
+        self.query_bus.dispatch.assert_called_once_with(
+            key=VIEW_ALL_ROUTES,
+            query=ViewAllRoutesQuery(
+                page=PageQuery(limit=50, offset=0, include_total=False),
+            ),
+        )
+        self.event_collector.drain.assert_not_called()
 
     def test_create_route_returns_created_route(self) -> None:
         route = self._route(route_id=31)

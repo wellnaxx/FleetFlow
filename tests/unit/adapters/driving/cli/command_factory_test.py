@@ -25,6 +25,7 @@ from src.adapters.driving.cli.commands.remove_package import RemovePackage
 from src.adapters.driving.cli.commands.remove_route import RemoveRoute
 from src.adapters.driving.cli.commands.view_all_customers import ViewAllCustomers
 from src.adapters.driving.cli.commands.view_all_packages import ViewAllPackages
+from src.adapters.driving.cli.commands.view_all_routes import ViewAllRoutes
 from src.adapters.driving.cli.commands.view_audits import ViewAuditLogs
 from src.adapters.driving.cli.commands.view_package import ViewPackage
 from src.adapters.driving.cli.commands.view_unassigned_packages import ViewUnassignedPackages
@@ -149,7 +150,7 @@ class CommandFactoryShould(unittest.TestCase):
                 container.command_bus,
             ),
             ("viewroute 42", "viewroute", ["42"], container.route_cases.view),
-            ("viewallroutes", "viewallroutes", [], container.route_cases.view_all),
+            ("viewallroutes", "viewallroutes", [], container.query_bus),
             ("viewroutesinprogress", "viewroutesinprogress", [], container.route_cases.view_in_progress),
             ("removeroute 42", "removeroute", ["42"], container.command_bus),
             (
@@ -329,6 +330,16 @@ class CommandFactoryShould(unittest.TestCase):
         command = cast(ViewAllPackages, factory.create("viewallpackages"))
 
         self.assertIsInstance(command, ViewAllPackages)
+        self.assertEqual(command.params, ())
+        self.assertIs(command.query_bus, container.query_bus)
+
+    def test_view_all_routes_receives_registered_query_bus(self) -> None:
+        """Build route listing with the container query bus."""
+        factory, container = self.make_factory()
+
+        command = cast(ViewAllRoutes, factory.create("viewallroutes"))
+
+        self.assertIsInstance(command, ViewAllRoutes)
         self.assertEqual(command.params, ())
         self.assertIs(command.query_bus, container.query_bus)
 
