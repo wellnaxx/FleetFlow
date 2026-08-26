@@ -13,19 +13,20 @@ from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.enums.auth import Permission
 
 if TYPE_CHECKING:
+    from src.application.queries.routes.view_route import ViewRouteQuery
     from src.ports.output.route_repository import RouteRepositoryPort
 
 
 def _resolve_route_target_id(
     _self: ViewRouteUseCase,
-    route_id: int,
+    query: ViewRouteQuery,
 ) -> int | None:
     """Resolve the audit target resource id for a route view attempt."""
-    return route_id
+    return query.route_id
 
 
 class ViewRouteUseCase(AuthorizedUseCase[DeliveryRoute]):
-    """Fetch one route by id."""
+    """Fetch one route through the published application query contract."""
 
     def __init__(self, routes: RouteRepositoryPort, authz: AuthorizationService) -> None:
         """Initialize the use case.
@@ -43,11 +44,11 @@ class ViewRouteUseCase(AuthorizedUseCase[DeliveryRoute]):
         target_resource_type=AuditResourceType.ROUTE,
         target_resource_id_resolver=_resolve_route_target_id,
     )
-    def execute(self, route_id: int) -> DeliveryRoute:
+    def execute(self, query: ViewRouteQuery) -> DeliveryRoute:
         """Return one route by id.
 
         Args:
-            route_id: Identifier of the route to fetch.
+            query: Route lookup request containing the target identifier.
 
         Returns:
             The matching route entity.
@@ -57,6 +58,7 @@ class ViewRouteUseCase(AuthorizedUseCase[DeliveryRoute]):
             DatabaseError: If the route lookup persistence fails.
             NotFoundError: If the route does not exist.
         """
+        route_id = query.route_id
         route = self._routes.get_by_id(route_id)
         if not route:
             raise NotFoundError(f"Route with ID {route_id} not found")

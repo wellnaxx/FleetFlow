@@ -5,7 +5,6 @@ from typing import Annotated
 from fastapi import Depends
 
 from src.adapters.driving.http.dependencies.auth import AuthenticatedHTTPPrincipal, get_current_user
-from src.application.use_cases.routes.view_route import ViewRouteUseCase
 from src.application.use_cases.routes.view_routes_in_progress import ViewRoutesInProgressUseCase
 from src.application.use_cases.state.advance_world_state import AdvanceWorldStateUseCase
 from src.application.use_cases.state.load_world import LoadWorldStateUseCase
@@ -32,25 +31,6 @@ def get_view_routes_in_progress_use_case(
         HTTPException: Raised by `get_current_user` when authentication fails.
     """
     return ViewRoutesInProgressUseCase(container.route_repo, authz=principal.authz)
-
-
-def get_view_route_use_case(
-    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
-    container: Annotated[Container, Depends(get_container)],
-) -> ViewRouteUseCase:
-    """Build the route-detail use case for the authenticated request.
-
-    Args:
-        principal: Authenticated HTTP principal carrying request-scoped authorization.
-        container: Application dependency container.
-
-    Returns:
-        Route-detail use case bound to the route repository.
-
-    Raises:
-        HTTPException: Raised by `get_current_user` when authentication fails.
-    """
-    return ViewRouteUseCase(container.route_repo, authz=principal.authz)
 
 
 def get_view_all_trucks_use_case(

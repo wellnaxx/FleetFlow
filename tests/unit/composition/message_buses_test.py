@@ -143,7 +143,7 @@ class MessageBusCompositionShould(unittest.TestCase):
                 self.package_cases.view_unassigned,
             ),
             (subject.VIEW_ALL_ROUTES, subject.EventDrainingExecutor, self.route_cases.view_all),
-            (subject.VIEW_ROUTE, subject.ViewRouteQueryHandler, self.route_cases.view),
+            (subject.VIEW_ROUTE, subject.EventDrainingExecutor, self.route_cases.view),
             (
                 subject.VIEW_ROUTES_IN_PROGRESS,
                 subject.ViewRoutesInProgressQueryHandler,

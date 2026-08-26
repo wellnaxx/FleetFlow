@@ -24,6 +24,7 @@ from src.application.queries.routes.find_suitable_trucks_for_route import (
     FindSuitableTrucksForRouteQuery,
 )
 from src.application.queries.routes.view_all_routes import VIEW_ALL_ROUTES, ViewAllRoutesQuery
+from src.application.queries.routes.view_route import VIEW_ROUTE, ViewRouteQuery
 from src.application.results.assign_packages_to_route_result import (
     AssignPackagesToRouteResult,
     PackageAssignmentError,
@@ -246,38 +247,43 @@ class RoutesRouterShould(unittest.TestCase):
         self.event_collector.drain.assert_called_once_with((use_case,))
 
     def test_get_route_returns_route_response(self) -> None:
-        use_case = MagicMock()
-        use_case.execute.return_value = self._route(route_id=51)
-        self.app.dependency_overrides[routes_router_module.get_view_route_use_case] = lambda: use_case
+        self.query_bus.dispatch.return_value = self._route(route_id=51)
 
         response = self.client.get("/routes/51")
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["route_id"], 51)
-        use_case.execute.assert_called_once_with(route_id=51)
-        self.event_collector.drain.assert_called_once_with((use_case,))
+        self.query_bus.dispatch.assert_called_once_with(
+            key=VIEW_ROUTE,
+            query=ViewRouteQuery(route_id=51),
+        )
+        self.event_collector.drain.assert_not_called()
 
     def test_get_route_returns_not_found_for_missing_route(self) -> None:
-        use_case = MagicMock()
-        use_case.execute.side_effect = NotFoundError("Route with ID 51 not found")
-        self.app.dependency_overrides[routes_router_module.get_view_route_use_case] = lambda: use_case
+        self.query_bus.dispatch.side_effect = NotFoundError("Route with ID 51 not found")
 
         response = self.client.get("/routes/51")
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["detail"], "Route with ID 51 not found")
-        self.event_collector.drain.assert_called_once_with((use_case,))
+        self.query_bus.dispatch.assert_called_once_with(
+            key=VIEW_ROUTE,
+            query=ViewRouteQuery(route_id=51),
+        )
+        self.event_collector.drain.assert_not_called()
 
     def test_get_route_returns_forbidden_for_permission_error(self) -> None:
-        use_case = MagicMock()
-        use_case.execute.side_effect = PermissionError("Missing permission: ROUTE_VIEW")
-        self.app.dependency_overrides[routes_router_module.get_view_route_use_case] = lambda: use_case
+        self.query_bus.dispatch.side_effect = PermissionError("Missing permission: ROUTE_VIEW")
 
         response = self.client.get("/routes/51")
 
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"], "Missing permission: ROUTE_VIEW")
-        self.event_collector.drain.assert_called_once_with((use_case,))
+        self.query_bus.dispatch.assert_called_once_with(
+            key=VIEW_ROUTE,
+            query=ViewRouteQuery(route_id=51),
+        )
+        self.event_collector.drain.assert_not_called()
 
     def test_delete_route_removes_route(self) -> None:
         response = self.client.delete("/routes/61")

@@ -9,7 +9,6 @@ from src.adapters.driving.http.dependencies.message_buses import (
     get_authenticated_query_bus,
 )
 from src.adapters.driving.http.dependencies.use_cases import (
-    get_view_route_use_case,
     get_view_routes_in_progress_use_case,
 )
 from src.adapters.driving.http.schemas.routes import (
@@ -39,8 +38,8 @@ from src.application.queries.routes.find_suitable_trucks_for_route import (
     FindSuitableTrucksForRouteQuery,
 )
 from src.application.queries.routes.view_all_routes import VIEW_ALL_ROUTES, ViewAllRoutesQuery
+from src.application.queries.routes.view_route import VIEW_ROUTE, ViewRouteQuery
 from src.application.use_cases.pagination import PageQuery
-from src.application.use_cases.routes.view_route import ViewRouteUseCase
 from src.application.use_cases.routes.view_routes_in_progress import ViewRoutesInProgressUseCase
 from src.ports.input.command_bus import CommandBus
 from src.ports.input.query_bus import QueryBus
@@ -153,15 +152,14 @@ def list_in_progress_routes(
 @routes_router.get("/{route_id}", status_code=status.HTTP_200_OK)
 def get_route(
     route_id: int,
-    use_case: Annotated[ViewRouteUseCase, Depends(get_view_route_use_case)],
-    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
+    query_bus: Annotated[QueryBus, Depends(get_authenticated_query_bus)],
 ) -> RouteResponse:
     """Return one delivery route by id.
 
     Args:
         route_id: Identifier of the route to retrieve.
-        use_case: Use case for retrieving one route, injected by FastAPI.
-        event_collector: Collector used to publish authorization events.
+        query_bus: Authenticated query bus injected by FastAPI. The registered
+            executor owns authorization-event publication.
 
     Returns:
         Route details for the requested route.
@@ -172,10 +170,9 @@ def get_route(
             * 404 - Route not found.
             * 500 - Database operation failure.
     """
-    route = execute_and_drain_events(
-        recorder=use_case,
-        event_collector=event_collector,
-        action=lambda: use_case.execute(route_id=route_id),
+    route = query_bus.dispatch(
+        key=VIEW_ROUTE,
+        query=ViewRouteQuery(route_id=route_id),
     )
     return RouteResponse.from_route(route)
 
