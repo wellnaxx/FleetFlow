@@ -1,9 +1,8 @@
 """Use case for listing routes currently in progress."""
 
-from datetime import datetime
-
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.authorization_operations import AuthorizationOperation
+from src.application.queries.routes.view_routes_in_progress import ViewRoutesInProgressQuery
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.entities.delivery_route import DeliveryRoute, RoutePosition, RoutePositionKind
@@ -30,11 +29,14 @@ class ViewRoutesInProgressUseCase(AuthorizedUseCase[list[tuple[DeliveryRoute, Ro
         target_resource_type=AuditResourceType.ROUTE,
         target_resource_id_resolver=None,
     )
-    def execute(self, now: datetime) -> list[tuple[DeliveryRoute, RoutePosition]]:
+    def execute(
+        self,
+        query: ViewRoutesInProgressQuery,
+    ) -> list[tuple[DeliveryRoute, RoutePosition]]:
         """Return routes currently at a stop or in transit.
 
         Args:
-            now: Clock value used to compute each route's position.
+            query: Business timestamp used to calculate each route's position.
 
         Returns:
             A list of `(route, position)` tuples for active routes.
@@ -46,7 +48,7 @@ class ViewRoutesInProgressUseCase(AuthorizedUseCase[list[tuple[DeliveryRoute, Ro
         active: list[tuple[DeliveryRoute, RoutePosition]] = []
 
         for route in self._routes.list_all():
-            pos = route.current_position(now)
+            pos = route.current_position(query.now)
             if pos.kind in {RoutePositionKind.AT_STOP, RoutePositionKind.IN_TRANSIT}:
                 active.append((route, pos))
 

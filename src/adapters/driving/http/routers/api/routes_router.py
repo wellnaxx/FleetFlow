@@ -3,13 +3,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from src.adapters.driving.http.dependencies.eventing import execute_and_drain_events, get_event_collector
 from src.adapters.driving.http.dependencies.message_buses import (
     get_authenticated_command_bus,
     get_authenticated_query_bus,
-)
-from src.adapters.driving.http.dependencies.use_cases import (
-    get_view_routes_in_progress_use_case,
 )
 from src.adapters.driving.http.schemas.routes import (
     AssignPackagesToRouteRequest,
@@ -32,15 +28,17 @@ from src.application.commands.routes.assign_truck_to_route import (
 )
 from src.application.commands.routes.create_route import CREATE_ROUTE, CreateRouteCommand
 from src.application.commands.routes.remove_route import REMOVE_ROUTE, RemoveRouteCommand
-from src.application.eventing.collector import EventCollector
 from src.application.queries.routes.find_suitable_trucks_for_route import (
     FIND_SUITABLE_TRUCKS_FOR_ROUTE,
     FindSuitableTrucksForRouteQuery,
 )
 from src.application.queries.routes.view_all_routes import VIEW_ALL_ROUTES, ViewAllRoutesQuery
 from src.application.queries.routes.view_route import VIEW_ROUTE, ViewRouteQuery
+from src.application.queries.routes.view_routes_in_progress import (
+    VIEW_ROUTES_IN_PROGRESS,
+    ViewRoutesInProgressQuery,
+)
 from src.application.use_cases.pagination import PageQuery
-from src.application.use_cases.routes.view_routes_in_progress import ViewRoutesInProgressUseCase
 from src.ports.input.command_bus import CommandBus
 from src.ports.input.query_bus import QueryBus
 
@@ -114,14 +112,13 @@ def list_routes(
 
 @routes_router.get("/in-progress", status_code=status.HTTP_200_OK)
 def list_in_progress_routes(
-    use_case: Annotated[ViewRoutesInProgressUseCase, Depends(get_view_routes_in_progress_use_case)],
-    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
+    query_bus: Annotated[QueryBus, Depends(get_authenticated_query_bus)],
 ) -> list[RouteInProgressResponse]:
     """List routes that are currently at a stop or in transit.
 
     Args:
-        use_case: Use case for listing active routes, injected by FastAPI.
-        event_collector: Collector used to publish authorization events.
+        query_bus: Authenticated query bus injected by FastAPI. The registered
+            executor owns authorization-event publication.
 
     Returns:
         Active route details with computed position information.
@@ -133,10 +130,9 @@ def list_in_progress_routes(
     """
     # Domain route timing currently uses naive local datetimes.
     now = datetime.now()
-    active_routes = execute_and_drain_events(
-        recorder=use_case,
-        event_collector=event_collector,
-        action=lambda: use_case.execute(now=now),
+    active_routes = query_bus.dispatch(
+        key=VIEW_ROUTES_IN_PROGRESS,
+        query=ViewRoutesInProgressQuery(now=now),
     )
     try:
         return [

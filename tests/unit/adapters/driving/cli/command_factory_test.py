@@ -29,6 +29,7 @@ from src.adapters.driving.cli.commands.view_all_routes import ViewAllRoutes
 from src.adapters.driving.cli.commands.view_audits import ViewAuditLogs
 from src.adapters.driving.cli.commands.view_package import ViewPackage
 from src.adapters.driving.cli.commands.view_route import ViewRoute
+from src.adapters.driving.cli.commands.view_routes_in_progress import ViewRoutesInProgress
 from src.adapters.driving.cli.commands.view_unassigned_packages import ViewUnassignedPackages
 
 
@@ -152,7 +153,7 @@ class CommandFactoryShould(unittest.TestCase):
             ),
             ("viewroute 42", "viewroute", ["42"], container.query_bus),
             ("viewallroutes", "viewallroutes", [], container.query_bus),
-            ("viewroutesinprogress", "viewroutesinprogress", [], container.route_cases.view_in_progress),
+            ("viewroutesinprogress", "viewroutesinprogress", [], container.query_bus),
             ("removeroute 42", "removeroute", ["42"], container.command_bus),
             (
                 "assigntrucktoroute 11 22",
@@ -352,6 +353,16 @@ class CommandFactoryShould(unittest.TestCase):
 
         self.assertIsInstance(command, ViewRoute)
         self.assertEqual(command.params, ("42",))
+        self.assertIs(command.query_bus, container.query_bus)
+
+    def test_view_routes_in_progress_receives_registered_query_bus(self) -> None:
+        """Build active-route listing with the container query bus."""
+        factory, container = self.make_factory()
+
+        command = cast(ViewRoutesInProgress, factory.create("viewroutesinprogress"))
+
+        self.assertIsInstance(command, ViewRoutesInProgress)
+        self.assertEqual(command.params, ())
         self.assertIs(command.query_bus, container.query_bus)
 
     def test_view_package_receives_registered_query_bus(self) -> None:

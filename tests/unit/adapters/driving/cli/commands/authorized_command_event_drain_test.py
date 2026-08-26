@@ -1,12 +1,10 @@
 """Cross-command tests for authorized CLI event drainage."""
 
 import unittest
-from datetime import datetime
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from src.adapters.driving.cli.commands.view_all_trucks import ViewAllTrucks
-from src.adapters.driving.cli.commands.view_routes_in_progress import ViewRoutesInProgress
 
 
 class AuthorizedCommandEventDrainShould(unittest.TestCase):
@@ -15,7 +13,6 @@ class AuthorizedCommandEventDrainShould(unittest.TestCase):
     def test_drain_read_and_search_use_cases_after_success(self) -> None:
         cases: tuple[tuple[type[Any], tuple[str, ...], object], ...] = (
             (ViewAllTrucks, (), list[object]()),
-            (ViewRoutesInProgress, (), list[object]()),
         )
 
         for command_type, params, result in cases:
@@ -25,11 +22,7 @@ class AuthorizedCommandEventDrainShould(unittest.TestCase):
                 use_case.execute.return_value = result
                 command = command_type(params, use_case, collector)
 
-                with patch(
-                    "src.adapters.driving.cli.commands.view_routes_in_progress.datetime"
-                ) as datetime_mock:
-                    datetime_mock.now.return_value = datetime(2026, 7, 12, 12, 0)
-                    command.execute()
+                command.execute()
 
                 collector.drain.assert_called_once_with((use_case,))
 

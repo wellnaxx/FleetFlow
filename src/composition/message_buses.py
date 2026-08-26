@@ -26,7 +26,6 @@ from src.application.commands.state.save_world import SAVE_WORLD
 from src.application.eventing.collector import EventCollector
 from src.application.handlers.commands.state.load_world import LoadWorldCommandHandler
 from src.application.handlers.commands.state.save_world import SaveWorldCommandHandler
-from src.application.handlers.queries.routes.view_routes_in_progress import ViewRoutesInProgressQueryHandler
 from src.application.handlers.queries.trucks.view_all_trucks import ViewAllTrucksQueryHandler
 from src.application.messaging.executors.event_draining import EventDrainingExecutor
 from src.application.messaging.in_process_command_bus import InProcessCommandBus
@@ -282,7 +281,13 @@ def build_query_bus(
             event_collector=event_collector,
         ),
     )
-    bus.register(VIEW_ROUTES_IN_PROGRESS, ViewRoutesInProgressQueryHandler(route_cases.view_in_progress))
+    bus.register(
+        VIEW_ROUTES_IN_PROGRESS,
+        EventDrainingExecutor(
+            delegate=route_cases.view_in_progress,
+            event_collector=event_collector,
+        ),
+    )
     bus.register(
         FIND_SUITABLE_TRUCKS_FOR_ROUTE,
         EventDrainingExecutor(
