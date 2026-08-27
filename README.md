@@ -31,12 +31,12 @@ FleetFlow currently supports:
 - JWT access/refresh tokens for HTTP authentication, with token-version revocation.
 - Typed domain, application, and repository errors for expected validation, not-found, conflict, authentication, and persistence failures.
 - Centralized layer-neutral runtime validation with domain and adapter wrappers that preserve boundary-specific errors.
-- Typed command/query messages, routing keys, dispatch input-port protocols, synchronous in-process buses,
-  exhaustive message catalogs, and composition-owned registration for every interactive workflow. Temporary
-  handlers expose the same `execute(message)` contract targeted for direct use-case execution; container wiring
-  and CLI/HTTP migration remain in progress, so driving adapters currently continue to invoke use cases directly.
+- Typed command/query messages, result-aware routing keys, dispatch-only input ports, synchronous in-process
+  buses, exhaustive message catalogs, and composition-owned registration. CLI and HTTP adapters dispatch every
+  application workflow through these buses, and use cases directly implement `execute(command_or_query)`.
 - Global FastAPI exception handlers that map expected application/domain failures to stable, sanitized HTTP responses.
-- Immutable domain and application event types with per-entity/use-case pending-event recording, event checkpoints for rollback, context-local envelope metadata, synchronous in-process dispatch, and structured event logging.
+- Immutable domain and application event types with per-entity pending events, execution-scoped application
+  events, rollback checkpoints, context-local envelope metadata, synchronous dispatch, and structured logging.
 - Browsable audit log with normalized descriptors, versioned event payloads, subscribed persistence handlers, in-memory and PostgreSQL repositories, and actor-scoped CLI/HTTP queries.
 - Role-based authorization around CLI commands and application use cases.
 - Password hashing with PBKDF2-HMAC and strict persisted password-hash validation.
@@ -48,8 +48,8 @@ FleetFlow currently supports:
 - PostgreSQL world-state export/import through the same JSON snapshot format.
 - Startup recovery for default saved state: missing state is ignored, corrupt state is quarantined, and unexpected runtime errors still fail loudly.
 - A Postman/Newman collection covering authentication, authorization, logistics workflows, state import/export, validation, and token revocation.
-- A large automated test suite covering domain behavior, application services, use cases, typed command/query
-  handlers, CLI commands, HTTP routers/dependencies, fleet-overview composition and projections, JSON and
+- A large automated test suite covering domain behavior, application services, message buses and executors,
+  direct-message use cases, CLI commands, HTTP routers/dependencies, fleet-overview projections, JSON and
   database persistence, runtime swaps, snapshot import/export, and startup behavior.
 
 ## Architecture Overview
@@ -77,11 +77,10 @@ FleetFlow/
 |   |   |-- dto/                  # persisted snapshot and runtime transfer objects
 |   |   |-- enums/                # application-level classifications and reasons
 |   |   |-- event_handlers/       # audit and other event consumers
-|   |   |-- eventing/             # collector, execution context, event envelopes, handler protocol
+|   |   |-- eventing/             # collector, recorder scope, execution context, envelopes, handler protocol
 |   |   |-- events/               # immutable application event definitions
 |   |   |-- exceptions/           # application and world-state exception hierarchy
-|   |   |-- handlers/             # temporary command/query executors over existing use cases
-|   |   |-- messaging/            # message markers, typed keys, executor protocols, and in-process buses
+|   |   |-- messaging/            # message contracts, typed keys, scoped executors, and in-process buses
 |   |   |-- models/               # persisted/query models such as UserRecord, AuditRecord, AuditLogQuery
 |   |   |-- queries/              # immutable read messages and typed routing keys
 |   |   |-- results/              # use-case/service result objects
@@ -113,12 +112,14 @@ The CLI runtime flow is:
 ```text
 CLI Menu / Command Mode
   -> Bind CLI EventContext
-  -> CLI Command
-  -> Application Use Case
+  -> CLI Command builds a Command or Query
+  -> CommandBus or QueryBus
+  -> Registered use case or scoped message executor
+  -> Application Use Case.execute(message)
   -> Application Service / Port
   -> Domain Entity / Domain Service
   -> In-memory/PostgreSQL Repository or JSON Persistence Adapter
-  -> EventCollector drains pending events
+  -> EventCollector drains execution-scoped and tracked domain events
   -> In-process EventDispatcher invokes subscribers
 ```
 
@@ -127,32 +128,29 @@ The HTTP runtime flow is:
 ```text
 FastAPI Router
   -> Request Dependency / Authenticated Principal / EventContext
-  -> Application Use Case
+  -> CommandBus or QueryBus
+  -> Registered use case or scoped message executor
+  -> Application Use Case.execute(message)
   -> Application Service / Port
   -> Domain Entity / Domain Service
   -> In-memory/PostgreSQL Repository or JSON Persistence Adapter
-  -> EventCollector drains pending events
+  -> EventCollector drains execution-scoped and tracked domain events
   -> In-process EventDispatcher invokes subscribers
 ```
 
-These diagrams describe the currently wired runtime. The application also contains a complete pre-adapter
-command/query bus layer: immutable messages, result-typed routing keys, structural `execute(message)` contracts,
-dispatch-only input ports, synchronous in-process buses, exhaustive command/query catalogs, and explicit
-composition-owned registration for every published message. The buses support exact-type dispatch, name-based
-routing, duplicate-registration protection, missing-handler reporting, and unchanged executor error propagation.
-Composition tests verify every key, temporary handler class, injected use case, catalog entry, and registration
-order. The container does not yet instantiate these buses, and CLI/HTTP adapters do not yet dispatch through them.
+These diagrams describe the currently wired runtime. All public CLI and HTTP workflows use immutable messages,
+result-typed routing keys, structural `execute(message)` contracts, and dispatch-only input ports. The buses route
+by stable key name while enforcing exact message types, reject duplicate registrations, report missing handlers,
+and propagate executor results and failures unchanged.
 
-The intended next-stage flow is:
+Use cases are registered directly. Event-aware registrations are decorated with `EventDrainingExecutor`, which
+binds an execution-local `EventRecorderScope`, attempts denial/failure-event publication on exceptional paths, and
+drains application events plus tracked domain recorders after successful execution. Internal heartbeat advancement uses
+`WorldStateAdvancementExecutor` to preserve its required domain-event-before-summary ordering. `WhoAmI` is
+registered without event draining because it emits no events. Composition tests verify every key, use-case
+delegate, executor, catalog entry, and registration order.
 
-```text
-CLI Command / FastAPI Router
-  -> CommandBus or QueryBus
-  -> Application Use Case.execute(Command or Query)
-  -> Application Service / Output Port / Domain
-```
-
-The composition root is `src/composition/container.py`. It wires repositories, domain services, application services, world-state persistence, runtime state management, the event collector, and use-case registries. `src/composition/message_buses.py` owns the complete command/query registration builders, while `src/composition/command_catalog.py` and `src/composition/query_catalog.py` provide authoritative completeness catalogs. These builders are not yet called by the container. `src/composition/runtime.py` provides cached runtime dependencies shared by the CLI and HTTP adapters. Event subscriptions are centralized in `src/composition/event_subscriptions.py`.
+The composition root is `src/composition/container.py`. It wires repositories, domain services, application services, world-state persistence, runtime state management, the event collector, use-case registries, and the in-process command/query buses. `src/composition/message_buses.py` owns the complete registration builders, while `src/composition/command_catalog.py` and `src/composition/query_catalog.py` provide authoritative completeness catalogs. The container exposes the built buses through the dispatch-only input-port protocols. `src/composition/runtime.py` provides cached runtime dependencies shared by the CLI and HTTP adapters. Event subscriptions are centralized in `src/composition/event_subscriptions.py`.
 
 ## Domain Model
 
@@ -228,8 +226,12 @@ FleetFlow has an in-process event pipeline for business facts and application wo
 - Events are immutable and share an event id, positive per-event contract version, business `occurred_at` timestamp, and UTC `recorded_at` timestamp. Audit records preserve the version used to serialize each event.
 - Event checkpoints allow pending events to be rolled back with failed in-memory mutations.
 - `EventContext`, `EventActor`, and `EventEnvelope` provide correlation, source, actor, and causation metadata through `ContextVar`-local workflow context.
-- CLI commands and HTTP router handlers bind event context before draining pending events. CLI heartbeat and autosave events are drained under the surrounding CLI command context.
-- `EventCollector` captures pending events from use cases and entities, wraps them with the current context, publishes them, and clears recorders only after the publisher accepts the batch.
+- CLI and HTTP boundaries bind event context before bus dispatch. The CLI engine dispatches heartbeat and autosave
+  commands through the same bus under the surrounding command context.
+- `EventDrainingExecutor` binds a fresh `EventRecorderScope` for each dispatch. Application events are recorded in
+  that scope, while mutated domain entities register their own pending-event recorders with it.
+- `EventCollector` snapshots events from the scope and tracked entities, wraps them with the current envelope
+  context, publishes them, and clears recorders only after the publisher accepts the batch.
 - `InProcessEventDispatcher` routes envelopes by exact event type to subscribed handlers.
 - `PUBLISHED_EVENT_TYPES` is the exhaustive composition-level event catalog used to subscribe structured logging independently of audit coverage.
 - `StructuredEventLoggingHandler` is subscribed to every cataloged event type and writes event metadata to the configured application logger.
@@ -237,7 +239,12 @@ FleetFlow has an in-process event pipeline for business facts and application wo
 - `AuditEventHandler` receives that mapper through composition, combines an event envelope with its normalized descriptor, and persists an `AuditRecordDraft` through `AuditRepositoryPort`.
 - In-memory and PostgreSQL audit repositories implement the audit repository contract, including idempotency by event id, filtering, stable ordering, pagination, and page-total queries. The CLI and HTTP API expose those queries with manager-wide and employee self-only authorization.
 
-Events are currently dispatched synchronously in process after workflow persistence completes. The runtime subscription graph wires structured logging from the independent published-event catalog and audit persistence from registered audit mappings. Handler failures are not isolated: an audit repository failure propagates as event-publication failure. FleetFlow does not yet include a transactional outbox, so event handling is still not resilient to process crashes between business-state commit and handler execution.
+Events are currently dispatched synchronously in process after workflow persistence completes. The runtime
+subscription graph wires structured logging from the independent published-event catalog and audit persistence
+from registered audit mappings. Publication failures after successful workflow execution propagate to the caller;
+when a workflow itself fails, pending denial/failure events are published best-effort without replacing the
+original exception. FleetFlow does not yet include a transactional outbox, so event handling is still not
+resilient to process crashes between business-state commit and subscriber execution.
 
 ## World-State Persistence
 
@@ -748,7 +755,8 @@ The CLI engine performs heartbeat/reconciliation around command execution. Recon
 
 Mutating commands are autosaved to the default world-state path when autosave is enabled. Autosave is enabled for the in-memory backend and disabled for the PostgreSQL backend. With PostgreSQL, `save` and `load` remain explicit snapshot export/import commands, but normal command mutations are persisted directly through database repositories and units of work.
 
-Heartbeat and autosave run inside the current CLI command event context, so their application events share the command correlation id and actor when they are triggered by user-entered CLI work.
+Heartbeat and autosave are internal command-bus dispatches inside the current CLI command event context, so their
+application events share the command correlation id and actor when triggered by user-entered CLI work.
 
 ## Testing
 
@@ -831,26 +839,23 @@ The current architecture leaves several possible paths for future development. T
 
 The existing backend can be tightened further by hardening PostgreSQL setup/migration workflows and adding a real PostgreSQL integration-test harness.
 
-### Command bus layer
+### Typed messaging and execution
 
-FleetFlow now has immutable command/query messages for every interactive workflow, typed routing keys,
-structural `execute(message)` protocols, dispatch-only `CommandBus` and `QueryBus` input ports, synchronous
-in-process buses, and authoritative command/query type catalogs. Temporary handlers adapt those messages to the
-existing positional use-case signatures. Their tests verify argument forwarding, result propagation, and the few
-temporary representation conversions required during migration.
+FleetFlow has immutable command/query messages for every application workflow, typed routing keys, structural
+`execute(message)` protocols, dispatch-only `CommandBus` and `QueryBus` input ports, synchronous in-process buses,
+and authoritative message catalogs. CLI and HTTP adapters use typed dispatch exclusively; use cases accept their
+messages directly, so no argument-adapting handler layer remains.
 
-Composition now explicitly registers all 13 commands and all 13 queries. Tests verify every key, handler type,
-injected use-case instance, catalog entry, ordering invariant, and absence of duplicate catalog types. Bus tests
-also cover routing-name identity, exact message-type checks, duplicate-registration rejection, missing-handler
-reporting, and unchanged executor result/error propagation.
+Composition explicitly registers 14 commands, including internal world-state advancement, and 13 queries. Tests
+verify every key, direct use-case delegate, executor type, catalog entry, registration order, and absence of
+duplicate catalog types. Bus tests also cover routing-name identity, exact message-type checks, duplicate
+registration, missing handlers, and unchanged result/error propagation.
 
-The remaining migration is to change each public use case from `execute(field, ...)` to
-`execute(command_or_query)`, register that use case directly, and remove its temporary handler. The resulting
-buses then need to be instantiated by the container and injected into CLI/HTTP adapters. Event draining must move
-to a bus or executor boundary before adapters lose direct access to event-aware use cases. Once typed dispatch is
-the sole adapter path, repeated cross-cutting behavior such as event draining, logging, metrics, and transaction
-boundaries can move into a small execution pipeline. The heartbeat-only world-state advancement workflow remains
-an internal orchestration path rather than a public command.
+Event publication is already centralized in scoped executors. The generic executor owns application/domain event
+draining for normal commands and queries, while the dedicated world-state advancement executor preserves heartbeat
+causal ordering. Possible future pipeline work includes structured dispatch metrics, tracing, explicit transaction
+coordination, and narrower retry policies. Those additions should remain small decorators around message execution
+rather than logic duplicated across CLI commands and HTTP routers.
 
 ### HTTP API expansion
 
@@ -870,7 +875,7 @@ Remaining work includes operational migration tooling, stronger integration cove
 
 FleetFlow already defines and records pending domain and application events for important actions such as package assignment, route scheduling, truck dispatch/release, package delivery, authentication, authorization denial, heartbeat advancement, and world-state import/export. Event envelopes and context metadata are available for correlation and actor attribution, and the in-process dispatcher currently publishes those envelopes to structured logging and audit handlers.
 
-The audit-log model, typed exact-event descriptor registry, family-specific descriptor factories, audit handler, repository port, in-memory repository, PostgreSQL repository, SQL queries, schema migrations, composition wiring, query use case, CLI command, and HTTP endpoint are implemented. Logging subscriptions are driven by an independent exhaustive event catalog, while audit subscriptions are driven by registered mappings. The active repository follows the configured persistence backend. Manager-wide and employee self-only filtering is enforced in the application use case. The current failure policy is strict: audit handler or repository failures propagate to the publisher.
+The audit-log model, typed exact-event descriptor registry, family-specific descriptor factories, audit handler, repository port, in-memory repository, PostgreSQL repository, SQL queries, schema migrations, composition wiring, query use case, CLI command, and HTTP endpoint are implemented. Logging subscriptions are driven by an independent exhaustive event catalog, while audit subscriptions are driven by registered mappings. The active repository follows the configured persistence backend. Manager-wide and employee self-only filtering is enforced in the application use case. After successful workflow execution, the failure policy is strict: audit handler or repository failures propagate to the caller through the publisher.
 
 The next eventing reliability step is to unify mutating persistence under explicit unit-of-work boundaries, separate event capture from publication, and add live PostgreSQL transaction coverage. A transactional outbox can then persist versioned event envelopes in the same transaction as business state before asynchronous dispatch. External brokers such as Kafka or Redis Streams would only make sense later if the project needed higher-volume event processing or cross-service integration.
 
