@@ -309,7 +309,12 @@ class Container:
         self.state_cases = StateUseCases(
             advance=AdvanceWorldStateUseCase(self.heartbeat_service, clock=self.clock),
             save=SaveWorldStateUseCase(self.world_state_gateway, self.world_state_persistence, self.authz),
-            load=LoadWorldStateUseCase(self.world_state_gateway, self.world_state_persistence, self.authz),
+            load=LoadWorldStateUseCase(
+                self.world_state_gateway,
+                self.world_state_persistence,
+                self.authz,
+                clock=self.clock,
+            ),
         )
         self.audit_use_cases = AuditUseCases(
             view_audit_logs=ViewAuditLogsUseCase(self.audit_repo, self.authz, clock=self.clock)

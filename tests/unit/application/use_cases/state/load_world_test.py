@@ -2,6 +2,7 @@ import unittest
 from datetime import datetime
 from unittest.mock import MagicMock, call
 
+from src.application.commands.state.load_world import LoadWorldCommand
 from src.application.dto.world_state_snapshot_dto import (
     CountersSnapshot,
     CustomerSnapshot,
@@ -38,7 +39,7 @@ class LoadWorldStateUseCaseTests(unittest.TestCase):
 
         use_case = LoadWorldStateUseCase(gateway, persistence, manager_authz())
 
-        result = use_case.execute("state.json")
+        result = use_case.execute(LoadWorldCommand(path="state.json"))
 
         persistence.read.assert_called_once_with("state.json")
         gateway.apply_snapshot.assert_called_once_with(snapshot)
@@ -59,7 +60,7 @@ class LoadWorldStateUseCaseTests(unittest.TestCase):
         persistence.read.return_value = ("/abs/state.json", snapshot)
         use_case = LoadWorldStateUseCase(gateway, persistence, manager_authz())
 
-        result = use_case.execute("  state.json  ")
+        result = use_case.execute(LoadWorldCommand(path="  state.json  "))
 
         persistence.read.assert_called_once_with("state.json")
         gateway.apply_snapshot.assert_called_once_with(snapshot)
@@ -99,7 +100,7 @@ class LoadWorldStateUseCaseTests(unittest.TestCase):
             clock=lambda: occurred_at,
         )
 
-        use_case.execute("state.json")
+        use_case.execute(LoadWorldCommand(path="state.json"))
 
         event = use_case.pending_events[0]
         self.assertIsInstance(event, WorldStateImported)
@@ -133,7 +134,7 @@ class LoadWorldStateUseCaseTests(unittest.TestCase):
         use_case = LoadWorldStateUseCase(gateway, persistence, manager_authz())
 
         with self.assertRaises(WorldStateCorruptionError):
-            use_case.execute("state.json")
+            use_case.execute(LoadWorldCommand(path="state.json"))
 
     def test_execute_records_corruption_events_when_read_snapshot_is_corrupt(self) -> None:
         gateway = MagicMock()
@@ -151,7 +152,7 @@ class LoadWorldStateUseCaseTests(unittest.TestCase):
         )
 
         with self.assertRaises(WorldStateCorruptionError):
-            use_case.execute("state.json")
+            use_case.execute(LoadWorldCommand(path="state.json"))
 
         import_failed, corruption_detected = use_case.pending_events
         self.assertIsInstance(import_failed, WorldStateImportFailed)
@@ -194,7 +195,7 @@ class LoadWorldStateUseCaseTests(unittest.TestCase):
         )
 
         with self.assertRaises(WorldStateCorruptionError):
-            use_case.execute("state.json")
+            use_case.execute(LoadWorldCommand(path="state.json"))
 
         import_failed, corruption_detected = use_case.pending_events
         self.assertIsInstance(import_failed, WorldStateImportFailed)
@@ -215,7 +216,7 @@ class LoadWorldStateUseCaseTests(unittest.TestCase):
         use_case = LoadWorldStateUseCase(gateway, persistence, manager_authz())
 
         with self.assertRaises(ValidationError) as ctx:
-            use_case.execute("   ")
+            use_case.execute(LoadWorldCommand(path="   "))
 
         self.assertIn("World state snapshot path is required.", str(ctx.exception))
         persistence.read.assert_not_called()
@@ -229,7 +230,7 @@ class LoadWorldStateUseCaseTests(unittest.TestCase):
         use_case = LoadWorldStateUseCase(gateway, persistence, manager_authz())
 
         with self.assertRaises(ValidationError) as ctx:
-            use_case.execute("bad")
+            use_case.execute(LoadWorldCommand(path="bad"))
 
         self.assertIn("Invalid snapshot path.", str(ctx.exception))
         gateway.build_snapshot.assert_not_called()
@@ -242,7 +243,7 @@ class LoadWorldStateUseCaseTests(unittest.TestCase):
         use_case = LoadWorldStateUseCase(gateway, persistence, manager_authz())
 
         with self.assertRaises(WorldStatePersistenceError) as ctx:
-            use_case.execute("state.json")
+            use_case.execute(LoadWorldCommand(path="state.json"))
 
         self.assertIn("Could not read world state snapshot.", str(ctx.exception))
         gateway.build_snapshot.assert_not_called()

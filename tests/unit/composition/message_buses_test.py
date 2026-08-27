@@ -87,7 +87,7 @@ class MessageBusCompositionShould(unittest.TestCase):
                 subject.WorldStateAdvancementExecutor,
                 self.state_cases.advance,
             ),
-            (subject.LOAD_WORLD, subject.LoadWorldCommandHandler, self.state_cases.load),
+            (subject.LOAD_WORLD, subject.EventDrainingExecutor, self.state_cases.load),
             (subject.SAVE_WORLD, subject.SaveWorldCommandHandler, self.state_cases.save),
         )
 

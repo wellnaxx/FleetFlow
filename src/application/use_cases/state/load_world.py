@@ -31,6 +31,7 @@ from src.domain.enums.auth import Permission
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from src.application.commands.state.load_world import LoadWorldCommand
     from src.application.enums.world_state_corruption_reasons import WorldStateCorruptionReason
     from src.ports.output.world_state_gateway import WorldStateGatewayPort
     from src.ports.output.world_state_persistence import WorldStatePersistencePort
@@ -38,9 +39,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _resolve_path_target_id(_self: LoadWorldStateUseCase, path: str) -> str | None:
+def _resolve_path_target_id(_self: LoadWorldStateUseCase, command: LoadWorldCommand) -> str | None:
     """Resolve the audit target resource id for a world state import attempt."""
-    return path.strip() or None
+    return command.path.strip() or None
 
 
 class LoadWorldStateUseCase(AuthorizedUseCase[str]):
@@ -73,11 +74,11 @@ class LoadWorldStateUseCase(AuthorizedUseCase[str]):
         target_resource_type=AuditResourceType.WORLD_STATE,
         target_resource_id_resolver=_resolve_path_target_id,
     )
-    def execute(self, path: str) -> str:
+    def execute(self, command: LoadWorldCommand) -> str:
         """Read persisted state and replace runtime state with a reconciled snapshot.
 
         Args:
-            path: Source filename or path containing the world-state snapshot.
+            command: Snapshot path selected by the driving adapter.
 
         Returns:
             The resolved absolute path read by the persistence adapter.
@@ -91,6 +92,7 @@ class LoadWorldStateUseCase(AuthorizedUseCase[str]):
             WorldStatePersistenceError: If the snapshot cannot be read or applied.
         """
         occurred_at = self._clock()
+        path = command.path
         try:
             stripped_path = validate_world_state_path(path)
         except ValidationError:
@@ -159,7 +161,7 @@ class LoadWorldStateUseCase(AuthorizedUseCase[str]):
             )
             raise
 
-        self._record_event(
+        self.record_event(
             WorldStateImported(
                 snapshot_path=abs_path,
                 schema_version=snapshot.schema_version,
@@ -189,7 +191,7 @@ class LoadWorldStateUseCase(AuthorizedUseCase[str]):
         reason: WorldStateFailureReason,
         occurred_at: datetime,
     ) -> None:
-        self._record_event(
+        self.record_event(
             WorldStateImportFailed(
                 snapshot_path=snapshot_path,
                 schema_version=schema_version,
@@ -204,7 +206,7 @@ class LoadWorldStateUseCase(AuthorizedUseCase[str]):
         reason: WorldStateCorruptionReason,
         occurred_at: datetime,
     ) -> None:
-        self._record_event(
+        self.record_event(
             WorldStateCorruptionDetected(
                 snapshot_path=snapshot_path,
                 reason=reason,

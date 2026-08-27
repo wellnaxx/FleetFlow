@@ -5,7 +5,6 @@ from typing import Annotated
 from fastapi import Depends
 
 from src.adapters.driving.http.dependencies.auth import AuthenticatedHTTPPrincipal, get_current_user
-from src.application.use_cases.state.load_world import LoadWorldStateUseCase
 from src.application.use_cases.state.save_world import SaveWorldStateUseCase
 from src.application.use_cases.trucks.view_all_trucks import ViewAllTrucksUseCase
 from src.composition.container import Container
@@ -53,25 +52,3 @@ def get_save_world_state_use_case(
         authz=principal.authz,
     )
 
-
-def get_load_world_state_use_case(
-    principal: Annotated[AuthenticatedHTTPPrincipal, Depends(get_current_user)],
-    container: Annotated[Container, Depends(get_container)],
-) -> LoadWorldStateUseCase:
-    """Build the world-state load use case for the authenticated request.
-
-    Args:
-        principal: Authenticated HTTP principal carrying request-scoped authorization.
-        container: Application dependency container.
-
-    Returns:
-        World-state load use case bound to snapshot gateway and persistence.
-
-    Raises:
-        HTTPException: Raised by `get_current_user` when authentication fails.
-    """
-    return LoadWorldStateUseCase(
-        container.world_state_gateway,
-        container.world_state_persistence,
-        authz=principal.authz,
-    )

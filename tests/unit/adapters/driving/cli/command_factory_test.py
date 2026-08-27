@@ -21,6 +21,7 @@ from src.adapters.driving.cli.commands.find_suitable_trucks_for_route import (
     FindSuitableTrucksForRoute,
 )
 from src.adapters.driving.cli.commands.get_fleet_overview import GetFleetOverview
+from src.adapters.driving.cli.commands.load_state import LoadState
 from src.adapters.driving.cli.commands.remove_package import RemovePackage
 from src.adapters.driving.cli.commands.remove_route import RemoveRoute
 from src.adapters.driving.cli.commands.view_all_customers import ViewAllCustomers
@@ -117,7 +118,7 @@ class CommandFactoryShould(unittest.TestCase):
         factory, container = self.make_factory()
         cases: list[tuple[str, str, list[str], object]] = [
             ("save state.json", "save", ["state.json"], container.state_cases.save),
-            ("load state.json", "load", ["state.json"], container.state_cases.load),
+            ("load state.json", "load", ["state.json"], container.command_bus),
             ("login alice", "login", ["alice"], container.command_bus),
             ("logout", "logout", [], container.command_bus),
             ("whoami", "whoami", [], container.query_bus),
@@ -283,6 +284,16 @@ class CommandFactoryShould(unittest.TestCase):
 
         self.assertIsInstance(command, RemovePackage)
         self.assertEqual(command.params, ("42",))
+        self.assertIs(command.command_bus, container.command_bus)
+
+    def test_load_state_receives_registered_command_bus(self) -> None:
+        """Build world-state loading with the container command bus."""
+        factory, container = self.make_factory()
+
+        command = cast(LoadState, factory.create("load world.json"))
+
+        self.assertIsInstance(command, LoadState)
+        self.assertEqual(command.params, ("world.json",))
         self.assertIs(command.command_bus, container.command_bus)
 
     def test_remove_route_receives_registered_command_bus(self) -> None:

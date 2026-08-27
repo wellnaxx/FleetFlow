@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 import cli_main
+from src.application.commands.state.load_world import LOAD_WORLD, LoadWorldCommand
 from src.application.enums.event_sources import EventSource
 from src.application.enums.world_state_corruption_reasons import WorldStateCorruptionReason
 from src.application.eventing.current_context import get_event_context, get_optional_event_context
@@ -28,6 +29,13 @@ def _container(*, autosave_enabled: bool = True, default_path: str = "state.json
 
 
 class MainStartupTests(unittest.TestCase):
+    def assert_default_load_dispatched(self, container: MagicMock) -> None:
+        """Assert startup requested the configured default snapshot through the bus."""
+        container.command_bus.dispatch.assert_called_once_with(
+            key=LOAD_WORLD,
+            command=LoadWorldCommand(path="state.json"),
+        )
+
     def _run_main(self, container: MagicMock, *, exists: bool) -> SimpleNamespace:
         user_repo = MagicMock()
         command_factory = MagicMock()
@@ -72,13 +80,15 @@ class MainStartupTests(unittest.TestCase):
         def bootstrap_admin(_auth: MagicMock, _store: MagicMock) -> None:
             observed_contexts.append(get_event_context())
 
-        def load_default_state(_path: str) -> None:
+        def load_default_state(*, key: object, command: object) -> None:
+            self.assertIs(key, LOAD_WORLD)
+            self.assertEqual(command, LoadWorldCommand(path="state.json"))
             observed_contexts.append(get_event_context())
 
         def start_engine() -> None:
             self.assertIsNone(get_optional_event_context())
 
-        container.state_cases.load.execute.side_effect = load_default_state
+        container.command_bus.dispatch.side_effect = load_default_state
         engine.start.side_effect = start_engine
 
         with (
@@ -133,7 +143,7 @@ class MainStartupTests(unittest.TestCase):
         result = self._run_main(container, exists=False)
 
         result.bootstrap_admin.assert_called_once_with(container.auth, result.user_repo)
-        container.state_cases.load.execute.assert_not_called()
+        container.command_bus.dispatch.assert_not_called()
         result.engine.start.assert_called_once_with()
 
     def test_main_loads_world_state_when_autosave_exists_and_is_valid(self) -> None:
@@ -141,12 +151,12 @@ class MainStartupTests(unittest.TestCase):
 
         result = self._run_main(container, exists=True)
 
-        container.state_cases.load.execute.assert_called_once_with("state.json")
+        self.assert_default_load_dispatched(container)
         result.engine.start.assert_called_once_with()
 
     def test_main_treats_missing_default_world_state_as_noop_even_after_exists_check(self) -> None:
         container = _container(default_path="state.json")
-        container.state_cases.load.execute.side_effect = WorldStateFileNotFoundError("missing")
+        container.command_bus.dispatch.side_effect = WorldStateFileNotFoundError("missing")
 
         with (
             patch("cli_main.print") as print_mock,
@@ -154,14 +164,17 @@ class MainStartupTests(unittest.TestCase):
         ):
             result = self._run_main(container, exists=True)
 
-        container.state_cases.load.execute.assert_called_once_with("state.json")
+        container.command_bus.dispatch.assert_called_once_with(
+            key=LOAD_WORLD,
+            command=LoadWorldCommand(path="state.json"),
+        )
         quarantine.assert_not_called()
         print_mock.assert_not_called()
         result.engine.start.assert_called_once_with()
 
     def test_main_warns_quarantines_and_continues_when_default_world_state_is_corrupt(self) -> None:
         container = _container(default_path="state.json")
-        container.state_cases.load.execute.side_effect = WorldStateCorruptionError(
+        container.command_bus.dispatch.side_effect = WorldStateCorruptionError(
             "bad snapshot",
             reason=WorldStateCorruptionReason.INVARIANT_VIOLATION,
         )
@@ -176,7 +189,7 @@ class MainStartupTests(unittest.TestCase):
         ):
             result = self._run_main(container, exists=True)
 
-        container.state_cases.load.execute.assert_called_once_with("state.json")
+        self.assert_default_load_dispatched(container)
         logger.exception.assert_called_once_with(
             "Failed to load default world state from %r.",
             "state.json",
@@ -194,7 +207,7 @@ class MainStartupTests(unittest.TestCase):
         self,
     ) -> None:
         container = _container(default_path="state.json")
-        container.state_cases.load.execute.side_effect = WorldStateCorruptionError(
+        container.command_bus.dispatch.side_effect = WorldStateCorruptionError(
             "bad snapshot",
             reason=WorldStateCorruptionReason.INVARIANT_VIOLATION,
         )
@@ -206,7 +219,7 @@ class MainStartupTests(unittest.TestCase):
         ):
             result = self._run_main(container, exists=True)
 
-        container.state_cases.load.execute.assert_called_once_with("state.json")
+        self.assert_default_load_dispatched(container)
         logger.exception.assert_called_once_with(
             "Failed to load default world state from %r.",
             "state.json",
@@ -222,7 +235,7 @@ class MainStartupTests(unittest.TestCase):
 
     def test_main_does_not_quarantine_non_corruption_startup_errors(self) -> None:
         container = _container(default_path="state.json")
-        container.state_cases.load.execute.side_effect = RuntimeError("runtime bug")
+        container.command_bus.dispatch.side_effect = RuntimeError("runtime bug")
 
         with (
             patch("cli_main.print") as print_mock,
@@ -248,7 +261,7 @@ class MainStartupTests(unittest.TestCase):
         result = self._run_main(container, exists=True)
 
         result.exists.assert_not_called()
-        container.state_cases.load.execute.assert_not_called()
+        container.command_bus.dispatch.assert_not_called()
         result.engine.start.assert_called_once_with()
 
     def test_main_wires_engine_with_container_dependencies(self) -> None:
@@ -308,7 +321,7 @@ class QuarantineCorruptWorldStateTests(unittest.TestCase):
 
     def test_main_does_not_quarantine_runtime_swap_errors(self) -> None:
         container = _container(default_path="state.json")
-        container.state_cases.load.execute.side_effect = WorldStateRuntimeSwapError(
+        container.command_bus.dispatch.side_effect = WorldStateRuntimeSwapError(
             "Failed to replace runtime world state."
         )
 
@@ -325,7 +338,10 @@ class QuarantineCorruptWorldStateTests(unittest.TestCase):
         ):
             cli_main.main()
 
-        container.state_cases.load.execute.assert_called_once_with("state.json")
+        container.command_bus.dispatch.assert_called_once_with(
+            key=LOAD_WORLD,
+            command=LoadWorldCommand(path="state.json"),
+        )
         quarantine.assert_not_called()
         print_mock.assert_not_called()
         command_factory_cls.assert_not_called()

@@ -25,7 +25,6 @@ from src.application.commands.state.advance_world import ADVANCE_WORLD_STATE
 from src.application.commands.state.load_world import LOAD_WORLD
 from src.application.commands.state.save_world import SAVE_WORLD
 from src.application.eventing.collector import EventCollector
-from src.application.handlers.commands.state.load_world import LoadWorldCommandHandler
 from src.application.handlers.commands.state.save_world import SaveWorldCommandHandler
 from src.application.handlers.queries.trucks.view_all_trucks import ViewAllTrucksQueryHandler
 from src.application.messaging.executors.event_draining import EventDrainingExecutor
@@ -179,7 +178,13 @@ def build_command_bus(
             event_collector=event_collector,
         ),
     )
-    bus.register(LOAD_WORLD, LoadWorldCommandHandler(state_cases.load))
+    bus.register(
+        LOAD_WORLD,
+        EventDrainingExecutor(
+            delegate=state_cases.load,
+            event_collector=event_collector,
+        ),
+    )
     bus.register(SAVE_WORLD, SaveWorldCommandHandler(state_cases.save))
 
     return bus

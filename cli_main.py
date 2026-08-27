@@ -8,6 +8,7 @@ from uuid import uuid4
 from src.adapters.driven.logging.config import configure_logging
 from src.adapters.driving.cli.command_factory import CommandFactory
 from src.adapters.driving.cli.engine import Engine
+from src.application.commands.state.load_world import LOAD_WORLD, LoadWorldCommand
 from src.application.enums.event_sources import EventSource
 from src.application.eventing.context import EventContext
 from src.application.eventing.current_context import bind_event_context
@@ -84,7 +85,10 @@ def _load_default_world_state(container: Container) -> None:
         return
 
     try:
-        container.state_cases.load.execute(default_world_state_path)
+        container.command_bus.dispatch(
+            key=LOAD_WORLD,
+            command=LoadWorldCommand(path=default_world_state_path),
+        )
     except WorldStateFileNotFoundError:
         return
     except WorldStateCorruptionError:
