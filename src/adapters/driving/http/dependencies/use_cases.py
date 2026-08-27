@@ -5,7 +5,6 @@ from typing import Annotated
 from fastapi import Depends
 
 from src.adapters.driving.http.dependencies.auth import AuthenticatedHTTPPrincipal, get_current_user
-from src.application.use_cases.state.advance_world_state import AdvanceWorldStateUseCase
 from src.application.use_cases.state.load_world import LoadWorldStateUseCase
 from src.application.use_cases.state.save_world import SaveWorldStateUseCase
 from src.application.use_cases.trucks.view_all_trucks import ViewAllTrucksUseCase
@@ -30,20 +29,6 @@ def get_view_all_trucks_use_case(
         HTTPException: Raised by `get_current_user` when authentication fails.
     """
     return ViewAllTrucksUseCase(container.vehicle_manager, authz=principal.authz)
-
-
-def get_advance_world_state_use_case(
-    container: Annotated[Container, Depends(get_container)],
-) -> AdvanceWorldStateUseCase:
-    """Build the world-state advancement use case for an HTTP request.
-
-    Args:
-        container: Application dependency container.
-
-    Returns:
-        World-state advancement use case bound to the heartbeat service.
-    """
-    return AdvanceWorldStateUseCase(container.heartbeat_service)
 
 
 def get_save_world_state_use_case(

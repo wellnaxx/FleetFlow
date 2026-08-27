@@ -53,6 +53,10 @@ class ContainerTests(unittest.TestCase):
             container.fleet_cases.get_overview._clock,  # pyright: ignore[reportPrivateUsage]
             container.clock,
         )
+        self.assertIs(
+            container.state_cases.advance._clock,  # pyright: ignore[reportPrivateUsage]
+            container.clock,
+        )
         self.assertIsInstance(container.customer_repo, InMemoryCustomerRepository)
         self.assertIsInstance(container.package_repo, InMemoryPackageRepository)
         self.assertIsInstance(container.route_repo, InMemoryRouteRepository)
@@ -118,6 +122,10 @@ class ContainerTests(unittest.TestCase):
         self.assertIs(container.fleet_cases.get_overview.authz, container.authz)
         self.assertIs(
             container.fleet_cases.get_overview._clock,  # pyright: ignore[reportPrivateUsage]
+            container.clock,
+        )
+        self.assertIs(
+            container.state_cases.advance._clock,  # pyright: ignore[reportPrivateUsage]
             container.clock,
         )
         self.assertIsInstance(container.world_state_gateway, PostgresWorldStateGateway)

@@ -307,7 +307,7 @@ class Container:
             view_all=ViewAllTrucksUseCase(self.vehicle_manager, self.authz),
         )
         self.state_cases = StateUseCases(
-            advance=AdvanceWorldStateUseCase(self.heartbeat_service),
+            advance=AdvanceWorldStateUseCase(self.heartbeat_service, clock=self.clock),
             save=SaveWorldStateUseCase(self.world_state_gateway, self.world_state_persistence, self.authz),
             load=LoadWorldStateUseCase(self.world_state_gateway, self.world_state_persistence, self.authz),
         )

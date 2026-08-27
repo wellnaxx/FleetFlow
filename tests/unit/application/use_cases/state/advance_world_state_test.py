@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import cast
 from unittest.mock import MagicMock
 
+from src.application.commands.state.advance_world import AdvanceWorldStateCommand
 from src.application.enums.route_reconciliation_reasons import RouteReconciliationReason
 from src.application.events.reconciliation_events import RouteStateReconciled
 from src.application.events.world_state_events import WorldStateAdvanced
@@ -36,9 +37,10 @@ class AdvanceWorldStateUseCaseShould(unittest.TestCase):
             mutated_trucks_released=(),
             reconciliation_events=(reconciliation_event,),
         )
-        use_case = AdvanceWorldStateUseCase(heartbeat_service)
+        clock = MagicMock(return_value=NOW)
+        use_case = AdvanceWorldStateUseCase(heartbeat_service, clock=clock)
 
-        result = use_case.execute(now=NOW)
+        result = use_case.execute(AdvanceWorldStateCommand())
 
         self.assertIs(result, heartbeat_service.advance.return_value)
         self.assertEqual(len(use_case.pending_events), 2)
@@ -46,7 +48,9 @@ class AdvanceWorldStateUseCaseShould(unittest.TestCase):
         advanced_event = cast(WorldStateAdvanced, use_case.pending_events[1])
         self.assertIsInstance(advanced_event, WorldStateAdvanced)
         self.assertEqual(advanced_event.event_version, 2)
+        self.assertEqual(advanced_event.occurred_at, NOW)
         self.assertEqual(advanced_event.trucks_reconciled, 0)
+        clock.assert_called_once_with()
         heartbeat_service.advance.assert_called_once_with(now=NOW)
 
     def test_record_no_events_when_heartbeat_changes_nothing(self) -> None:
@@ -57,11 +61,14 @@ class AdvanceWorldStateUseCaseShould(unittest.TestCase):
             mutated_trucks_moved=(),
             mutated_trucks_released=(),
         )
-        use_case = AdvanceWorldStateUseCase(heartbeat_service)
+        clock = MagicMock(return_value=NOW)
+        use_case = AdvanceWorldStateUseCase(heartbeat_service, clock=clock)
 
-        use_case.execute(now=NOW)
+        use_case.execute(AdvanceWorldStateCommand())
 
         self.assertEqual(use_case.pending_events, ())
+        clock.assert_called_once_with()
+        heartbeat_service.advance.assert_called_once_with(now=NOW)
 
 
 if __name__ == "__main__":

@@ -143,7 +143,7 @@ def main() -> None:
         container.authz,
         container.state_cases.save,
         container.default_world_state_path,
-        container.state_cases.advance,
+        container.command_bus,
         container.autosave_enabled,
         container.event_collector,
     ).start()

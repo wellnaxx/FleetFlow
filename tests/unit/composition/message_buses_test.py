@@ -82,6 +82,11 @@ class MessageBusCompositionShould(unittest.TestCase):
                 subject.EventDrainingExecutor,
                 self.route_cases.assign_truck,
             ),
+            (
+                subject.ADVANCE_WORLD_STATE,
+                subject.WorldStateAdvancementExecutor,
+                self.state_cases.advance,
+            ),
             (subject.LOAD_WORLD, subject.LoadWorldCommandHandler, self.state_cases.load),
             (subject.SAVE_WORLD, subject.SaveWorldCommandHandler, self.state_cases.save),
         )
@@ -101,7 +106,10 @@ class MessageBusCompositionShould(unittest.TestCase):
             actual_key, handler = cast(tuple[object, object], actual.args)
             self.assertIs(actual_key, key)
             self.assertIs(type(handler), handler_type)
-            if isinstance(handler, subject.EventDrainingExecutor):
+            if isinstance(
+                handler,
+                (subject.EventDrainingExecutor, subject.WorldStateAdvancementExecutor),
+            ):
                 self.assertIs(cast(object, vars(handler)["_delegate"]), use_case)
                 self.assertIs(
                     cast(object, vars(handler)["_event_collector"]),

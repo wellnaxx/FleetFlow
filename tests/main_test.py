@@ -263,7 +263,7 @@ class MainStartupTests(unittest.TestCase):
             container.authz,
             container.state_cases.save,
             "state.json",
-            container.state_cases.advance,
+            container.command_bus,
             True,
             container.event_collector,
         )

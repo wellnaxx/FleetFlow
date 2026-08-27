@@ -7,6 +7,7 @@ from datetime import datetime
 from uuid import uuid4
 
 from src.adapters.driving.cli.command_factory import CommandFactory
+from src.application.commands.state.advance_world import ADVANCE_WORLD_STATE, AdvanceWorldStateCommand
 from src.application.enums.event_sources import EventSource
 from src.application.eventing.collector import EventCollector
 from src.application.eventing.context import EventContext
@@ -15,8 +16,8 @@ from src.application.eventing.envelope import EventActor
 from src.application.results.heartbeat_summary_result import HeartbeatSummary
 from src.application.services.auth_service import AuthService
 from src.application.services.authorization_service import AuthorizationService
-from src.application.use_cases.state.advance_world_state import AdvanceWorldStateUseCase
 from src.application.use_cases.state.save_world import SaveWorldStateUseCase
+from src.ports.input.command_bus import CommandBus
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ class Engine:
         authz: AuthorizationService,
         save_world_state: SaveWorldStateUseCase,
         autosave_path: str,
-        advance_world_state: AdvanceWorldStateUseCase,
+        command_bus: CommandBus,
         autosave_enabled: bool,
         event_collector: EventCollector,
     ) -> None:
@@ -48,16 +49,19 @@ class Engine:
             authz: Authorization service used by commands.
             save_world_state: Use case used for post-mutation autosave.
             autosave_path: Default autosave path for state mutations.
-            advance_world_state: Use case used to run the pre-command heartbeat.
+            command_bus: Application command bus used to run the internal
+                pre-command heartbeat.
             autosave_enabled: Whether autosave is enabled.
-            event_collector: Collector used to publish heartbeat and autosave events.
+            event_collector: Collector used to publish events from the
+                remaining directly executed autosave workflow. Heartbeat event
+                publication is owned by its command-bus executor.
         """
         self._factory = factory
         self.auth = auth
         self.authz = authz
         self._save_world_state = save_world_state
         self._autosave_path = autosave_path
-        self._advance_world_state = advance_world_state
+        self._command_bus = command_bus
         self._autosave_enabled: bool = autosave_enabled
         self._running: bool = False
         self._event_collector = event_collector
@@ -422,16 +426,12 @@ class Engine:
             logger.info("Executing CLI command %s.", command_name)
 
             if not cmd.skips_heartbeat:
-                heartbeat_summary = self._advance_world_state.execute()
+                heartbeat_summary = self._command_bus.dispatch(
+                    key=ADVANCE_WORLD_STATE,
+                    command=AdvanceWorldStateCommand(),
+                )
                 heartbeat_changed = self._heartbeat_changed(heartbeat_summary)
                 if heartbeat_changed:
-                    self._event_collector.drain(
-                        (
-                            *heartbeat_summary.event_recorders,
-                            self._advance_world_state,
-                        )
-                    )
-
                     logger.info("Pre-command heartbeat changed world state before %s.", command_name)
 
             out = cmd.execute()

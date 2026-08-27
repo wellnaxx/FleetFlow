@@ -16,6 +16,7 @@ from src.application.commands.routes.assign_packages_to_route import AssignPacka
 from src.application.commands.routes.assign_truck_to_route import AssignTruckToRouteCommand
 from src.application.commands.routes.create_route import CreateRouteCommand
 from src.application.commands.routes.remove_route import RemoveRouteCommand
+from src.application.commands.state.advance_world import AdvanceWorldStateCommand
 from src.application.commands.state.load_world import LoadWorldCommand
 from src.application.commands.state.save_world import SaveWorldCommand
 from src.application.messaging.command import Command
@@ -33,6 +34,7 @@ PUBLISHED_COMMAND_TYPES: tuple[type[Command], ...] = (
     RemoveRouteCommand,
     AssignPackagesToRouteCommand,
     AssignTruckToRouteCommand,
+    AdvanceWorldStateCommand,
     LoadWorldCommand,
     SaveWorldCommand,
 )

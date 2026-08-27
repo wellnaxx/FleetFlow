@@ -3,11 +3,13 @@ from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 from src.adapters.driving.cli.engine import Engine
+from src.application.commands.state.advance_world import ADVANCE_WORLD_STATE, AdvanceWorldStateCommand
 from src.application.enums.event_sources import EventSource
 from src.application.eventing.current_context import get_event_context, get_optional_event_context
 from src.application.models.current_user_principal import CurrentUserPrincipal
 from src.application.results.heartbeat_summary_result import HeartbeatSummary
 from src.domain.enums.auth import Role
+from src.ports.input.command_bus import CommandBus
 
 if TYPE_CHECKING:
     from src.application.eventing.context import EventContext
@@ -40,9 +42,9 @@ class EngineTests(unittest.TestCase):
         auth.current_user = None
         authz = MagicMock()
         save_world = MagicMock()
-        advance = MagicMock()
+        advance = MagicMock(spec=CommandBus)
         event_collector = MagicMock()
-        advance.execute.return_value = HeartbeatSummary(
+        advance.dispatch.return_value = HeartbeatSummary(
             mutated_routes=(),
             mutated_packages=(),
             mutated_trucks_moved=(),
@@ -54,7 +56,7 @@ class EngineTests(unittest.TestCase):
             authz=authz,
             save_world_state=save_world,
             autosave_path="state.json",
-            advance_world_state=advance,
+            command_bus=advance,
             autosave_enabled=autosave_enabled,
             event_collector=event_collector,
         )
@@ -176,7 +178,10 @@ class EngineTests(unittest.TestCase):
             engine._exec_line("viewroute 1")  # pyright: ignore[reportPrivateUsage]
 
         factory.create.assert_called_once_with("viewroute 1")
-        advance.execute.assert_called_once_with()
+        advance.dispatch.assert_called_once_with(
+            key=ADVANCE_WORLD_STATE,
+            command=AdvanceWorldStateCommand(),
+        )
         cmd.execute.assert_called_once_with()
         mock_print.assert_called_once_with("ok")
 
@@ -188,7 +193,9 @@ class EngineTests(unittest.TestCase):
             observed_contexts.append(get_event_context())
             return "ok"
 
-        def advance_world() -> HeartbeatSummary:
+        def advance_world(*, key: object, command: object) -> HeartbeatSummary:
+            self.assertIs(key, ADVANCE_WORLD_STATE)
+            self.assertEqual(command, AdvanceWorldStateCommand())
             observed_contexts.append(get_event_context())
             return HeartbeatSummary(
                 mutated_routes=(),
@@ -207,7 +214,7 @@ class EngineTests(unittest.TestCase):
         cmd.autosaves_state = True
         cmd.execute.side_effect = execute_command
         factory.create.return_value = cmd
-        advance.execute.side_effect = advance_world
+        advance.dispatch.side_effect = advance_world
         save_world.execute.side_effect = autosave
 
         engine._exec_line("createroute SYD MEL")  # pyright: ignore[reportPrivateUsage]
@@ -260,7 +267,7 @@ class EngineTests(unittest.TestCase):
             engine._exec_line("whoami")  # pyright: ignore[reportPrivateUsage]
 
         factory.create.assert_called_once_with("whoami")
-        advance.execute.assert_not_called()
+        advance.dispatch.assert_not_called()
         cmd.execute.assert_called_once_with()
         mock_print.assert_called_once_with("ok")
 
@@ -278,7 +285,10 @@ class EngineTests(unittest.TestCase):
         with patch("builtins.print") as mock_print:
             engine._exec_line("save state.json")  # pyright: ignore[reportPrivateUsage]
 
-        advance.execute.assert_called_once_with()
+        advance.dispatch.assert_called_once_with(
+            key=ADVANCE_WORLD_STATE,
+            command=AdvanceWorldStateCommand(),
+        )
         cmd.execute.assert_called_once_with()
         save_world.execute.assert_called_once_with("state.json")
         event_collector: MagicMock = engine._event_collector  # pyright: ignore[reportPrivateUsage, reportAssignmentType]
@@ -298,7 +308,10 @@ class EngineTests(unittest.TestCase):
 
         engine._exec_line("viewallroutes")  # pyright: ignore[reportPrivateUsage]
 
-        advance.execute.assert_called_once_with()
+        advance.dispatch.assert_called_once_with(
+            key=ADVANCE_WORLD_STATE,
+            command=AdvanceWorldStateCommand(),
+        )
         save_world.execute.assert_not_called()
 
     def test_exec_line_autosaves_when_heartbeat_changes_state(self) -> None:
@@ -312,7 +325,7 @@ class EngineTests(unittest.TestCase):
         cmd.execute.return_value = "ok"
         factory.create.return_value = cmd
         package_recorder = MagicMock()
-        advance.execute.return_value = HeartbeatSummary(
+        advance.dispatch.return_value = HeartbeatSummary(
             mutated_routes=(),
             mutated_packages=(package_recorder,),
             mutated_trucks_moved=(),
@@ -322,12 +335,13 @@ class EngineTests(unittest.TestCase):
         with patch("builtins.print") as mock_print:
             engine._exec_line("viewallroutes")  # pyright: ignore[reportPrivateUsage]
 
-        advance.execute.assert_called_once_with()
+        advance.dispatch.assert_called_once_with(
+            key=ADVANCE_WORLD_STATE,
+            command=AdvanceWorldStateCommand(),
+        )
         save_world.execute.assert_called_once_with("state.json")
         event_collector: MagicMock = engine._event_collector  # pyright: ignore[reportPrivateUsage, reportAssignmentType]
-        self.assertEqual(event_collector.drain.call_count, 2)
-        event_collector.drain.assert_any_call((package_recorder, advance))
-        event_collector.drain.assert_any_call((save_world,))
+        event_collector.drain.assert_called_once_with((save_world,))
         mock_print.assert_called_once_with("ok")
 
     def test_exec_line_rebinds_after_session_mutation(self) -> None:
@@ -345,7 +359,7 @@ class EngineTests(unittest.TestCase):
         with patch("builtins.print") as mock_print:
             engine._exec_line("login admin")  # pyright: ignore[reportPrivateUsage]
 
-        advance.execute.assert_not_called()
+        advance.dispatch.assert_not_called()
         self.assertIs(authz.current_user, auth.current_user)
         mock_print.assert_called_once_with("logged in")
 
@@ -368,7 +382,10 @@ class EngineTests(unittest.TestCase):
         ):
             engine._exec_line("createroute A B")  # pyright: ignore[reportPrivateUsage]
 
-        advance.execute.assert_called_once_with()
+        advance.dispatch.assert_called_once_with(
+            key=ADVANCE_WORLD_STATE,
+            command=AdvanceWorldStateCommand(),
+        )
         event_collector: MagicMock = engine._event_collector  # pyright: ignore[reportPrivateUsage, reportAssignmentType]
         event_collector.drain.assert_called_once_with((save_world,))
         mock_logger.exception.assert_called_once_with(
@@ -388,7 +405,7 @@ class EngineTests(unittest.TestCase):
         with patch("builtins.print") as mock_print:
             engine._exec_line("broken")  # pyright: ignore[reportPrivateUsage]
 
-        advance.execute.assert_not_called()
+        advance.dispatch.assert_not_called()
         mock_print.assert_called_once_with("Error: bad input")
 
     def test_exec_line_prints_permission_error_cleanly(self) -> None:
@@ -399,7 +416,7 @@ class EngineTests(unittest.TestCase):
         with patch("builtins.print") as mock_print:
             engine._exec_line("save state.json")  # pyright: ignore[reportPrivateUsage]
 
-        advance.execute.assert_not_called()
+        advance.dispatch.assert_not_called()
         mock_print.assert_called_once_with("Permission Error: forbidden")
 
     def test_exec_line_logs_and_prints_unexpected_exception(self) -> None:
@@ -419,7 +436,10 @@ class EngineTests(unittest.TestCase):
         ):
             engine._exec_line("viewallroutes")  # pyright: ignore[reportPrivateUsage]
 
-        advance.execute.assert_called_once_with()
+        advance.dispatch.assert_called_once_with(
+            key=ADVANCE_WORLD_STATE,
+            command=AdvanceWorldStateCommand(),
+        )
         mock_logger.exception.assert_called_once_with(
             "Unexpected CLI error while executing %r",
             "viewallroutes",
@@ -440,7 +460,10 @@ class EngineTests(unittest.TestCase):
         with patch("builtins.print") as mock_print:
             engine._exec_line("load state.json")  # pyright: ignore[reportPrivateUsage]
 
-        advance.execute.assert_called_once_with()
+        advance.dispatch.assert_called_once_with(
+            key=ADVANCE_WORLD_STATE,
+            command=AdvanceWorldStateCommand(),
+        )
         cmd.execute.assert_called_once_with()
         save_world.execute.assert_not_called()
         mock_print.assert_called_once_with("Loaded state.")

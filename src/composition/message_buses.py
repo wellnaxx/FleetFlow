@@ -21,6 +21,7 @@ from src.application.commands.routes.assign_packages_to_route import ASSIGN_PACK
 from src.application.commands.routes.assign_truck_to_route import ASSIGN_TRUCK_TO_ROUTE
 from src.application.commands.routes.create_route import CREATE_ROUTE
 from src.application.commands.routes.remove_route import REMOVE_ROUTE
+from src.application.commands.state.advance_world import ADVANCE_WORLD_STATE
 from src.application.commands.state.load_world import LOAD_WORLD
 from src.application.commands.state.save_world import SAVE_WORLD
 from src.application.eventing.collector import EventCollector
@@ -28,6 +29,7 @@ from src.application.handlers.commands.state.load_world import LoadWorldCommandH
 from src.application.handlers.commands.state.save_world import SaveWorldCommandHandler
 from src.application.handlers.queries.trucks.view_all_trucks import ViewAllTrucksQueryHandler
 from src.application.messaging.executors.event_draining import EventDrainingExecutor
+from src.application.messaging.executors.world_state_advancement import WorldStateAdvancementExecutor
 from src.application.messaging.in_process_command_bus import InProcessCommandBus
 from src.application.messaging.in_process_query_bus import InProcessQueryBus
 from src.application.queries.audit.view_audits import VIEW_AUDITS
@@ -170,6 +172,13 @@ def build_command_bus(
     )
 
     # World state management
+    bus.register(
+        ADVANCE_WORLD_STATE,
+        WorldStateAdvancementExecutor(
+            delegate=state_cases.advance,
+            event_collector=event_collector,
+        ),
+    )
     bus.register(LOAD_WORLD, LoadWorldCommandHandler(state_cases.load))
     bus.register(SAVE_WORLD, SaveWorldCommandHandler(state_cases.save))
 
