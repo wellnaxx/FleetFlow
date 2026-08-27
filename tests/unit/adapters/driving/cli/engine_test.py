@@ -1,9 +1,10 @@
 import unittest
 from typing import TYPE_CHECKING
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 from src.adapters.driving.cli.engine import Engine
 from src.application.commands.state.advance_world import ADVANCE_WORLD_STATE, AdvanceWorldStateCommand
+from src.application.commands.state.save_world import SAVE_WORLD, SaveWorldCommand
 from src.application.enums.event_sources import EventSource
 from src.application.eventing.current_context import get_event_context, get_optional_event_context
 from src.application.models.current_user_principal import CurrentUserPrincipal
@@ -41,10 +42,8 @@ class EngineTests(unittest.TestCase):
         auth = MagicMock()
         auth.current_user = None
         authz = MagicMock()
-        save_world = MagicMock()
-        advance = MagicMock(spec=CommandBus)
-        event_collector = MagicMock()
-        advance.dispatch.return_value = HeartbeatSummary(
+        command_bus = MagicMock(spec=CommandBus)
+        command_bus.dispatch.return_value = HeartbeatSummary(
             mutated_routes=(),
             mutated_packages=(),
             mutated_trucks_moved=(),
@@ -54,13 +53,11 @@ class EngineTests(unittest.TestCase):
             factory=factory,
             auth=auth,
             authz=authz,
-            save_world_state=save_world,
             autosave_path="state.json",
-            command_bus=advance,
+            command_bus=command_bus,
             autosave_enabled=autosave_enabled,
-            event_collector=event_collector,
         )
-        return engine, factory, auth, authz, save_world, advance
+        return engine, factory, auth, authz, command_bus, command_bus
 
     def test_rebind_app_updates_authz_current_user(self) -> None:
         engine, _factory, auth, authz, _save_world, _advance = self.make_engine()
@@ -186,26 +183,29 @@ class EngineTests(unittest.TestCase):
         mock_print.assert_called_once_with("ok")
 
     def test_exec_line_binds_one_cli_context_for_heartbeat_command_and_autosave(self) -> None:
-        engine, factory, _auth, _authz, save_world, advance = self.make_engine()
+        engine, factory, _auth, _authz, _save_world, advance = self.make_engine()
         observed_contexts: list[EventContext] = []
 
         def execute_command() -> str:
             observed_contexts.append(get_event_context())
             return "ok"
 
-        def advance_world(*, key: object, command: object) -> HeartbeatSummary:
-            self.assertIs(key, ADVANCE_WORLD_STATE)
-            self.assertEqual(command, AdvanceWorldStateCommand())
-            observed_contexts.append(get_event_context())
-            return HeartbeatSummary(
-                mutated_routes=(),
-                mutated_packages=(),
-                mutated_trucks_moved=(),
-                mutated_trucks_released=(),
-            )
+        heartbeat_summary = HeartbeatSummary(
+            mutated_routes=(),
+            mutated_packages=(),
+            mutated_trucks_moved=(),
+            mutated_trucks_released=(),
+        )
 
-        def autosave(_path: str) -> None:
+        def dispatch(*, key: object, command: object) -> HeartbeatSummary | str:
             observed_contexts.append(get_event_context())
+            if key is ADVANCE_WORLD_STATE:
+                self.assertEqual(command, AdvanceWorldStateCommand())
+                return heartbeat_summary
+
+            self.assertIs(key, SAVE_WORLD)
+            self.assertEqual(command, SaveWorldCommand(path="state.json"))
+            return "/abs/state.json"
 
         cmd = MagicMock()
         cmd.skips_heartbeat = False
@@ -214,8 +214,7 @@ class EngineTests(unittest.TestCase):
         cmd.autosaves_state = True
         cmd.execute.side_effect = execute_command
         factory.create.return_value = cmd
-        advance.dispatch.side_effect = advance_world
-        save_world.execute.side_effect = autosave
+        advance.dispatch.side_effect = dispatch
 
         engine._exec_line("createroute SYD MEL")  # pyright: ignore[reportPrivateUsage]
 
@@ -272,7 +271,7 @@ class EngineTests(unittest.TestCase):
         mock_print.assert_called_once_with("ok")
 
     def test_exec_line_autosaves_mutating_commands(self) -> None:
-        engine, factory, _auth, _authz, save_world, advance = self.make_engine()
+        engine, factory, _auth, _authz, _save_world, advance = self.make_engine()
 
         cmd = MagicMock()
         cmd.skips_heartbeat = False
@@ -285,18 +284,18 @@ class EngineTests(unittest.TestCase):
         with patch("builtins.print") as mock_print:
             engine._exec_line("save state.json")  # pyright: ignore[reportPrivateUsage]
 
-        advance.dispatch.assert_called_once_with(
-            key=ADVANCE_WORLD_STATE,
-            command=AdvanceWorldStateCommand(),
-        )
         cmd.execute.assert_called_once_with()
-        save_world.execute.assert_called_once_with("state.json")
-        event_collector: MagicMock = engine._event_collector  # pyright: ignore[reportPrivateUsage, reportAssignmentType]
-        event_collector.drain.assert_called_once_with((save_world,))
+        self.assertEqual(
+            advance.dispatch.call_args_list,
+            [
+                call(key=ADVANCE_WORLD_STATE, command=AdvanceWorldStateCommand()),
+                call(key=SAVE_WORLD, command=SaveWorldCommand(path="state.json")),
+            ],
+        )
         mock_print.assert_called_once_with("ok")
 
     def test_exec_line_does_not_autosave_non_mutating_commands(self) -> None:
-        engine, factory, _auth, _authz, save_world, advance = self.make_engine()
+        engine, factory, _auth, _authz, _save_world, advance = self.make_engine()
 
         cmd = MagicMock()
         cmd.skips_heartbeat = False
@@ -312,10 +311,10 @@ class EngineTests(unittest.TestCase):
             key=ADVANCE_WORLD_STATE,
             command=AdvanceWorldStateCommand(),
         )
-        save_world.execute.assert_not_called()
+        self.assertEqual(advance.dispatch.call_count, 1)
 
     def test_exec_line_autosaves_when_heartbeat_changes_state(self) -> None:
-        engine, factory, _auth, _authz, save_world, advance = self.make_engine()
+        engine, factory, _auth, _authz, _save_world, advance = self.make_engine()
 
         cmd = MagicMock()
         cmd.skips_heartbeat = False
@@ -335,13 +334,13 @@ class EngineTests(unittest.TestCase):
         with patch("builtins.print") as mock_print:
             engine._exec_line("viewallroutes")  # pyright: ignore[reportPrivateUsage]
 
-        advance.dispatch.assert_called_once_with(
-            key=ADVANCE_WORLD_STATE,
-            command=AdvanceWorldStateCommand(),
+        self.assertEqual(
+            advance.dispatch.call_args_list,
+            [
+                call(key=ADVANCE_WORLD_STATE, command=AdvanceWorldStateCommand()),
+                call(key=SAVE_WORLD, command=SaveWorldCommand(path="state.json")),
+            ],
         )
-        save_world.execute.assert_called_once_with("state.json")
-        event_collector: MagicMock = engine._event_collector  # pyright: ignore[reportPrivateUsage, reportAssignmentType]
-        event_collector.drain.assert_called_once_with((save_world,))
         mock_print.assert_called_once_with("ok")
 
     def test_exec_line_rebinds_after_session_mutation(self) -> None:
@@ -364,7 +363,7 @@ class EngineTests(unittest.TestCase):
         mock_print.assert_called_once_with("logged in")
 
     def test_exec_line_warns_when_autosave_fails(self) -> None:
-        engine, factory, _auth, _authz, save_world, advance = self.make_engine()
+        engine, factory, _auth, _authz, _save_world, advance = self.make_engine()
 
         cmd = MagicMock()
         cmd.skips_heartbeat = False
@@ -374,7 +373,14 @@ class EngineTests(unittest.TestCase):
         cmd.execute.return_value = "ok"
         factory.create.return_value = cmd
 
-        save_world.execute.side_effect = OSError("disk full")
+        heartbeat_summary = advance.dispatch.return_value
+
+        def dispatch(*, key: object, command: object) -> object:
+            if key is SAVE_WORLD:
+                raise OSError("disk full")
+            return heartbeat_summary
+
+        advance.dispatch.side_effect = dispatch
 
         with (
             patch("builtins.print") as mock_print,
@@ -382,12 +388,13 @@ class EngineTests(unittest.TestCase):
         ):
             engine._exec_line("createroute A B")  # pyright: ignore[reportPrivateUsage]
 
-        advance.dispatch.assert_called_once_with(
-            key=ADVANCE_WORLD_STATE,
-            command=AdvanceWorldStateCommand(),
+        self.assertEqual(
+            advance.dispatch.call_args_list,
+            [
+                call(key=ADVANCE_WORLD_STATE, command=AdvanceWorldStateCommand()),
+                call(key=SAVE_WORLD, command=SaveWorldCommand(path="state.json")),
+            ],
         )
-        event_collector: MagicMock = engine._event_collector  # pyright: ignore[reportPrivateUsage, reportAssignmentType]
-        event_collector.drain.assert_called_once_with((save_world,))
         mock_logger.exception.assert_called_once_with(
             "Autosave failed after executing %r",
             "createroute A B",
@@ -447,7 +454,9 @@ class EngineTests(unittest.TestCase):
         mock_print.assert_called_once_with("Unexpected error: boom")
 
     def test_exec_line_does_not_autosave_mutating_command_when_autosave_disabled(self) -> None:
-        engine, factory, _auth, _authz, save_world, advance = self.make_engine(autosave_enabled=False)
+        engine, factory, _auth, _authz, _save_world, advance = self.make_engine(
+            autosave_enabled=False
+        )
 
         cmd = MagicMock()
         cmd.skips_heartbeat = False
@@ -465,7 +474,7 @@ class EngineTests(unittest.TestCase):
             command=AdvanceWorldStateCommand(),
         )
         cmd.execute.assert_called_once_with()
-        save_world.execute.assert_not_called()
+        self.assertEqual(advance.dispatch.call_count, 1)
         mock_print.assert_called_once_with("Loaded state.")
 
     def test_start_retries_invalid_main_menu_choice_before_exiting(self) -> None:

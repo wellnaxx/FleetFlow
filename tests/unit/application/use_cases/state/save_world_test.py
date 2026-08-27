@@ -2,6 +2,7 @@ import unittest
 from datetime import datetime
 from unittest.mock import MagicMock
 
+from src.application.commands.state.save_world import SaveWorldCommand
 from src.application.dto.world_state_snapshot_dto import (
     CountersSnapshot,
     WorldSnapshotData,
@@ -37,7 +38,7 @@ class SaveWorldStateUseCaseTests(unittest.TestCase):
 
         use_case = SaveWorldStateUseCase(gateway, persistence, manager_authz())
 
-        result = use_case.execute("state.json")
+        result = use_case.execute(SaveWorldCommand(path="state.json"))
 
         gateway.build_snapshot.assert_called_once_with()
         persistence.write.assert_called_once_with("state.json", snapshot)
@@ -57,7 +58,7 @@ class SaveWorldStateUseCaseTests(unittest.TestCase):
             clock=lambda: occurred_at,
         )
 
-        use_case.execute("state.json")
+        use_case.execute(SaveWorldCommand(path="state.json"))
 
         event = use_case.pending_events[0]
         self.assertIsInstance(event, WorldStateExported)
@@ -78,7 +79,7 @@ class SaveWorldStateUseCaseTests(unittest.TestCase):
         persistence.write.return_value = "/abs/state.json"
         use_case = SaveWorldStateUseCase(gateway, persistence, manager_authz())
 
-        result = use_case.execute("  state.json  ")
+        result = use_case.execute(SaveWorldCommand(path="  state.json  "))
 
         persistence.write.assert_called_once_with("state.json", snapshot)
         self.assertEqual(result, "/abs/state.json")
@@ -90,7 +91,7 @@ class SaveWorldStateUseCaseTests(unittest.TestCase):
         use_case = SaveWorldStateUseCase(gateway, persistence, manager_authz(), clock=lambda: occurred_at)
 
         with self.assertRaises(ValidationError) as ctx:
-            use_case.execute("   ")
+            use_case.execute(SaveWorldCommand(path="   "))
 
         self.assertIn("World state snapshot path is required.", str(ctx.exception))
         gateway.build_snapshot.assert_not_called()
@@ -113,7 +114,7 @@ class SaveWorldStateUseCaseTests(unittest.TestCase):
         use_case = SaveWorldStateUseCase(gateway, persistence, manager_authz(), clock=lambda: occurred_at)
 
         with self.assertRaises(ValidationError) as ctx:
-            use_case.execute("bad")
+            use_case.execute(SaveWorldCommand(path="bad"))
 
         self.assertIn("Invalid snapshot path.", str(ctx.exception))
         self._assert_export_failed(
@@ -134,7 +135,7 @@ class SaveWorldStateUseCaseTests(unittest.TestCase):
         use_case = SaveWorldStateUseCase(gateway, persistence, manager_authz(), clock=lambda: occurred_at)
 
         with self.assertRaises(WorldStatePersistenceError) as ctx:
-            use_case.execute("state.json")
+            use_case.execute(SaveWorldCommand(path="state.json"))
 
         self.assertIn("Could not write world state snapshot.", str(ctx.exception))
         self._assert_export_failed(

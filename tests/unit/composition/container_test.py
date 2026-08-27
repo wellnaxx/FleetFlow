@@ -74,6 +74,7 @@ class ContainerTests(unittest.TestCase):
         self.assertIsNone(container.query_bus.dispatch(WHO_AM_I, WhoAmIQuery()))
         self.assertIs(container.world_state_gateway._snapshot_service, container.world_state_snapshot_service)  # type: ignore[attr-defined]
         self.assertIs(container.state_cases.save._world_state_gateway, container.world_state_gateway)  # type: ignore[attr-defined]
+        self.assertIs(container.state_cases.save._clock, container.clock)  # type: ignore[attr-defined]
         self.assertEqual(container.default_world_state_path, "state.json")
 
     @patch("src.composition.container.PostgresFleetOverviewQuery")
@@ -141,5 +142,6 @@ class ContainerTests(unittest.TestCase):
         self.assertIsNone(container.world_state_runtime)
         self.assertIsNone(container.world_state_snapshot_service)
         self.assertIs(container.state_cases.save._world_state_gateway, container.world_state_gateway)  # type: ignore[attr-defined]
+        self.assertIs(container.state_cases.save._clock, container.clock)  # type: ignore[attr-defined]
         audit_repo_cls.assert_called_once_with()
         fleet_overview_query_cls.assert_called_once_with()

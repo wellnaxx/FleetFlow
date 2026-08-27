@@ -117,7 +117,7 @@ class CommandFactoryShould(unittest.TestCase):
     def test_container_backed_commands_receive_parsed_params(self) -> None:
         factory, container = self.make_factory()
         cases: list[tuple[str, str, list[str], object]] = [
-            ("save state.json", "save", ["state.json"], container.state_cases.save),
+            ("save state.json", "save", ["state.json"], container.command_bus),
             ("load state.json", "load", ["state.json"], container.command_bus),
             ("login alice", "login", ["alice"], container.command_bus),
             ("logout", "logout", [], container.command_bus),

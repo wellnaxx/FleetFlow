@@ -1,60 +1,79 @@
+"""Tests for the command-bus-backed world-state save CLI adapter."""
+
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from src.adapters.driving.cli.commands.save_state import SaveState
+from src.application.commands.state.save_world import SAVE_WORLD, SaveWorldCommand
+from src.ports.input.command_bus import CommandBus
 
 
 class SaveStateShould(unittest.TestCase):
-    def make_cmd(self, params: list[str] | None = None) -> SaveState:
-        cmd = SaveState.__new__(SaveState)
-        cmd._params = tuple(params or [])  # type: ignore[reportAttributeAccessIssue]
-        cmd._use_case = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        cmd._event_collector = MagicMock()  # type: ignore[reportAttributeAccessIssue]
-        return cmd
+    """Verify argument handling, dispatch, rendering, and failure propagation."""
 
-    def test_no_mutates_state_flag(self) -> None:
-        self.assertFalse(getattr(SaveState, "mutates_state", False))
+    def setUp(self) -> None:
+        """Create an isolated command bus for each test."""
+        self.command_bus = MagicMock(spec=CommandBus)
 
-    def test_execute_propagates_permission_errors_from_use_case(self) -> None:
-        cmd = self.make_cmd(["state.json"])
-        cmd._use_case.execute.side_effect = PermissionError("Missing permission: APP_SAVE_STATE")  # type: ignore[reportAttributeAccessIssue]
+    def make_command(self, *params: str) -> SaveState:
+        """Build the adapter with the supplied raw CLI parameters."""
+        return SaveState(params, self.command_bus)
 
-        with self.assertRaises(PermissionError) as ctx:
-            cmd.execute()
+    def test_declares_no_runtime_mutation_or_automatic_follow_up_save(self) -> None:
+        self.assertFalse(SaveState.mutates_state)
+        self.assertFalse(SaveState.autosaves_state)
 
-        self.assertIn("APP_SAVE_STATE", str(ctx.exception))
-        cmd._use_case.execute.assert_called_once_with("state.json")  # type: ignore[reportUnknownMemberType]
+    def test_dispatches_explicit_path_and_renders_resolved_path(self) -> None:
+        self.command_bus.dispatch.return_value = "/abs/state-01.json"
 
-    @patch("src.adapters.driving.cli.commands.save_state.validate_params_count")
-    def test_execute_with_explicit_path_returns_formatted_message(self, mock_validate: MagicMock) -> None:
-        cmd = self.make_cmd(["/tmp/state-01.json"])
-        cmd._use_case.execute.return_value = "/abs/state-01.json"  # type: ignore[reportAttributeAccessIssue]
+        result = self.make_command("/tmp/state-01.json").execute()
 
-        result = cmd.execute()
-
-        mock_validate.assert_called_once_with(cmd.params, 0, 1)
-        cmd._use_case.execute.assert_called_once_with("/tmp/state-01.json")  # type: ignore[reportUnknownMemberType]
         self.assertEqual(result, "Saved state to /abs/state-01.json")
+        self.command_bus.dispatch.assert_called_once_with(
+            key=SAVE_WORLD,
+            command=SaveWorldCommand(path="/tmp/state-01.json"),
+        )
 
-    @patch("src.adapters.driving.cli.commands.save_state.validate_params_count")
-    def test_execute_uses_default_filename_when_no_params(self, mock_validate: MagicMock) -> None:
-        cmd = self.make_cmd([])
-        cmd._use_case.execute.return_value = "/abs/state.json"  # type: ignore[reportAttributeAccessIssue]
+    def test_dispatches_default_path_when_omitted(self) -> None:
+        self.command_bus.dispatch.return_value = "/abs/state.json"
 
-        result = cmd.execute()
+        result = self.make_command().execute()
 
-        mock_validate.assert_called_once_with(cmd.params, 0, 1)
-        cmd._use_case.execute.assert_called_once_with("state.json")  # type: ignore[reportUnknownMemberType]
         self.assertEqual(result, "Saved state to /abs/state.json")
+        self.command_bus.dispatch.assert_called_once_with(
+            key=SAVE_WORLD,
+            command=SaveWorldCommand(path="state.json"),
+        )
 
-    @patch("src.adapters.driving.cli.commands.save_state.validate_params_count")
-    def test_execute_propagates_errors_from_use_case(self, mock_validate: MagicMock) -> None:
-        cmd = self.make_cmd(["bad/dir/state.json"])
-        cmd._use_case.execute.side_effect = ValueError("cannot write")  # type: ignore[reportAttributeAccessIssue]
+    def test_rejects_more_than_one_path_before_dispatch(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Expected between 0 and 1"):
+            self.make_command("one.json", "two.json").execute()
 
-        with self.assertRaises(ValueError) as ctx:
-            cmd.execute()
+        self.command_bus.dispatch.assert_not_called()
 
-        self.assertIn("cannot write", str(ctx.exception))
-        mock_validate.assert_called_once_with(cmd.params, 0, 1)
-        cmd._use_case.execute.assert_called_once_with("bad/dir/state.json")  # type: ignore[reportUnknownMemberType]
+    def test_propagates_permission_error_from_command_bus(self) -> None:
+        self.command_bus.dispatch.side_effect = PermissionError("Missing permission: APP_SAVE_STATE")
+
+        with self.assertRaisesRegex(PermissionError, "APP_SAVE_STATE"):
+            self.make_command("state.json").execute()
+
+        self._assert_state_save_dispatched()
+
+    def test_propagates_command_bus_failure(self) -> None:
+        self.command_bus.dispatch.side_effect = RuntimeError("save failed")
+
+        with self.assertRaisesRegex(RuntimeError, "save failed"):
+            self.make_command("state.json").execute()
+
+        self._assert_state_save_dispatched()
+
+    def _assert_state_save_dispatched(self) -> None:
+        """Assert dispatch of the canonical save command for the test path."""
+        self.command_bus.dispatch.assert_called_once_with(
+            key=SAVE_WORLD,
+            command=SaveWorldCommand(path="state.json"),
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

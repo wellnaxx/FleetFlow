@@ -21,15 +21,16 @@ from src.domain.enums.auth import Permission
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from src.application.commands.state.save_world import SaveWorldCommand
     from src.ports.output.world_state_gateway import WorldStateGatewayPort
     from src.ports.output.world_state_persistence import WorldStatePersistencePort
 
 logger = logging.getLogger(__name__)
 
 
-def _resolve_path_target_id(_self: SaveWorldStateUseCase, path: str) -> str | None:
+def _resolve_path_target_id(_self: SaveWorldStateUseCase, command: SaveWorldCommand) -> str | None:
     """Resolve the audit target resource id for a world state export attempt."""
-    return path.strip() or None
+    return command.path.strip() or None
 
 
 class SaveWorldStateUseCase(AuthorizedUseCase[str]):
@@ -62,11 +63,11 @@ class SaveWorldStateUseCase(AuthorizedUseCase[str]):
         target_resource_type=AuditResourceType.WORLD_STATE,
         target_resource_id_resolver=_resolve_path_target_id,
     )
-    def execute(self, path: str) -> str:
+    def execute(self, command: SaveWorldCommand) -> str:
         """Build a snapshot and write it to persistence.
 
         Args:
-            path: Target filename or path for the snapshot file.
+            command: Snapshot path selected by the driving adapter.
 
         Returns:
             The resolved absolute path written by the persistence adapter.
@@ -77,11 +78,12 @@ class SaveWorldStateUseCase(AuthorizedUseCase[str]):
             WorldStatePersistenceError: If the snapshot cannot be written.
         """
         occurred_at = self._clock()
+        path = command.path
 
         try:
             stripped_path = validate_world_state_path(path)
         except ValidationError:
-            self._record_event(
+            self.record_event(
                 WorldStateExportFailed(
                     snapshot_path=path,
                     schema_version=None,
@@ -103,7 +105,7 @@ class SaveWorldStateUseCase(AuthorizedUseCase[str]):
         try:
             written_path = self._persistence.write(stripped_path, snapshot)
         except ValueError as exc:
-            self._record_event(
+            self.record_event(
                 WorldStateExportFailed(
                     snapshot_path=stripped_path,
                     schema_version=snapshot.schema_version,
@@ -113,7 +115,7 @@ class SaveWorldStateUseCase(AuthorizedUseCase[str]):
             )
             raise ValidationError(str(exc)) from exc
         except OSError as exc:
-            self._record_event(
+            self.record_event(
                 WorldStateExportFailed(
                     snapshot_path=stripped_path,
                     schema_version=snapshot.schema_version,
@@ -123,7 +125,7 @@ class SaveWorldStateUseCase(AuthorizedUseCase[str]):
             )
             raise WorldStatePersistenceError("Could not write world state snapshot.") from exc
 
-        self._record_event(
+        self.record_event(
             WorldStateExported(
                 snapshot_path=written_path,
                 schema_version=snapshot.schema_version,

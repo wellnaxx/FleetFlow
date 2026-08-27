@@ -145,11 +145,9 @@ def main() -> None:
         cmd_factory,
         auth,
         container.authz,
-        container.state_cases.save,
         container.default_world_state_path,
         container.command_bus,
         container.autosave_enabled,
-        container.event_collector,
     ).start()
 
 

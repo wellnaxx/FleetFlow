@@ -8,15 +8,14 @@ from uuid import uuid4
 
 from src.adapters.driving.cli.command_factory import CommandFactory
 from src.application.commands.state.advance_world import ADVANCE_WORLD_STATE, AdvanceWorldStateCommand
+from src.application.commands.state.save_world import SAVE_WORLD, SaveWorldCommand
 from src.application.enums.event_sources import EventSource
-from src.application.eventing.collector import EventCollector
 from src.application.eventing.context import EventContext
 from src.application.eventing.current_context import bind_event_context
 from src.application.eventing.envelope import EventActor
 from src.application.results.heartbeat_summary_result import HeartbeatSummary
 from src.application.services.auth_service import AuthService
 from src.application.services.authorization_service import AuthorizationService
-from src.application.use_cases.state.save_world import SaveWorldStateUseCase
 from src.ports.input.command_bus import CommandBus
 
 logger = logging.getLogger(__name__)
@@ -35,11 +34,9 @@ class Engine:
         factory: CommandFactory,
         auth: AuthService,
         authz: AuthorizationService,
-        save_world_state: SaveWorldStateUseCase,
         autosave_path: str,
         command_bus: CommandBus,
         autosave_enabled: bool,
-        event_collector: EventCollector,
     ) -> None:
         """Initialize the CLI engine.
 
@@ -47,24 +44,18 @@ class Engine:
             factory: Command factory used to parse and instantiate commands.
             auth: Authentication service used to keep menu state in sync.
             authz: Authorization service used by commands.
-            save_world_state: Use case used for post-mutation autosave.
             autosave_path: Default autosave path for state mutations.
-            command_bus: Application command bus used to run the internal
-                pre-command heartbeat.
+            command_bus: Application command bus used for the internal
+                pre-command heartbeat and post-mutation autosave.
             autosave_enabled: Whether autosave is enabled.
-            event_collector: Collector used to publish events from the
-                remaining directly executed autosave workflow. Heartbeat event
-                publication is owned by its command-bus executor.
         """
         self._factory = factory
         self.auth = auth
         self.authz = authz
-        self._save_world_state = save_world_state
         self._autosave_path = autosave_path
         self._command_bus = command_bus
         self._autosave_enabled: bool = autosave_enabled
         self._running: bool = False
-        self._event_collector = event_collector
 
     def _rebind_app(self) -> None:
         """Synchronize authorization state after session-changing commands."""
@@ -442,16 +433,13 @@ class Engine:
             if self._autosave_enabled and (heartbeat_changed or (cmd.mutates_state and cmd.autosaves_state)):
                 try:
                     logger.info("Autosaving world state after %s.", command_name)
-                    self._save_world_state.execute(self._autosave_path)
+                    self._command_bus.dispatch(
+                        key=SAVE_WORLD,
+                        command=SaveWorldCommand(path=self._autosave_path),
+                    )
                 except Exception as se:
-                    try:
-                        self._event_collector.drain((self._save_world_state,))
-                    except Exception:
-                        logger.exception("Failed to publish autosave failure events.")
                     logger.exception("Autosave failed after executing %r", line)
                     print(f"Warning: autosave failed: {se}")
-                else:
-                    self._event_collector.drain((self._save_world_state,))
 
             if out:
                 print(out)

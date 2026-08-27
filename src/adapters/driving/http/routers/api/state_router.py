@@ -3,18 +3,15 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from src.adapters.driven.persistence.database.errors import DatabaseError
-from src.adapters.driving.http.dependencies.eventing import execute_and_drain_events, get_event_collector
 from src.adapters.driving.http.dependencies.message_buses import get_authenticated_command_bus
-from src.adapters.driving.http.dependencies.use_cases import get_save_world_state_use_case
 from src.adapters.driving.http.schemas.state import WorldStatePathRequest, WorldStatePathResponse
 from src.application.commands.state.load_world import LOAD_WORLD, LoadWorldCommand
-from src.application.eventing.collector import EventCollector
+from src.application.commands.state.save_world import SAVE_WORLD, SaveWorldCommand
 from src.application.exceptions.world_state_errors import (
     WorldStateFileNotFoundError,
     WorldStatePersistenceError,
     WorldStateRuntimeSwapError,
 )
-from src.application.use_cases.state.save_world import SaveWorldStateUseCase
 from src.ports.input.command_bus import CommandBus
 
 state_router = APIRouter(prefix="/state", tags=["state"])
@@ -22,16 +19,15 @@ state_router = APIRouter(prefix="/state", tags=["state"])
 
 @state_router.post("/save", status_code=status.HTTP_200_OK)
 def save_world(
-    use_case: Annotated[SaveWorldStateUseCase, Depends(get_save_world_state_use_case)],
+    command_bus: Annotated[CommandBus, Depends(get_authenticated_command_bus)],
     request: WorldStatePathRequest,
-    event_collector: Annotated[EventCollector, Depends(get_event_collector)],
 ) -> WorldStatePathResponse:
     """Save the current world state to a snapshot path.
 
     Args:
-        use_case: Use case for saving world state, injected by FastAPI.
+        command_bus: Authenticated command bus whose registered executor owns
+            authorization and export-event publication.
         request: Snapshot path request.
-        event_collector: Collector used to publish world-state export events.
 
     Returns:
         Resolved path metadata for the saved snapshot.
@@ -43,10 +39,9 @@ def save_world(
             * 500 - Snapshot export or persistence failure.
     """
     try:
-        path = execute_and_drain_events(
-            recorder=use_case,
-            event_collector=event_collector,
-            action=lambda: use_case.execute(request.path),
+        path = command_bus.dispatch(
+            key=SAVE_WORLD,
+            command=SaveWorldCommand(path=request.path),
         )
         return WorldStatePathResponse(path=path, message="World state saved.")
     except (DatabaseError, WorldStatePersistenceError) as exc:

@@ -88,7 +88,7 @@ class MessageBusCompositionShould(unittest.TestCase):
                 self.state_cases.advance,
             ),
             (subject.LOAD_WORLD, subject.EventDrainingExecutor, self.state_cases.load),
-            (subject.SAVE_WORLD, subject.SaveWorldCommandHandler, self.state_cases.save),
+            (subject.SAVE_WORLD, subject.EventDrainingExecutor, self.state_cases.save),
         )
 
         with patch.object(subject, "InProcessCommandBus", return_value=bus):
