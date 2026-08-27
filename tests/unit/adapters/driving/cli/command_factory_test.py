@@ -180,7 +180,7 @@ class CommandFactoryShould(unittest.TestCase):
                 ["5", "42", "43"],
                 container.command_bus,
             ),
-            ("viewalltrucks", "viewalltrucks", [], container.truck_cases.view_all),
+            ("viewalltrucks", "viewalltrucks", [], container.query_bus),
             ("viewauditlogs", "viewauditlogs", [], container.query_bus),
             (
                 "getfleetoverview 25",

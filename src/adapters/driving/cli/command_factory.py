@@ -64,9 +64,7 @@ _CONTAINER_COMMANDS: dict[str, CommandBuilder] = {
     "findsuitableroutesforpackage": lambda container, params: FindSuitableRoutesForPackage(
         params, container.query_bus
     ),
-    "viewalltrucks": lambda container, params: ViewAllTrucks(
-        params, container.truck_cases.view_all, container.event_collector
-    ),
+    "viewalltrucks": lambda container, params: ViewAllTrucks(params, container.query_bus),
     "viewauditlogs": lambda container, params: ViewAuditLogs(params, container.query_bus),
     "getfleetoverview": lambda container, params: GetFleetOverview(params, container.query_bus),
 }

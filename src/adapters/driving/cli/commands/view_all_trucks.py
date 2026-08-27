@@ -1,11 +1,11 @@
-"""CLI command for listing trucks."""
+"""Query-bus-backed CLI command for listing trucks."""
 
-from src.adapters.driving.cli.commands.base_command.event_draining_command import EventDrainingCommand
+from src.adapters.driving.cli.commands.base_command.query_bus_command import QueryBusCommand
 from src.adapters.driving.cli.rendering.truck_info_renderer import render_truck_info
-from src.application.use_cases.trucks.view_all_trucks import ViewAllTrucksUseCase
+from src.application.queries.trucks.view_all_trucks import VIEW_ALL_TRUCKS, ViewAllTrucksQuery
 
 
-class ViewAllTrucks(EventDrainingCommand[ViewAllTrucksUseCase]):
+class ViewAllTrucks(QueryBusCommand):
     """Render the current fleet."""
 
     def execute(self) -> str:
@@ -17,5 +17,8 @@ class ViewAllTrucks(EventDrainingCommand[ViewAllTrucksUseCase]):
         Raises:
             PermissionError: If the caller lacks truck view permission.
         """
-        trucks = self._run_and_drain(self._use_case, self._use_case.execute)
+        trucks = self.query_bus.dispatch(
+            key=VIEW_ALL_TRUCKS,
+            query=ViewAllTrucksQuery(),
+        )
         return "\n\n".join(render_truck_info(truck) for truck in trucks) or "No trucks."

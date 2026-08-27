@@ -25,7 +25,6 @@ from src.application.commands.state.advance_world import ADVANCE_WORLD_STATE
 from src.application.commands.state.load_world import LOAD_WORLD
 from src.application.commands.state.save_world import SAVE_WORLD
 from src.application.eventing.collector import EventCollector
-from src.application.handlers.queries.trucks.view_all_trucks import ViewAllTrucksQueryHandler
 from src.application.messaging.executors.event_draining import EventDrainingExecutor
 from src.application.messaging.executors.world_state_advancement import WorldStateAdvancementExecutor
 from src.application.messaging.in_process_command_bus import InProcessCommandBus
@@ -323,6 +322,12 @@ def build_query_bus(
     )
 
     # Truck-facing queries
-    bus.register(VIEW_ALL_TRUCKS, ViewAllTrucksQueryHandler(truck_cases.view_all))
+    bus.register(
+        VIEW_ALL_TRUCKS,
+        EventDrainingExecutor(
+            delegate=truck_cases.view_all,
+            event_collector=event_collector,
+        ),
+    )
 
     return bus

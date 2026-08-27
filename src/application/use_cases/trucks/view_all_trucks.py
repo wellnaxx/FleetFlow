@@ -2,6 +2,7 @@
 
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.authorization_operations import AuthorizationOperation
+from src.application.queries.trucks.view_all_trucks import ViewAllTrucksQuery
 from src.application.services.authorization_service import AuthorizationService, requires
 from src.application.use_cases.base.authorized_use_case import AuthorizedUseCase
 from src.domain.entities.truck import Truck
@@ -28,8 +29,11 @@ class ViewAllTrucksUseCase(AuthorizedUseCase[list[Truck]]):
         target_resource_type=AuditResourceType.TRUCK,
         target_resource_id_resolver=None,
     )
-    def execute(self) -> list[Truck]:
+    def execute(self, query: ViewAllTrucksQuery) -> list[Truck]:
         """Return the current fleet listing.
+
+        Args:
+            query: Fieldless request for the complete truck listing.
 
         Returns:
             Trucks currently known to the vehicle manager.
@@ -38,4 +42,5 @@ class ViewAllTrucksUseCase(AuthorizedUseCase[list[Truck]]):
             PermissionError: If the caller lacks truck view permission.
             DatabaseError: If truck persistence lookup fails.
         """
+        del query
         return self._vehicles.list_fleet()

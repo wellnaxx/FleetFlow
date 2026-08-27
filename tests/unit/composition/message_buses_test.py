@@ -167,7 +167,7 @@ class MessageBusCompositionShould(unittest.TestCase):
                 subject.EventDrainingExecutor,
                 self.route_cases.find_suitable_routes,
             ),
-            (subject.VIEW_ALL_TRUCKS, subject.ViewAllTrucksQueryHandler, self.truck_cases.view_all),
+            (subject.VIEW_ALL_TRUCKS, subject.EventDrainingExecutor, self.truck_cases.view_all),
         )
 
         with patch.object(subject, "InProcessQueryBus", return_value=bus):
