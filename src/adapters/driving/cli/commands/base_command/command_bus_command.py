@@ -15,4 +15,4 @@ class CommandBusCommand(BaseCommand[CommandBus]):
     @property
     def command_bus(self) -> CommandBus:
         """Return the command bus injected by the command factory."""
-        return self.use_case
+        return self.dependency

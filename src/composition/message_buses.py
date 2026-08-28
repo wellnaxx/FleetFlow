@@ -206,10 +206,10 @@ def build_query_bus(
 ) -> InProcessQueryBus:
     """Build a query bus containing every application query executor.
 
-    A fresh bus is created for each call. Legacy handlers and directly
-    registered use cases are bound under their canonical typed keys. Migrated
-    event-aware workflows are decorated to drain their execution-local events
-    when dispatched; no query executes during construction.
+    A fresh bus is created for each call. Use cases are bound under their
+    canonical typed keys. Event-aware workflows are decorated to drain their
+    execution-local events when dispatched; no query executes during
+    construction.
 
     Args:
         audit_cases: Audit-facing use cases.

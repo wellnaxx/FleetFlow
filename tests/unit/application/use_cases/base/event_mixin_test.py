@@ -1,4 +1,4 @@
-"""Tests for transitional application-event recording behavior."""
+"""Tests for scoped and focused unscoped application-event recording."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ class SampleApplicationEvent(ApplicationEvent):
 
 
 class ApplicationRecorder(ApplicationEventRecorderMixin):
-    """Legacy-capable application recorder fake."""
+    """Application recorder fake supporting both execution modes."""
 
     def __init__(self) -> None:
         self._pending_events: list[ApplicationEvent] = []
@@ -38,11 +38,11 @@ class DomainRecorder(DomainEventRecorderMixin):
 
 
 class ApplicationEventRecorderMixinShould(unittest.TestCase):
-    """Verify mutually exclusive scoped and legacy event destinations."""
+    """Verify mutually exclusive scoped and unscoped event destinations."""
 
     def test_record_on_use_case_when_no_scope_is_bound(self) -> None:
         recorder = ApplicationRecorder()
-        event = self._event("legacy")
+        event = self._event("unscoped")
 
         recorder.record_event(event)
 

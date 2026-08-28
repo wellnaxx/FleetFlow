@@ -7,11 +7,12 @@ from src.shared.event_recorder_mixin import EventRecorderMixin
 
 
 class ApplicationEventRecorderMixin(EventRecorderMixin[ApplicationEvent]):
-    """Record application events through scoped or legacy storage.
+    """Record application events through scoped or unscoped storage.
 
-    Bus-migrated workflows write into an execution-local recorder scope.
-    Legacy adapters execute without a scope and retain events on the use-case
-    instance for explicit drainage. An event is written to exactly one
+    Production workflows run through message executors and write into an
+    execution-local recorder scope. Focused use-case tests may execute a use
+    case without infrastructure; those calls retain events on the use-case
+    instance for direct assertions. An event is written to exactly one
     destination.
     """
 
@@ -36,9 +37,8 @@ class ApplicationEventRecorderMixin(EventRecorderMixin[ApplicationEvent]):
         """Register a mutated domain entity with the active execution scope.
 
         Bus-executed workflows use this hook to make domain events available
-        to the scoped event-draining executor. During legacy direct execution,
-        no scope exists and adapters retain responsibility for draining the
-        returned entities explicitly.
+        to the scoped event-draining executor. During intentional unscoped
+        execution, no publication scope exists and registration is a no-op.
 
         Args:
             recorder: Domain entity whose pending events were produced by the

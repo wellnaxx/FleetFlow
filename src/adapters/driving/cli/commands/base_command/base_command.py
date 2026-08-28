@@ -7,9 +7,9 @@ from collections.abc import Iterable
 class BaseCommand[T](ABC):
     """Abstract base for all CLI commands.
 
-    Concrete commands receive one application execution dependency. Existing
-    adapters generally receive a use case directly, while bus-migrated
-    adapters receive a command or query bus through a specialized subclass.
+    Concrete commands receive one application execution dependency. Current
+    adapters receive either a command bus or query bus through a specialized
+    subclass.
 
     Class flags describe command side effects for the CLI engine:
     `mutates_state` means the command changes runtime world state,
@@ -26,16 +26,16 @@ class BaseCommand[T](ABC):
     def __init__(
         self,
         params: Iterable[str],
-        use_case: T,
+        dependency: T,
     ) -> None:
-        """Initialize a command with raw CLI params and its use case.
+        """Initialize a command with raw CLI parameters and its dependency.
 
         Args:
             params: Raw string parameters parsed from the CLI.
-            use_case: Application use case executed by the command.
+            dependency: Application execution dependency used by the command.
         """
         self._params = tuple(params)
-        self._use_case = use_case
+        self._dependency = dependency
 
     @property
     def params(self) -> tuple[str, ...]:
@@ -43,14 +43,9 @@ class BaseCommand[T](ABC):
         return self._params
 
     @property
-    def use_case(self) -> T:
-        """Return the execution dependency stored by the legacy base slot.
-
-        Direct-use-case commands interpret this value as a use case. The
-        bus-specific base classes expose it through a semantically named
-        ``command_bus`` or ``query_bus`` property during adapter migration.
-        """
-        return self._use_case
+    def dependency(self) -> T:
+        """Return the command's injected application dependency."""
+        return self._dependency
 
     @abstractmethod
     def execute(self) -> str:

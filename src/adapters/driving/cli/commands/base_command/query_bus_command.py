@@ -15,4 +15,4 @@ class QueryBusCommand(BaseCommand[QueryBus]):
     @property
     def query_bus(self) -> QueryBus:
         """Return the query bus injected by the command factory."""
-        return self.use_case
+        return self.dependency

@@ -18,8 +18,8 @@ class WorldStateAdvancementExecutor:
     well as reconciliation and aggregate application events. Unlike the
     generic event-draining executor, this executor derives changed domain
     recorders from the successful ``HeartbeatSummary`` and drains those
-    recorders before the application-event scope. This preserves the causal
-    ordering established by the legacy heartbeat path.
+    recorders before the application-event scope. This preserves heartbeat's
+    required causal publication order.
     """
 
     def __init__(

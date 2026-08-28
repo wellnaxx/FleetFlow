@@ -10,11 +10,11 @@ class _DummyCommand(BaseCommand[object]):
 
 class BaseCommandShould(unittest.TestCase):
     def test_exposes_constructor_dependencies(self) -> None:
-        use_case = object()
+        dependency = object()
 
-        cmd = _DummyCommand(["a", "b"], use_case)
+        cmd = _DummyCommand(["a", "b"], dependency)
 
-        self.assertIs(cmd.use_case, use_case)
+        self.assertIs(cmd.dependency, dependency)
         self.assertEqual(cmd.params, ("a", "b"))
 
     def test_defaults_mutation_flags_to_false(self) -> None:
