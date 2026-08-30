@@ -1,10 +1,12 @@
 import unittest
 from datetime import datetime
 from decimal import Decimal
+from enum import StrEnum
 from uuid import uuid4
 
 from src.shared.validation import (
     require_datetime,
+    require_enum,
     require_finite_decimal,
     require_finite_positive_decimal,
     require_int,
@@ -23,7 +25,22 @@ from src.shared.validation import (
 )
 
 
+class SampleValue(StrEnum):
+    VALID = "valid"
+
+
+class OtherValue(StrEnum):
+    VALID = "valid"
+
+
 class SharedValidation_Should(unittest.TestCase):
+    def test_enum_helper_requires_member_of_expected_enum(self) -> None:
+        self.assertIsNone(require_enum(SampleValue.VALID, "value", SampleValue))
+
+        for value in ("valid", OtherValue.VALID, None):
+            with self.subTest(value=value), self.assertRaises(TypeError):
+                require_enum(value, "value", SampleValue)
+
     def test_require_int_accepts_int_and_rejects_bool_and_other_types(self) -> None:
         self.assertEqual(require_int(3, "value"), 3)
 

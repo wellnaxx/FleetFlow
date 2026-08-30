@@ -3,6 +3,7 @@
 import math
 from datetime import datetime
 from decimal import Decimal
+from enum import StrEnum
 from uuid import UUID
 
 
@@ -160,6 +161,21 @@ def require_non_empty_str(value: object, field_name: str) -> str:
     if not normalized:
         raise ValueError(f"{field_name} must be a non-empty string.")
     return normalized
+
+
+def require_enum(value: object, field_name: str, enum_class: type[StrEnum]) -> None:
+    """Require a value that is an instance of the expected string enum.
+
+    Args:
+        value: Runtime value to validate.
+        field_name: Field name used in the error message.
+        enum_class: Expected ``StrEnum`` subclass.
+
+    Raises:
+        TypeError: If ``value`` is not a member of ``enum_class``.
+    """
+    if not isinstance(value, enum_class):
+        raise TypeError(f"{field_name}: expected {enum_class.__name__}, got {type(value).__name__}.")
 
 
 def require_datetime(value: object, field_name: str) -> datetime:

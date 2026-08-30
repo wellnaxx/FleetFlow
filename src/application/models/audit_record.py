@@ -13,15 +13,15 @@ from uuid import UUID
 from src.application.enums.audit_actions import AuditAction
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.event_sources import EventSource
-from src.application.models.audit_validation import (
+from src.shared.json_types import JSONObject
+from src.shared.json_validation import require_json_object
+from src.shared.validation import (
     require_datetime,
     require_enum,
-    require_json_object,
+    require_non_empty_str,
     require_positive_int,
-    require_str,
     require_uuid,
 )
-from src.shared.json_types import JSONObject
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -80,7 +80,7 @@ class AuditRecordDraft:
         """
         require_uuid(self.event_id, "event_id")
         require_positive_int(self.event_version, "event_version")
-        object.__setattr__(self, "event_type", require_str(self.event_type, "event_type"))
+        object.__setattr__(self, "event_type", require_non_empty_str(self.event_type, "event_type"))
         require_datetime(self.occurred_at, "occurred_at")
         require_datetime(self.recorded_at, "recorded_at")
         require_uuid(self.envelope_id, "envelope_id")
@@ -91,10 +91,14 @@ class AuditRecordDraft:
         if self.actor_user_id is not None:
             require_positive_int(self.actor_user_id, "actor_user_id")
         if self.actor_username is not None:
-            object.__setattr__(self, "actor_username", require_str(self.actor_username, "actor_username"))
+            object.__setattr__(
+                self,
+                "actor_username",
+                require_non_empty_str(self.actor_username, "actor_username"),
+            )
         require_enum(self.resource_type, "resource_type", AuditResourceType)
         if self.resource_id is not None:
-            object.__setattr__(self, "resource_id", require_str(self.resource_id, "resource_id"))
+            object.__setattr__(self, "resource_id", require_non_empty_str(self.resource_id, "resource_id"))
         require_enum(self.action, "action", AuditAction)
         object.__setattr__(self, "payload_json", require_json_object(self.payload_json, "payload_json"))
 

@@ -7,14 +7,9 @@ from src.application.enums.audit_actions import AuditAction
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.event_sources import EventSource
 from src.application.messaging.query import Query
-from src.application.models.audit_validation import (
-    require_datetime,
-    require_enum,
-    require_ordered_optional_datetime_range,
-    require_positive_int,
-    require_str,
-)
+from src.application.models.audit_validation import require_ordered_optional_datetime_range
 from src.application.use_cases.pagination import PageQuery
+from src.shared.validation import require_datetime, require_enum, require_non_empty_str, require_positive_int
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -55,13 +50,13 @@ class AuditLogFilter:
     def __post_init__(self) -> None:
         """Validate and normalize audit-log filters."""
         if self.event_type is not None:
-            object.__setattr__(self, "event_type", require_str(self.event_type, "event_type"))
+            object.__setattr__(self, "event_type", require_non_empty_str(self.event_type, "event_type"))
 
         if self.resource_type is not None:
             require_enum(self.resource_type, "resource_type", AuditResourceType)
 
         if self.resource_id is not None:
-            object.__setattr__(self, "resource_id", require_str(self.resource_id, "resource_id"))
+            object.__setattr__(self, "resource_id", require_non_empty_str(self.resource_id, "resource_id"))
 
         if self.action is not None:
             require_enum(self.action, "action", AuditAction)
@@ -70,7 +65,11 @@ class AuditLogFilter:
             require_positive_int(self.actor_user_id, "actor_user_id")
 
         if self.actor_username is not None:
-            object.__setattr__(self, "actor_username", require_str(self.actor_username, "actor_username"))
+            object.__setattr__(
+                self,
+                "actor_username",
+                require_non_empty_str(self.actor_username, "actor_username"),
+            )
 
         if self.source is not None:
             require_enum(self.source, "source", EventSource)

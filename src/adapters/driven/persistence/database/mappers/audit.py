@@ -9,8 +9,8 @@ from src.application.enums.audit_actions import AuditAction
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.event_sources import EventSource
 from src.application.models.audit_record import AuditRecord
-from src.application.models.audit_validation import require_json_object
 from src.shared.json_types import JSONObject
+from src.shared.json_validation import require_json_object
 from src.shared.validation import (
     require_datetime,
     require_int,
