@@ -70,6 +70,7 @@ class PackageStateReconciled(ApplicationEvent):
             ValueError: If no reason is supplied or a reason occurs more than
                 once.
         """
+        super().__post_init__()
         if not self.reasons:
             raise ValueError("Package reconciliation requires at least one reason.")
         if len(set(self.reasons)) != len(self.reasons):

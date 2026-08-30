@@ -1,7 +1,7 @@
 """Tests for the audit-log CLI command."""
 
 import unittest
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import cast
 from unittest.mock import MagicMock, patch
 
@@ -79,9 +79,9 @@ class ViewAuditLogsShould(unittest.TestCase):
                 "--occurred_to",
                 "2026-07-06 11:00",
                 "--created_from",
-                "2026-07-06",
+                "2026-07-06T00:00:00+00:00",
                 "--created_to",
-                "2026-07-07",
+                "2026-07-07T00:00:00+00:00",
             ]
         )
         query_bus.dispatch.return_value = PageResult(items=(), total=0, limit=10, offset=5)
@@ -103,8 +103,8 @@ class ViewAuditLogsShould(unittest.TestCase):
         self.assertIs(query.filters.source, EventSource.CLI)
         self.assertEqual(query.filters.occurred_from, datetime(2026, 7, 6, 10, 0))
         self.assertEqual(query.filters.occurred_to, datetime(2026, 7, 6, 11, 0))
-        self.assertEqual(query.filters.created_from, datetime(2026, 7, 6))
-        self.assertEqual(query.filters.created_to, datetime(2026, 7, 7))
+        self.assertEqual(query.filters.created_from, datetime(2026, 7, 6, tzinfo=UTC))
+        self.assertEqual(query.filters.created_to, datetime(2026, 7, 7, tzinfo=UTC))
 
     def test_execute_rejects_invalid_option_shapes(self) -> None:
         cases = (

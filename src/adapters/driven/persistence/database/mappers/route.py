@@ -7,7 +7,12 @@ from src.adapters.driven.persistence.database.executor import RowDict
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.enums.route_status import RouteStatus
 from src.domain.value_objects.location_code import LocationCode
-from src.shared.validation import require_int, require_optional_datetime, require_optional_int, require_str
+from src.shared.validation import (
+    require_int,
+    require_optional_int,
+    require_optional_naive_datetime,
+    require_str,
+)
 
 
 class RouteRow(TypedDict):
@@ -65,7 +70,7 @@ def as_route_row(row: RowDict) -> RouteRow:
         TypeError: If a required route column has an unexpected type.
     """
     route_id = require_int(row["route_id"], "route_id")
-    departure_time = require_optional_datetime(row["departure_time"], "departure_time")
+    departure_time = require_optional_naive_datetime(row["departure_time"], "departure_time")
     status = require_str(row["status"], "status")
     truck_vehicle_id = require_optional_int(row["truck_vehicle_id"], "truck_vehicle_id")
 

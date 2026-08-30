@@ -18,7 +18,7 @@ from src.adapters.driven.persistence.database.mappers.fleet_overview import (
 )
 from src.adapters.driven.persistence.database.queries import QUERIES
 from src.application.results.fleet_overview import ActiveRouteOverview, FleetOverview
-from src.shared.validation import require_datetime, require_positive_int
+from src.shared.validation import require_naive_datetime, require_positive_int
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -70,9 +70,7 @@ class PostgresFleetOverviewQuery:
                 distance.
             RuntimeError: If an active route position lacks required fields.
         """
-        generated_at = require_datetime(generated_at, "generated_at")
-        if generated_at.tzinfo is not None and generated_at.utcoffset() is not None:
-            raise ValueError("generated_at must be timezone-naive.")
+        generated_at = require_naive_datetime(generated_at, "generated_at")
 
         active_route_limit = require_positive_int(active_route_limit, "active_route_limit")
         if active_route_limit > 100:

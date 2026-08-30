@@ -12,8 +12,8 @@ from src.domain.enums.item_status import ItemStatus
 from src.domain.value_objects.location_code import LocationCode
 from src.shared.validation import (
     require_int,
-    require_optional_datetime,
     require_optional_int,
+    require_optional_naive_datetime,
     require_optional_str,
     require_str,
 )
@@ -82,7 +82,7 @@ def as_package_row(row: RowDict) -> PackageRow:
     weight = row["weight"]
     status = require_str(row["status"], "status")
     current_location = require_optional_str(row["current_location"], "current_location")
-    expected_arrival = require_optional_datetime(row["expected_arrival"], "expected_arrival")
+    expected_arrival = require_optional_naive_datetime(row["expected_arrival"], "expected_arrival")
     customer_id = require_int(row["customer_id"], "customer_id")
     route_id = require_optional_int(row["route_id"], "route_id")
 

@@ -2,7 +2,7 @@
 
 import math
 import unittest
-from datetime import datetime
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any, cast
 from uuid import UUID, uuid4
 
@@ -55,6 +55,19 @@ class AuditRecordDraftShould(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises((TypeError, ValueError)):
                 AuditRecordDraft(**make_draft_kwargs(actor_user_id=cast(Any, value)))
 
+    def test_require_business_occurrence_time_and_utc_recording_time(self) -> None:
+        with self.assertRaisesRegex(ValueError, "occurred_at must be timezone-naive"):
+            AuditRecordDraft(
+                **make_draft_kwargs(occurred_at=datetime(2026, 1, 1, 12, 0, tzinfo=UTC))
+            )
+
+        for recorded_at in (
+            datetime(2026, 1, 1, 12, 0, 1),
+            datetime(2026, 1, 1, 12, 0, 1, tzinfo=timezone(timedelta(hours=2))),
+        ):
+            with self.subTest(recorded_at=recorded_at), self.assertRaises(ValueError):
+                AuditRecordDraft(**make_draft_kwargs(recorded_at=recorded_at))
+
     def test_reject_invalid_event_version(self) -> None:
         for value in (0, -1, True, "2"):
             with self.subTest(value=value), self.assertRaises((TypeError, ValueError)):
@@ -93,19 +106,19 @@ class AuditRecordShould(unittest.TestCase):
         record = AuditRecord(
             **make_draft_kwargs(
                 audit_id=1,
-                created_at=datetime(2026, 1, 1, 12, 0, 2),
+                created_at=datetime(2026, 1, 1, 12, 0, 2, tzinfo=UTC),
             )
         )
 
         self.assertEqual(record.audit_id, 1)
-        self.assertEqual(record.created_at, datetime(2026, 1, 1, 12, 0, 2))
+        self.assertEqual(record.created_at, datetime(2026, 1, 1, 12, 0, 2, tzinfo=UTC))
 
     def test_reject_invalid_persisted_metadata(self) -> None:
         with self.assertRaises(ValueError):
             AuditRecord(
                 **make_draft_kwargs(
                     audit_id=0,
-                    created_at=datetime(2026, 1, 1, 12, 0, 2),
+                    created_at=datetime(2026, 1, 1, 12, 0, 2, tzinfo=UTC),
                 )
             )
 
@@ -117,6 +130,19 @@ class AuditRecordShould(unittest.TestCase):
                 )
             )
 
+    def test_require_utc_creation_time(self) -> None:
+        for created_at in (
+            datetime(2026, 1, 1, 12, 0, 2),
+            datetime(2026, 1, 1, 12, 0, 2, tzinfo=timezone(timedelta(hours=-5))),
+        ):
+            with self.subTest(created_at=created_at), self.assertRaises(ValueError):
+                AuditRecord(
+                    **make_draft_kwargs(
+                        audit_id=1,
+                        created_at=created_at,
+                    )
+                )
+
 
 def make_draft_kwargs(**overrides: object) -> dict[str, Any]:
     """Return valid audit-record construction kwargs with optional overrides."""
@@ -125,7 +151,7 @@ def make_draft_kwargs(**overrides: object) -> dict[str, Any]:
         "event_version": 2,
         "event_type": "PackageCreated",
         "occurred_at": datetime(2026, 1, 1, 12, 0),
-        "recorded_at": datetime(2026, 1, 1, 12, 0, 1),
+        "recorded_at": datetime(2026, 1, 1, 12, 0, 1, tzinfo=UTC),
         "envelope_id": UUID("22222222-2222-2222-2222-222222222222"),
         "correlation_id": UUID("33333333-3333-3333-3333-333333333333"),
         "causation_id": UUID("44444444-4444-4444-4444-444444444444"),

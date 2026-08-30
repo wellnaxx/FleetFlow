@@ -103,26 +103,30 @@ def normalize_string(value: str, field_name: str = "value") -> str:
 def try_parse_datetime(value: str, field_name: str = "value") -> datetime:
     """Parse a CLI datetime value using supported command formats.
 
-    Supported formats are ``YYYY-MM-DDTHH:MM:SS``, ``YYYY-MM-DD HH:MM``,
-    and ``YYYY-MM-DD``.
+    Supported formats are ``YYYY-MM-DDTHH:MM:SS`` with an optional UTC
+    offset, ``YYYY-MM-DD HH:MM``, and ``YYYY-MM-DD``. Domain-specific models
+    decide whether the parsed value must be naive, aware, or UTC.
 
     Args:
         value: Raw CLI token.
         field_name: Human-readable field or option name for error messages.
 
     Returns:
-        Parsed naive ``datetime`` value.
+        Parsed ``datetime`` value, preserving any supplied UTC offset.
 
     Raises:
         ValueError: If the token does not match a supported datetime format.
     """
-    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+    for fmt in ("%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
         try:
             return datetime.strptime(value, fmt)
         except ValueError:
             continue
 
-    raise ValueError(f"{field_name} must be a datetime, e.g. 2026-07-06T14:30:00.")
+    raise ValueError(
+        f"{field_name} must be a datetime, e.g. 2026-07-06T14:30:00 or "
+        "2026-07-06T14:30:00+00:00."
+    )
 
 
 def parse_departure_from_tail(tokens: list[str]) -> tuple[list[str], datetime | None]:

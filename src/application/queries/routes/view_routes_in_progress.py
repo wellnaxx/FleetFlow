@@ -7,6 +7,7 @@ from typing import Final
 from src.application.messaging.query import Query, QueryKey
 from src.domain.entities.delivery_route import DeliveryRoute
 from src.domain.value_objects.route_schedule import RoutePosition
+from src.shared.validation import require_naive_datetime
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -21,8 +22,8 @@ class ViewRoutesInProgressQuery(Query):
     now: datetime
 
     def __post_init__(self) -> None:
-        if self.now.tzinfo is not None and self.now.utcoffset() is not None:
-            raise ValueError("now must be a naive app-local datetime")
+        """Require a timezone-naive app-local evaluation timestamp."""
+        require_naive_datetime(self.now, "now")
 
 
 VIEW_ROUTES_IN_PROGRESS: Final[

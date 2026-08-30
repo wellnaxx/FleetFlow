@@ -12,12 +12,13 @@ from src.application.models.audit_record import AuditRecord
 from src.shared.json_types import JSONObject
 from src.shared.json_validation import require_json_object
 from src.shared.validation import (
-    require_datetime,
     require_int,
+    require_naive_datetime,
     require_optional_int,
     require_optional_str,
     require_optional_uuid,
     require_str,
+    require_utc_datetime,
     require_uuid,
 )
 
@@ -105,8 +106,8 @@ def _as_audit_row(row: RowDict) -> AuditRow:
     event_id = require_uuid(row["event_id"], "event_id")
     event_version = require_int(row["event_version"], "event_version")
     event_type = require_str(row["event_type"], "event_type")
-    occurred_at = require_datetime(row["occurred_at"], "occurred_at")
-    recorded_at = require_datetime(row["recorded_at"], "recorded_at")
+    occurred_at = require_naive_datetime(row["occurred_at"], "occurred_at")
+    recorded_at = require_utc_datetime(row["recorded_at"], "recorded_at")
     envelope_id = require_uuid(row["envelope_id"], "envelope_id")
     correlation_id = require_uuid(row["correlation_id"], "correlation_id")
     causation_id = require_optional_uuid(row["causation_id"], "causation_id")
@@ -117,7 +118,7 @@ def _as_audit_row(row: RowDict) -> AuditRow:
     resource_id = require_optional_str(row["resource_id"], "resource_id")
     action = require_str(row["action"], "action")
     payload_json = row["payload_json"]
-    created_at = require_datetime(row["created_at"], "created_at")
+    created_at = require_utc_datetime(row["created_at"], "created_at")
 
     payload_json = require_json_object(payload_json, "payload_json")
 

@@ -16,10 +16,11 @@ from src.application.enums.event_sources import EventSource
 from src.shared.json_types import JSONObject
 from src.shared.json_validation import require_json_object
 from src.shared.validation import (
-    require_datetime,
     require_enum,
+    require_naive_datetime,
     require_non_empty_str,
     require_positive_int,
+    require_utc_datetime,
     require_uuid,
 )
 
@@ -81,8 +82,8 @@ class AuditRecordDraft:
         require_uuid(self.event_id, "event_id")
         require_positive_int(self.event_version, "event_version")
         object.__setattr__(self, "event_type", require_non_empty_str(self.event_type, "event_type"))
-        require_datetime(self.occurred_at, "occurred_at")
-        require_datetime(self.recorded_at, "recorded_at")
+        require_naive_datetime(self.occurred_at, "occurred_at")
+        require_utc_datetime(self.recorded_at, "recorded_at")
         require_uuid(self.envelope_id, "envelope_id")
         require_uuid(self.correlation_id, "correlation_id")
         if self.causation_id is not None:
@@ -109,7 +110,7 @@ class AuditRecord(AuditRecordDraft):
 
     Attributes:
         audit_id: Positive repository-assigned audit-row identity.
-        created_at: Timestamp when the audit record was persisted.
+        created_at: UTC timestamp when the audit record was persisted.
     """
 
     audit_id: int
@@ -125,4 +126,4 @@ class AuditRecord(AuditRecordDraft):
         """
         super().__post_init__()
         require_positive_int(self.audit_id, "audit_id")
-        require_datetime(self.created_at, "created_at")
+        require_utc_datetime(self.created_at, "created_at")

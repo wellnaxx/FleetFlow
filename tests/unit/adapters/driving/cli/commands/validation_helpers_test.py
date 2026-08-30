@@ -1,8 +1,9 @@
 import unittest
-from datetime import datetime
+from datetime import UTC, datetime
 
 from src.adapters.driving.cli.commands.validation_helpers import (
     parse_departure_from_tail,
+    try_parse_datetime,
     try_parse_float,
     try_parse_int,
     validate_params_count,
@@ -86,6 +87,22 @@ class TryParseFloat_Should(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             try_parse_float("abc", "weight")
         self.assertIn("Invalid value for weight", str(ctx.exception))
+
+
+class TryParseDatetime_Should(unittest.TestCase):
+    def test_parse_naive_and_utc_iso_timestamps(self) -> None:
+        self.assertEqual(
+            try_parse_datetime("2026-07-06T14:30:00", "--occurred_from"),
+            datetime(2026, 7, 6, 14, 30),
+        )
+        self.assertEqual(
+            try_parse_datetime("2026-07-06T14:30:00Z", "--created_from"),
+            datetime(2026, 7, 6, 14, 30, tzinfo=UTC),
+        )
+
+    def test_reject_invalid_datetime_with_field_context(self) -> None:
+        with self.assertRaisesRegex(ValueError, "--created_from must be a datetime"):
+            try_parse_datetime("tomorrow", "--created_from")
 
 
 class ParseDepartureFromTail_Should(unittest.TestCase):

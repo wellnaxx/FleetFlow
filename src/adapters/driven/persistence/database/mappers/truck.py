@@ -9,7 +9,7 @@ from src.domain.enums.truck_status import TruckStatus
 from src.domain.value_objects.location_code import LocationCode
 from src.shared.validation import (
     require_int,
-    require_optional_datetime,
+    require_optional_naive_datetime,
     require_optional_str,
     require_str,
 )
@@ -77,8 +77,8 @@ def _as_truck_row(row: RowDict) -> TruckRow:
     max_range = require_int(row["max_range"], "max_range")
     status = require_str(row["status"], "status")
     current_location = require_optional_str(row["current_location"], "current_location")
-    busy_from = require_optional_datetime(row["busy_from"], "busy_from")
-    busy_until = require_optional_datetime(row["busy_until"], "busy_until")
+    busy_from = require_optional_naive_datetime(row["busy_from"], "busy_from")
+    busy_until = require_optional_naive_datetime(row["busy_until"], "busy_until")
     in_transit_to = require_optional_str(row["in_transit_to"], "in_transit_to")
 
     return TruckRow(

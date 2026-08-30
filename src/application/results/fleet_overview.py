@@ -7,6 +7,7 @@ from typing import Literal
 from src.domain.enums.route_status import RouteStatus
 from src.domain.value_objects.location_code import LocationCode
 from src.shared.validation import (
+    require_naive_datetime,
     require_non_negative_finite_float,
     require_non_negative_int,
     require_positive_int,
@@ -319,3 +320,7 @@ class FleetOverview:
     routes: RouteOverview
     trucks: TruckOverview
     active_routes: tuple[ActiveRouteOverview, ...]
+
+    def __post_init__(self) -> None:
+        """Require the app-local timestamp used to build this projection."""
+        require_naive_datetime(self.generated_at, "generated_at")

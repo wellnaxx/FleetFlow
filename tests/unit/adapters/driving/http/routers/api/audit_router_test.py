@@ -1,7 +1,7 @@
 """Tests for audit HTTP routes."""
 
 import unittest
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import cast
 from unittest.mock import MagicMock
 from uuid import uuid4
@@ -58,8 +58,8 @@ class AuditRouterShould(unittest.TestCase):
                 "source": "CLI",
                 "occurred_from": "2026-01-01T12:00:00",
                 "occurred_to": "2026-01-01T13:00:00",
-                "created_from": "2026-01-01T12:00:02",
-                "created_to": "2026-01-01T13:00:02",
+                "created_from": "2026-01-01T12:00:02Z",
+                "created_to": "2026-01-01T13:00:02Z",
             },
         )
 
@@ -91,8 +91,8 @@ class AuditRouterShould(unittest.TestCase):
         self.assertIs(query.filters.source, EventSource.CLI)
         self.assertEqual(query.filters.occurred_from, datetime(2026, 1, 1, 12, 0))
         self.assertEqual(query.filters.occurred_to, datetime(2026, 1, 1, 13, 0))
-        self.assertEqual(query.filters.created_from, datetime(2026, 1, 1, 12, 0, 2))
-        self.assertEqual(query.filters.created_to, datetime(2026, 1, 1, 13, 0, 2))
+        self.assertEqual(query.filters.created_from, datetime(2026, 1, 1, 12, 0, 2, tzinfo=UTC))
+        self.assertEqual(query.filters.created_to, datetime(2026, 1, 1, 13, 0, 2, tzinfo=UTC))
 
     def test_list_audits_rejects_invalid_query_parameters(self) -> None:
         response = self.client.get("/audit/?limit=0&actor_user_id=0&resource_type=unknown")
@@ -128,7 +128,7 @@ def make_audit_record() -> AuditRecord:
         event_version=2,
         event_type="PackageCreated",
         occurred_at=datetime(2026, 1, 1, 12, 0),
-        recorded_at=datetime(2026, 1, 1, 12, 0, 1),
+        recorded_at=datetime(2026, 1, 1, 12, 0, 1, tzinfo=UTC),
         envelope_id=uuid4(),
         correlation_id=uuid4(),
         causation_id=None,
@@ -140,5 +140,5 @@ def make_audit_record() -> AuditRecord:
         action=AuditAction.CREATED,
         payload_json={"package_id": 42},
         audit_id=1,
-        created_at=datetime(2026, 1, 1, 12, 0, 2),
+        created_at=datetime(2026, 1, 1, 12, 0, 2, tzinfo=UTC),
     )

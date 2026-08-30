@@ -6,6 +6,7 @@ from typing import Final
 
 from src.application.messaging.command import Command, CommandKey
 from src.domain.entities.delivery_route import DeliveryRoute
+from src.shared.validation import require_optional_naive_datetime
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -21,6 +22,10 @@ class CreateRouteCommand(Command):
 
     locations: tuple[str, ...]
     departure_time: datetime | None = None
+
+    def __post_init__(self) -> None:
+        """Require an optional timezone-naive business departure time."""
+        require_optional_naive_datetime(self.departure_time, "departure_time")
 
 
 CREATE_ROUTE: Final[CommandKey[CreateRouteCommand, DeliveryRoute]] = CommandKey(

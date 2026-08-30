@@ -24,4 +24,5 @@ def get_connection() -> Connection:
         password=config.password,
         host=config.host,
         port=config.port,
+        options="-c timezone=UTC",
     )

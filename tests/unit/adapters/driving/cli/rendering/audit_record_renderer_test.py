@@ -1,7 +1,7 @@
 """Tests for audit-record CLI rendering."""
 
 import unittest
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from src.adapters.driving.cli.rendering.audit_record_renderer import render_audit_record
@@ -28,7 +28,7 @@ class AuditRecordRendererShould(unittest.TestCase):
         self.assertIn("Event version: 2", output)
         self.assertIn("Event type: PackageCreated", output)
         self.assertIn("Occurred at: 2026-01-01 12:00:00", output)
-        self.assertIn("Recorded at: 2026-01-01 12:00:01", output)
+        self.assertIn("Recorded at: 2026-01-01 12:00:01+00:00", output)
         self.assertIn("Source: CLI", output)
         self.assertIn("Actor's user ID: 7", output)
         self.assertIn("Actor's username: alice", output)
@@ -37,7 +37,7 @@ class AuditRecordRendererShould(unittest.TestCase):
         self.assertIn("Action: created", output)
         self.assertIn('"alpha": 1', output)
         self.assertLess(output.index('"alpha": 1'), output.index('"zeta": 2'))
-        self.assertIn("Created at: 2026-01-01 12:00:02", output)
+        self.assertIn("Created at: 2026-01-01 12:00:02+00:00", output)
 
     def test_render_optional_fields_as_not_available(self) -> None:
         record = make_audit_record(
@@ -69,7 +69,7 @@ def make_audit_record(
         event_version=2,
         event_type="PackageCreated",
         occurred_at=datetime(2026, 1, 1, 12, 0, 0, 123),
-        recorded_at=datetime(2026, 1, 1, 12, 0, 1, 456),
+        recorded_at=datetime(2026, 1, 1, 12, 0, 1, 456, tzinfo=UTC),
         envelope_id=UUID("22222222-2222-2222-2222-222222222222"),
         correlation_id=UUID("33333333-3333-3333-3333-333333333333"),
         causation_id=causation_id,
@@ -81,5 +81,5 @@ def make_audit_record(
         action=AuditAction.CREATED,
         payload_json=payload_json or {"package_id": 42},
         audit_id=1,
-        created_at=datetime(2026, 1, 1, 12, 0, 2, 789),
+        created_at=datetime(2026, 1, 1, 12, 0, 2, 789, tzinfo=UTC),
     )

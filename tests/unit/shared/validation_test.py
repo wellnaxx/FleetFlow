@@ -1,26 +1,32 @@
 import unittest
-from datetime import datetime
+from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal
 from enum import StrEnum
 from uuid import uuid4
 
 from src.shared.validation import (
+    require_aware_datetime,
     require_datetime,
     require_enum,
     require_finite_decimal,
     require_finite_positive_decimal,
     require_int,
+    require_naive_datetime,
     require_non_empty_str,
     require_non_negative_finite_float,
     require_non_negative_int,
+    require_optional_aware_datetime,
     require_optional_datetime,
     require_optional_int,
+    require_optional_naive_datetime,
     require_optional_positive_int,
     require_optional_str,
+    require_optional_utc_datetime,
     require_optional_uuid,
     require_positive_finite_float,
     require_positive_int,
     require_str,
+    require_utc_datetime,
     require_uuid,
 )
 
@@ -90,6 +96,40 @@ class SharedValidation_Should(unittest.TestCase):
 
         with self.assertRaises(TypeError):
             require_datetime("2030-01-01", "value")
+
+    def test_naive_datetime_helpers_reject_effective_timezone_offsets(self) -> None:
+        value = datetime(2030, 1, 1, 10, 0)
+
+        self.assertIs(require_naive_datetime(value, "value"), value)
+        self.assertIs(require_optional_naive_datetime(value, "value"), value)
+        self.assertIsNone(require_optional_naive_datetime(None, "value"))
+
+        with self.assertRaisesRegex(ValueError, "value must be timezone-naive"):
+            require_naive_datetime(value.replace(tzinfo=UTC), "value")
+
+    def test_aware_datetime_helpers_accept_any_defined_offset(self) -> None:
+        value = datetime(2030, 1, 1, 10, 0, tzinfo=timezone(timedelta(hours=2)))
+
+        self.assertIs(require_aware_datetime(value, "value"), value)
+        self.assertIs(require_optional_aware_datetime(value, "value"), value)
+        self.assertIsNone(require_optional_aware_datetime(None, "value"))
+
+        with self.assertRaisesRegex(ValueError, "value must be timezone-aware"):
+            require_aware_datetime(value.replace(tzinfo=None), "value")
+
+    def test_utc_datetime_helpers_require_zero_offset(self) -> None:
+        value = datetime(2030, 1, 1, 10, 0, tzinfo=UTC)
+
+        self.assertIs(require_utc_datetime(value, "value"), value)
+        self.assertIs(require_optional_utc_datetime(value, "value"), value)
+        self.assertIsNone(require_optional_utc_datetime(None, "value"))
+
+        with self.assertRaisesRegex(ValueError, "value must be timezone-aware"):
+            require_utc_datetime(value.replace(tzinfo=None), "value")
+
+        non_utc = value.replace(tzinfo=timezone(timedelta(hours=2)))
+        with self.assertRaisesRegex(ValueError, "value must use UTC"):
+            require_utc_datetime(non_utc, "value")
 
     def test_uuid_helpers_validate_required_and_optional_values(self) -> None:
         value = uuid4()

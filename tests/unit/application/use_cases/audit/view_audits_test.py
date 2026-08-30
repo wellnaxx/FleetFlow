@@ -2,7 +2,7 @@
 
 import unittest
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import cast
 from uuid import UUID
 
@@ -223,7 +223,7 @@ def make_audit_record(
         event_version=2,
         event_type="PackageCreated",
         occurred_at=datetime(2026, 1, 1, 12, 0),
-        recorded_at=datetime(2026, 1, 1, 12, 0, 1),
+        recorded_at=datetime(2026, 1, 1, 12, 0, 1, tzinfo=UTC),
         envelope_id=UUID(f"22222222-2222-2222-2222-{audit_id:012d}"),
         correlation_id=UUID("33333333-3333-3333-3333-333333333333"),
         causation_id=None,
@@ -235,7 +235,7 @@ def make_audit_record(
         action=AuditAction.CREATED,
         payload_json={"package_id": audit_id},
         audit_id=audit_id,
-        created_at=datetime(2026, 1, 1, 12, 0, 2),
+        created_at=datetime(2026, 1, 1, 12, 0, 2, tzinfo=UTC),
     )
 
 

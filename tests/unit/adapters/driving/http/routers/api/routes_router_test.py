@@ -1,6 +1,6 @@
 import unittest
 from datetime import datetime
-from unittest.mock import ANY, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -400,10 +400,7 @@ class RoutesRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"route_id": 81, "truck_id": 7})
-        self.command_bus.dispatch.assert_called_once_with(
-            key=ASSIGN_TRUCK_TO_ROUTE,
-            command=AssignTruckToRouteCommand(truck_id=7, route_id=81, now=ANY),
-        )
+        self._assert_assign_truck_dispatched()
 
     def test_assign_truck_to_route_returns_conflict_for_unsuitable_truck(self) -> None:
         self.command_bus.dispatch.side_effect = ConflictError("Truck 7 is not suitable for route 81.")
@@ -412,10 +409,7 @@ class RoutesRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 409)
         self.assertEqual(response.json()["detail"], "Truck 7 is not suitable for route 81.")
-        self.command_bus.dispatch.assert_called_once_with(
-            key=ASSIGN_TRUCK_TO_ROUTE,
-            command=AssignTruckToRouteCommand(truck_id=7, route_id=81, now=ANY),
-        )
+        self._assert_assign_truck_dispatched()
 
     def test_assign_truck_to_route_returns_not_found_for_missing_truck_or_route(self) -> None:
         self.command_bus.dispatch.side_effect = NotFoundError("Truck with ID 7 not found")
@@ -424,10 +418,7 @@ class RoutesRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["detail"], "Truck with ID 7 not found")
-        self.command_bus.dispatch.assert_called_once_with(
-            key=ASSIGN_TRUCK_TO_ROUTE,
-            command=AssignTruckToRouteCommand(truck_id=7, route_id=81, now=ANY),
-        )
+        self._assert_assign_truck_dispatched()
 
     def test_assign_truck_to_route_returns_generic_error_for_database_failure(self) -> None:
         self.command_bus.dispatch.side_effect = DatabaseError.write_failed(Exception("boom"))
@@ -436,10 +427,7 @@ class RoutesRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 500)
         self.assertEqual(response.json()["detail"], "Database operation failed.")
-        self.command_bus.dispatch.assert_called_once_with(
-            key=ASSIGN_TRUCK_TO_ROUTE,
-            command=AssignTruckToRouteCommand(truck_id=7, route_id=81, now=ANY),
-        )
+        self._assert_assign_truck_dispatched()
 
     def test_assign_truck_to_route_returns_forbidden_for_permission_error(self) -> None:
         self.command_bus.dispatch.side_effect = PermissionError("Missing permission: ROUTE_ASSIGN_TRUCK")
@@ -448,10 +436,7 @@ class RoutesRouterShould(unittest.TestCase):
 
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"], "Missing permission: ROUTE_ASSIGN_TRUCK")
-        self.command_bus.dispatch.assert_called_once_with(
-            key=ASSIGN_TRUCK_TO_ROUTE,
-            command=AssignTruckToRouteCommand(truck_id=7, route_id=81, now=ANY),
-        )
+        self._assert_assign_truck_dispatched()
 
     def test_find_suitable_trucks_for_route_returns_truck_responses(self) -> None:
         truck = Truck(vehicle_id=7, name="Scania", capacity=42000, max_range=8000)
@@ -508,3 +493,14 @@ class RoutesRouterShould(unittest.TestCase):
 
     def _route(self, *, route_id: int) -> DeliveryRoute:
         return DeliveryRoute(LocationCode("SYD"), LocationCode("MEL"), route_id=route_id)
+
+    def _assert_assign_truck_dispatched(self) -> None:
+        """Assert assignment dispatch while allowing its runtime timestamp."""
+        self.command_bus.dispatch.assert_called_once()
+        self.assertIs(self.command_bus.dispatch.call_args.kwargs["key"], ASSIGN_TRUCK_TO_ROUTE)
+        command = self.command_bus.dispatch.call_args.kwargs["command"]
+        self.assertIsInstance(command, AssignTruckToRouteCommand)
+        assert isinstance(command, AssignTruckToRouteCommand)
+        self.assertEqual(command.truck_id, 7)
+        self.assertEqual(command.route_id, 81)
+        self.assertIsNone(command.now.tzinfo)

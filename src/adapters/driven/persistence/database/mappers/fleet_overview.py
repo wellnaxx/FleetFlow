@@ -40,8 +40,8 @@ from src.domain.value_objects.package_load import PackageLoad
 from src.domain.value_objects.route_path import RoutePath
 from src.domain.value_objects.route_schedule import RoutePosition, RoutePositionKind
 from src.shared.validation import (
-    require_datetime,
     require_finite_positive_decimal,
+    require_naive_datetime,
     require_non_negative_int,
     require_optional_positive_int,
     require_positive_int,
@@ -160,7 +160,7 @@ def map_route_overview(row: RowDict, generated_at: datetime) -> RouteOverview:
         DomainValidationError: If candidate route topology is invalid.
         EntityNotFoundError: If a candidate segment has no map distance.
     """
-    generated_at = _require_naive_datetime(generated_at, "generated_at")
+    generated_at = require_naive_datetime(generated_at, "generated_at")
     typed = _as_route_overview_row(row)
 
     return RouteOverview(
@@ -375,7 +375,7 @@ def map_active_route_overviews(
         EntityNotFoundError: If a route segment has no map distance.
         RuntimeError: If an active schedule position lacks required fields.
     """
-    generated_at = _require_naive_datetime(generated_at, "generated_at")
+    generated_at = require_naive_datetime(generated_at, "generated_at")
     active_route_limit = require_positive_int(active_route_limit, "active_route_limit")
     if active_route_limit > 100:
         raise ValueError("active_route_limit must be less than or equal to 100.")
@@ -433,7 +433,7 @@ def select_active_route_overviews(
         ValueError: If ``generated_at`` is timezone-aware or the limit is
             outside 1 through 100.
     """
-    generated_at = _require_naive_datetime(generated_at, "generated_at")
+    generated_at = require_naive_datetime(generated_at, "generated_at")
     active_route_limit = require_positive_int(active_route_limit, "active_route_limit")
     if active_route_limit > 100:
         raise ValueError("active_route_limit must be less than or equal to 100.")
@@ -495,7 +495,7 @@ def map_active_route_overview(
     if not route_rows:
         raise ValueError("Cannot map an active route without route rows.")
 
-    generated_at = _require_naive_datetime(generated_at, "generated_at")
+    generated_at = require_naive_datetime(generated_at, "generated_at")
     typed_route_rows = [_as_active_route_row(row) for row in route_rows]
     typed_route_row = typed_route_rows[0]
     if any(row != typed_route_row for row in typed_route_rows[1:]):
@@ -629,7 +629,7 @@ def _map_active_position(position: RoutePosition) -> ActiveRoutePosition | None:
 def _as_active_route_row(row: RowDict) -> ActiveRouteRow:
     """Validate route and optional truck metadata from an active-route row."""
     route_id = require_positive_int(row["route_id"], "route_id")
-    departure_time = _require_naive_datetime(row["departure_time"], "departure_time")
+    departure_time = require_naive_datetime(row["departure_time"], "departure_time")
     status = require_str(row["status"], "status")
     truck_vehicle_id = require_optional_positive_int(row["truck_vehicle_id"], "truck_vehicle_id")
     truck_capacity = require_optional_positive_int(row["truck_capacity"], "truck_capacity")
@@ -686,25 +686,4 @@ def _parse_naive_datetime(value: str, field_name: str) -> datetime:
     except ValueError as exc:
         raise ValueError(f"{field_name} must be a valid ISO 8601 datetime.") from exc
 
-    return _require_naive_datetime(parsed, field_name)
-
-
-def _require_naive_datetime(value: object, field_name: str) -> datetime:
-    """Require a timezone-naive datetime used by app-local business time.
-
-    Args:
-        value: Runtime value to validate.
-        field_name: Field name used in validation errors.
-
-    Returns:
-        Validated timezone-naive datetime.
-
-    Raises:
-        TypeError: If ``value`` is not a datetime.
-        ValueError: If ``value`` is timezone-aware.
-    """
-    parsed = require_datetime(value, field_name)
-    if parsed.tzinfo is not None and parsed.utcoffset() is not None:
-        raise ValueError(f"{field_name} must be timezone-naive.")
-
-    return parsed
+    return require_naive_datetime(parsed, field_name)

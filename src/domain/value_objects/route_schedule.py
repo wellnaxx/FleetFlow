@@ -8,6 +8,7 @@ from types import MappingProxyType
 
 from src.domain.exceptions import DomainValidationError
 from src.domain.value_objects.location_code import LocationCode
+from src.shared.validation import require_naive_datetime
 
 
 class RoutePositionKind(StrEnum):
@@ -101,10 +102,18 @@ class RouteSchedule:
         """Validate schedule topology and initialize immutable lookup indexes.
 
         Raises:
-            DomainValidationError: If the schedule has too few stops, duplicate
-                locations, mismatched segment topology, non-positive travel
-                values, or inconsistent arrival times.
+            DomainValidationError: If timestamps are not naive app-local
+                datetimes, the schedule has too few stops, locations are
+                duplicated, segment topology is mismatched, travel values are
+                non-positive, or arrival times are inconsistent.
         """
+
+        try:
+            require_naive_datetime(self.departure_time, "departure_time")
+            for index, stop in enumerate(self.stops):
+                require_naive_datetime(stop.arrival_at, f"stops[{index}].arrival_at")
+        except (TypeError, ValueError) as exc:
+            raise DomainValidationError("Route schedule timestamps must be timezone-naive datetimes.") from exc
 
         if len(self.stops) < 2:
             raise DomainValidationError("A route schedule must contain at least two stops.")
@@ -180,21 +189,30 @@ class RouteSchedule:
 
         Returns:
             Position before departure, at a stop, in transit, or after arrival.
+
+        Raises:
+            DomainValidationError: If ``now`` is not a timezone-naive
+                app-local datetime.
         """
+        try:
+            normalized_now = require_naive_datetime(now, "now")
+        except (TypeError, ValueError) as exc:
+            raise DomainValidationError("Route position time must be a timezone-naive datetime.") from exc
+
         first_city = self.stops[0].location
         first_departure = self._arrival_times[first_city]
 
-        if now < first_departure:
+        if normalized_now < first_departure:
             return RoutePosition(
                 kind=RoutePositionKind.BEFORE_START, stop_city=first_city, next_eta=first_departure
             )
 
         for segment in self.segments:
-            position = self._position_on_segment(segment, now, first_city)
+            position = self._position_on_segment(segment, normalized_now, first_city)
             if position is not None:
                 return position
 
-        return self._position_after_segments(now, first_departure)
+        return self._position_after_segments(normalized_now, first_departure)
 
     def _position_on_segment(
         self,

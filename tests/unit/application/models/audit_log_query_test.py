@@ -1,7 +1,7 @@
 """Tests for audit-log query and filter models."""
 
 import unittest
-from datetime import datetime
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any, cast
 
 from src.application.enums.audit_actions import AuditAction
@@ -25,8 +25,8 @@ class AuditLogFilterShould(unittest.TestCase):
             source=EventSource.HTTP,
             occurred_from=datetime(2026, 1, 1, 12, 0),
             occurred_to=datetime(2026, 1, 1, 13, 0),
-            created_from=datetime(2026, 1, 1, 14, 0),
-            created_to=datetime(2026, 1, 1, 15, 0),
+            created_from=datetime(2026, 1, 1, 14, 0, tzinfo=UTC),
+            created_to=datetime(2026, 1, 1, 15, 0, tzinfo=UTC),
         )
 
         self.assertEqual(filters.event_type, "PackageCreated")
@@ -65,6 +65,17 @@ class AuditLogFilterShould(unittest.TestCase):
             with self.subTest(field_name=field_name), self.assertRaises(TypeError):
                 AuditLogFilter(**{field_name: cast(Any, "not-a-datetime")})
 
+    def test_enforce_timestamp_domains_for_filter_bounds(self) -> None:
+        with self.assertRaisesRegex(ValueError, "occurred_from must be timezone-naive"):
+            AuditLogFilter(occurred_from=datetime(2026, 1, 1, 12, 0, tzinfo=UTC))
+
+        for created_from in (
+            datetime(2026, 1, 1, 12, 0),
+            datetime(2026, 1, 1, 12, 0, tzinfo=timezone(timedelta(hours=2))),
+        ):
+            with self.subTest(created_from=created_from), self.assertRaises(ValueError):
+                AuditLogFilter(created_from=created_from)
+
     def test_reject_unordered_datetime_ranges(self) -> None:
         with self.assertRaisesRegex(ValueError, "occurred_from"):
             AuditLogFilter(
@@ -74,8 +85,8 @@ class AuditLogFilterShould(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "created_from"):
             AuditLogFilter(
-                created_from=datetime(2026, 1, 1, 13, 0),
-                created_to=datetime(2026, 1, 1, 12, 0),
+                created_from=datetime(2026, 1, 1, 13, 0, tzinfo=UTC),
+                created_to=datetime(2026, 1, 1, 12, 0, tzinfo=UTC),
             )
 
 

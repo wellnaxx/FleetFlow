@@ -2,7 +2,7 @@
 
 import unittest
 from dataclasses import FrozenInstanceError
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 from uuid import UUID
 
 from src.domain.enums.route_status import RouteStatus
@@ -61,6 +61,22 @@ class DomainEventShould(unittest.TestCase):
         event = _route_completed(datetime(2026, 6, 7, 12, 30))
 
         self.assertEqual(event.event_version, 2)
+
+    def test_require_naive_occurrence_time(self) -> None:
+        with self.assertRaisesRegex(ValueError, "occurred_at must be timezone-naive"):
+            _route_completed(datetime(2026, 6, 7, 12, 30, tzinfo=UTC))
+
+    def test_require_utc_recording_time(self) -> None:
+        for recorded_at in (
+            datetime(2026, 6, 7, 12, 30),
+            datetime(2026, 6, 7, 12, 30, tzinfo=timezone(timedelta(hours=3))),
+        ):
+            with self.subTest(recorded_at=recorded_at), self.assertRaises(ValueError):
+                CustomerCreated(
+                    customer_id=3,
+                    occurred_at=datetime(2026, 6, 7, 12, 30),
+                    recorded_at=recorded_at,
+                )
 
 
 def _route_completed(occurred_at: datetime) -> RouteCompleted:

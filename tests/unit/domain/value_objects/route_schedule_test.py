@@ -1,5 +1,5 @@
 import unittest
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from src.domain.exceptions import DomainValidationError
 from src.domain.value_objects.location_code import LocationCode
@@ -226,3 +226,32 @@ class RouteSchedule_Should(unittest.TestCase):
                     ScheduledStop(location=BBB, arrival_at=DEPARTURE + timedelta(hours=2)),
                 ),
             )
+
+    def test_rejects_timezone_aware_schedule_timestamps(self) -> None:
+        aware_departure = DEPARTURE.replace(tzinfo=UTC)
+        with self.assertRaisesRegex(DomainValidationError, "timestamps must be timezone-naive"):
+            RouteSchedule(
+                departure_time=aware_departure,
+                segments=(RouteSegment(start=AAA, end=BBB, distance_km=100, duration=ONE_HOUR),),
+                stops=(
+                    ScheduledStop(location=AAA, arrival_at=aware_departure),
+                    ScheduledStop(location=BBB, arrival_at=aware_departure + ONE_HOUR),
+                ),
+            )
+
+        with self.assertRaisesRegex(DomainValidationError, "timestamps must be timezone-naive"):
+            RouteSchedule(
+                departure_time=DEPARTURE,
+                segments=(RouteSegment(start=AAA, end=BBB, distance_km=100, duration=ONE_HOUR),),
+                stops=(
+                    ScheduledStop(location=AAA, arrival_at=DEPARTURE),
+                    ScheduledStop(
+                        location=BBB,
+                        arrival_at=(DEPARTURE + ONE_HOUR).replace(tzinfo=UTC),
+                    ),
+                ),
+            )
+
+    def test_position_at_rejects_timezone_aware_business_time(self) -> None:
+        with self.assertRaisesRegex(DomainValidationError, "position time must be a timezone-naive"):
+            make_schedule().position_at(DEPARTURE.replace(tzinfo=UTC))

@@ -1,7 +1,7 @@
 """Layer-neutral runtime validation and primitive normalization helpers."""
 
 import math
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID
@@ -214,6 +214,123 @@ def require_optional_datetime(value: object, field_name: str) -> datetime | None
     if not isinstance(value, datetime):
         raise TypeError(f"{field_name}: expected datetime or None, got {type(value).__name__}")
     return value
+
+
+def require_naive_datetime(value: object, field_name: str) -> datetime:
+    """Require a timezone-naive datetime used as app-local business time.
+
+    Args:
+        value: Runtime value to validate.
+        field_name: Field name used in the error message.
+
+    Returns:
+        Validated timezone-naive datetime.
+
+    Raises:
+        TypeError: If ``value`` is not a datetime.
+        ValueError: If ``value`` is timezone-aware.
+    """
+    normalized = require_datetime(value, field_name)
+    if normalized.tzinfo is not None and normalized.utcoffset() is not None:
+        raise ValueError(f"{field_name} must be timezone-naive.")
+    return normalized
+
+
+def require_optional_naive_datetime(value: object, field_name: str) -> datetime | None:
+    """Require a timezone-naive datetime or ``None``.
+
+    Args:
+        value: Runtime value to validate.
+        field_name: Field name used in the error message.
+
+    Returns:
+        Validated timezone-naive datetime or ``None``.
+
+    Raises:
+        TypeError: If ``value`` is neither a datetime nor ``None``.
+        ValueError: If ``value`` is a timezone-aware datetime.
+    """
+    if value is None:
+        return None
+    return require_naive_datetime(value, field_name)
+
+
+def require_aware_datetime(value: object, field_name: str) -> datetime:
+    """Require a timezone-aware datetime with a defined UTC offset.
+
+    Args:
+        value: Runtime value to validate.
+        field_name: Field name used in the error message.
+
+    Returns:
+        Validated timezone-aware datetime.
+
+    Raises:
+        TypeError: If ``value`` is not a datetime.
+        ValueError: If ``value`` has no effective UTC offset.
+    """
+    normalized = require_datetime(value, field_name)
+    if normalized.tzinfo is None or normalized.utcoffset() is None:
+        raise ValueError(f"{field_name} must be timezone-aware.")
+    return normalized
+
+
+def require_optional_aware_datetime(value: object, field_name: str) -> datetime | None:
+    """Require a timezone-aware datetime or ``None``.
+
+    Args:
+        value: Runtime value to validate.
+        field_name: Field name used in the error message.
+
+    Returns:
+        Validated timezone-aware datetime or ``None``.
+
+    Raises:
+        TypeError: If ``value`` is neither a datetime nor ``None``.
+        ValueError: If ``value`` is a timezone-naive datetime.
+    """
+    if value is None:
+        return None
+    return require_aware_datetime(value, field_name)
+
+
+def require_utc_datetime(value: object, field_name: str) -> datetime:
+    """Require a timezone-aware datetime whose UTC offset is zero.
+
+    Args:
+        value: Runtime value to validate.
+        field_name: Field name used in the error message.
+
+    Returns:
+        Validated UTC datetime without replacing its timezone object.
+
+    Raises:
+        TypeError: If ``value`` is not a datetime.
+        ValueError: If ``value`` is naive or has a non-zero UTC offset.
+    """
+    normalized = require_aware_datetime(value, field_name)
+    if normalized.utcoffset() != timedelta(0):
+        raise ValueError(f"{field_name} must use UTC.")
+    return normalized
+
+
+def require_optional_utc_datetime(value: object, field_name: str) -> datetime | None:
+    """Require a UTC datetime or ``None``.
+
+    Args:
+        value: Runtime value to validate.
+        field_name: Field name used in the error message.
+
+    Returns:
+        Validated UTC datetime or ``None``.
+
+    Raises:
+        TypeError: If ``value`` is neither a datetime nor ``None``.
+        ValueError: If ``value`` is naive or has a non-zero UTC offset.
+    """
+    if value is None:
+        return None
+    return require_utc_datetime(value, field_name)
 
 
 def require_uuid(value: object, field_name: str) -> UUID:

@@ -27,7 +27,7 @@ from src.domain.value_objects.route_schedule import RoutePosition, RoutePosition
 from src.ports.output.package_repository import PackageRepositoryPort
 from src.ports.output.route_repository import RouteRepositoryPort
 from src.ports.output.truck_repository import TruckRepositoryPort
-from src.shared.validation import require_positive_int
+from src.shared.validation import require_naive_datetime, require_positive_int
 
 
 class InMemoryFleetOverviewQuery:
@@ -73,13 +73,15 @@ class InMemoryFleetOverviewQuery:
             Point-in-time fleet overview projection.
 
         Raises:
-            TypeError: If ``active_route_limit`` is not an integer or is a
-                boolean.
-            ValueError: If ``active_route_limit`` is outside 1 through 100 or
-                mapped projection data violates its result contract.
+            TypeError: If ``generated_at`` is not a datetime or
+                ``active_route_limit`` is not an integer.
+            ValueError: If ``generated_at`` is timezone-aware,
+                ``active_route_limit`` is outside 1 through 100, or mapped
+                projection data violates its result contract.
             RuntimeError: If an active domain position lacks fields required
                 by its kind.
         """
+        generated_at = require_naive_datetime(generated_at, "generated_at")
         active_route_limit = require_positive_int(active_route_limit, "active_route_limit")
         if active_route_limit > 100:
             raise ValueError("active_route_limit must be less than or equal to 100.")
