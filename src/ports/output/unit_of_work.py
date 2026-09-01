@@ -3,8 +3,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from types import TracebackType
 
+    from src.application.eventing.outbox.message import OutboxMessageDraft
     from src.domain.entities.delivery_package import DeliveryPackage
     from src.domain.entities.delivery_route import DeliveryRoute
     from src.domain.entities.truck import Truck
@@ -103,4 +105,44 @@ class UnitOfWorkPort(Protocol):
 
     def rollback(self) -> None:
         """Rollback all uncommitted work performed inside the boundary."""
+        ...
+
+
+class UnitOfWorkOutboxRepositoryPort(Protocol):
+    """Insert outbox drafts through an existing business transaction.
+
+    Implementations use the unit of work's active connection or cursor and
+    must never commit independently. This guarantees that business state and
+    the events describing that state either persist together or both roll
+    back.
+    """
+
+    def add(self, draft: OutboxMessageDraft) -> None:
+        """Insert one outbox draft in the active transaction.
+
+        Args:
+            draft: Validated event and envelope data to persist.
+
+        Returns:
+            None. Repository-assigned lifecycle metadata is consumed later by
+            the delivery repository.
+        """
+        ...
+
+    def add_all(
+        self,
+        drafts: Sequence[OutboxMessageDraft],
+    ) -> None:
+        """Insert an ordered batch of drafts in the active transaction.
+
+        Implementations should treat an empty sequence as a no-op and preserve
+        input order when assigning row identities. Event identity must provide
+        idempotency against accidental duplicate insertion.
+
+        Args:
+            drafts: Materialized ordered drafts to persist atomically.
+
+        Returns:
+            None.
+        """
         ...
