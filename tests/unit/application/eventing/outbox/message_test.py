@@ -17,6 +17,7 @@ EVENT_ID = UUID("11111111-1111-1111-1111-111111111111")
 ENVELOPE_ID = UUID("22222222-2222-2222-2222-222222222222")
 CORRELATION_ID = UUID("33333333-3333-3333-3333-333333333333")
 CAUSATION_ID = UUID("44444444-4444-4444-4444-444444444444")
+CLAIM_TOKEN = UUID("55555555-5555-5555-5555-555555555555")
 
 
 class OutboxMessageDraftShould(unittest.TestCase):
@@ -167,6 +168,7 @@ class OutboxMessageShould(unittest.TestCase):
         self.assertEqual(message.available_at, CREATED_AT)
         self.assertEqual(message.attempt_count, 0)
         self.assertIsNone(message.claimed_until)
+        self.assertIsNone(message.claim_token)
         self.assertIsNone(message.published_at)
         self.assertIsNone(message.failure_category)
         self.assertIsNone(message.last_error)
@@ -187,10 +189,13 @@ class OutboxMessageShould(unittest.TestCase):
                 message = OutboxMessage(
                     **make_message_kwargs(
                         available_at=available_at,
+                        attempt_count=1,
                         claimed_until=claimed_until,
+                        claim_token=CLAIM_TOKEN,
                     )
                 )
                 self.assertEqual(message.claimed_until, claimed_until)
+                self.assertEqual(message.claim_token, CLAIM_TOKEN)
 
     def test_accept_each_failed_message_category_and_normalize_error(self) -> None:
         for category in OutboxFailureCategory:
@@ -229,6 +234,25 @@ class OutboxMessageShould(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises((TypeError, ValueError)):
                 OutboxMessage(**make_message_kwargs(attempt_count=value))
 
+    def test_require_claim_token_and_expiry_together(self) -> None:
+        cases = (
+            {"claimed_until": CREATED_AT + timedelta(minutes=1)},
+            {"claim_token": CLAIM_TOKEN},
+        )
+
+        for overrides in cases:
+            with self.subTest(overrides=overrides), self.assertRaisesRegex(ValueError, "both"):
+                OutboxMessage(**make_message_kwargs(**overrides))
+
+    def test_require_optional_claim_token_to_be_uuid(self) -> None:
+        with self.assertRaisesRegex(TypeError, "claim_token"):
+            OutboxMessage(
+                **make_message_kwargs(
+                    claimed_until=CREATED_AT + timedelta(minutes=1),
+                    claim_token="not-a-uuid",
+                )
+            )
+
     def test_require_utc_lifecycle_timestamps(self) -> None:
         for field_name in ("created_at", "available_at", "claimed_until", "published_at"):
             invalid_values = (
@@ -252,7 +276,9 @@ class OutboxMessageShould(unittest.TestCase):
             {"available_at": CREATED_AT - timedelta(seconds=1)},
             {
                 "available_at": available_at,
+                "attempt_count": 1,
                 "claimed_until": available_at - timedelta(seconds=1),
+                "claim_token": CLAIM_TOKEN,
             },
             {
                 "available_at": available_at,
@@ -305,8 +331,12 @@ class OutboxMessageShould(unittest.TestCase):
                 )
             )
 
-    def test_require_attempt_for_failed_or_published_state(self) -> None:
+    def test_require_attempt_for_claimed_failed_or_published_state(self) -> None:
         cases = (
+            {
+                "claimed_until": CREATED_AT + timedelta(minutes=1),
+                "claim_token": CLAIM_TOKEN,
+            },
             {
                 "failure_category": OutboxFailureCategory.PUBLICATION,
                 "last_error": "broker unavailable",
@@ -320,7 +350,10 @@ class OutboxMessageShould(unittest.TestCase):
 
     def test_reject_active_claim_or_failure_metadata_after_publication(self) -> None:
         cases = (
-            {"claimed_until": CREATED_AT + timedelta(minutes=1)},
+            {
+                "claimed_until": CREATED_AT + timedelta(minutes=1),
+                "claim_token": CLAIM_TOKEN,
+            },
             {
                 "failure_category": OutboxFailureCategory.PUBLICATION,
                 "last_error": "stale error",
@@ -366,6 +399,7 @@ def make_message_kwargs(**overrides: object) -> dict[str, Any]:
         available_at=CREATED_AT,
         attempt_count=0,
         claimed_until=None,
+        claim_token=None,
         published_at=None,
         failure_category=None,
         last_error=None,

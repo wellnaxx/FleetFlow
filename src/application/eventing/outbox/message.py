@@ -23,6 +23,7 @@ from src.shared.validation import (
     require_non_empty_str,
     require_non_negative_int,
     require_optional_utc_datetime,
+    require_optional_uuid,
     require_positive_int,
     require_utc_datetime,
     require_uuid,
@@ -113,25 +114,31 @@ class OutboxMessage(OutboxMessageDraft):
     """Persisted outbox message with delivery and retry state.
 
     An unpublished row may be immediately available, delayed until
-    ``available_at``, temporarily leased through ``claimed_until``, or carry
-    details from its most recent failed attempt. A published row is terminal:
-    it has a positive attempt count and no active claim or failure metadata.
+    ``available_at``, temporarily leased through ``claim_token`` and
+    ``claimed_until``, or carry details from its most recent failed attempt. A
+    published row is terminal: it has a positive attempt count and no active
+    claim or failure metadata.
 
     Attributes:
         outbox_id: Positive repository-assigned row identity.
         created_at: UTC timestamp when the row was inserted.
         available_at: Earliest UTC timestamp at which processing may begin.
-        attempt_count: Number of processing attempts already made.
+        attempt_count: Number of processing attempts started. Claiming a row
+            increments this value before returning it to a worker.
         claimed_until: UTC lease expiry for an active worker claim, if any.
+        claim_token: Opaque ownership token for an active worker claim. It
+            prevents a worker with an expired lease from acknowledging a row
+            subsequently claimed by another worker.
         published_at: UTC timestamp of successful publication, if complete.
         failure_category: Machine-readable category of the latest failure.
         last_error: Stripped diagnostic text for the latest failure. It is not
             an enum because concrete exception details remain operational data.
 
     Notes:
-        ``failure_category`` and ``last_error`` are either both present or both
-        absent. Failure and publication metadata require at least one attempt.
-        Published messages cannot remain claimed or failed.
+        ``claim_token`` and ``claimed_until`` are either both present or both
+        absent. ``failure_category`` and ``last_error`` follow the same paired
+        invariant. Failure and publication metadata require at least one
+        attempt. Published messages cannot remain claimed or failed.
     """
 
     outbox_id: int
@@ -139,6 +146,7 @@ class OutboxMessage(OutboxMessageDraft):
     available_at: datetime
     attempt_count: int
     claimed_until: datetime | None
+    claim_token: UUID | None
     published_at: datetime | None
     failure_category: OutboxFailureCategory | None
     last_error: str | None
@@ -161,8 +169,14 @@ class OutboxMessage(OutboxMessageDraft):
         available_at = require_utc_datetime(self.available_at, "available_at")
         attempt_count = require_non_negative_int(self.attempt_count, "attempt_count")
         claimed_until = require_optional_utc_datetime(self.claimed_until, "claimed_until")
+        claim_token = require_optional_uuid(self.claim_token, "claim_token")
         published_at = require_optional_utc_datetime(self.published_at, "published_at")
         has_failure = self.failure_category is not None
+
+        if (claimed_until is not None) != (claim_token is not None):
+            raise ValueError("claim_token and claimed_until must either both be provided or both be None.")
+        if claim_token is not None and attempt_count == 0:
+            raise ValueError("attempt_count must be positive when claim information is present.")
 
         if self.failure_category is not None:
             require_enum(
@@ -187,7 +201,7 @@ class OutboxMessage(OutboxMessageDraft):
             if attempt_count == 0:
                 raise ValueError("attempt_count must be positive when published_at is present.")
             if claimed_until is not None:
-                raise ValueError("claimed_until must be None when published_at is present.")
+                raise ValueError("claim information must be cleared when published_at is present.")
             if has_failure:
                 raise ValueError("failure information must be cleared when published_at is present.")
 
