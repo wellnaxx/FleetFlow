@@ -77,7 +77,7 @@ FleetFlow/
 |   |   |-- dto/                  # persisted snapshot and runtime transfer objects
 |   |   |-- enums/                # application-level classifications and reasons
 |   |   |-- event_handlers/       # audit and other event consumers
-|   |   |-- eventing/             # collector, recorder scope, execution context, envelopes, handler protocol
+|   |   |-- eventing/             # collector, recorder scope, envelopes, handlers, and outbox message models
 |   |   |-- events/               # immutable application event definitions
 |   |   |-- exceptions/           # application and world-state exception hierarchy
 |   |   |-- messaging/            # message contracts, typed keys, scoped executors, and in-process buses
@@ -98,7 +98,7 @@ FleetFlow/
 |   |   `-- value_objects/        # contact/location values, route paths/schedules, and assignment decisions
 |   |-- ports/
 |   |   |-- input/                # dispatch-only CommandBus and QueryBus protocols
-|   |   `-- output/               # repositories, fleet/audit queries, persistence, runtime, event, and vehicle ports
+|   |   `-- output/               # repositories, queries, UoW/outbox, persistence, runtime, event, and vehicle ports
 |   `-- shared/                   # environment, JSON, event, and runtime-validation primitives
 |-- tests/
 |-- postman/                      # API collection, local environment, and runner notes
@@ -238,13 +238,16 @@ FleetFlow has an in-process event pipeline for business facts and application wo
 - `AuditDescriptorMapper` performs exact-type lookup through an immutable typed registry. Explicit descriptor factories are grouped by auth, customer, package, route, startup, world-state, and reconciliation event families.
 - `AuditEventHandler` receives that mapper through composition, combines an event envelope with its normalized descriptor, and persists an `AuditRecordDraft` through `AuditRepositoryPort`.
 - In-memory and PostgreSQL audit repositories implement the audit repository contract, including idempotency by event id, filtering, stable ordering, pagination, and page-total queries. The CLI and HTTP API expose those queries with manager-wide and employee self-only authorization.
+- The transactional-outbox foundation defines validated write-side and persisted message models, UTC-aware
+  delivery lifecycle state, claim-token lease ownership, retry failure categories, a worker-facing repository
+  port, and a transaction-bound insertion port.
 
 Events are currently dispatched synchronously in process after workflow persistence completes. The runtime
 subscription graph wires structured logging from the independent published-event catalog and audit persistence
 from registered audit mappings. Publication failures after successful workflow execution propagate to the caller;
 when a workflow itself fails, pending denial/failure events are published best-effort without replacing the
-original exception. FleetFlow does not yet include a transactional outbox, so event handling is still not
-resilient to process crashes between business-state commit and subscriber execution.
+original exception. The outbox contracts are not yet connected to persistence or dispatch, so the running
+application is still not resilient to process crashes between business-state commit and subscriber execution.
 
 ## World-State Persistence
 
@@ -831,7 +834,8 @@ architecture, domain entities, immutable route path/schedule values, pure packag
 policies, use cases, ports, in-memory repositories, PostgreSQL repository/query adapters, a point-in-time
 fleet overview, JSON world-state persistence, authentication, autosave/load support, heartbeat
 reconciliation, segment-aware route capacity checks, audit browsing, and synchronous in-process event
-publication.
+publication. Transactional-outbox message and repository contracts are under development but are not yet
+part of the running publication path.
 
 The current architecture leaves several possible paths for future development. These are not required for the core project to work, but they are natural extensions if the project continues growing.
 
@@ -877,7 +881,25 @@ FleetFlow already defines and records pending domain and application events for 
 
 The audit-log model, typed exact-event descriptor registry, family-specific descriptor factories, audit handler, repository port, in-memory repository, PostgreSQL repository, SQL queries, schema migrations, composition wiring, query use case, CLI command, and HTTP endpoint are implemented. Logging subscriptions are driven by an independent exhaustive event catalog, while audit subscriptions are driven by registered mappings. The active repository follows the configured persistence backend. Manager-wide and employee self-only filtering is enforced in the application use case. After successful workflow execution, the failure policy is strict: audit handler or repository failures propagate to the caller through the publisher.
 
-The next eventing reliability step is to unify mutating persistence under explicit unit-of-work boundaries, separate event capture from publication, and add live PostgreSQL transaction coverage. A transactional outbox can then persist versioned event envelopes in the same transaction as business state before asynchronous dispatch. External brokers such as Kafka or Redis Streams would only make sense later if the project needed higher-volume event processing or cross-service integration.
+### Transactional outbox
+
+The outbox foundation now includes validated `OutboxMessageDraft` and `OutboxMessage` models. They preserve
+versioned event payload and envelope metadata while enforcing UTC lifecycle timestamps, retry counts, paired
+failure state, publication state, and claim-token/lease ownership. Stable `OutboxFailureCategory` values separate
+machine-readable failure policy from free-text operational diagnostics.
+
+Two output-port boundaries are defined: `UnitOfWorkOutboxRepositoryPort` inserts drafts through an existing
+business transaction without committing independently, while `OutboxRepositoryPort` atomically claims leased
+batches and supports ownership-checked publication, retry scheduling, expired-claim release, and bounded retention
+cleanup. These are contracts only; no schema migration, repository adapter, event codec, transactional capture
+integration, dispatcher worker, or composition/runtime wiring exists yet.
+
+The next implementation steps are to define the event-envelope codec and outbox table, implement PostgreSQL and
+in-memory adapters, expose outbox insertion through active unit-of-work implementations, persist captured events in
+the same commit as business state, and add a worker that publishes claimed messages with bounded retries. Live
+PostgreSQL concurrency and crash-recovery tests should verify the lease and idempotency behavior before the runtime
+switches away from direct synchronous publication. External brokers such as Kafka or Redis Streams would only make
+sense later if the project needed cross-service delivery or substantially higher event volume.
 
 ### Background jobs
 
