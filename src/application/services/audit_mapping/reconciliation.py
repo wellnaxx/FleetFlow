@@ -10,11 +10,7 @@ from src.application.events.reconciliation_events import (
 )
 from src.application.models.audit_descriptor import AuditDescriptor
 from src.application.services.audit_mapping.mapper import AuditDescriptorMapping, audit_mapping
-from src.application.services.audit_mapping.serialization import (
-    optional_id,
-    optional_isoformat,
-    optional_str,
-)
+from src.shared.json_serialization import optional_id, optional_isoformat, optional_str
 
 
 def map_route_state_reconciled(event: RouteStateReconciled) -> AuditDescriptor:

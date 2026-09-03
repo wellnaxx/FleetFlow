@@ -4,7 +4,6 @@ from src.application.enums.audit_actions import AuditAction
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.models.audit_descriptor import AuditDescriptor
 from src.application.services.audit_mapping.mapper import AuditDescriptorMapping, audit_mapping
-from src.application.services.audit_mapping.serialization import optional_id
 from src.domain.events.route_events import (
     PackageAssignedToRoute,
     PackageDetachedFromRoute,
@@ -16,6 +15,7 @@ from src.domain.events.route_events import (
     TruckAssignedToRoute,
     TruckReleasedFromRoute,
 )
+from src.shared.json_serialization import optional_id
 
 
 def map_route_created(event: RouteCreated) -> AuditDescriptor:

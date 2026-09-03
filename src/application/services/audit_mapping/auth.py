@@ -17,7 +17,7 @@ from src.application.events.auth_events import (
 )
 from src.application.models.audit_descriptor import AuditDescriptor
 from src.application.services.audit_mapping.mapper import AuditDescriptorMapping, audit_mapping
-from src.application.services.audit_mapping.serialization import optional_id
+from src.shared.json_serialization import optional_id
 
 
 def map_user_registered(event: UserRegistered) -> AuditDescriptor:
