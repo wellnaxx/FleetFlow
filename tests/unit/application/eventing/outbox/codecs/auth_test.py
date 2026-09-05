@@ -1,4 +1,4 @@
-"""Authorization-denied and user-authenticated payload contract tests."""
+"""Authentication and authorization outbox payload contract tests."""
 
 import json
 import unittest
@@ -8,13 +8,15 @@ from uuid import UUID
 
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.authorization_operations import AuthorizationOperation
+from src.application.enums.user_login_rejection_reasons import UserLoginRejectionReason
 from src.application.eventing.outbox.codecs.auth import (
     AuthorizationDeniedEventPayloadCodec,
     UserAuthenticatedEventPayloadCodec,
+    UserLoginRejectedEventPayloadCodec,
 )
 from src.application.eventing.outbox.errors import EventCodecNotFoundError
 from src.application.eventing.outbox.registry import EventOutboxCodecRegistry
-from src.application.events.auth_events import AuthorizationDenied, UserAuthenticated
+from src.application.events.auth_events import AuthorizationDenied, UserAuthenticated, UserLoginRejected
 from src.domain.enums.auth import Permission, Role
 from src.shared.json_types import JSONObject, JSONValue
 
@@ -34,6 +36,152 @@ def make_payload() -> JSONObject:
         "target_resource_id": "7",
         "required_permissions": ["PACKAGE_VIEW"],
     }
+
+
+class UserLoginRejectedCodecShould(unittest.TestCase):
+    def setUp(self) -> None:
+        self.codec = UserLoginRejectedEventPayloadCodec()
+
+    def make_payload(self) -> JSONObject:
+        return {"user_id": 7, "username": "alice", "reason": "INVALID_PASSWORD"}
+
+    def decode(self, payload: JSONObject) -> UserLoginRejected:
+        return self.codec.decode(
+            payload, event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+        )
+
+    def test_encodes_exact_wire_contract_including_explicit_nulls(self) -> None:
+        for user_id, username in ((7, "alice"), (None, None), (7, None), (None, "alice")):
+            with self.subTest(user_id=user_id, username=username):
+                event = UserLoginRejected(
+                    event_id=EVENT_ID,
+                    occurred_at=OCCURRED_AT,
+                    recorded_at=RECORDED_AT,
+                    user_id=user_id,
+                    username=username,
+                    reason=UserLoginRejectionReason.INVALID_PASSWORD,
+                )
+                self.assertEqual(
+                    self.codec.encode(event),
+                    {"user_id": user_id, "username": username, "reason": "INVALID_PASSWORD"},
+                )
+
+    def test_json_round_trip_preserves_all_reasons_and_nullable_identity_combinations(self) -> None:
+        for reason in UserLoginRejectionReason:
+            for user_id in (None, 1, 2**63):
+                for username in (None, "alice", "MiXeD", "", "   ", "  alice  ", "user-\u03b1"):
+                    with self.subTest(reason=reason, user_id=user_id, username=username):
+                        event = UserLoginRejected(
+                            event_id=EVENT_ID,
+                            occurred_at=OCCURRED_AT,
+                            recorded_at=RECORDED_AT,
+                            user_id=user_id,
+                            username=username,
+                            reason=reason,
+                        )
+                        payload = cast(JSONObject, json.loads(json.dumps(self.codec.encode(event))))
+                        restored = self.decode(payload)
+                        self.assertEqual(restored, event)
+                        self.assertIs(restored.reason, reason)
+
+    def test_requires_every_key_even_when_identity_values_are_null(self) -> None:
+        for field in self.make_payload():
+            with self.subTest(field=field):
+                payload: JSONObject = {"user_id": None, "username": None, "reason": "USER_NOT_FOUND"}
+                del payload[field]
+                with self.assertRaisesRegex(ValueError, f"Missing fields:.*{field}"):
+                    self.decode(payload)
+
+    def test_rejects_empty_payload_and_extra_fields(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Missing fields"):
+            self.decode({})
+        payload = self.make_payload()
+        payload.update({"password": "unexpected", "event_id": str(EVENT_ID)})
+        with self.assertRaises(ValueError) as ctx:
+            self.decode(payload)
+        self.assertEqual(str(ctx.exception), "Unexpected fields: ['event_id', 'password']")
+
+    def test_rejects_non_positive_user_ids(self) -> None:
+        for value in (0, -1, -(2**63)):
+            with self.subTest(value=value):
+                payload = self.make_payload()
+                payload["user_id"] = value
+                with self.assertRaisesRegex(ValueError, "user_id must be a positive integer"):
+                    self.decode(payload)
+
+    def test_rejects_wrong_field_types_without_coercion(self) -> None:
+        invalid_by_field: dict[str, tuple[JSONValue, ...]] = {
+            "user_id": (True, False, 1.0, "7", "", [], {}),
+            "username": (True, False, 7, 1.5, [], {}),
+            "reason": (None, True, False, 7, 1.5, [], {}),
+        }
+        for field, values in invalid_by_field.items():
+            for value in values:
+                with self.subTest(field=field, value=value):
+                    payload = self.make_payload()
+                    payload[field] = value
+                    with self.assertRaisesRegex(TypeError, field):
+                        self.decode(payload)
+
+    def test_unknown_reasons_raise_value_error(self) -> None:
+        for reason in ("", "UNKNOWN", "invalid_password", " INVALID_PASSWORD ", "1"):
+            with self.subTest(reason=reason):
+                payload = self.make_payload()
+                payload["reason"] = reason
+                with self.assertRaises(ValueError):
+                    self.decode(payload)
+
+    def test_codec_does_not_mutate_or_retain_input_payload(self) -> None:
+        payload = self.make_payload()
+        event = self.decode(payload)
+        self.assertEqual(payload, self.make_payload())
+        payload["username"] = "changed"
+        self.assertEqual(event.username, "alice")
+        encoded = self.codec.encode(event)
+        encoded["reason"] = "USER_NOT_FOUND"
+        self.assertEqual(self.codec.encode(event), self.make_payload())
+
+    def test_registry_resolves_exact_version_and_preserves_decoded_event(self) -> None:
+        registry = EventOutboxCodecRegistry()
+        registry.register(UserLoginRejected, self.codec)
+        event = self.decode(self.make_payload())
+        adapter = registry.for_identity("user_login_rejected", 1)
+        self.assertIs(adapter, registry.for_event(event))
+        self.assertIs(adapter.event_class, UserLoginRejected)
+        self.assertEqual(adapter.event_version, 1)
+        restored = adapter.decode(
+            adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+        )
+        self.assertEqual(restored, event)
+        with self.assertRaises(EventCodecNotFoundError):
+            registry.for_identity("user_login_rejected", 2)
+
+    def test_event_constructor_validates_supplied_metadata(self) -> None:
+        cases: tuple[tuple[str, object, type[Exception]], ...] = (
+            ("event_id", None, TypeError),
+            ("event_id", str(EVENT_ID), TypeError),
+            ("occurred_at", None, TypeError),
+            ("occurred_at", "2030-01-02", TypeError),
+            ("recorded_at", "2030-01-02", TypeError),
+            ("occurred_at", OCCURRED_AT.replace(tzinfo=UTC), ValueError),
+            ("recorded_at", RECORDED_AT.replace(tzinfo=None), ValueError),
+            ("recorded_at", RECORDED_AT.astimezone(timezone(timedelta(hours=2))), ValueError),
+        )
+        for field, value, error in cases:
+            with self.subTest(field=field, value=value):
+                metadata: dict[str, object] = {
+                    "event_id": EVENT_ID,
+                    "occurred_at": OCCURRED_AT,
+                    "recorded_at": RECORDED_AT,
+                }
+                metadata[field] = value
+                with self.assertRaisesRegex(error, field):
+                    self.codec.decode(
+                        self.make_payload(),
+                        event_id=cast(UUID, metadata["event_id"]),
+                        occurred_at=cast(datetime, metadata["occurred_at"]),
+                        recorded_at=cast(datetime, metadata["recorded_at"]),
+                    )
 
 
 class UserAuthenticatedCodecShould(unittest.TestCase):

@@ -11,12 +11,19 @@ from uuid import UUID
 
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.authorization_operations import AuthorizationOperation
+from src.application.enums.user_login_rejection_reasons import UserLoginRejectionReason
 from src.application.eventing.outbox.codec import EventPayloadCodec
-from src.application.events.auth_events import AuthorizationDenied, UserAuthenticated
+from src.application.events.auth_events import AuthorizationDenied, UserAuthenticated, UserLoginRejected
 from src.domain.enums.auth import Permission, Role
 from src.shared.json_types import JSONObject
 from src.shared.json_validation import require_json_object_keys
-from src.shared.validation import require_list, require_optional_str, require_positive_int, require_str
+from src.shared.validation import (
+    require_list,
+    require_optional_positive_int,
+    require_optional_str,
+    require_positive_int,
+    require_str,
+)
 
 
 class AuthorizationDeniedEventPayloadCodec(EventPayloadCodec[AuthorizationDenied]):
@@ -223,4 +230,94 @@ class UserAuthenticatedEventPayloadCodec(EventPayloadCodec[UserAuthenticated]):
             user_id=user_id,
             username=username,
             role=role,
+        )
+
+
+class UserLoginRejectedEventPayloadCodec(EventPayloadCodec[UserLoginRejected]):
+    """Encode and decode version-1 rejected-login payloads.
+
+    All three keys are required, even when ``user_id`` or ``username`` is null.
+    A present identifier must be a positive integer; username text is preserved
+    verbatim. Reasons are serialized by enum value. The two nullable fields
+    are independent, with no reason-specific combinations imposed by this codec.
+
+    Encoding expects correctly typed event fields. Decoding validates payload
+    fields and delegates universal metadata validation to the event constructor.
+    """
+
+    @property
+    def event_class(self) -> type[UserLoginRejected]:
+        """Return the concrete rejected-login event class."""
+        return UserLoginRejected
+
+    @property
+    def event_type(self) -> str:
+        """Return the stable persisted identity ``user_login_rejected``."""
+        return "user_login_rejected"
+
+    @property
+    def event_version(self) -> int:
+        """Return the explicit payload contract version supported here."""
+        return 1
+
+    def encode(self, event: UserLoginRejected) -> JSONObject:
+        """Serialize rejected-login fields into a fresh JSON object.
+
+        Args:
+            event: Version-1 rejected-login event to serialize.
+
+        Returns:
+            Nullable integer user ID, nullable unmodified username, and the
+            rejection reason's enum value. Event and envelope metadata are
+            excluded; absent values remain explicit JSON nulls.
+        """
+        return {
+            "user_id": event.user_id,
+            "username": event.username,
+            "reason": event.reason.value,
+        }
+
+    def decode(
+        self,
+        payload: JSONObject,
+        *,
+        event_id: UUID,
+        occurred_at: datetime,
+        recorded_at: datetime,
+    ) -> UserLoginRejected:
+        """Validate a version-1 payload and reconstruct the rejected login.
+
+        Args:
+            payload: JSON object containing exactly user_id, username, and reason.
+            event_id: Original event UUID.
+            occurred_at: Original naive app-local business timestamp.
+            recorded_at: Original UTC-aware recording timestamp.
+
+        Returns:
+            A new rejected-login event with the supplied metadata, nullable
+            identity fields, and typed rejection reason. Input data is not
+            mutated and username whitespace and case are preserved.
+
+        Raises:
+            TypeError: If a field or metadata value has an invalid runtime
+                type, including a boolean, string, or float user ID.
+            ValueError: If keys are missing or unexpected, a supplied user ID
+                is not positive, reason is unknown, or timestamps use the
+                wrong time domain.
+        """
+        expected_payload_keys: Final[frozenset[str]] = frozenset(["user_id", "username", "reason"])
+
+        require_json_object_keys(payload, expected_payload_keys)
+
+        user_id = require_optional_positive_int(payload["user_id"], "user_id")
+        username = require_optional_str(payload["username"], "username")
+        reason = UserLoginRejectionReason(require_str(payload["reason"], "reason"))
+
+        return UserLoginRejected(
+            event_id=event_id,
+            occurred_at=occurred_at,
+            recorded_at=recorded_at,
+            user_id=user_id,
+            username=username,
+            reason=reason,
         )
