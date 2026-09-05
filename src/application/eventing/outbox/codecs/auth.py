@@ -12,10 +12,11 @@ from uuid import UUID
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.eventing.outbox.codec import EventPayloadCodec
-from src.application.events.auth_events import AuthorizationDenied
-from src.domain.enums.auth import Permission
+from src.application.events.auth_events import AuthorizationDenied, UserAuthenticated
+from src.domain.enums.auth import Permission, Role
 from src.shared.json_types import JSONObject
-from src.shared.validation import require_list, require_optional_str, require_str
+from src.shared.json_validation import require_json_object_keys
+from src.shared.validation import require_list, require_optional_str, require_positive_int, require_str
 
 
 class AuthorizationDeniedEventPayloadCodec(EventPayloadCodec[AuthorizationDenied]):
@@ -99,13 +100,7 @@ class AuthorizationDeniedEventPayloadCodec(EventPayloadCodec[AuthorizationDenied
             "required_permissions",
         ])
 
-        unexpected_keys = payload.keys() - expected_payload_keys
-        if unexpected_keys:
-            raise ValueError(f"Unexpected fields: {sorted(unexpected_keys)}")
-
-        missing_keys = expected_payload_keys - payload.keys()
-        if missing_keys:
-            raise ValueError(f"Missing fields: {sorted(missing_keys)}")
+        require_json_object_keys(payload, expected_payload_keys)
 
         attempted_operation = AuthorizationOperation(
             require_str(payload["attempted_operation"], "attempted_operation")
@@ -136,4 +131,96 @@ class AuthorizationDeniedEventPayloadCodec(EventPayloadCodec[AuthorizationDenied
             target_resource_type=target_resource_type,
             target_resource_id=target_resource_id,
             required_permissions=tuple(permissions),
+        )
+
+
+class UserAuthenticatedEventPayloadCodec(EventPayloadCodec[UserAuthenticated]):
+    """Encode and decode version-1 successful-authentication payloads.
+
+    The exact required fields are a positive integer ``user_id``, string
+    ``username``, and ``role`` encoded by enum value. Booleans, numeric strings,
+    and floats are not valid identifiers. Username text is retained verbatim,
+    without imposing account-creation rules or changing historical event data.
+
+    Encoding expects correctly typed event fields. Decoding validates the
+    payload and lets the event constructor validate universal metadata.
+    """
+
+    @property
+    def event_class(self) -> type[UserAuthenticated]:
+        """Return the concrete successful-authentication event class."""
+        return UserAuthenticated
+
+    @property
+    def event_type(self) -> str:
+        """Return the stable persisted identity ``user_authenticated``."""
+        return "user_authenticated"
+
+    @property
+    def event_version(self) -> int:
+        """Return the explicit payload contract version supported here."""
+        return 1
+
+    def encode(self, event: UserAuthenticated) -> JSONObject:
+        """Serialize the event-specific fields into a fresh JSON object.
+
+        Args:
+            event: Version-1 successful-authentication event to serialize.
+
+        Returns:
+            Integer user ID, unmodified username, and role enum value. Event
+            and envelope metadata are excluded.
+        """
+        return {
+            "user_id": event.user_id,
+            "username": event.username,
+            "role": event.role.value,
+        }
+
+    def decode(
+        self,
+        payload: JSONObject,
+        *,
+        event_id: UUID,
+        occurred_at: datetime,
+        recorded_at: datetime,
+    ) -> UserAuthenticated:
+        """Validate a version-1 payload and restore its original metadata.
+
+        Args:
+            payload: JSON object containing exactly user_id, username, and role.
+            event_id: Original event UUID.
+            occurred_at: Original naive app-local business timestamp.
+            recorded_at: Original UTC-aware recording timestamp.
+
+        Returns:
+            A new successful-authentication event. Input data is not mutated;
+            username text, including whitespace and case, is preserved.
+
+        Raises:
+            TypeError: If payload fields or supplied metadata have invalid
+                runtime types, including a boolean, float, or string user ID.
+            ValueError: If keys are missing or unexpected, user_id is not
+                positive, role is unknown, or timestamps use the wrong time
+                domain.
+        """
+        expected_payload_keys: Final[frozenset[str]] = frozenset([
+            "user_id",
+            "username",
+            "role",
+        ])
+
+        require_json_object_keys(payload, expected_payload_keys)
+
+        user_id = require_positive_int(payload["user_id"], "user_id")
+        username = require_str(payload["username"], "username")
+        role = Role(require_str(payload["role"], "role"))
+
+        return UserAuthenticated(
+            event_id=event_id,
+            occurred_at=occurred_at,
+            recorded_at=recorded_at,
+            user_id=user_id,
+            username=username,
+            role=role,
         )

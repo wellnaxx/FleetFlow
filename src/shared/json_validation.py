@@ -6,6 +6,29 @@ from typing import cast
 from src.shared.json_types import JSONObject
 
 
+def require_json_object_keys(value: JSONObject, expected_keys: frozenset[str]) -> None:
+    """Require a JSON object to contain exactly the specified keys.
+
+    This checks field presence only. A key with a null value counts as present;
+    callers validate individual values separately. Neither input is modified.
+
+    Args:
+        value: JSON object whose keys should be checked.
+        expected_keys: Complete set of required keys, including nullable fields.
+
+    Raises:
+        ValueError: If unexpected or missing keys exist. Unexpected keys are
+            reported first, and names within each error are sorted.
+    """
+    unexpected_keys = value.keys() - expected_keys
+    if unexpected_keys:
+        raise ValueError(f"Unexpected fields: {sorted(unexpected_keys)}")
+
+    missing_keys = expected_keys - value.keys()
+    if missing_keys:
+        raise ValueError(f"Missing fields: {sorted(missing_keys)}")
+
+
 def require_json_object(value: object, field_name: str) -> JSONObject:
     """Validate and return a JSON object with string keys and JSON-compatible values.
 
