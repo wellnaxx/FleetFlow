@@ -11,6 +11,7 @@ from src.shared.validation import (
     require_finite_decimal,
     require_finite_positive_decimal,
     require_int,
+    require_list,
     require_naive_datetime,
     require_non_empty_str,
     require_non_negative_finite_float,
@@ -40,6 +41,18 @@ class OtherValue(StrEnum):
 
 
 class SharedValidation_Should(unittest.TestCase):
+    def test_require_list_returns_original_list_without_validating_elements(self) -> None:
+        values: list[list[object]] = [[], [None, "text", 1, object()]]
+        for value in values:
+            with self.subTest(value=value):
+                self.assertIs(require_list(value, "items"), value)
+
+    def test_require_list_rejects_other_containers_and_scalars(self) -> None:
+        values: tuple[object, ...] = (None, (), {}, set[object](), "items", b"items", 1, True)
+        for value in values:
+            with self.subTest(value=value), self.assertRaisesRegex(TypeError, "items: expected list"):
+                require_list(value, "items")
+
     def test_enum_helper_requires_member_of_expected_enum(self) -> None:
         self.assertIsNone(require_enum(SampleValue.VALID, "value", SampleValue))
 

@@ -28,6 +28,7 @@ from src.domain.value_objects.location_code import LocationCode
 from src.ports.output.world_state_persistence import WorldStatePersistencePort
 from src.shared.validation import (
     require_int,
+    require_list,
     require_optional_int,
     require_optional_str,
     require_positive_finite_float,
@@ -190,10 +191,10 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
                 )
         try:
             counters_raw = self._require_mapping(world_dict.get("counters"))
-            customers_raw = self._require_list(world_dict.get("customers"))
-            packages_raw = self._require_list(world_dict.get("packages"))
-            routes_raw = self._require_list(world_dict.get("routes"))
-            trucks_raw = self._require_list(world_dict.get("trucks", []))
+            customers_raw = require_list(world_dict.get("customers"), "customers")
+            packages_raw = require_list(world_dict.get("packages"), "packages")
+            routes_raw = require_list(world_dict.get("routes"), "routes")
+            trucks_raw = require_list(world_dict.get("trucks", []), "trucks")
         except TypeError as exc:
             raise WorldStateCorruptionError(
                 str(exc), reason=WorldStateCorruptionReason.INVALID_STRUCTURE
@@ -251,8 +252,8 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
     def _route_snapshot_from_raw(self, raw: object) -> RouteSnapshot:
         data = self._require_mapping(raw)
 
-        locations_raw = self._require_list(data.get("locations"))
-        package_ids_raw = self._require_list(data.get("package_ids"))
+        locations_raw = require_list(data.get("locations"), "locations")
+        package_ids_raw = require_list(data.get("package_ids"), "package_ids")
 
         locations = [LocationCode(require_str(item, "route_location")) for item in locations_raw]
 
@@ -299,11 +300,6 @@ class JsonWorldStatePersistence(WorldStatePersistencePort):
             result[key] = item
 
         return result
-
-    def _require_list(self, value: object) -> list[object]:
-        if not isinstance(value, list):
-            raise TypeError("expected list")
-        return cast(list[object], value)
 
     def _require_int(self, raw: dict[str, object], field: str) -> int:
         return require_int(raw.get(field), field)

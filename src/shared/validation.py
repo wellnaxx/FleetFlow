@@ -4,7 +4,26 @@ import math
 from datetime import datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
+from typing import cast
 from uuid import UUID
+
+
+def require_list(value: object, field_name: str) -> list[object]:
+    """Require a list without validating or converting its elements.
+
+    Args:
+        value: Runtime value to validate.
+        field_name: Field name used in the error message.
+
+    Returns:
+        The original list, including an empty list. Elements remain unvalidated.
+
+    Raises:
+        TypeError: If ``value`` is not a list.
+    """
+    if not isinstance(value, list):
+        raise TypeError(f"{field_name}: expected list, got {type(value).__name__}")
+    return cast(list[object], value)
 
 
 def require_int(value: object, field_name: str) -> int:
