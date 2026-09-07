@@ -12,12 +12,14 @@ from uuid import UUID
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.enums.user_login_rejection_reasons import UserLoginRejectionReason
+from src.application.enums.user_password_change_rejection_reasons import UserPasswordChangeRejectionReason
 from src.application.eventing.outbox.codec import EventPayloadCodec
 from src.application.events.auth_events import (
     AuthorizationDenied,
     UserAuthenticated,
     UserLoginRejected,
     UserPasswordChanged,
+    UserPasswordChangeRejected,
 )
 from src.domain.enums.auth import Permission, Role
 from src.shared.json_types import JSONObject
@@ -410,4 +412,99 @@ class UserPasswordChangedEventPayloadCodec(EventPayloadCodec[UserPasswordChanged
             recorded_at=recorded_at,
             user_id=user_id,
             username=username,
+        )
+
+
+class UserPasswordChangeRejectedEventPayloadCodec(EventPayloadCodec[UserPasswordChangeRejected]):
+    """Encode and decode version-1 rejected password-change payloads.
+
+    Exactly ``user_id``, ``username``, and ``reason`` are required. Identity
+    fields may independently be null; a supplied ID must be a positive integer.
+    Username text is preserved, including blank values associated with an
+    invalid-username rejection. Reasons use enum values. Passwords and hashes
+    are excluded.
+
+    Encoding expects correctly typed event fields. Decoding validates payload
+    fields and delegates universal metadata validation to the event constructor.
+    """
+
+    @property
+    def event_class(self) -> type[UserPasswordChangeRejected]:
+        """Return the concrete rejected password-change event class."""
+        return UserPasswordChangeRejected
+
+    @property
+    def event_type(self) -> str:
+        """Return the stable persisted identity ``user_password_change_rejected``."""
+        return "user_password_change_rejected"
+
+    @property
+    def event_version(self) -> int:
+        """Return the explicit payload contract version supported here."""
+        return 1
+
+    def encode(self, event: UserPasswordChangeRejected) -> JSONObject:
+        """Serialize the affected identity and rejection reason.
+
+        Args:
+            event: Version-1 rejected password-change event to serialize.
+
+        Returns:
+            A fresh JSON object containing the nullable user ID and username
+            and reason enum value. Nulls are explicit; credentials and event
+            and envelope metadata are excluded.
+        """
+        return {
+            "user_id": event.user_id,
+            "username": event.username,
+            "reason": event.reason.value,
+        }
+
+    def decode(
+        self,
+        payload: JSONObject,
+        *,
+        event_id: UUID,
+        occurred_at: datetime,
+        recorded_at: datetime,
+    ) -> UserPasswordChangeRejected:
+        """Validate a version-1 payload and restore the original event metadata.
+
+        Args:
+            payload: JSON object containing exactly user_id, username, and reason.
+            event_id: Original event UUID.
+            occurred_at: Original naive app-local business timestamp.
+            recorded_at: Original UTC-aware recording timestamp.
+
+        Returns:
+            A new rejected password-change event with nullable identity fields
+            and a typed reason. Payload data is not mutated and username case
+            and whitespace are retained.
+
+        Raises:
+            TypeError: If fields or metadata have invalid runtime types,
+                including a boolean, string, or float user ID.
+            ValueError: If keys are missing or unexpected, a supplied user ID
+                is not positive, reason is unknown, or timestamps use the
+                wrong time domain.
+        """
+        expected_payload_keys: Final[frozenset[str]] = frozenset([
+            "user_id",
+            "username",
+            "reason",
+        ])
+
+        require_json_object_keys(payload, expected_payload_keys)
+
+        user_id = require_optional_positive_int(payload["user_id"], "user_id")
+        username = require_optional_str(payload["username"], "username")
+        reason = UserPasswordChangeRejectionReason(require_str(payload["reason"], "reason"))
+
+        return UserPasswordChangeRejected(
+            event_id=event_id,
+            occurred_at=occurred_at,
+            recorded_at=recorded_at,
+            user_id=user_id,
+            username=username,
+            reason=reason,
         )
