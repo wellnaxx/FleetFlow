@@ -23,6 +23,7 @@ from src.application.events.auth_events import (
     UserPasswordChangeRejected,
     UserPasswordReset,
     UserPasswordResetRejected,
+    UserRegistered,
 )
 from src.domain.enums.auth import Permission, Role
 from src.shared.json_types import JSONObject
@@ -692,4 +693,94 @@ class UserPasswordResetRejectedEventPayloadCodec(EventPayloadCodec[UserPasswordR
             user_id=user_id,
             username=username,
             reason=reason,
+        )
+
+
+class UserRegisteredEventPayloadCodec(EventPayloadCodec[UserRegistered]):
+    """Encode and decode version-1 successful user-registration payloads.
+
+    Exactly ``user_id``, ``username``, and ``role`` describe the created account.
+    The ID must be a positive integer excluding booleans. Username text is
+    retained verbatim without reapplying account-creation normalization or
+    validation rules; roles use enum values. Credentials are excluded and actor
+    identity belongs to envelope metadata.
+
+    Encoding expects correctly typed event fields. Decoding validates the
+    payload and delegates universal metadata validation to the event constructor.
+    """
+
+    @property
+    def event_class(self) -> type[UserRegistered]:
+        """Return the concrete successful-registration event class."""
+        return UserRegistered
+
+    @property
+    def event_type(self) -> str:
+        """Return the stable persisted identity ``user_registered``."""
+        return "user_registered"
+
+    @property
+    def event_version(self) -> int:
+        """Return the explicit payload contract version supported here."""
+        return 1
+
+    def encode(self, event: UserRegistered) -> JSONObject:
+        """Serialize the created account's identity and role.
+
+        Args:
+            event: Version-1 user-registration event to serialize.
+
+        Returns:
+            A fresh JSON object containing integer user ID, unmodified username,
+            and role enum value. Credentials and event and envelope metadata
+            are excluded.
+        """
+        return {
+            "user_id": event.user_id,
+            "username": event.username,
+            "role": event.role.value,
+        }
+
+    def decode(
+        self,
+        payload: JSONObject,
+        *,
+        event_id: UUID,
+        occurred_at: datetime,
+        recorded_at: datetime,
+    ) -> UserRegistered:
+        """Validate a version-1 payload and restore its original event metadata.
+
+        Args:
+            payload: JSON object containing exactly user_id, username, and role.
+            event_id: Original event UUID.
+            occurred_at: Original naive app-local business timestamp.
+            recorded_at: Original UTC-aware recording timestamp.
+
+        Returns:
+            A new registration event with a typed role and supplied metadata.
+            Input data is not mutated; username case and whitespace are retained.
+
+        Raises:
+            TypeError: If fields or metadata have invalid runtime types,
+                including null fields or a boolean, string, or float user ID.
+            ValueError: If keys are missing or unexpected, the user ID is not
+                positive, role is unknown, or timestamps use the wrong time
+                domain.
+        """
+        expected_payload_keys: Final[frozenset[str]] = frozenset(["user_id", "username", "role"])
+
+        require_json_object_keys(payload, expected_payload_keys)
+
+        user_id = require_positive_int(payload["user_id"], "user_id")
+        username = require_str(payload["username"], "username")
+        role = Role(require_str(payload["role"], "role"))
+
+        return UserRegistered(
+            event_id=event_id,
+            occurred_at=occurred_at,
+            recorded_at=recorded_at,
+            user_id=user_id,
+            username=username,
+            role=role,
         )

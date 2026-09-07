@@ -19,6 +19,7 @@ from src.application.eventing.outbox.codecs.auth import (
     UserPasswordChangeRejectedEventPayloadCodec,
     UserPasswordResetEventPayloadCodec,
     UserPasswordResetRejectedEventPayloadCodec,
+    UserRegisteredEventPayloadCodec,
 )
 from src.application.eventing.outbox.errors import EventCodecNotFoundError
 from src.application.eventing.outbox.registry import EventOutboxCodecRegistry
@@ -30,6 +31,7 @@ from src.application.events.auth_events import (
     UserPasswordChangeRejected,
     UserPasswordReset,
     UserPasswordResetRejected,
+    UserRegistered,
 )
 from src.domain.enums.auth import Permission, Role
 from src.shared.json_types import JSONObject, JSONValue
@@ -50,6 +52,144 @@ def make_payload() -> JSONObject:
         "target_resource_id": "7",
         "required_permissions": ["PACKAGE_VIEW"],
     }
+
+
+class UserRegisteredCodecShould(unittest.TestCase):
+    def setUp(self) -> None:
+        self.codec = UserRegisteredEventPayloadCodec()
+
+    def decode(self, payload: JSONObject) -> UserRegistered:
+        return self.codec.decode(
+            payload, event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+        )
+
+    def test_exact_wire_contract_and_json_round_trip_for_all_roles(self) -> None:
+        for role in Role:
+            for user_id in (1, 7, 2**63):
+                for username in ("alice", "MiXeD", "", "   ", "  alice  ", "user-\u03b1"):
+                    with self.subTest(role=role, user_id=user_id, username=username):
+                        event = UserRegistered(
+                            event_id=EVENT_ID,
+                            occurred_at=OCCURRED_AT,
+                            recorded_at=RECORDED_AT,
+                            user_id=user_id,
+                            username=username,
+                            role=role,
+                        )
+                        encoded = self.codec.encode(event)
+                        self.assertEqual(
+                            encoded, {"user_id": user_id, "username": username, "role": role.value}
+                        )
+                        self.assertIs(type(encoded["user_id"]), int)
+                        restored = self.decode(cast(JSONObject, json.loads(json.dumps(encoded))))
+                        self.assertIs(type(restored), UserRegistered)
+                        self.assertEqual(restored, event)
+                        self.assertIs(restored.role, role)
+
+    def test_requires_all_keys_and_rejects_empty_payload(self) -> None:
+        for field in make_authenticated_payload():
+            with self.subTest(field=field):
+                payload = make_authenticated_payload()
+                del payload[field]
+                with self.assertRaisesRegex(ValueError, f"Missing fields:.*{field}"):
+                    self.decode(payload)
+        with self.assertRaisesRegex(ValueError, "Missing fields"):
+            self.decode({})
+
+    def test_rejects_extra_credentials_actor_and_metadata_fields(self) -> None:
+        for field in ("password", "password_hash", "actor_user_id", "event_id"):
+            with self.subTest(field=field):
+                payload = make_authenticated_payload()
+                payload[field] = "unexpected"
+                with self.assertRaisesRegex(ValueError, f"Unexpected fields:.*{field}"):
+                    self.decode(payload)
+
+    def test_rejects_non_positive_user_ids(self) -> None:
+        for value in (0, -1, -(2**63)):
+            with self.subTest(value=value):
+                payload = make_authenticated_payload()
+                payload["user_id"] = value
+                with self.assertRaisesRegex(ValueError, "user_id must be a positive integer"):
+                    self.decode(payload)
+
+    def test_rejects_wrong_field_types_without_coercion(self) -> None:
+        invalid_by_field: dict[str, tuple[JSONValue, ...]] = {
+            "user_id": (None, True, False, 1.0, "7", "", [], {}),
+            "username": (None, True, False, 7, 1.5, [], {}),
+            "role": (None, True, False, 7, 1.5, [], {}),
+        }
+        for field, values in invalid_by_field.items():
+            for value in values:
+                with self.subTest(field=field, value=value):
+                    payload = make_authenticated_payload()
+                    payload[field] = value
+                    with self.assertRaisesRegex(TypeError, field):
+                        self.decode(payload)
+
+    def test_unknown_roles_raise_value_error(self) -> None:
+        for role in ("", "UNKNOWN", "manager", " MANAGER ", "1"):
+            with self.subTest(role=role):
+                payload = make_authenticated_payload()
+                payload["role"] = role
+                with self.assertRaises(ValueError):
+                    self.decode(payload)
+
+    def test_payload_and_event_are_independent(self) -> None:
+        payload = make_authenticated_payload()
+        event = self.decode(payload)
+        self.assertEqual(payload, make_authenticated_payload())
+        payload["username"] = "changed"
+        self.assertEqual(event.username, "alice")
+        encoded = self.codec.encode(event)
+        encoded["role"] = "EMPLOYEE"
+        self.assertEqual(self.codec.encode(event), make_authenticated_payload())
+
+    def test_registry_distinguishes_registration_from_authentication(self) -> None:
+        registry = EventOutboxCodecRegistry()
+        registry.register(UserRegistered, self.codec)
+        registry.register(UserAuthenticated, UserAuthenticatedEventPayloadCodec())
+        event = self.decode(make_authenticated_payload())
+        adapter = registry.for_identity("user_registered", 1)
+        self.assertIs(adapter, registry.for_event(event))
+        self.assertIs(adapter.event_class, UserRegistered)
+        self.assertEqual(adapter.event_version, 1)
+        self.assertIsNot(adapter, registry.for_identity("user_authenticated", 1))
+        self.assertEqual(
+            adapter.decode(
+                adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+            ),
+            event,
+        )
+        with self.assertRaises(EventCodecNotFoundError):
+            registry.for_identity("user_registered", 2)
+
+    def test_event_constructor_rejects_invalid_metadata(self) -> None:
+        cases: tuple[tuple[str, object, type[Exception]], ...] = (
+            ("event_id", None, TypeError),
+            ("event_id", str(EVENT_ID), TypeError),
+            ("occurred_at", None, TypeError),
+            ("occurred_at", "2030-01-02", TypeError),
+            ("recorded_at", None, TypeError),
+            ("recorded_at", "2030-01-02", TypeError),
+            ("occurred_at", OCCURRED_AT.replace(tzinfo=UTC), ValueError),
+            ("recorded_at", RECORDED_AT.replace(tzinfo=None), ValueError),
+            ("recorded_at", RECORDED_AT.astimezone(timezone(timedelta(hours=2))), ValueError),
+        )
+        for field, value, error in cases:
+            with self.subTest(field=field, value=value):
+                metadata: dict[str, object] = {
+                    "event_id": EVENT_ID,
+                    "occurred_at": OCCURRED_AT,
+                    "recorded_at": RECORDED_AT,
+                }
+                metadata[field] = value
+                with self.assertRaisesRegex(error, field):
+                    self.codec.decode(
+                        make_authenticated_payload(),
+                        event_id=cast(UUID, metadata["event_id"]),
+                        occurred_at=cast(datetime, metadata["occurred_at"]),
+                        recorded_at=cast(datetime, metadata["recorded_at"]),
+                    )
 
 
 class UserPasswordResetRejectedCodecShould(unittest.TestCase):
