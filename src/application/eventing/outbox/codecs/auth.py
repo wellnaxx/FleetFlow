@@ -20,6 +20,7 @@ from src.application.events.auth_events import (
     UserLoginRejected,
     UserPasswordChanged,
     UserPasswordChangeRejected,
+    UserPasswordReset,
 )
 from src.domain.enums.auth import Permission, Role
 from src.shared.json_types import JSONObject
@@ -507,4 +508,90 @@ class UserPasswordChangeRejectedEventPayloadCodec(EventPayloadCodec[UserPassword
             user_id=user_id,
             username=username,
             reason=reason,
+        )
+
+
+class UserPasswordResetEventPayloadCodec(EventPayloadCodec[UserPasswordReset]):
+    """Encode and decode version-1 administrator password-reset confirmations.
+
+    Exactly ``user_id`` and ``username`` identify the account whose password
+    was reset. Both are required and non-null; the ID must be a positive
+    integer excluding booleans. Username case and whitespace are preserved.
+    Administrator identity belongs to the envelope. Passwords and hashes are
+    not part of this payload.
+
+    Encoding expects correctly typed event fields. Decoding validates payload
+    fields and delegates universal metadata validation to the event constructor.
+    """
+
+    @property
+    def event_class(self) -> type[UserPasswordReset]:
+        """Return the concrete successful password-reset event class."""
+        return UserPasswordReset
+
+    @property
+    def event_type(self) -> str:
+        """Return the stable persisted identity ``user_password_reset``."""
+        return "user_password_reset"
+
+    @property
+    def event_version(self) -> int:
+        """Return the explicit payload contract version supported here."""
+        return 1
+
+    def encode(self, event: UserPasswordReset) -> JSONObject:
+        """Serialize the reset account's identity into a fresh JSON object.
+
+        Args:
+            event: Version-1 password-reset confirmation to serialize.
+
+        Returns:
+            Integer user ID and unmodified username. Credentials and event
+            and envelope metadata are excluded.
+        """
+        return {
+            "user_id": event.user_id,
+            "username": event.username,
+        }
+
+    def decode(
+        self,
+        payload: JSONObject,
+        *,
+        event_id: UUID,
+        occurred_at: datetime,
+        recorded_at: datetime,
+    ) -> UserPasswordReset:
+        """Validate a version-1 payload and restore its original event metadata.
+
+        Args:
+            payload: JSON object containing exactly user_id and username.
+            event_id: Original event UUID.
+            occurred_at: Original naive app-local business timestamp.
+            recorded_at: Original UTC-aware recording timestamp.
+
+        Returns:
+            A new password-reset event with the supplied metadata. Input data
+            is not mutated and username text is retained without normalization.
+
+        Raises:
+            TypeError: If a field or metadata value has an invalid runtime
+                type, including null identity fields or a boolean, string,
+                or float user ID.
+            ValueError: If keys are missing or unexpected, the user ID is not
+                positive, or timestamps use the wrong time domain.
+        """
+        expected_payload_keys: Final[frozenset[str]] = frozenset(["user_id", "username"])
+
+        require_json_object_keys(payload, expected_payload_keys)
+
+        user_id = require_positive_int(payload["user_id"], "user_id")
+        username = require_str(payload["username"], "username")
+
+        return UserPasswordReset(
+            event_id=event_id,
+            occurred_at=occurred_at,
+            recorded_at=recorded_at,
+            user_id=user_id,
+            username=username,
         )
