@@ -13,7 +13,12 @@ from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.authorization_operations import AuthorizationOperation
 from src.application.enums.user_login_rejection_reasons import UserLoginRejectionReason
 from src.application.eventing.outbox.codec import EventPayloadCodec
-from src.application.events.auth_events import AuthorizationDenied, UserAuthenticated, UserLoginRejected
+from src.application.events.auth_events import (
+    AuthorizationDenied,
+    UserAuthenticated,
+    UserLoginRejected,
+    UserPasswordChanged,
+)
 from src.domain.enums.auth import Permission, Role
 from src.shared.json_types import JSONObject
 from src.shared.json_validation import require_json_object_keys
@@ -320,4 +325,89 @@ class UserLoginRejectedEventPayloadCodec(EventPayloadCodec[UserLoginRejected]):
             user_id=user_id,
             username=username,
             reason=reason,
+        )
+
+
+class UserPasswordChangedEventPayloadCodec(EventPayloadCodec[UserPasswordChanged]):
+    """Encode and decode version-1 password-change confirmation payloads.
+
+    Exactly ``user_id`` and ``username`` are required. The identifier must be
+    a positive integer, excluding booleans; the username is a non-null string
+    preserved verbatim, including case and whitespace. Passwords and password
+    hashes are not part of the event or its serialized payload.
+
+    Encoding expects correctly typed event fields. Decoding validates payload
+    fields and delegates universal metadata validation to the event constructor.
+    """
+
+    @property
+    def event_class(self) -> type[UserPasswordChanged]:
+        """Return the concrete successful password-change event class."""
+        return UserPasswordChanged
+
+    @property
+    def event_type(self) -> str:
+        """Return the stable persisted identity ``user_password_changed``."""
+        return "user_password_changed"
+
+    @property
+    def event_version(self) -> int:
+        """Return the explicit payload contract version supported here."""
+        return 1
+
+    def encode(self, event: UserPasswordChanged) -> JSONObject:
+        """Serialize the affected user's identity into a fresh JSON object.
+
+        Args:
+            event: Version-1 password-change confirmation to serialize.
+
+        Returns:
+            Integer user ID and unmodified username. No credentials or event
+            and envelope metadata are included.
+        """
+        return {
+            "user_id": event.user_id,
+            "username": event.username,
+        }
+
+    def decode(
+        self,
+        payload: JSONObject,
+        *,
+        event_id: UUID,
+        occurred_at: datetime,
+        recorded_at: datetime,
+    ) -> UserPasswordChanged:
+        """Validate a version-1 payload and restore its original event metadata.
+
+        Args:
+            payload: JSON object containing exactly user_id and username.
+            event_id: Original event UUID.
+            occurred_at: Original naive app-local business timestamp.
+            recorded_at: Original UTC-aware recording timestamp.
+
+        Returns:
+            A new password-changed event with the supplied metadata. Input data
+            is not mutated and username text is preserved without normalization.
+
+        Raises:
+            TypeError: If a field or metadata value has an invalid runtime
+                type, including null identity fields or a boolean, string,
+                or float user ID.
+            ValueError: If keys are missing or unexpected, the user ID is not
+                positive, or timestamps use the wrong time domain.
+        """
+        expected_payload_keys: Final[frozenset[str]] = frozenset(["user_id", "username"])
+
+        require_json_object_keys(payload, expected_payload_keys)
+
+        user_id = require_positive_int(payload["user_id"], "user_id")
+        username = require_str(payload["username"], "username")
+
+        return UserPasswordChanged(
+            event_id=event_id,
+            occurred_at=occurred_at,
+            recorded_at=recorded_at,
+            user_id=user_id,
+            username=username,
         )
