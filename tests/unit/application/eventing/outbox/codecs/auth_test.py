@@ -11,6 +11,7 @@ from src.application.enums.authorization_operations import AuthorizationOperatio
 from src.application.enums.user_login_rejection_reasons import UserLoginRejectionReason
 from src.application.enums.user_password_change_rejection_reasons import UserPasswordChangeRejectionReason
 from src.application.enums.user_password_reset_rejection_reasons import UserPasswordResetRejectionReason
+from src.application.enums.user_registration_rejection_reasons import UserRegistrationRejectionReason
 from src.application.eventing.outbox.codecs.auth import (
     AuthorizationDeniedEventPayloadCodec,
     UserAuthenticatedEventPayloadCodec,
@@ -20,6 +21,7 @@ from src.application.eventing.outbox.codecs.auth import (
     UserPasswordResetEventPayloadCodec,
     UserPasswordResetRejectedEventPayloadCodec,
     UserRegisteredEventPayloadCodec,
+    UserRegistrationRejectedEventPayloadCodec,
 )
 from src.application.eventing.outbox.errors import EventCodecNotFoundError
 from src.application.eventing.outbox.registry import EventOutboxCodecRegistry
@@ -32,6 +34,7 @@ from src.application.events.auth_events import (
     UserPasswordReset,
     UserPasswordResetRejected,
     UserRegistered,
+    UserRegistrationRejected,
 )
 from src.domain.enums.auth import Permission, Role
 from src.shared.json_types import JSONObject, JSONValue
@@ -52,6 +55,138 @@ def make_payload() -> JSONObject:
         "target_resource_id": "7",
         "required_permissions": ["PACKAGE_VIEW"],
     }
+
+
+class UserRegistrationRejectedCodecShould(unittest.TestCase):
+    def setUp(self) -> None:
+        self.codec = UserRegistrationRejectedEventPayloadCodec()
+
+    def make_payload(self) -> JSONObject:
+        return {"username": "alice", "reason": "USERNAME_ALREADY_EXISTS"}
+
+    def decode(self, payload: JSONObject) -> UserRegistrationRejected:
+        return self.codec.decode(
+            payload, event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+        )
+
+    def test_exact_wire_contract_and_json_round_trip_for_every_reason(self) -> None:
+        for reason in UserRegistrationRejectionReason:
+            for username in (None, "alice", "MiXeD", "", "   ", "  alice  ", "user-\u03b1"):
+                with self.subTest(reason=reason, username=username):
+                    event = UserRegistrationRejected(
+                        event_id=EVENT_ID,
+                        occurred_at=OCCURRED_AT,
+                        recorded_at=RECORDED_AT,
+                        username=username,
+                        reason=reason,
+                    )
+                    encoded = self.codec.encode(event)
+                    self.assertEqual(encoded, {"username": username, "reason": reason.value})
+                    restored = self.decode(cast(JSONObject, json.loads(json.dumps(encoded))))
+                    self.assertIs(type(restored), UserRegistrationRejected)
+                    self.assertEqual(restored, event)
+                    self.assertIs(restored.reason, reason)
+
+    def test_requires_every_key_including_nullable_username(self) -> None:
+        for field in self.make_payload():
+            with self.subTest(field=field):
+                payload: JSONObject = {"username": None, "reason": "INVALID_USERNAME"}
+                del payload[field]
+                with self.assertRaisesRegex(ValueError, f"Missing fields:.*{field}"):
+                    self.decode(payload)
+        with self.assertRaisesRegex(ValueError, "Missing fields"):
+            self.decode({})
+
+    def test_rejects_extra_account_credentials_and_metadata_fields(self) -> None:
+        for field in ("user_id", "role", "password", "password_hash", "actor_user_id", "event_id"):
+            with self.subTest(field=field):
+                payload = self.make_payload()
+                payload[field] = "unexpected"
+                with self.assertRaisesRegex(ValueError, f"Unexpected fields:.*{field}"):
+                    self.decode(payload)
+
+    def test_rejects_wrong_field_types_without_coercion(self) -> None:
+        invalid_by_field: dict[str, tuple[JSONValue, ...]] = {
+            "username": (True, False, 7, 1.5, [], {}),
+            "reason": (None, True, False, 7, 1.5, [], {}),
+        }
+        for field, values in invalid_by_field.items():
+            for value in values:
+                with self.subTest(field=field, value=value):
+                    payload = self.make_payload()
+                    payload[field] = value
+                    with self.assertRaisesRegex(TypeError, field):
+                        self.decode(payload)
+
+    def test_rejects_unknown_and_other_workflow_reasons(self) -> None:
+        for reason in (
+            "", "UNKNOWN", "invalid_username", " INVALID_USERNAME ", "1",
+            "USER_NOT_FOUND", "CANNOT_RESET_OWN_PASSWORD", "CURRENT_PASSWORD_INCORRECT",
+        ):
+            with self.subTest(reason=reason):
+                payload = self.make_payload()
+                payload["reason"] = reason
+                with self.assertRaises(ValueError):
+                    self.decode(payload)
+
+    def test_payload_and_event_are_independent(self) -> None:
+        payload = self.make_payload()
+        event = self.decode(payload)
+        self.assertEqual(payload, self.make_payload())
+        payload["username"] = "changed"
+        self.assertEqual(event.username, "alice")
+        encoded = self.codec.encode(event)
+        encoded["reason"] = "INVALID_USERNAME"
+        self.assertEqual(self.codec.encode(event), self.make_payload())
+
+    def test_registry_distinguishes_rejection_from_success_and_other_rejections(self) -> None:
+        registry = EventOutboxCodecRegistry()
+        registry.register(UserRegistrationRejected, self.codec)
+        registry.register(UserRegistered, UserRegisteredEventPayloadCodec())
+        registry.register(UserLoginRejected, UserLoginRejectedEventPayloadCodec())
+        event = self.decode(self.make_payload())
+        adapter = registry.for_identity("user_registration_rejected", 1)
+        self.assertIs(adapter, registry.for_event(event))
+        self.assertIs(adapter.event_class, UserRegistrationRejected)
+        self.assertEqual(adapter.event_version, 1)
+        self.assertIsNot(adapter, registry.for_identity("user_registered", 1))
+        self.assertIsNot(adapter, registry.for_identity("user_login_rejected", 1))
+        self.assertEqual(
+            adapter.decode(
+                adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+            ),
+            event,
+        )
+        with self.assertRaises(EventCodecNotFoundError):
+            registry.for_identity("user_registration_rejected", 2)
+
+    def test_event_constructor_rejects_invalid_metadata(self) -> None:
+        cases: tuple[tuple[str, object, type[Exception]], ...] = (
+            ("event_id", None, TypeError),
+            ("event_id", str(EVENT_ID), TypeError),
+            ("occurred_at", None, TypeError),
+            ("occurred_at", "2030-01-02", TypeError),
+            ("recorded_at", None, TypeError),
+            ("recorded_at", "2030-01-02", TypeError),
+            ("occurred_at", OCCURRED_AT.replace(tzinfo=UTC), ValueError),
+            ("recorded_at", RECORDED_AT.replace(tzinfo=None), ValueError),
+            ("recorded_at", RECORDED_AT.astimezone(timezone(timedelta(hours=2))), ValueError),
+        )
+        for field, value, error in cases:
+            with self.subTest(field=field, value=value):
+                metadata: dict[str, object] = {
+                    "event_id": EVENT_ID,
+                    "occurred_at": OCCURRED_AT,
+                    "recorded_at": RECORDED_AT,
+                }
+                metadata[field] = value
+                with self.assertRaisesRegex(error, field):
+                    self.codec.decode(
+                        self.make_payload(),
+                        event_id=cast(UUID, metadata["event_id"]),
+                        occurred_at=cast(datetime, metadata["occurred_at"]),
+                        recorded_at=cast(datetime, metadata["recorded_at"]),
+                    )
 
 
 class UserRegisteredCodecShould(unittest.TestCase):
