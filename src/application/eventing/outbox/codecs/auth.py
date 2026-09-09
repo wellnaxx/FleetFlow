@@ -26,6 +26,7 @@ from src.application.events.auth_events import (
     UserPasswordResetRejected,
     UserRegistered,
     UserRegistrationRejected,
+    UserSessionEnded,
 )
 from src.domain.enums.auth import Permission, Role
 from src.shared.json_types import JSONObject
@@ -871,4 +872,91 @@ class UserRegistrationRejectedEventPayloadCodec(EventPayloadCodec[UserRegistrati
             recorded_at=recorded_at,
             username=username,
             reason=reason,
+        )
+
+
+class UserSessionEndedEventPayloadCodec(EventPayloadCodec[UserSessionEnded]):
+    """Encode and decode version-1 local-session-ended payloads.
+
+    Exactly ``user_id`` and ``username`` identify the user whose local session
+    ended. Both fields are required and non-null. IDs must be positive integers
+    excluding booleans; username case and whitespace are preserved verbatim.
+    Ending a local session is distinct from revoking outstanding tokens.
+
+    Encoding expects correctly typed event fields. Decoding validates the
+    payload and delegates universal metadata validation to the event constructor.
+    Credentials, token data, and envelope metadata are excluded from the payload.
+    """
+
+    @property
+    def event_class(self) -> type[UserSessionEnded]:
+        """Return the concrete local-session-ended event class."""
+        return UserSessionEnded
+
+    @property
+    def event_type(self) -> str:
+        """Return the stable persisted identity ``user_session_ended``."""
+        return "user_session_ended"
+
+    @property
+    def event_version(self) -> int:
+        """Return the explicit payload contract version supported here."""
+        return 1
+
+    def encode(self, event: UserSessionEnded) -> JSONObject:
+        """Serialize the ended session's user identity.
+
+        Args:
+            event: Version-1 local-session-ended event to serialize.
+
+        Returns:
+            A fresh JSON object containing integer user ID and unmodified
+            username. Credentials, tokens, and event and envelope metadata
+            are excluded.
+        """
+        return {
+            "user_id": event.user_id,
+            "username": event.username,
+        }
+
+    def decode(
+        self,
+        payload: JSONObject,
+        *,
+        event_id: UUID,
+        occurred_at: datetime,
+        recorded_at: datetime,
+    ) -> UserSessionEnded:
+        """Validate a version-1 payload and restore its original event metadata.
+
+        Args:
+            payload: JSON object containing exactly user_id and username.
+            event_id: Original event UUID.
+            occurred_at: Original naive app-local business timestamp.
+            recorded_at: Original UTC-aware recording timestamp.
+
+        Returns:
+            A new session-ended event with the supplied metadata. Input data
+            is not mutated; username text is preserved without normalization.
+
+        Raises:
+            TypeError: If fields or metadata have invalid runtime types,
+                including null identity fields or a boolean, string, or float
+                user ID.
+            ValueError: If keys are missing or unexpected, user ID is not
+                positive, or timestamps use the wrong time domain.
+        """
+        expected_payload_keys: Final[frozenset[str]] = frozenset(["user_id", "username"])
+
+        require_json_object_keys(payload, expected_payload_keys)
+
+        user_id = require_positive_int(payload["user_id"], "user_id")
+        username = require_str(payload["username"], "username")
+
+        return UserSessionEnded(
+            event_id=event_id,
+            occurred_at=occurred_at,
+            recorded_at=recorded_at,
+            user_id=user_id,
+            username=username,
         )
