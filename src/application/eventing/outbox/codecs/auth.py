@@ -11,6 +11,7 @@ from uuid import UUID
 
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.authorization_operations import AuthorizationOperation
+from src.application.enums.token_revocation_reasons import TokenRevocationReason
 from src.application.enums.user_login_rejection_reasons import UserLoginRejectionReason
 from src.application.enums.user_password_change_rejection_reasons import UserPasswordChangeRejectionReason
 from src.application.enums.user_password_reset_rejection_reasons import UserPasswordResetRejectionReason
@@ -27,6 +28,7 @@ from src.application.events.auth_events import (
     UserRegistered,
     UserRegistrationRejected,
     UserSessionEnded,
+    UserTokensRevoked,
 )
 from src.domain.enums.auth import Permission, Role
 from src.shared.json_types import JSONObject
@@ -959,4 +961,95 @@ class UserSessionEndedEventPayloadCodec(EventPayloadCodec[UserSessionEnded]):
             recorded_at=recorded_at,
             user_id=user_id,
             username=username,
+        )
+
+
+class UserTokensRevokedEventPayloadCodec(EventPayloadCodec[UserTokensRevoked]):
+    """Encode and decode version-1 token-revocation confirmations.
+
+    Exactly ``user_id``, ``username``, and ``reason`` describe the account whose
+    outstanding tokens were invalidated. All fields are required and non-null.
+    IDs must be positive integers excluding booleans; username text is preserved
+    verbatim. Reasons use enum values. Token contents, credentials, and envelope
+    metadata are excluded. Revocation is distinct from ending a local session.
+
+    Encoding expects correctly typed event fields. Decoding validates the
+    payload and delegates universal metadata validation to the event constructor.
+    """
+
+    @property
+    def event_class(self) -> type[UserTokensRevoked]:
+        """Return the concrete token-revocation event class."""
+        return UserTokensRevoked
+
+    @property
+    def event_type(self) -> str:
+        """Return the stable persisted identity ``user_tokens_revoked``."""
+        return "user_tokens_revoked"
+
+    @property
+    def event_version(self) -> int:
+        """Return the explicit payload contract version supported here."""
+        return 1
+
+    def encode(self, event: UserTokensRevoked) -> JSONObject:
+        """Serialize the affected account and token-revocation reason.
+
+        Args:
+            event: Version-1 token-revocation event to serialize.
+
+        Returns:
+            A fresh JSON object containing integer user ID, unmodified username,
+            and the reason's enum value. Credentials, tokens, and event and
+            envelope metadata are excluded.
+        """
+        return {
+            "user_id": event.user_id,
+            "username": event.username,
+            "reason": event.reason.value,
+        }
+
+    def decode(
+        self,
+        payload: JSONObject,
+        *,
+        event_id: UUID,
+        occurred_at: datetime,
+        recorded_at: datetime,
+    ) -> UserTokensRevoked:
+        """Validate a version-1 payload and restore its original event metadata.
+
+        Args:
+            payload: JSON object containing exactly user_id, username, and reason.
+            event_id: Original event UUID.
+            occurred_at: Original naive app-local business timestamp.
+            recorded_at: Original UTC-aware recording timestamp.
+
+        Returns:
+            A new token-revocation event with the supplied metadata and a typed
+            reason. Input data is not mutated; username case and whitespace
+            are preserved without normalization.
+
+        Raises:
+            TypeError: If fields or metadata have invalid runtime types,
+                including null fields or a boolean, string, or float user ID.
+            ValueError: If keys are missing or unexpected, user ID is not
+                positive, reason is unknown, or timestamps use the wrong time
+                domain.
+        """
+        expected_payload_keys: Final[frozenset[str]] = frozenset(["user_id", "username", "reason"])
+
+        require_json_object_keys(payload, expected_payload_keys)
+
+        user_id = require_positive_int(payload["user_id"], "user_id")
+        username = require_str(payload["username"], "username")
+        reason = TokenRevocationReason(require_str(payload["reason"], "reason"))
+
+        return UserTokensRevoked(
+            event_id=event_id,
+            occurred_at=occurred_at,
+            recorded_at=recorded_at,
+            user_id=user_id,
+            username=username,
+            reason=reason,
         )
