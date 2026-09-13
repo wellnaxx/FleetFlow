@@ -10,7 +10,7 @@ from uuid import UUID
 
 from src.application.eventing.outbox.codec import EventPayloadCodec
 from src.domain.enums.route_status import RouteStatus
-from src.domain.events.route_events import RouteCreated, RouteScheduled
+from src.domain.events.route_events import PackageAssignedToRoute, RouteCreated, RouteScheduled
 from src.domain.value_objects.location_code import LocationCode
 from src.shared.json_serialization import optional_isoformat
 from src.shared.json_types import JSONObject
@@ -18,6 +18,7 @@ from src.shared.json_validation import require_json_object_keys
 from src.shared.validation import (
     require_list,
     require_naive_datetime,
+    require_optional_positive_int,
     require_positive_int,
     require_str,
 )
@@ -291,4 +292,118 @@ class RouteScheduledEventPayloadCodec(EventPayloadCodec[RouteScheduled]):
             new_departure_time=new_departure_time,
             previous_expected_completion_time=previous_expected_completion_time,
             new_expected_completion_time=new_expected_completion_time,
+        )
+
+
+class PackageAssignedToRouteEventPayloadCodec(EventPayloadCodec[PackageAssignedToRoute]):
+    """Encode and decode the version-2 package-to-route assignment snapshot.
+
+    All five payload keys are required. previous_route_id and both expected
+    arrival times may independently be null; package_id and new_route_id must
+    be positive integers. Encoding trusts typed event fields. Decoding validates
+    serialized values without looking up live entities, recalculating arrival
+    times, or reapplying package-assignment policies.
+    """
+
+    @property
+    def event_class(self) -> type[PackageAssignedToRoute]:
+        """Return the concrete package-assigned-to-route event class."""
+        return PackageAssignedToRoute
+
+    @property
+    def event_type(self) -> str:
+        """Return the stable persisted identity ``package_assigned_to_route``."""
+        return "package_assigned_to_route"
+
+    @property
+    def event_version(self) -> int:
+        """Return the explicit supported payload contract version."""
+        return 2
+
+    def encode(self, event: PackageAssignedToRoute) -> JSONObject:
+        """Serialize the assignment's before/after values into a fresh JSON object.
+
+        Args:
+            event: Version-2 event with correctly typed assignment fields.
+
+        Returns:
+            Integer package and route IDs, and ISO-formatted expected arrivals
+            with microseconds preserved. Absent previous route and arrival
+            values become JSON null. Event and envelope metadata are excluded.
+        """
+        return {
+            "package_id": event.package_id,
+            "previous_route_id": event.previous_route_id,
+            "new_route_id": event.new_route_id,
+            "previous_expected_arrival": optional_isoformat(event.previous_expected_arrival),
+            "new_expected_arrival": optional_isoformat(event.new_expected_arrival),
+        }
+
+    def decode(
+        self,
+        payload: JSONObject,
+        *,
+        event_id: UUID,
+        occurred_at: datetime,
+        recorded_at: datetime,
+    ) -> PackageAssignedToRoute:
+        """Validate an assignment payload and restore its original event metadata.
+
+        Args:
+            payload: JSON object containing exactly the five version-2 keys.
+                Nullable fields must be present even when their values are null.
+            event_id: Original event UUID.
+            occurred_at: Original naive app-local business timestamp.
+            recorded_at: Original UTC-aware recording timestamp.
+
+        Returns:
+            A new event preserving the previous and new route IDs and optional
+            naive arrival times. The input payload is neither mutated nor retained.
+
+        Raises:
+            TypeError: If a payload field or metadata has an invalid runtime
+                type. Booleans are not valid IDs, package_id and new_route_id
+                cannot be null, and non-null arrivals must be strings.
+            ValueError: If keys are missing or unexpected, an ID is non-positive,
+                arrival text is invalid, or timestamps use the wrong time domain.
+        """
+        expected_payload_keys: Final[frozenset[str]] = frozenset([
+            "package_id",
+            "previous_route_id",
+            "new_route_id",
+            "previous_expected_arrival",
+            "new_expected_arrival",
+        ])
+
+        require_json_object_keys(payload, expected_payload_keys)
+
+        package_id = require_positive_int(payload["package_id"], "package_id")
+        previous_route_id = require_optional_positive_int(payload["previous_route_id"], "previous_route_id")
+        new_route_id = require_positive_int(payload["new_route_id"], "new_route_id")
+        previous_expected_arrival = None
+        if payload["previous_expected_arrival"] is not None:
+            arrival_text = require_str(payload["previous_expected_arrival"], "previous_expected_arrival")
+            try:
+                parsed_arrival = datetime.fromisoformat(arrival_text)
+            except ValueError as exc:
+                raise ValueError("previous_expected_arrival: expected ISO-formatted datetime.") from exc
+            previous_expected_arrival = require_naive_datetime(parsed_arrival, "previous_expected_arrival")
+        new_expected_arrival = None
+        if payload["new_expected_arrival"] is not None:
+            arrival_text = require_str(payload["new_expected_arrival"], "new_expected_arrival")
+            try:
+                parsed_arrival = datetime.fromisoformat(arrival_text)
+            except ValueError as exc:
+                raise ValueError("new_expected_arrival: expected ISO-formatted datetime.") from exc
+            new_expected_arrival = require_naive_datetime(parsed_arrival, "new_expected_arrival")
+
+        return PackageAssignedToRoute(
+            event_id=event_id,
+            occurred_at=occurred_at,
+            recorded_at=recorded_at,
+            package_id=package_id,
+            previous_route_id=previous_route_id,
+            new_route_id=new_route_id,
+            previous_expected_arrival=previous_expected_arrival,
+            new_expected_arrival=new_expected_arrival,
         )

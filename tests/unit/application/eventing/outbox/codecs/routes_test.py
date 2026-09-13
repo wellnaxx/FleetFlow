@@ -7,13 +7,14 @@ from typing import cast
 from uuid import UUID
 
 from src.application.eventing.outbox.codecs.routes import (
+    PackageAssignedToRouteEventPayloadCodec,
     RouteCreatedEventPayloadCodec,
     RouteScheduledEventPayloadCodec,
 )
 from src.application.eventing.outbox.errors import EventCodecNotFoundError
 from src.application.eventing.outbox.registry import EventOutboxCodecRegistry
 from src.domain.enums.route_status import RouteStatus
-from src.domain.events.route_events import RouteCreated, RouteScheduled
+from src.domain.events.route_events import PackageAssignedToRoute, RouteCreated, RouteScheduled
 from src.domain.exceptions import DomainValidationError
 from src.domain.value_objects.location_code import LocationCode
 from src.shared.json_types import JSONObject, JSONValue
@@ -23,6 +24,188 @@ OCCURRED_AT = datetime(2030, 1, 2, 3, 4, 5, 123456)
 RECORDED_AT = datetime(2030, 1, 2, 1, 4, 5, 654321, tzinfo=UTC)
 DEPARTURE = datetime(2030, 1, 3, 6, 30, 45, 123456)
 COMPLETION = datetime(2030, 1, 4, 18, 45, 30, 654321)
+
+
+class PackageAssignedToRouteCodecShould(unittest.TestCase):
+    def setUp(self) -> None:
+        self.codec = PackageAssignedToRouteEventPayloadCodec()
+        self.previous_arrival = COMPLETION - timedelta(days=1)
+        self.payload: JSONObject = {
+            "package_id": 7,
+            "previous_route_id": 12,
+            "new_route_id": 19,
+            "previous_expected_arrival": self.previous_arrival.isoformat(),
+            "new_expected_arrival": COMPLETION.isoformat(),
+        }
+        self.timestamp_fields = ("previous_expected_arrival", "new_expected_arrival")
+
+    def decode(self, payload: JSONObject) -> PackageAssignedToRoute:
+        return self.codec.decode(
+            payload, event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+        )
+
+    def test_exact_wire_contract_round_trips_all_nullable_combinations(self) -> None:
+        for previous_route_id in (None, 12):
+            for previous_arrival in (None, self.previous_arrival):
+                for new_arrival in (None, COMPLETION):
+                    with self.subTest(route=previous_route_id, previous=previous_arrival, new=new_arrival):
+                        event = PackageAssignedToRoute(
+                            event_id=EVENT_ID,
+                            occurred_at=OCCURRED_AT,
+                            recorded_at=RECORDED_AT,
+                            package_id=7,
+                            previous_route_id=previous_route_id,
+                            new_route_id=19,
+                            previous_expected_arrival=previous_arrival,
+                            new_expected_arrival=new_arrival,
+                        )
+                        expected = dict(self.payload)
+                        expected.update(
+                            previous_route_id=previous_route_id,
+                            previous_expected_arrival=(
+                                previous_arrival.isoformat() if previous_arrival is not None else None
+                            ),
+                            new_expected_arrival=new_arrival.isoformat() if new_arrival is not None else None,
+                        )
+                        encoded = self.codec.encode(event)
+                        self.assertEqual(encoded, expected)
+                        for field in ("package_id", "new_route_id"):
+                            self.assertIs(type(encoded[field]), int)
+                        self.assertIs(type(encoded["previous_route_id"]), type(previous_route_id))
+                        for field in self.timestamp_fields:
+                            if encoded[field] is not None:
+                                self.assertIs(type(encoded[field]), str)
+                        restored = self.decode(
+                            cast(JSONObject, json.loads(json.dumps(encoded, allow_nan=False)))
+                        )
+                        self.assertIs(type(restored), PackageAssignedToRoute)
+                        self.assertEqual(restored, event)
+
+    def test_requires_every_key_including_nullable_fields(self) -> None:
+        for field in self.payload:
+            with self.subTest(field=field):
+                payload = dict(self.payload)
+                del payload[field]
+                with self.assertRaisesRegex(ValueError, f"Missing fields:.*{field}"):
+                    self.decode(payload)
+        with self.assertRaisesRegex(ValueError, "Missing fields"):
+            self.decode({})
+
+    def test_rejects_unknown_and_metadata_keys(self) -> None:
+        for field in ("unknown", "event_id", "event_version", "occurred_at", "recorded_at", "envelope_id"):
+            with self.subTest(field=field), self.assertRaisesRegex(ValueError, f"Unexpected fields:.*{field}"):
+                self.decode({**self.payload, field: "unexpected"})
+
+    def test_validates_required_and_optional_ids_without_coercion(self) -> None:
+        wrong_types: tuple[JSONValue, ...] = (True, False, 1.0, "7", "", [], {})
+        for field in ("package_id", "previous_route_id", "new_route_id"):
+            for value in wrong_types:
+                with self.subTest(field=field, value=value), self.assertRaisesRegex(TypeError, field):
+                    self.decode({**self.payload, field: value})
+            for value in (0, -1, -(2**63)):
+                with self.subTest(field=field, value=value), self.assertRaisesRegex(ValueError, field):
+                    self.decode({**self.payload, field: value})
+            for value in (1, 2**63):
+                with self.subTest(field=field, value=value):
+                    self.assertEqual(getattr(self.decode({**self.payload, field: value}), field), value)
+
+    def test_rejects_null_package_and_new_route_ids(self) -> None:
+        for field in ("package_id", "new_route_id"):
+            with self.subTest(field=field), self.assertRaisesRegex(TypeError, field):
+                self.decode({**self.payload, field: None})
+
+    def test_rejects_non_string_arrivals_including_datetime_objects(self) -> None:
+        values: tuple[object, ...] = (True, False, 1, 1.5, [], {}, COMPLETION)
+        for field in self.timestamp_fields:
+            for value in values:
+                with self.subTest(field=field, value=value), self.assertRaisesRegex(TypeError, field):
+                    self.decode({**self.payload, field: cast(JSONValue, value)})
+
+    def test_rejects_invalid_or_timezone_aware_arrivals(self) -> None:
+        for field in self.timestamp_fields:
+            for value in (
+                "", " ", "invalid", "2030-02-30T12:00:00", "2030-01-01T25:00:00",
+                "2030-01-01T12:00:00Z", "2030-01-01T12:00:00+00:00", "2030-01-01T12:00:00+02:00",
+                "2030-01-01T12:00:00-03:00",
+            ):
+                with self.subTest(field=field, value=value), self.assertRaisesRegex(ValueError, field):
+                    self.decode({**self.payload, field: value})
+
+    def test_invalid_arrival_text_preserves_parse_error_as_cause(self) -> None:
+        for field in self.timestamp_fields:
+            with self.subTest(field=field):
+                with self.assertRaisesRegex(ValueError, field) as raised:
+                    self.decode({**self.payload, field: "invalid"})
+                self.assertIsInstance(raised.exception.__cause__, ValueError)
+
+    def test_preserves_earlier_and_unchanged_arrival_estimates(self) -> None:
+        for arrival in (self.previous_arrival, self.previous_arrival - timedelta(days=2)):
+            with self.subTest(arrival=arrival):
+                payload = {**self.payload, "new_expected_arrival": arrival.isoformat()}
+                event = self.decode(payload)
+                self.assertEqual(event.previous_expected_arrival, self.previous_arrival)
+                self.assertEqual(event.new_expected_arrival, arrival)
+                self.assertEqual(self.codec.encode(event), payload)
+
+    def test_payload_and_event_remain_independent(self) -> None:
+        original = dict(self.payload)
+        event = self.decode(self.payload)
+        self.assertEqual(self.payload, original)
+        self.payload["previous_route_id"] = None
+        self.assertEqual(event.previous_route_id, 12)
+        encoded = self.codec.encode(event)
+        encoded["new_expected_arrival"] = None
+        self.assertEqual(self.codec.encode(event), original)
+
+    def test_registry_resolves_version_two_without_conflicting_with_route_codecs(self) -> None:
+        registry = EventOutboxCodecRegistry()
+        registry.register(RouteCreated, RouteCreatedEventPayloadCodec())
+        registry.register(RouteScheduled, RouteScheduledEventPayloadCodec())
+        registry.register(PackageAssignedToRoute, self.codec)
+        event = self.decode(self.payload)
+        adapter = registry.for_identity("package_assigned_to_route", 2)
+        self.assertIs(adapter, registry.for_event(event))
+        self.assertIs(adapter.event_class, PackageAssignedToRoute)
+        self.assertEqual(adapter.event_version, PackageAssignedToRoute.event_version)
+        for name in ("route_created", "route_scheduled"):
+            self.assertIsNot(adapter, registry.for_identity(name, 2))
+        self.assertEqual(
+            adapter.decode(
+                adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+            ),
+            event,
+        )
+        for version in (1, 3):
+            with self.subTest(version=version), self.assertRaises(EventCodecNotFoundError):
+                registry.for_identity("package_assigned_to_route", version)
+
+    def test_event_constructor_rejects_invalid_metadata(self) -> None:
+        cases: tuple[tuple[str, object, type[Exception]], ...] = (
+            ("event_id", None, TypeError),
+            ("event_id", str(EVENT_ID), TypeError),
+            ("occurred_at", None, TypeError),
+            ("occurred_at", "2030-01-02", TypeError),
+            ("recorded_at", None, TypeError),
+            ("recorded_at", "2030-01-02", TypeError),
+            ("occurred_at", OCCURRED_AT.replace(tzinfo=UTC), ValueError),
+            ("recorded_at", RECORDED_AT.replace(tzinfo=None), ValueError),
+            ("recorded_at", RECORDED_AT.astimezone(timezone(timedelta(hours=2))), ValueError),
+        )
+        for field, value, error in cases:
+            with self.subTest(field=field, value=value):
+                metadata: dict[str, object] = {
+                    "event_id": EVENT_ID,
+                    "occurred_at": OCCURRED_AT,
+                    "recorded_at": RECORDED_AT,
+                }
+                metadata[field] = value
+                with self.assertRaisesRegex(error, field):
+                    self.codec.decode(
+                        self.payload,
+                        event_id=cast(UUID, metadata["event_id"]),
+                        occurred_at=cast(datetime, metadata["occurred_at"]),
+                        recorded_at=cast(datetime, metadata["recorded_at"]),
+                    )
 
 
 class RouteScheduledCodecShould(unittest.TestCase):
