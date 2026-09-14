@@ -9,8 +9,15 @@ from typing import Final
 from uuid import UUID
 
 from src.application.eventing.outbox.codec import EventPayloadCodec
+from src.domain.enums.item_status import ItemStatus
+from src.domain.enums.package_detachment_reasons import PackageDetachmentReason
 from src.domain.enums.route_status import RouteStatus
-from src.domain.events.route_events import PackageAssignedToRoute, RouteCreated, RouteScheduled
+from src.domain.events.route_events import (
+    PackageAssignedToRoute,
+    PackageDetachedFromRoute,
+    RouteCreated,
+    RouteScheduled,
+)
 from src.domain.value_objects.location_code import LocationCode
 from src.shared.json_serialization import optional_isoformat
 from src.shared.json_types import JSONObject
@@ -406,4 +413,141 @@ class PackageAssignedToRouteEventPayloadCodec(EventPayloadCodec[PackageAssignedT
             new_route_id=new_route_id,
             previous_expected_arrival=previous_expected_arrival,
             new_expected_arrival=new_expected_arrival,
+        )
+
+
+class PackageDetachedFromRouteEventPayloadCodec(EventPayloadCodec[PackageDetachedFromRoute]):
+    """Encode and decode the version-2 package detachment snapshot.
+
+    All ten payload keys are required. new_route_id and both expected arrivals
+    may independently be null; package_id and previous_route_id are positive
+    integers. Statuses and detachment reason use their enum values. Encoding
+    trusts typed event fields; decoding validates serialized values without
+    consulting live entities or reapplying detachment policies.
+    """
+
+    @property
+    def event_class(self) -> type[PackageDetachedFromRoute]:
+        """Return the concrete package-detached-from-route event class."""
+        return PackageDetachedFromRoute
+
+    @property
+    def event_type(self) -> str:
+        """Return the stable persisted identity ``package_detached_from_route``."""
+        return "package_detached_from_route"
+
+    @property
+    def event_version(self) -> int:
+        """Return the explicit supported payload contract version."""
+        return 2
+
+    def encode(self, event: PackageDetachedFromRoute) -> JSONObject:
+        """Serialize the detachment's before/after values into a fresh JSON object.
+
+        Args:
+            event: Version-2 event with correctly typed detachment fields.
+
+        Returns:
+            Integer IDs, string statuses, locations and reason, and ISO-formatted
+            arrivals with microseconds preserved. Absent new route and arrival
+            values become JSON null. Event and envelope metadata are excluded.
+        """
+        return {
+            "package_id": event.package_id,
+            "previous_route_id": event.previous_route_id,
+            "new_route_id": event.new_route_id,
+            "previous_status": event.previous_status.value,
+            "new_status": event.new_status.value,
+            "previous_location": str(event.previous_location),
+            "new_location": str(event.new_location),
+            "previous_expected_arrival": optional_isoformat(event.previous_expected_arrival),
+            "new_expected_arrival": optional_isoformat(event.new_expected_arrival),
+            "reason": event.reason.value,
+        }
+
+    def decode(
+        self,
+        payload: JSONObject,
+        *,
+        event_id: UUID,
+        occurred_at: datetime,
+        recorded_at: datetime,
+    ) -> PackageDetachedFromRoute:
+        """Validate a detachment payload and restore its original event metadata.
+
+        Args:
+            payload: JSON object containing exactly the ten version-2 keys.
+                Nullable fields must be present even when their values are null.
+            event_id: Original event UUID.
+            occurred_at: Original naive app-local business timestamp.
+            recorded_at: Original UTC-aware recording timestamp.
+
+        Returns:
+            A new event preserving before/after IDs, typed statuses and locations,
+            optional naive arrivals, and the typed detachment reason. The input
+            payload is neither mutated nor retained.
+
+        Raises:
+            TypeError: If a payload field or metadata has an invalid runtime
+                type. Booleans are not valid IDs, package_id and previous_route_id
+                cannot be null, and non-null arrivals must be strings.
+            ValueError: If keys are missing or unexpected, an ID is non-positive,
+                a status or reason is unknown, arrival text is invalid, or
+                timestamps use the wrong time domain.
+            DomainValidationError: If either location is blank after normalization.
+        """
+        expected_payload_keys: Final[frozenset[str]] = frozenset([
+            "package_id",
+            "previous_route_id",
+            "new_route_id",
+            "previous_status",
+            "new_status",
+            "previous_location",
+            "new_location",
+            "previous_expected_arrival",
+            "new_expected_arrival",
+            "reason",
+        ])
+
+        require_json_object_keys(payload, expected_payload_keys)
+
+        package_id = require_positive_int(payload["package_id"], "package_id")
+        previous_route_id = require_positive_int(payload["previous_route_id"], "previous_route_id")
+        new_route_id = require_optional_positive_int(payload["new_route_id"], "new_route_id")
+        previous_status = ItemStatus(require_str(payload["previous_status"], "previous_status"))
+        new_status = ItemStatus(require_str(payload["new_status"], "new_status"))
+        previous_location = LocationCode(require_str(payload["previous_location"], "previous_location"))
+        new_location = LocationCode(require_str(payload["new_location"], "new_location"))
+        previous_expected_arrival = None
+        if payload["previous_expected_arrival"] is not None:
+            arrival_text = require_str(payload["previous_expected_arrival"], "previous_expected_arrival")
+            try:
+                parsed_arrival = datetime.fromisoformat(arrival_text)
+            except ValueError as exc:
+                raise ValueError("previous_expected_arrival: expected ISO-formatted datetime.") from exc
+            previous_expected_arrival = require_naive_datetime(parsed_arrival, "previous_expected_arrival")
+        new_expected_arrival = None
+        if payload["new_expected_arrival"] is not None:
+            arrival_text = require_str(payload["new_expected_arrival"], "new_expected_arrival")
+            try:
+                parsed_arrival = datetime.fromisoformat(arrival_text)
+            except ValueError as exc:
+                raise ValueError("new_expected_arrival: expected ISO-formatted datetime.") from exc
+            new_expected_arrival = require_naive_datetime(parsed_arrival, "new_expected_arrival")
+        reason = PackageDetachmentReason(require_str(payload["reason"], "reason"))
+
+        return PackageDetachedFromRoute(
+            event_id=event_id,
+            occurred_at=occurred_at,
+            recorded_at=recorded_at,
+            package_id=package_id,
+            previous_route_id=previous_route_id,
+            new_route_id=new_route_id,
+            previous_status=previous_status,
+            new_status=new_status,
+            previous_location=previous_location,
+            new_location=new_location,
+            previous_expected_arrival=previous_expected_arrival,
+            new_expected_arrival=new_expected_arrival,
+            reason=reason,
         )
