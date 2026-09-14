@@ -12,11 +12,13 @@ from src.application.eventing.outbox.codec import EventPayloadCodec
 from src.domain.enums.item_status import ItemStatus
 from src.domain.enums.package_detachment_reasons import PackageDetachmentReason
 from src.domain.enums.route_status import RouteStatus
+from src.domain.enums.truck_status import TruckStatus
 from src.domain.events.route_events import (
     PackageAssignedToRoute,
     PackageDetachedFromRoute,
     RouteCreated,
     RouteScheduled,
+    TruckAssignedToRoute,
 )
 from src.domain.value_objects.location_code import LocationCode
 from src.shared.json_serialization import optional_isoformat
@@ -550,4 +552,160 @@ class PackageDetachedFromRouteEventPayloadCodec(EventPayloadCodec[PackageDetache
             previous_expected_arrival=previous_expected_arrival,
             new_expected_arrival=new_expected_arrival,
             reason=reason,
+        )
+
+
+class TruckAssignedToRouteEventPayloadCodec(EventPayloadCodec[TruckAssignedToRoute]):
+    """Encode and decode the version-2 truck assignment snapshot.
+
+    All eleven payload keys are required. previous_route_id and the four busy
+    timestamps may independently be null; truck_id and new_route_id must be
+    positive integers. IDs are not restricted to the seeded fleet's range.
+    Encoding trusts typed event fields. Decoding restores serialized values
+    without consulting live entities or reapplying truck-assignment policies.
+    """
+
+    @property
+    def event_class(self) -> type[TruckAssignedToRoute]:
+        """Return the concrete truck-assigned-to-route event class."""
+        return TruckAssignedToRoute
+
+    @property
+    def event_type(self) -> str:
+        """Return the stable persisted identity ``truck_assigned_to_route``."""
+        return "truck_assigned_to_route"
+
+    @property
+    def event_version(self) -> int:
+        """Return the explicit supported payload contract version."""
+        return 2
+
+    def encode(self, event: TruckAssignedToRoute) -> JSONObject:
+        """Serialize assignment before/after values into a fresh JSON object.
+
+        Args:
+            event: Version-2 event with correctly typed assignment fields.
+
+        Returns:
+            Integer IDs, string statuses and locations, and ISO-formatted busy
+            timestamps with microseconds preserved. Absent previous route and
+            busy timestamps become JSON null. Event and envelope metadata are
+            excluded.
+        """
+        return {
+            "truck_id": event.truck_id,
+            "previous_route_id": event.previous_route_id,
+            "new_route_id": event.new_route_id,
+            "previous_status": event.previous_status.value,
+            "new_status": event.new_status.value,
+            "previous_location": str(event.previous_location),
+            "new_location": str(event.new_location),
+            "previous_busy_from": optional_isoformat(event.previous_busy_from),
+            "new_busy_from": optional_isoformat(event.new_busy_from),
+            "previous_busy_until": optional_isoformat(event.previous_busy_until),
+            "new_busy_until": optional_isoformat(event.new_busy_until),
+        }
+
+    def decode(
+        self,
+        payload: JSONObject,
+        *,
+        event_id: UUID,
+        occurred_at: datetime,
+        recorded_at: datetime,
+    ) -> TruckAssignedToRoute:
+        """Validate an assignment payload and restore its original event metadata.
+
+        Args:
+            payload: JSON object containing exactly the eleven version-2 keys.
+                Nullable fields must be present even when their values are null.
+            event_id: Original event UUID.
+            occurred_at: Original naive app-local business timestamp.
+            recorded_at: Original UTC-aware recording timestamp.
+
+        Returns:
+            A new event preserving before/after route IDs, typed statuses and
+            locations, and optional naive busy timestamps. The input payload
+            is neither mutated nor retained.
+
+        Raises:
+            TypeError: If a payload field or metadata has an invalid runtime
+                type. Booleans are not valid IDs, truck_id and new_route_id
+                cannot be null, and non-null busy timestamps must be strings.
+            ValueError: If keys are missing or unexpected, an ID is non-positive,
+                a status is unknown, timestamp text is invalid, or timestamps
+                use the wrong time domain.
+            DomainValidationError: If either location is blank after normalization.
+        """
+        expected_payload_keys: Final[frozenset[str]] = frozenset([
+            "truck_id",
+            "previous_route_id",
+            "new_route_id",
+            "previous_status",
+            "new_status",
+            "previous_location",
+            "new_location",
+            "previous_busy_from",
+            "new_busy_from",
+            "previous_busy_until",
+            "new_busy_until",
+        ])
+
+        require_json_object_keys(payload, expected_payload_keys)
+
+        truck_id = require_positive_int(payload["truck_id"], "truck_id")
+        previous_route_id = require_optional_positive_int(payload["previous_route_id"], "previous_route_id")
+        new_route_id = require_positive_int(payload["new_route_id"], "new_route_id")
+        previous_status = TruckStatus(require_str(payload["previous_status"], "previous_status"))
+        new_status = TruckStatus(require_str(payload["new_status"], "new_status"))
+        previous_location = LocationCode(require_str(payload["previous_location"], "previous_location"))
+        new_location = LocationCode(require_str(payload["new_location"], "new_location"))
+        previous_busy_from = None
+        if payload["previous_busy_from"] is not None:
+            busy_from_text = require_str(payload["previous_busy_from"], "previous_busy_from")
+            try:
+                parsed_busy_from = datetime.fromisoformat(busy_from_text)
+            except ValueError as exc:
+                raise ValueError("previous_busy_from: expected ISO-formatted datetime.") from exc
+            previous_busy_from = require_naive_datetime(parsed_busy_from, "previous_busy_from")
+        new_busy_from = None
+        if payload["new_busy_from"] is not None:
+            busy_from_text = require_str(payload["new_busy_from"], "new_busy_from")
+            try:
+                parsed_busy_from = datetime.fromisoformat(busy_from_text)
+            except ValueError as exc:
+                raise ValueError("new_busy_from: expected ISO-formatted datetime.") from exc
+            new_busy_from = require_naive_datetime(parsed_busy_from, "new_busy_from")
+        previous_busy_until = None
+        if payload["previous_busy_until"] is not None:
+            busy_until_text = require_str(payload["previous_busy_until"], "previous_busy_until")
+            try:
+                parsed_busy_until = datetime.fromisoformat(busy_until_text)
+            except ValueError as exc:
+                raise ValueError("previous_busy_until: expected ISO-formatted datetime.") from exc
+            previous_busy_until = require_naive_datetime(parsed_busy_until, "previous_busy_until")
+        new_busy_until = None
+        if payload["new_busy_until"] is not None:
+            busy_until_text = require_str(payload["new_busy_until"], "new_busy_until")
+            try:
+                parsed_busy_until = datetime.fromisoformat(busy_until_text)
+            except ValueError as exc:
+                raise ValueError("new_busy_until: expected ISO-formatted datetime.") from exc
+            new_busy_until = require_naive_datetime(parsed_busy_until, "new_busy_until")
+
+        return TruckAssignedToRoute(
+            event_id=event_id,
+            occurred_at=occurred_at,
+            recorded_at=recorded_at,
+            truck_id=truck_id,
+            previous_route_id=previous_route_id,
+            new_route_id=new_route_id,
+            previous_status=previous_status,
+            new_status=new_status,
+            previous_location=previous_location,
+            new_location=new_location,
+            previous_busy_from=previous_busy_from,
+            new_busy_from=new_busy_from,
+            previous_busy_until=previous_busy_until,
+            new_busy_until=new_busy_until,
         )
