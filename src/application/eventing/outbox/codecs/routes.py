@@ -19,6 +19,7 @@ from src.domain.events.route_events import (
     PackageDetachedFromRoute,
     RouteCreated,
     RouteScheduled,
+    RouteStarted,
     TruckAssignedToRoute,
     TruckReleasedFromRoute,
 )
@@ -871,4 +872,94 @@ class TruckReleasedFromRouteEventPayloadCodec(EventPayloadCodec[TruckReleasedFro
             previous_busy_until=previous_busy_until,
             new_busy_until=new_busy_until,
             reason=reason,
+        )
+
+
+class RouteStartedEventPayloadCodec(EventPayloadCodec[RouteStarted]):
+    """Encode and decode the version-2 route-start transition snapshot.
+
+    Exactly route_id, previous_status, and new_status are required. The route
+    ID is a positive integer and statuses use RouteStatus values. Encoding
+    trusts typed event fields; decoding validates serialized representations
+    without consulting live routes or reapplying transition eligibility rules.
+    Occurrence time remains separate event metadata, not a payload field.
+    """
+
+    @property
+    def event_class(self) -> type[RouteStarted]:
+        """Return the concrete route-started event class."""
+        return RouteStarted
+
+    @property
+    def event_type(self) -> str:
+        """Return the stable persisted identity ``route_started``."""
+        return "route_started"
+
+    @property
+    def event_version(self) -> int:
+        """Return the explicit supported payload contract version."""
+        return 2
+
+    def encode(self, event: RouteStarted) -> JSONObject:
+        """Serialize the route's before/after statuses into a fresh JSON object.
+
+        Args:
+            event: Version-2 event with correctly typed transition fields.
+
+        Returns:
+            Integer route ID and string previous/new status values. Event and
+            envelope metadata, including occurrence time, are excluded.
+        """
+        return {
+            "route_id": event.route_id,
+            "previous_status": event.previous_status.value,
+            "new_status": event.new_status.value,
+        }
+
+    def decode(
+        self,
+        payload: JSONObject,
+        *,
+        event_id: UUID,
+        occurred_at: datetime,
+        recorded_at: datetime,
+    ) -> RouteStarted:
+        """Validate a route-start payload and restore its original event metadata.
+
+        Args:
+            payload: JSON object containing exactly the three version-2 keys.
+            event_id: Original event UUID.
+            occurred_at: Original naive app-local business timestamp.
+            recorded_at: Original UTC-aware recording timestamp.
+
+        Returns:
+            A new event preserving the route ID and typed before/after statuses.
+            The input payload is neither mutated nor retained.
+
+        Raises:
+            TypeError: If a payload field or metadata has an invalid runtime
+                type. A null, boolean, float, or string is not a valid route ID.
+            ValueError: If keys are missing or unexpected, route_id is
+                non-positive, a status is unknown, or timestamps use the wrong
+                time domain.
+        """
+        expected_payload_keys: Final[frozenset[str]] = frozenset([
+            "route_id",
+            "previous_status",
+            "new_status",
+        ])
+
+        require_json_object_keys(payload, expected_payload_keys)
+
+        route_id = require_positive_int(payload["route_id"], "route_id")
+        previous_status = RouteStatus(require_str(payload["previous_status"], "previous_status"))
+        new_status = RouteStatus(require_str(payload["new_status"], "new_status"))
+
+        return RouteStarted(
+            event_id=event_id,
+            occurred_at=occurred_at,
+            recorded_at=recorded_at,
+            route_id=route_id,
+            previous_status=previous_status,
+            new_status=new_status,
         )
