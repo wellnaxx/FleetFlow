@@ -19,6 +19,7 @@ from src.domain.events.route_events import (
     PackageDetachedFromRoute,
     RouteCompleted,
     RouteCreated,
+    RouteRemoved,
     RouteScheduled,
     RouteStarted,
     TruckAssignedToRoute,
@@ -1075,4 +1076,146 @@ class RouteCompletedEventPayloadCodec(EventPayloadCodec[RouteCompleted]):
             new_status=new_status,
             departure_time=departure_time,
             expected_completion_time=expected_completion_time,
+        )
+
+
+class RouteRemovedEventPayloadCodec(EventPayloadCodec[RouteRemoved]):
+    """Encode and decode the version-2 route removal snapshot.
+
+    All seven payload keys are required. Previous schedule timestamps and the
+    released truck ID may independently be null. Locations and detached package
+    IDs are ordered JSON arrays, restored as tuples on decoding. IDs are positive
+    integers without seeded-fleet restrictions. Encoding trusts typed fields;
+    decoding validates representations without consulting live entities or
+    reapplying route-path, scheduling, or removal policies.
+    """
+
+    @property
+    def event_class(self) -> type[RouteRemoved]:
+        """Return the concrete route-removed event class."""
+        return RouteRemoved
+
+    @property
+    def event_type(self) -> str:
+        """Return the stable persisted identity ``route_removed``."""
+        return "route_removed"
+
+    @property
+    def event_version(self) -> int:
+        """Return the explicit supported payload contract version."""
+        return 2
+
+    def encode(self, event: RouteRemoved) -> JSONObject:
+        """Serialize the pre-removal snapshot into a fresh JSON object.
+
+        Args:
+            event: Version-2 event with correctly typed removal fields.
+
+        Returns:
+            Integer IDs, string status, fresh lists of location strings and
+            detached package IDs, and ISO-formatted schedule timestamps with
+            microseconds preserved. Absent truck and timestamp values become
+            JSON null. Event and envelope metadata are excluded.
+        """
+        return {
+            "route_id": event.route_id,
+            "previous_status": event.previous_status.value,
+            "previous_locations": [str(location) for location in event.previous_locations],
+            "previous_departure_time": optional_isoformat(event.previous_departure_time),
+            "previous_expected_completion_time": optional_isoformat(event.previous_expected_completion_time),
+            "detached_package_ids": list(event.detached_package_ids),
+            "released_truck_id": event.released_truck_id,
+        }
+
+    def decode(
+        self,
+        payload: JSONObject,
+        *,
+        event_id: UUID,
+        occurred_at: datetime,
+        recorded_at: datetime,
+    ) -> RouteRemoved:
+        """Validate a removal payload and restore its original event metadata.
+
+        Args:
+            payload: JSON object containing exactly the seven version-2 keys.
+                Nullable fields must be present even when their values are null.
+            event_id: Original event UUID.
+            occurred_at: Original naive app-local business timestamp.
+            recorded_at: Original UTC-aware recording timestamp.
+
+        Returns:
+            A new event with typed status, ordered location and package-ID tuples,
+            optional naive schedule timestamps, and optional released truck ID.
+            The payload and its lists are neither mutated nor retained.
+
+        Raises:
+            TypeError: If a field or metadata has an invalid runtime type.
+                Locations and package IDs must be lists with correctly typed
+                elements; booleans are not valid IDs and non-null timestamps
+                must be strings.
+            ValueError: If keys are missing or unexpected, an ID is non-positive,
+                status is unknown, timestamp text is invalid, or timestamps use
+                the wrong time domain.
+            DomainValidationError: If any location is blank after normalization.
+        """
+        expected_payload_keys: Final[frozenset[str]] = frozenset([
+            "route_id",
+            "previous_status",
+            "previous_locations",
+            "previous_departure_time",
+            "previous_expected_completion_time",
+            "detached_package_ids",
+            "released_truck_id",
+        ])
+
+        require_json_object_keys(payload, expected_payload_keys)
+
+        route_id = require_positive_int(payload["route_id"], "route_id")
+        previous_status = RouteStatus(require_str(payload["previous_status"], "previous_status"))
+        raw_previous_locations = require_list(payload["previous_locations"], "previous_locations")
+        previous_locations: list[LocationCode] = []
+        for index, item in enumerate(raw_previous_locations):
+            field_name = f"previous_locations[{index}]"
+            name = require_str(item, field_name)
+            previous_locations.append(LocationCode(name))
+        previous_departure_time = None
+        if payload["previous_departure_time"] is not None:
+            departure_text = require_str(payload["previous_departure_time"], "previous_departure_time")
+            try:
+                parsed_departure = datetime.fromisoformat(departure_text)
+            except ValueError as exc:
+                raise ValueError("previous_departure_time: expected ISO-formatted datetime.") from exc
+            previous_departure_time = require_naive_datetime(parsed_departure, "previous_departure_time")
+        previous_expected_completion_time = None
+        if payload["previous_expected_completion_time"] is not None:
+            completion_text = require_str(
+                payload["previous_expected_completion_time"], "previous_expected_completion_time"
+            )
+            try:
+                parsed_completion = datetime.fromisoformat(completion_text)
+            except ValueError as exc:
+                raise ValueError("previous_expected_completion_time: expected ISO-formatted datetime.") from exc
+            previous_expected_completion_time = require_naive_datetime(
+                parsed_completion, "previous_expected_completion_time"
+            )
+        raw_detached_package_ids = require_list(payload["detached_package_ids"], "detached_package_ids")
+        detached_package_ids: list[int] = []
+        for index, package_id in enumerate(raw_detached_package_ids):
+            field_name = f"detached_package_ids[{index}]"
+            package_id = require_positive_int(package_id, field_name)
+            detached_package_ids.append(package_id)
+        released_truck_id = require_optional_positive_int(payload["released_truck_id"], "released_truck_id")
+
+        return RouteRemoved(
+            event_id=event_id,
+            occurred_at=occurred_at,
+            recorded_at=recorded_at,
+            route_id=route_id,
+            previous_status=previous_status,
+            previous_locations=tuple(previous_locations),
+            previous_departure_time=previous_departure_time,
+            previous_expected_completion_time=previous_expected_completion_time,
+            detached_package_ids=tuple(detached_package_ids),
+            released_truck_id=released_truck_id,
         )
