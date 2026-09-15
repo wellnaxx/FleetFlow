@@ -17,6 +17,7 @@ from src.domain.enums.truck_status import TruckStatus
 from src.domain.events.route_events import (
     PackageAssignedToRoute,
     PackageDetachedFromRoute,
+    RouteCompleted,
     RouteCreated,
     RouteScheduled,
     RouteStarted,
@@ -962,4 +963,116 @@ class RouteStartedEventPayloadCodec(EventPayloadCodec[RouteStarted]):
             route_id=route_id,
             previous_status=previous_status,
             new_status=new_status,
+        )
+
+
+class RouteCompletedEventPayloadCodec(EventPayloadCodec[RouteCompleted]):
+    """Encode and decode the version-2 route completion snapshot.
+
+    All five payload keys are required and non-null. The route ID is a positive
+    integer, statuses use RouteStatus values, and both schedule timestamps are
+    naive app-local datetimes. Expected completion remains separate from event
+    occurrence time. Encoding trusts typed fields; decoding validates serialized
+    values without rebuilding schedules or reapplying transition policies.
+    """
+
+    @property
+    def event_class(self) -> type[RouteCompleted]:
+        """Return the concrete route-completed event class."""
+        return RouteCompleted
+
+    @property
+    def event_type(self) -> str:
+        """Return the stable persisted identity ``route_completed``."""
+        return "route_completed"
+
+    @property
+    def event_version(self) -> int:
+        """Return the explicit supported payload contract version."""
+        return 2
+
+    def encode(self, event: RouteCompleted) -> JSONObject:
+        """Serialize the completion snapshot into a fresh JSON object.
+
+        Args:
+            event: Version-2 event with correctly typed completion fields.
+
+        Returns:
+            Integer route ID, string before/after status values, and
+            ISO-formatted departure and expected completion times with
+            microseconds preserved. Event and envelope metadata are excluded.
+        """
+        return {
+            "route_id": event.route_id,
+            "previous_status": event.previous_status.value,
+            "new_status": event.new_status.value,
+            "departure_time": event.departure_time.isoformat(),
+            "expected_completion_time": event.expected_completion_time.isoformat(),
+        }
+
+    def decode(
+        self,
+        payload: JSONObject,
+        *,
+        event_id: UUID,
+        occurred_at: datetime,
+        recorded_at: datetime,
+    ) -> RouteCompleted:
+        """Validate a completion payload and restore its original event metadata.
+
+        Args:
+            payload: JSON object containing exactly the five version-2 keys.
+                Neither schedule timestamp may be null.
+            event_id: Original event UUID.
+            occurred_at: Original naive app-local business timestamp.
+            recorded_at: Original UTC-aware recording timestamp.
+
+        Returns:
+            A new event preserving the route ID, typed before/after statuses,
+            and naive schedule timestamps. The input payload is neither mutated
+            nor retained.
+
+        Raises:
+            TypeError: If a payload field or metadata has an invalid runtime
+                type. Booleans are not valid IDs, and schedule timestamps must
+                be strings rather than null or datetime objects.
+            ValueError: If keys are missing or unexpected, route_id is
+                non-positive, a status is unknown, timestamp text is invalid,
+                or timestamps use the wrong time domain.
+        """
+        expected_payload_keys: Final[frozenset[str]] = frozenset([
+            "route_id",
+            "previous_status",
+            "new_status",
+            "departure_time",
+            "expected_completion_time",
+        ])
+
+        require_json_object_keys(payload, expected_payload_keys)
+
+        route_id = require_positive_int(payload["route_id"], "route_id")
+        previous_status = RouteStatus(require_str(payload["previous_status"], "previous_status"))
+        new_status = RouteStatus(require_str(payload["new_status"], "new_status"))
+        departure_text = require_str(payload["departure_time"], "departure_time")
+        try:
+            parsed_departure = datetime.fromisoformat(departure_text)
+        except ValueError as exc:
+            raise ValueError("departure_time: expected ISO-formatted datetime.") from exc
+        departure_time = require_naive_datetime(parsed_departure, "departure_time")
+        expected_completion_text = require_str(payload["expected_completion_time"], "expected_completion_time")
+        try:
+            parsed_completion = datetime.fromisoformat(expected_completion_text)
+        except ValueError as exc:
+            raise ValueError("expected_completion_time: expected ISO-formatted datetime.") from exc
+        expected_completion_time = require_naive_datetime(parsed_completion, "expected_completion_time")
+
+        return RouteCompleted(
+            event_id=event_id,
+            occurred_at=occurred_at,
+            recorded_at=recorded_at,
+            route_id=route_id,
+            previous_status=previous_status,
+            new_status=new_status,
+            departure_time=departure_time,
+            expected_completion_time=expected_completion_time,
         )
