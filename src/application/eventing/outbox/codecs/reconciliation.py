@@ -15,6 +15,7 @@ from src.application.events.reconciliation_events import (
     PackageStateReconciled,
     RouteStateReconciled,
     TruckPositionReconciled,
+    TruckRouteReferenceReconciled,
 )
 from src.domain.enums.item_status import ItemStatus
 from src.domain.enums.route_status import RouteStatus
@@ -437,4 +438,95 @@ class TruckPositionReconciledEventPayloadCodec(EventPayloadCodec[TruckPositionRe
             previous_in_transit_to=previous_in_transit_to,
             new_in_transit_to=new_in_transit_to,
             position_kind=position_kind,
+        )
+
+
+class TruckRouteReferenceReconciledEventPayloadCodec(EventPayloadCodec[TruckRouteReferenceReconciled]):
+    """Encode and decode the version-1 truck route-reference correction.
+
+    Exactly truck_id, previous_route_id, and new_route_id are required. Only
+    previous_route_id may be null. IDs are positive integers without seeded-fleet
+    range restrictions. Encoding trusts typed event fields; decoding validates
+    serialized IDs without looking up live entities or reapplying reconciliation
+    policies.
+    """
+
+    @property
+    def event_class(self) -> type[TruckRouteReferenceReconciled]:
+        """Return the concrete truck-route-reference-reconciled event class."""
+        return TruckRouteReferenceReconciled
+
+    @property
+    def event_type(self) -> str:
+        """Return the stable persisted identity ``truck_route_reference_reconciled``."""
+        return "truck_route_reference_reconciled"
+
+    @property
+    def event_version(self) -> int:
+        """Return the explicit supported payload contract version."""
+        return 1
+
+    def encode(self, event: TruckRouteReferenceReconciled) -> JSONObject:
+        """Serialize the reference correction into a fresh JSON object.
+
+        Args:
+            event: Version-1 event with correctly typed reference fields.
+
+        Returns:
+            Integer truck and route IDs, with an absent previous route encoded
+            as JSON null. Event and envelope metadata are excluded.
+        """
+        return {
+            "truck_id": event.truck_id,
+            "previous_route_id": event.previous_route_id,
+            "new_route_id": event.new_route_id,
+        }
+
+    def decode(
+        self,
+        payload: JSONObject,
+        *,
+        event_id: UUID,
+        occurred_at: datetime,
+        recorded_at: datetime,
+    ) -> TruckRouteReferenceReconciled:
+        """Validate a reference correction and restore its original event metadata.
+
+        Args:
+            payload: JSON object containing exactly the three version-1 keys.
+                previous_route_id must be present even when its value is null.
+            event_id: Original event UUID.
+            occurred_at: Original naive app-local business timestamp.
+            recorded_at: Original UTC-aware recording timestamp.
+
+        Returns:
+            A new event preserving truck identity and the previous and restored
+            route IDs. The input payload is neither mutated nor retained.
+
+        Raises:
+            TypeError: If an ID or metadata has an invalid runtime type. IDs
+                cannot be booleans, strings, or floats; truck_id and new_route_id
+                cannot be null.
+            ValueError: If keys are missing or unexpected, an ID is non-positive,
+                or timestamps use the wrong time domain.
+        """
+        expected_payload_keys: Final[frozenset[str]] = frozenset([
+            "truck_id",
+            "previous_route_id",
+            "new_route_id",
+        ])
+
+        require_json_object_keys(payload, expected_payload_keys)
+
+        truck_id = require_positive_int(payload["truck_id"], "truck_id")
+        previous_route_id = require_optional_positive_int(payload["previous_route_id"], "previous_route_id")
+        new_route_id = require_positive_int(payload["new_route_id"], "new_route_id")
+
+        return TruckRouteReferenceReconciled(
+            event_id=event_id,
+            occurred_at=occurred_at,
+            recorded_at=recorded_at,
+            truck_id=truck_id,
+            previous_route_id=previous_route_id,
+            new_route_id=new_route_id,
         )
