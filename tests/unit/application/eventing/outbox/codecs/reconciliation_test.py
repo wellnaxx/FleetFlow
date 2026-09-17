@@ -12,14 +12,20 @@ from src.application.enums.route_reconciliation_reasons import RouteReconciliati
 from src.application.eventing.outbox.codecs.reconciliation import (
     PackageStateReconciledEventPayloadCodec,
     RouteStateReconciledEventPayloadCodec,
+    TruckPositionReconciledEventPayloadCodec,
 )
 from src.application.eventing.outbox.errors import EventCodecNotFoundError
 from src.application.eventing.outbox.registry import EventOutboxCodecRegistry
-from src.application.events.reconciliation_events import PackageStateReconciled, RouteStateReconciled
+from src.application.events.reconciliation_events import (
+    PackageStateReconciled,
+    RouteStateReconciled,
+    TruckPositionReconciled,
+)
 from src.domain.enums.item_status import ItemStatus
 from src.domain.enums.route_status import RouteStatus
 from src.domain.exceptions import DomainValidationError
 from src.domain.value_objects.location_code import LocationCode
+from src.domain.value_objects.route_schedule import RoutePositionKind
 from src.shared.json_types import JSONObject, JSONValue
 
 EVENT_ID = UUID("12345678-1234-4678-9234-567812345678")
@@ -27,6 +33,208 @@ OCCURRED_AT = datetime(2030, 1, 2, 3, 4, 5, 123456)
 RECORDED_AT = datetime(2030, 1, 2, 1, 4, 5, 654321, tzinfo=UTC)
 DEPARTURE = datetime(2030, 1, 3, 6, 30, 45, 123456)
 COMPLETION = datetime(2030, 1, 4, 18, 45, 30, 654321)
+
+
+class TruckPositionReconciledCodecShould(unittest.TestCase):
+    def setUp(self) -> None:
+        self.codec = TruckPositionReconciledEventPayloadCodec()
+        self.payload: JSONObject = {
+            "truck_id": 1001,
+            "route_id": 19,
+            "previous_location": "SYD",
+            "new_location": "MEL",
+            "previous_in_transit_to": "BNE",
+            "new_in_transit_to": "PER",
+            "position_kind": RoutePositionKind.IN_TRANSIT.value,
+        }
+        self.location_fields = (
+            "previous_location", "new_location", "previous_in_transit_to", "new_in_transit_to"
+        )
+
+    def decode(self, payload: JSONObject) -> TruckPositionReconciled:
+        return self.codec.decode(
+            payload, event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+        )
+
+    def test_exact_wire_contract_round_trips_all_position_kinds_and_nullable_combinations(self) -> None:
+        for kind, route_id, previous, new, previous_target, new_target in product(
+            RoutePositionKind, (None, 19), (None, LocationCode("SYD")), (None, LocationCode("MEL")),
+            (None, LocationCode("BNE")), (None, LocationCode("PER")),
+        ):
+            with self.subTest(
+                kind=kind, route=route_id, previous=previous, new=new,
+                previous_target=previous_target, new_target=new_target,
+            ):
+                event = TruckPositionReconciled(
+                    event_id=EVENT_ID,
+                    occurred_at=OCCURRED_AT,
+                    recorded_at=RECORDED_AT,
+                    truck_id=1001,
+                    route_id=route_id,
+                    previous_location=previous,
+                    new_location=new,
+                    previous_in_transit_to=previous_target,
+                    new_in_transit_to=new_target,
+                    position_kind=kind,
+                )
+                expected = dict(self.payload)
+                expected.update(route_id=route_id, position_kind=kind.value)
+                for field, value in zip(
+                    self.location_fields, (previous, new, previous_target, new_target), strict=True
+                ):
+                    expected[field] = str(value) if value is not None else None
+                encoded = self.codec.encode(event)
+                self.assertEqual(encoded, expected)
+                self.assertIs(type(encoded["truck_id"]), int)
+                self.assertIs(type(encoded["route_id"]), type(route_id))
+                self.assertIs(type(encoded["position_kind"]), str)
+                for field in self.location_fields:
+                    if expected[field] is None:
+                        self.assertIsNone(encoded[field])
+                    else:
+                        self.assertIs(type(encoded[field]), str)
+                restored = self.decode(cast(JSONObject, json.loads(json.dumps(encoded, allow_nan=False))))
+                self.assertIs(type(restored), TruckPositionReconciled)
+                self.assertEqual(restored, event)
+                self.assertIs(restored.position_kind, kind)
+                for field in self.location_fields:
+                    value = getattr(restored, field)
+                    if value is not None:
+                        self.assertIsInstance(value, LocationCode)
+
+    def test_requires_every_key_including_new_location_and_nullable_fields(self) -> None:
+        for field in self.payload:
+            with self.subTest(field=field):
+                payload = dict(self.payload)
+                del payload[field]
+                with self.assertRaisesRegex(ValueError, f"Missing fields:.*{field}"):
+                    self.decode(payload)
+        with self.assertRaisesRegex(ValueError, "Missing fields"):
+            self.decode({})
+
+    def test_rejects_unknown_and_metadata_keys(self) -> None:
+        for field in ("unknown", "event_id", "event_version", "occurred_at", "recorded_at", "envelope_id"):
+            with self.subTest(field=field), self.assertRaisesRegex(ValueError, f"Unexpected fields:.*{field}"):
+                self.decode({**self.payload, field: "unexpected"})
+
+    def test_validates_required_and_optional_ids_without_coercion(self) -> None:
+        values: tuple[JSONValue, ...] = (True, False, 1.0, "19", "", [], {})
+        for field in ("truck_id", "route_id"):
+            for value in values:
+                with self.subTest(field=field, value=value), self.assertRaisesRegex(TypeError, field):
+                    self.decode({**self.payload, field: value})
+            for value in (0, -1, -(2**63)):
+                with self.subTest(field=field, value=value), self.assertRaisesRegex(ValueError, field):
+                    self.decode({**self.payload, field: value})
+            for value in (1, 2**63):
+                with self.subTest(field=field, value=value):
+                    self.assertEqual(getattr(self.decode({**self.payload, field: value}), field), value)
+        with self.assertRaisesRegex(TypeError, "truck_id"):
+            self.decode({**self.payload, "truck_id": None})
+
+    def test_accepts_truck_ids_inside_and_outside_seeded_fleet_range(self) -> None:
+        for truck_id in (1, 1000, 1001, 1040, 1041, 2**63):
+            with self.subTest(truck_id=truck_id):
+                payload = {**self.payload, "truck_id": truck_id}
+                self.assertEqual(self.codec.encode(self.decode(payload)), payload)
+
+    def test_validates_and_normalizes_all_four_locations(self) -> None:
+        values: tuple[JSONValue, ...] = (True, False, 1, 1.5, [], {})
+        for field in self.location_fields:
+            for value in values:
+                with self.subTest(field=field, value=value), self.assertRaisesRegex(TypeError, field):
+                    self.decode({**self.payload, field: value})
+            for value in ("", " \t\n"):
+                with self.subTest(field=field, value=value), self.assertRaises(DomainValidationError):
+                    self.decode({**self.payload, field: value})
+            event = self.decode({**self.payload, field: " adl "})
+            self.assertEqual(getattr(event, field), LocationCode("ADL"))
+            self.assertEqual(self.codec.encode(event)[field], "ADL")
+
+    def test_rejects_wrong_position_kind_types(self) -> None:
+        values: tuple[JSONValue, ...] = (None, True, False, 1, 1.5, [], {})
+        for value in values:
+            with self.subTest(value=value), self.assertRaisesRegex(TypeError, "position_kind"):
+                self.decode({**self.payload, "position_kind": value})
+
+    def test_rejects_unknown_position_kinds_case_changes_and_whitespace(self) -> None:
+        values = ["", "unknown"]
+        values.extend(kind.value.lower() for kind in RoutePositionKind)
+        values.extend(f" {kind.value} " for kind in RoutePositionKind)
+        for value in values:
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                self.decode({**self.payload, "position_kind": value})
+
+    def test_preserves_unchanged_location_when_clearing_transit_target(self) -> None:
+        payload = {
+            **self.payload,
+            "new_location": "SYD",
+            "new_in_transit_to": None,
+            "position_kind": RoutePositionKind.AT_STOP.value,
+        }
+        event = self.decode(payload)
+        self.assertEqual(event.previous_location, event.new_location)
+        self.assertEqual(event.previous_in_transit_to, LocationCode("BNE"))
+        self.assertIsNone(event.new_in_transit_to)
+        self.assertEqual(self.codec.encode(event), payload)
+
+    def test_payload_and_event_remain_independent(self) -> None:
+        original = dict(self.payload)
+        event = self.decode(self.payload)
+        self.assertEqual(self.payload, original)
+        self.payload["new_location"] = None
+        self.assertEqual(event.new_location, LocationCode("MEL"))
+        encoded = self.codec.encode(event)
+        encoded["previous_in_transit_to"] = None
+        self.assertEqual(self.codec.encode(event), original)
+
+    def test_registry_resolves_version_one_without_conflicting_with_other_reconciliation_events(self) -> None:
+        registry = EventOutboxCodecRegistry()
+        registry.register(RouteStateReconciled, RouteStateReconciledEventPayloadCodec())
+        registry.register(PackageStateReconciled, PackageStateReconciledEventPayloadCodec())
+        registry.register(TruckPositionReconciled, self.codec)
+        event = self.decode(self.payload)
+        adapter = registry.for_identity("truck_position_reconciled", 1)
+        self.assertIs(adapter, registry.for_event(event))
+        self.assertIs(adapter.event_class, TruckPositionReconciled)
+        self.assertEqual(adapter.event_version, TruckPositionReconciled.event_version)
+        for name in ("route_state_reconciled", "package_state_reconciled"):
+            self.assertIsNot(adapter, registry.for_identity(name, 1))
+        self.assertEqual(
+            adapter.decode(
+                adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+            ),
+            event,
+        )
+        for version in (2, 3):
+            with self.subTest(version=version), self.assertRaises(EventCodecNotFoundError):
+                registry.for_identity("truck_position_reconciled", version)
+
+    def test_event_constructor_rejects_invalid_metadata(self) -> None:
+        cases: tuple[tuple[str, object, type[Exception]], ...] = (
+            ("event_id", None, TypeError),
+            ("event_id", str(EVENT_ID), TypeError),
+            ("occurred_at", None, TypeError),
+            ("occurred_at", "2030-01-02", TypeError),
+            ("recorded_at", None, TypeError),
+            ("recorded_at", "2030-01-02", TypeError),
+            ("occurred_at", OCCURRED_AT.replace(tzinfo=UTC), ValueError),
+            ("recorded_at", RECORDED_AT.replace(tzinfo=None), ValueError),
+            ("recorded_at", RECORDED_AT.astimezone(timezone(timedelta(hours=2))), ValueError),
+        )
+        for field, value, error in cases:
+            with self.subTest(field=field, value=value):
+                metadata: dict[str, object] = {
+                    "event_id": EVENT_ID, "occurred_at": OCCURRED_AT, "recorded_at": RECORDED_AT,
+                }
+                metadata[field] = value
+                with self.assertRaisesRegex(error, field):
+                    self.codec.decode(
+                        self.payload,
+                        event_id=cast(UUID, metadata["event_id"]),
+                        occurred_at=cast(datetime, metadata["occurred_at"]),
+                        recorded_at=cast(datetime, metadata["recorded_at"]),
+                    )
 
 
 class PackageStateReconciledCodecShould(unittest.TestCase):

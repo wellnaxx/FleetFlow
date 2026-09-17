@@ -11,11 +11,16 @@ from uuid import UUID
 from src.application.enums.package_reconciliation_reasons import PackageReconciliationReason
 from src.application.enums.route_reconciliation_reasons import RouteReconciliationReason
 from src.application.eventing.outbox.codec import EventPayloadCodec
-from src.application.events.reconciliation_events import PackageStateReconciled, RouteStateReconciled
+from src.application.events.reconciliation_events import (
+    PackageStateReconciled,
+    RouteStateReconciled,
+    TruckPositionReconciled,
+)
 from src.domain.enums.item_status import ItemStatus
 from src.domain.enums.route_status import RouteStatus
 from src.domain.value_objects.location_code import LocationCode
-from src.shared.json_serialization import optional_isoformat
+from src.domain.value_objects.route_schedule import RoutePositionKind
+from src.shared.json_serialization import optional_isoformat, optional_str
 from src.shared.json_types import JSONObject
 from src.shared.json_validation import require_json_object_keys
 from src.shared.validation import (
@@ -306,4 +311,130 @@ class PackageStateReconciledEventPayloadCodec(EventPayloadCodec[PackageStateReco
             scheduled_pickup_time=scheduled_pickup_time,
             scheduled_delivery_time=scheduled_delivery_time,
             reasons=tuple(reasons),
+        )
+
+
+class TruckPositionReconciledEventPayloadCodec(EventPayloadCodec[TruckPositionReconciled]):
+    """Encode and decode the version-1 truck position correction snapshot.
+
+    All seven keys are required. route_id and all four location fields may
+    independently be null. IDs are positive integers without seeded-fleet range
+    restrictions, and position_kind uses a RoutePositionKind value. Encoding
+    trusts typed fields; decoding restores the snapshot without consulting live
+    trucks or reapplying schedule-position policies.
+    """
+
+    @property
+    def event_class(self) -> type[TruckPositionReconciled]:
+        """Return the concrete truck-position-reconciled application event class."""
+        return TruckPositionReconciled
+
+    @property
+    def event_type(self) -> str:
+        """Return the stable persisted identity ``truck_position_reconciled``."""
+        return "truck_position_reconciled"
+
+    @property
+    def event_version(self) -> int:
+        """Return the explicit supported payload contract version."""
+        return 1
+
+    def encode(self, event: TruckPositionReconciled) -> JSONObject:
+        """Serialize the position before/after values into a fresh JSON object.
+
+        Args:
+            event: Version-1 event with correctly typed correction fields.
+
+        Returns:
+            Integer IDs, string locations and position kind. Absent route,
+            locations, and transit targets become JSON null, never the string
+            ``"None"``. Event and envelope metadata are excluded.
+        """
+        return {
+            "truck_id": event.truck_id,
+            "route_id": event.route_id,
+            "previous_location": optional_str(event.previous_location),
+            "new_location": optional_str(event.new_location),
+            "previous_in_transit_to": optional_str(event.previous_in_transit_to),
+            "new_in_transit_to": optional_str(event.new_in_transit_to),
+            "position_kind": event.position_kind.value,
+        }
+
+    def decode(
+        self,
+        payload: JSONObject,
+        *,
+        event_id: UUID,
+        occurred_at: datetime,
+        recorded_at: datetime,
+    ) -> TruckPositionReconciled:
+        """Validate a position correction and restore its original event metadata.
+
+        Args:
+            payload: JSON object containing exactly the seven version-1 keys.
+                Nullable fields must exist even when their values are null.
+            event_id: Original event UUID.
+            occurred_at: Original naive app-local business timestamp.
+            recorded_at: Original UTC-aware recording timestamp.
+
+        Returns:
+            A new event with typed position kind and optional normalized
+            LocationCode values, preserving before/after locations and transit
+            targets. The input payload is neither mutated nor retained.
+
+        Raises:
+            TypeError: If a field or metadata has an invalid runtime type.
+                Booleans are not valid IDs; non-null locations and position kind
+                must be strings.
+            ValueError: If keys are missing or unexpected, an ID is non-positive,
+                position kind is unknown, or timestamps use the wrong time domain.
+            DomainValidationError: If a non-null location is blank after normalization.
+        """
+        expected_payload_keys: Final[frozenset[str]] = frozenset([
+            "truck_id",
+            "route_id",
+            "previous_location",
+            "new_location",
+            "previous_in_transit_to",
+            "new_in_transit_to",
+            "position_kind",
+        ])
+
+        require_json_object_keys(payload, expected_payload_keys)
+
+        truck_id = require_positive_int(payload["truck_id"], "truck_id")
+        route_id = require_optional_positive_int(payload["route_id"], "route_id")
+        previous_location = (
+            LocationCode(require_str(payload["previous_location"], "previous_location"))
+            if payload["previous_location"] is not None
+            else None
+        )
+        new_location = (
+            LocationCode(require_str(payload["new_location"], "new_location"))
+            if payload["new_location"] is not None
+            else None
+        )
+        previous_in_transit_to = (
+            LocationCode(require_str(payload["previous_in_transit_to"], "previous_in_transit_to"))
+            if payload["previous_in_transit_to"] is not None
+            else None
+        )
+        new_in_transit_to = (
+            LocationCode(require_str(payload["new_in_transit_to"], "new_in_transit_to"))
+            if payload["new_in_transit_to"] is not None
+            else None
+        )
+        position_kind = RoutePositionKind(require_str(payload["position_kind"], "position_kind"))
+
+        return TruckPositionReconciled(
+            event_id=event_id,
+            occurred_at=occurred_at,
+            recorded_at=recorded_at,
+            truck_id=truck_id,
+            route_id=route_id,
+            previous_location=previous_location,
+            new_location=new_location,
+            previous_in_transit_to=previous_in_transit_to,
+            new_in_transit_to=new_in_transit_to,
+            position_kind=position_kind,
         )
