@@ -8,9 +8,11 @@ from datetime import datetime
 from typing import Final
 from uuid import UUID
 
+from src.application.enums.world_state_corruption_reasons import WorldStateCorruptionReason
 from src.application.enums.world_state_failure_reasons import WorldStateFailureReason
 from src.application.eventing.outbox.codec import EventPayloadCodec
 from src.application.events.world_state_events import (
+    WorldStateCorruptionDetected,
     WorldStateExported,
     WorldStateExportFailed,
     WorldStateImported,
@@ -448,5 +450,89 @@ class WorldStateImportFailedEventPayloadCodec(EventPayloadCodec[WorldStateImport
             recorded_at=recorded_at,
             snapshot_path=snapshot_path,
             schema_version=schema_version,
+            reason=reason,
+        )
+
+
+class WorldStateCorruptionDetectedEventPayloadCodec(EventPayloadCodec[WorldStateCorruptionDetected]):
+    """Encode and decode the version-1 snapshot-corruption detection event.
+
+    Payloads contain exactly snapshot_path and reason. Reasons are persisted
+    WorldStateCorruptionReason values describing snapshot defects, not the
+    operation-level WorldStateFailureReason classification. No snapshot schema
+    version is included. Path text is preserved verbatim; replay does not inspect
+    or quarantine the file. Encoding trusts typed event fields, while decoding
+    validates serialized values.
+    """
+
+    @property
+    def event_class(self) -> type[WorldStateCorruptionDetected]:
+        """Return the concrete corruption-detected application event class."""
+        return WorldStateCorruptionDetected
+
+    @property
+    def event_type(self) -> str:
+        """Return the stable persisted identity ``world_state_corruption_detected``."""
+        return "world_state_corruption_detected"
+
+    @property
+    def event_version(self) -> int:
+        """Return version 1 of the corruption-detection payload contract."""
+        return 1
+
+    def encode(self, event: WorldStateCorruptionDetected) -> JSONObject:
+        """Serialize a detected snapshot defect into a fresh JSON object.
+
+        Args:
+            event: Version-1 event with correctly typed corruption fields.
+
+        Returns:
+            The unchanged snapshot path and corruption reason string, without
+            universal event metadata or snapshot contents.
+        """
+        return {
+            "snapshot_path": event.snapshot_path,
+            "reason": event.reason.value,
+        }
+
+    def decode(
+        self,
+        payload: JSONObject,
+        *,
+        event_id: UUID,
+        occurred_at: datetime,
+        recorded_at: datetime,
+    ) -> WorldStateCorruptionDetected:
+        """Validate a corruption payload and restore its original event metadata.
+
+        Args:
+            payload: JSON object containing exactly snapshot_path and reason.
+            event_id: Original event UUID.
+            occurred_at: Original naive app-local business timestamp.
+            recorded_at: Original UTC-aware recording timestamp.
+
+        Returns:
+            A new event containing a typed WorldStateCorruptionReason and the
+            supplied metadata. The payload is neither mutated nor retained.
+
+        Raises:
+            TypeError: If the path or reason is not a string, or metadata has
+                an invalid runtime type.
+            ValueError: If keys are missing or unexpected, the reason is not a
+                supported corruption value, or timestamps use the wrong time
+                domain.
+        """
+        expected_payload_keys: Final[frozenset[str]] = frozenset(["snapshot_path", "reason"])
+
+        require_json_object_keys(payload, expected_payload_keys)
+
+        snapshot_path = require_str(payload["snapshot_path"], "snapshot_path")
+        reason = WorldStateCorruptionReason(require_str(payload["reason"], "reason"))
+
+        return WorldStateCorruptionDetected(
+            event_id=event_id,
+            occurred_at=occurred_at,
+            recorded_at=recorded_at,
+            snapshot_path=snapshot_path,
             reason=reason,
         )
