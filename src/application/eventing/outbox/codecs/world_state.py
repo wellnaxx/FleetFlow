@@ -1,0 +1,128 @@
+"""Outbox payload codecs for world-state persistence events.
+
+Payloads preserve event-specific snapshots. Universal event metadata is supplied
+separately on decoding; replay does not read or write the referenced snapshot file.
+"""
+
+from datetime import datetime
+from typing import Final
+from uuid import UUID
+
+from src.application.eventing.outbox.codec import EventPayloadCodec
+from src.application.events.world_state_events import WorldStateExported
+from src.application.value_objects.world_state_entity_counts import WorldStateEntityCounts
+from src.shared.json_types import JSONObject
+from src.shared.json_validation import require_json_object_keys
+from src.shared.validation import (
+    require_non_negative_int,
+    require_positive_int,
+    require_str,
+)
+
+
+class WorldStateExportedEventPayloadCodec(EventPayloadCodec[WorldStateExported]):
+    """Encode and decode the version-1 successful world-state export snapshot.
+
+    Exactly six keys are required: snapshot_path, schema_version, and the four
+    flat customer_count, package_count, route_count, and truck_count fields.
+    Decoding reconstructs WorldStateEntityCounts from these non-negative integer
+    counts. The positive snapshot schema_version is independent of this codec's
+    event_version. Path text is preserved verbatim, without filesystem access.
+    Encoding trusts typed event fields; decoding validates serialized values.
+    """
+
+    @property
+    def event_class(self) -> type[WorldStateExported]:
+        """Return the concrete world-state-exported application event class."""
+        return WorldStateExported
+
+    @property
+    def event_type(self) -> str:
+        """Return the stable persisted identity ``world_state_exported``."""
+        return "world_state_exported"
+
+    @property
+    def event_version(self) -> int:
+        """Return the payload contract version, not the snapshot schema version."""
+        return 1
+
+    def encode(self, event: WorldStateExported) -> JSONObject:
+        """Serialize the export snapshot into a fresh, flat JSON object.
+
+        Args:
+            event: Version-1 event with correctly typed export fields.
+
+        Returns:
+            Unchanged snapshot path, integer schema version, and four integer
+            counts. No nested entity_counts object or event/envelope metadata
+            is included.
+        """
+        return {
+            "snapshot_path": event.snapshot_path,
+            "schema_version": event.schema_version,
+            "customer_count": event.entity_counts.customers,
+            "package_count": event.entity_counts.packages,
+            "route_count": event.entity_counts.routes,
+            "truck_count": event.entity_counts.trucks,
+        }
+
+    def decode(
+        self,
+        payload: JSONObject,
+        *,
+        event_id: UUID,
+        occurred_at: datetime,
+        recorded_at: datetime,
+    ) -> WorldStateExported:
+        """Validate an export payload and restore its original event metadata.
+
+        Args:
+            payload: JSON object containing exactly the six version-1 keys.
+            event_id: Original event UUID.
+            occurred_at: Original naive app-local business timestamp.
+            recorded_at: Original UTC-aware recording timestamp.
+
+        Returns:
+            A new event containing a WorldStateEntityCounts value object and
+            the original path and snapshot schema version. The input payload
+            is neither mutated nor retained, and the path is not resolved.
+
+        Raises:
+            TypeError: If a payload field or metadata has an invalid runtime
+                type. Booleans, strings, and floats are not valid counts or
+                schema versions; snapshot_path must be a string.
+            ValueError: If keys are missing or unexpected, schema_version is
+                non-positive, any count is negative, or timestamps use the
+                wrong time domain.
+        """
+        expected_payload_keys: Final[frozenset[str]] = frozenset([
+            "snapshot_path",
+            "schema_version",
+            "customer_count",
+            "package_count",
+            "route_count",
+            "truck_count",
+        ])
+
+        require_json_object_keys(payload, expected_payload_keys)
+
+        snapshot_path = require_str(payload["snapshot_path"], "snapshot_path")
+        schema_version = require_positive_int(payload["schema_version"], "schema_version")
+        customer_count = require_non_negative_int(payload["customer_count"], "customer_count")
+        package_count = require_non_negative_int(payload["package_count"], "package_count")
+        route_count = require_non_negative_int(payload["route_count"], "route_count")
+        truck_count = require_non_negative_int(payload["truck_count"], "truck_count")
+
+        return WorldStateExported(
+            event_id=event_id,
+            occurred_at=occurred_at,
+            recorded_at=recorded_at,
+            snapshot_path=snapshot_path,
+            schema_version=schema_version,
+            entity_counts=WorldStateEntityCounts(
+                customers=customer_count,
+                packages=package_count,
+                routes=route_count,
+                trucks=truck_count,
+            ),
+        )
