@@ -10,7 +10,11 @@ from uuid import UUID
 
 from src.application.enums.world_state_failure_reasons import WorldStateFailureReason
 from src.application.eventing.outbox.codec import EventPayloadCodec
-from src.application.events.world_state_events import WorldStateExported, WorldStateExportFailed
+from src.application.events.world_state_events import (
+    WorldStateExported,
+    WorldStateExportFailed,
+    WorldStateImported,
+)
 from src.application.value_objects.world_state_entity_counts import WorldStateEntityCounts
 from src.shared.json_types import JSONObject
 from src.shared.json_validation import require_json_object_keys
@@ -219,4 +223,137 @@ class WorldStateExportFailedEventPayloadCodec(EventPayloadCodec[WorldStateExport
             snapshot_path=snapshot_path,
             schema_version=schema_version,
             reason=reason,
+        )
+
+
+class WorldStateImportedEventPayloadCodec(EventPayloadCodec[WorldStateImported]):
+    """Encode and decode the version-2 successful world-state import snapshot.
+
+    Exactly ten keys are required: snapshot_path, schema_version, and four
+    previous_*_count and four new_*_count fields for customers, packages, routes,
+    and trucks. Both count groups are non-negative integer snapshots, not deltas;
+    counts may increase, decrease, or stay unchanged during an import.
+
+    The positive snapshot schema_version is independent of event_version.
+    Paths are preserved verbatim, and decoding does not read the snapshot file
+    or perform an import. Encoding trusts typed event fields; decoding validates
+    serialized values. This codec does not upgrade version-1 payloads.
+    """
+
+    @property
+    def event_class(self) -> type[WorldStateImported]:
+        """Return the concrete world-state-imported application event class."""
+        return WorldStateImported
+
+    @property
+    def event_type(self) -> str:
+        """Return the stable persisted identity ``world_state_imported``."""
+        return "world_state_imported"
+
+    @property
+    def event_version(self) -> int:
+        """Return version 2, whose payload includes before and after counts."""
+        return 2
+
+    def encode(self, event: WorldStateImported) -> JSONObject:
+        """Serialize both import count snapshots into a fresh, flat JSON object.
+
+        Args:
+            event: Version-2 event with correctly typed import fields.
+
+        Returns:
+            The unchanged path, integer snapshot schema version, and eight
+            integer counts. No nested count objects or universal event metadata
+            are included.
+        """
+        return {
+            "snapshot_path": event.snapshot_path,
+            "schema_version": event.schema_version,
+            "previous_customer_count": event.previous_entity_counts.customers,
+            "previous_package_count": event.previous_entity_counts.packages,
+            "previous_route_count": event.previous_entity_counts.routes,
+            "previous_truck_count": event.previous_entity_counts.trucks,
+            "new_customer_count": event.new_entity_counts.customers,
+            "new_package_count": event.new_entity_counts.packages,
+            "new_route_count": event.new_entity_counts.routes,
+            "new_truck_count": event.new_entity_counts.trucks,
+        }
+
+    def decode(
+        self,
+        payload: JSONObject,
+        *,
+        event_id: UUID,
+        occurred_at: datetime,
+        recorded_at: datetime,
+    ) -> WorldStateImported:
+        """Validate an import payload and restore its original event metadata.
+
+        Args:
+            payload: JSON object containing exactly the ten version-2 keys.
+            event_id: Original event UUID.
+            occurred_at: Original naive app-local business timestamp.
+            recorded_at: Original UTC-aware recording timestamp.
+
+        Returns:
+            A new event with separate previous and new WorldStateEntityCounts
+            objects, the original path, and snapshot schema version. The input
+            payload is neither mutated nor retained.
+
+        Raises:
+            TypeError: If a payload field or metadata has an invalid runtime
+                type. Booleans, strings, floats, and None are not valid counts
+                or schema versions; snapshot_path must be a string.
+            ValueError: If keys are missing or unexpected, schema_version is
+                non-positive, any count is negative, or timestamps use the
+                wrong time domain.
+        """
+        expected_payload_keys: Final[frozenset[str]] = frozenset([
+            "snapshot_path",
+            "schema_version",
+            "previous_customer_count",
+            "previous_package_count",
+            "previous_route_count",
+            "previous_truck_count",
+            "new_customer_count",
+            "new_package_count",
+            "new_route_count",
+            "new_truck_count",
+        ])
+
+        require_json_object_keys(payload, expected_payload_keys)
+
+        snapshot_path = require_str(payload["snapshot_path"], "snapshot_path")
+        schema_version = require_positive_int(payload["schema_version"], "schema_version")
+        previous_customer_count = require_non_negative_int(
+            payload["previous_customer_count"], "previous_customer_count"
+        )
+        previous_package_count = require_non_negative_int(
+            payload["previous_package_count"], "previous_package_count"
+        )
+        previous_route_count = require_non_negative_int(payload["previous_route_count"], "previous_route_count")
+        previous_truck_count = require_non_negative_int(payload["previous_truck_count"], "previous_truck_count")
+        new_customer_count = require_non_negative_int(payload["new_customer_count"], "new_customer_count")
+        new_package_count = require_non_negative_int(payload["new_package_count"], "new_package_count")
+        new_route_count = require_non_negative_int(payload["new_route_count"], "new_route_count")
+        new_truck_count = require_non_negative_int(payload["new_truck_count"], "new_truck_count")
+
+        return WorldStateImported(
+            event_id=event_id,
+            occurred_at=occurred_at,
+            recorded_at=recorded_at,
+            snapshot_path=snapshot_path,
+            schema_version=schema_version,
+            previous_entity_counts=WorldStateEntityCounts(
+                customers=previous_customer_count,
+                packages=previous_package_count,
+                routes=previous_route_count,
+                trucks=previous_truck_count,
+            ),
+            new_entity_counts=WorldStateEntityCounts(
+                customers=new_customer_count,
+                packages=new_package_count,
+                routes=new_route_count,
+                trucks=new_truck_count,
+            ),
         )
