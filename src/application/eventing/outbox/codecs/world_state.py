@@ -10,6 +10,7 @@ from uuid import UUID
 
 from src.application.enums.world_state_corruption_reasons import WorldStateCorruptionReason
 from src.application.enums.world_state_failure_reasons import WorldStateFailureReason
+from src.application.enums.world_state_startup_skip_reasons import WorldStateStartupSkipReason
 from src.application.eventing.outbox.codec import EventPayloadCodec
 from src.application.events.world_state_events import (
     WorldStateCorruptionDetected,
@@ -20,6 +21,7 @@ from src.application.events.world_state_events import (
     WorldStateRuntimeSwapped,
     WorldStateSnapshotQuarantined,
     WorldStateStartupRestored,
+    WorldStateStartupRestoreSkipped,
 )
 from src.application.value_objects.world_state_entity_counts import WorldStateEntityCounts
 from src.shared.json_types import JSONObject
@@ -895,4 +897,81 @@ class WorldStateStartupRestoredEventPayloadCodec(EventPayloadCodec[WorldStateSta
                 routes=new_route_count,
                 trucks=new_truck_count,
             ),
+        )
+
+
+class WorldStateStartupRestoreSkippedEventPayloadCodec(EventPayloadCodec[WorldStateStartupRestoreSkipped]):
+    """Encode and decode the version-1 skipped startup-restore event.
+
+    The payload contains exactly one key, reason, serialized as a
+    WorldStateStartupSkipReason value. A skipped restore is distinct from a
+    failed operation or detected snapshot corruption; paths, schema versions,
+    and entity counts are not part of this event. Encoding trusts typed event
+    fields, while decoding validates serialized values without performing
+    startup restoration or inspecting the filesystem.
+    """
+
+    @property
+    def event_class(self) -> type[WorldStateStartupRestoreSkipped]:
+        """Return the concrete startup-restore-skipped application event class."""
+        return WorldStateStartupRestoreSkipped
+
+    @property
+    def event_type(self) -> str:
+        """Return the stable persisted identity ``world_state_startup_restore_skipped``."""
+        return "world_state_startup_restore_skipped"
+
+    @property
+    def event_version(self) -> int:
+        """Return version 1 of the skipped-restore payload contract."""
+        return 1
+
+    def encode(self, event: WorldStateStartupRestoreSkipped) -> JSONObject:
+        """Serialize the skip reason into a fresh JSON object.
+
+        Args:
+            event: Version-1 event with a correctly typed startup skip reason.
+
+        Returns:
+            A single reason string, without universal event metadata.
+        """
+        return {"reason": event.reason.value}
+
+    def decode(
+        self,
+        payload: JSONObject,
+        *,
+        event_id: UUID,
+        occurred_at: datetime,
+        recorded_at: datetime,
+    ) -> WorldStateStartupRestoreSkipped:
+        """Validate a skip payload and restore its original event metadata.
+
+        Args:
+            payload: JSON object containing exactly the reason key.
+            event_id: Original event UUID.
+            occurred_at: Original naive app-local business timestamp.
+            recorded_at: Original UTC-aware recording timestamp.
+
+        Returns:
+            A new event with a typed WorldStateStartupSkipReason and the
+            supplied metadata. The payload is neither mutated nor retained.
+
+        Raises:
+            TypeError: If reason is not a string, or metadata has an invalid
+                runtime type.
+            ValueError: If keys are missing or unexpected, reason is not a
+                supported skip value, or timestamps use the wrong time domain.
+        """
+        expected_payload_keys: Final[frozenset[str]] = frozenset(["reason"])
+
+        require_json_object_keys(payload, expected_payload_keys)
+
+        reason = WorldStateStartupSkipReason(require_str(payload["reason"], "reason"))
+
+        return WorldStateStartupRestoreSkipped(
+            event_id=event_id,
+            occurred_at=occurred_at,
+            recorded_at=recorded_at,
+            reason=reason,
         )

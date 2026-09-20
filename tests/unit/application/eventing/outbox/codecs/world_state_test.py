@@ -8,6 +8,7 @@ from uuid import UUID
 
 from src.application.enums.world_state_corruption_reasons import WorldStateCorruptionReason
 from src.application.enums.world_state_failure_reasons import WorldStateFailureReason
+from src.application.enums.world_state_startup_skip_reasons import WorldStateStartupSkipReason
 from src.application.eventing.outbox.codecs.world_state import (
     WorldStateCorruptionDetectedEventPayloadCodec,
     WorldStateExportedEventPayloadCodec,
@@ -17,6 +18,7 @@ from src.application.eventing.outbox.codecs.world_state import (
     WorldStateRuntimeSwappedEventPayloadCodec,
     WorldStateSnapshotQuarantinedEventPayloadCodec,
     WorldStateStartupRestoredEventPayloadCodec,
+    WorldStateStartupRestoreSkippedEventPayloadCodec,
 )
 from src.application.eventing.outbox.errors import EventCodecNotFoundError
 from src.application.eventing.outbox.registry import EventOutboxCodecRegistry
@@ -29,6 +31,7 @@ from src.application.events.world_state_events import (
     WorldStateRuntimeSwapped,
     WorldStateSnapshotQuarantined,
     WorldStateStartupRestored,
+    WorldStateStartupRestoreSkipped,
 )
 from src.application.value_objects.world_state_entity_counts import WorldStateEntityCounts
 from src.shared.json_types import JSONObject, JSONValue
@@ -36,6 +39,125 @@ from src.shared.json_types import JSONObject, JSONValue
 EVENT_ID = UUID("12345678-1234-4678-9234-567812345678")
 OCCURRED_AT = datetime(2030, 1, 2, 3, 4, 5, 123456)
 RECORDED_AT = datetime(2030, 1, 2, 1, 4, 5, 654321, tzinfo=UTC)
+
+
+class WorldStateStartupRestoreSkippedCodecShould(unittest.TestCase):
+    def setUp(self) -> None:
+        self.codec = WorldStateStartupRestoreSkippedEventPayloadCodec()
+        self.payload: JSONObject = {"reason": "NO_SNAPSHOT_FOUND"}
+
+    def decode(self, payload: JSONObject) -> WorldStateStartupRestoreSkipped:
+        return self.codec.decode(
+            payload, event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+        )
+
+    def test_exact_wire_contract_and_json_round_trip_for_all_skip_reasons(self) -> None:
+        for reason in WorldStateStartupSkipReason:
+            with self.subTest(reason=reason):
+                event = WorldStateStartupRestoreSkipped(
+                    event_id=EVENT_ID,
+                    occurred_at=OCCURRED_AT,
+                    recorded_at=RECORDED_AT,
+                    reason=reason,
+                )
+                encoded = self.codec.encode(event)
+                self.assertEqual(encoded, {"reason": reason.value})
+                self.assertIs(type(encoded["reason"]), str)
+                restored = self.decode(cast(JSONObject, json.loads(json.dumps(encoded, allow_nan=False))))
+                self.assertIs(type(restored), WorldStateStartupRestoreSkipped)
+                self.assertEqual(restored, event)
+                self.assertIs(restored.reason, reason)
+                self.assertEqual(restored.event_version, 1)
+                self.assertEqual(self.codec.event_version, 1)
+
+    def test_requires_reason(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Missing fields:.*reason"):
+            self.decode({})
+
+    def test_rejects_unknown_snapshot_and_metadata_keys(self) -> None:
+        for field in (
+            "unknown", "snapshot_path", "schema_version", "entity_counts",
+            "event_id", "event_version", "occurred_at", "recorded_at", "envelope_id",
+        ):
+            with self.subTest(field=field), self.assertRaisesRegex(ValueError, f"Unexpected fields:.*{field}"):
+                self.decode({**self.payload, field: "unexpected"})
+
+    def test_rejects_non_string_reasons(self) -> None:
+        values: tuple[JSONValue, ...] = (None, True, False, 1, 1.5, [], {})
+        for value in values:
+            with self.subTest(value=value), self.assertRaisesRegex(TypeError, "reason"):
+                self.decode({"reason": value})
+
+    def test_rejects_unknown_or_normalized_reason_strings(self) -> None:
+        for reason in (
+            "", " ", "UNKNOWN", "no_snapshot_found", " NO_SNAPSHOT_FOUND ",
+            "snapshot_disabled", " SNAPSHOT_DISABLED ",
+        ):
+            with self.subTest(reason=reason), self.assertRaises(ValueError):
+                self.decode({"reason": reason})
+
+    def test_rejects_operation_failure_and_corruption_reason_values(self) -> None:
+        for reason in (*WorldStateFailureReason, *WorldStateCorruptionReason):
+            with self.subTest(enum=type(reason).__name__, reason=reason), self.assertRaises(ValueError):
+                self.decode({"reason": reason.value})
+
+    def test_payload_and_event_remain_independent(self) -> None:
+        original = dict(self.payload)
+        event = self.decode(self.payload)
+        self.assertEqual(self.payload, original)
+        self.payload["reason"] = "SNAPSHOT_DISABLED"
+        self.assertIs(event.reason, WorldStateStartupSkipReason.NO_SNAPSHOT_FOUND)
+        encoded = self.codec.encode(event)
+        encoded["reason"] = "SNAPSHOT_DISABLED"
+        self.assertIs(event.reason, WorldStateStartupSkipReason.NO_SNAPSHOT_FOUND)
+        self.assertEqual(self.codec.encode(event), original)
+
+    def test_registry_resolves_version_one_without_confusing_successful_restores(self) -> None:
+        registry = EventOutboxCodecRegistry()
+        registry.register(WorldStateStartupRestoreSkipped, self.codec)
+        registry.register(WorldStateStartupRestored, WorldStateStartupRestoredEventPayloadCodec())
+        adapter = registry.for_identity("world_state_startup_restore_skipped", 1)
+        self.assertIs(adapter.event_class, WorldStateStartupRestoreSkipped)
+        self.assertEqual(adapter.event_version, WorldStateStartupRestoreSkipped.event_version)
+        self.assertIsNot(adapter, registry.for_identity("world_state_startup_restored", 2))
+        for reason in WorldStateStartupSkipReason:
+            with self.subTest(reason=reason):
+                event = self.decode({"reason": reason.value})
+                self.assertIs(adapter, registry.for_event(event))
+                restored = adapter.decode(
+                    adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+                )
+                self.assertIs(type(restored), WorldStateStartupRestoreSkipped)
+                self.assertEqual(restored, event)
+        for version in (2, 3):
+            with self.subTest(version=version), self.assertRaises(EventCodecNotFoundError):
+                registry.for_identity("world_state_startup_restore_skipped", version)
+
+    def test_event_constructor_rejects_invalid_metadata(self) -> None:
+        cases: tuple[tuple[str, object, type[Exception]], ...] = (
+            ("event_id", None, TypeError),
+            ("event_id", str(EVENT_ID), TypeError),
+            ("occurred_at", None, TypeError),
+            ("occurred_at", "2030-01-02", TypeError),
+            ("recorded_at", None, TypeError),
+            ("recorded_at", "2030-01-02", TypeError),
+            ("occurred_at", OCCURRED_AT.replace(tzinfo=UTC), ValueError),
+            ("recorded_at", RECORDED_AT.replace(tzinfo=None), ValueError),
+            ("recorded_at", RECORDED_AT.astimezone(timezone(timedelta(hours=2))), ValueError),
+        )
+        for field, value, error in cases:
+            with self.subTest(field=field, value=value):
+                metadata: dict[str, object] = {
+                    "event_id": EVENT_ID, "occurred_at": OCCURRED_AT, "recorded_at": RECORDED_AT,
+                }
+                metadata[field] = value
+                with self.assertRaisesRegex(error, field):
+                    self.codec.decode(
+                        self.payload,
+                        event_id=cast(UUID, metadata["event_id"]),
+                        occurred_at=cast(datetime, metadata["occurred_at"]),
+                        recorded_at=cast(datetime, metadata["recorded_at"]),
+                    )
 
 
 class WorldStateStartupRestoredCodecShould(unittest.TestCase):
