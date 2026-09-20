@@ -17,6 +17,7 @@ from src.application.events.world_state_events import (
     WorldStateExportFailed,
     WorldStateImported,
     WorldStateImportFailed,
+    WorldStateRuntimeSwapped,
     WorldStateSnapshotQuarantined,
 )
 from src.application.value_objects.world_state_entity_counts import WorldStateEntityCounts
@@ -627,4 +628,137 @@ class WorldStateSnapshotQuarantinedEventPayloadCodec(EventPayloadCodec[WorldStat
             original_path=original_path,
             quarantined_path=quarantined_path,
             reason=reason,
+        )
+
+
+class WorldStateRuntimeSwappedEventPayloadCodec(EventPayloadCodec[WorldStateRuntimeSwapped]):
+    """Encode and decode the version-2 runtime-replacement event.
+
+    Payloads contain exactly snapshot_path, schema_version, and four
+    previous_*_count and four new_*_count fields for customers, packages, routes,
+    and trucks. These are non-negative count snapshots, not deltas; counts may
+    increase, decrease, or remain unchanged when the runtime is replaced.
+
+    The positive snapshot schema_version is independent of event_version.
+    Paths are preserved verbatim. Decoding neither reads the snapshot nor
+    replaces runtime state, and does not upgrade version-1 payloads. Encoding
+    trusts typed event fields; decoding validates serialized values.
+    """
+
+    @property
+    def event_class(self) -> type[WorldStateRuntimeSwapped]:
+        """Return the concrete runtime-swapped application event class."""
+        return WorldStateRuntimeSwapped
+
+    @property
+    def event_type(self) -> str:
+        """Return the stable persisted identity ``world_state_runtime_swapped``."""
+        return "world_state_runtime_swapped"
+
+    @property
+    def event_version(self) -> int:
+        """Return version 2, whose payload includes before and after counts."""
+        return 2
+
+    def encode(self, event: WorldStateRuntimeSwapped) -> JSONObject:
+        """Serialize both runtime count snapshots into a fresh, flat JSON object.
+
+        Args:
+            event: Version-2 event with correctly typed runtime-swap fields.
+
+        Returns:
+            The unchanged snapshot path, integer schema version, and eight
+            integer counts. No nested count objects or universal event metadata
+            are included.
+        """
+        return {
+            "snapshot_path": event.snapshot_path,
+            "schema_version": event.schema_version,
+            "previous_customer_count": event.previous_entity_counts.customers,
+            "previous_package_count": event.previous_entity_counts.packages,
+            "previous_route_count": event.previous_entity_counts.routes,
+            "previous_truck_count": event.previous_entity_counts.trucks,
+            "new_customer_count": event.new_entity_counts.customers,
+            "new_package_count": event.new_entity_counts.packages,
+            "new_route_count": event.new_entity_counts.routes,
+            "new_truck_count": event.new_entity_counts.trucks,
+        }
+
+    def decode(
+        self,
+        payload: JSONObject,
+        *,
+        event_id: UUID,
+        occurred_at: datetime,
+        recorded_at: datetime,
+    ) -> WorldStateRuntimeSwapped:
+        """Validate a runtime-swap payload and restore its original metadata.
+
+        Args:
+            payload: JSON object containing exactly the ten version-2 keys.
+            event_id: Original event UUID.
+            occurred_at: Original naive app-local business timestamp.
+            recorded_at: Original UTC-aware recording timestamp.
+
+        Returns:
+            A new event with separate previous and new WorldStateEntityCounts
+            objects, the original path, and snapshot schema version. The input
+            payload is neither mutated nor retained.
+
+        Raises:
+            TypeError: If a payload field or metadata has an invalid runtime
+                type. Booleans, strings, floats, and None are not valid counts
+                or schema versions; snapshot_path must be a string.
+            ValueError: If keys are missing or unexpected, schema_version is
+                non-positive, any count is negative, or timestamps use the
+                wrong time domain.
+        """
+        expected_payload_keys: Final[frozenset[str]] = frozenset([
+            "snapshot_path",
+            "schema_version",
+            "previous_customer_count",
+            "previous_package_count",
+            "previous_route_count",
+            "previous_truck_count",
+            "new_customer_count",
+            "new_package_count",
+            "new_route_count",
+            "new_truck_count",
+        ])
+
+        require_json_object_keys(payload, expected_payload_keys)
+
+        snapshot_path = require_str(payload["snapshot_path"], "snapshot_path")
+        schema_version = require_positive_int(payload["schema_version"], "schema_version")
+        previous_customer_count = require_non_negative_int(
+            payload["previous_customer_count"], "previous_customer_count"
+        )
+        previous_package_count = require_non_negative_int(
+            payload["previous_package_count"], "previous_package_count"
+        )
+        previous_route_count = require_non_negative_int(payload["previous_route_count"], "previous_route_count")
+        previous_truck_count = require_non_negative_int(payload["previous_truck_count"], "previous_truck_count")
+        new_customer_count = require_non_negative_int(payload["new_customer_count"], "new_customer_count")
+        new_package_count = require_non_negative_int(payload["new_package_count"], "new_package_count")
+        new_route_count = require_non_negative_int(payload["new_route_count"], "new_route_count")
+        new_truck_count = require_non_negative_int(payload["new_truck_count"], "new_truck_count")
+
+        return WorldStateRuntimeSwapped(
+            event_id=event_id,
+            occurred_at=occurred_at,
+            recorded_at=recorded_at,
+            snapshot_path=snapshot_path,
+            schema_version=schema_version,
+            previous_entity_counts=WorldStateEntityCounts(
+                customers=previous_customer_count,
+                packages=previous_package_count,
+                routes=previous_route_count,
+                trucks=previous_truck_count,
+            ),
+            new_entity_counts=WorldStateEntityCounts(
+                customers=new_customer_count,
+                packages=new_package_count,
+                routes=new_route_count,
+                trucks=new_truck_count,
+            ),
         )
