@@ -17,6 +17,7 @@ from src.application.events.world_state_events import (
     WorldStateExportFailed,
     WorldStateImported,
     WorldStateImportFailed,
+    WorldStateSnapshotQuarantined,
 )
 from src.application.value_objects.world_state_entity_counts import WorldStateEntityCounts
 from src.shared.json_types import JSONObject
@@ -534,5 +535,96 @@ class WorldStateCorruptionDetectedEventPayloadCodec(EventPayloadCodec[WorldState
             occurred_at=occurred_at,
             recorded_at=recorded_at,
             snapshot_path=snapshot_path,
+            reason=reason,
+        )
+
+
+class WorldStateSnapshotQuarantinedEventPayloadCodec(EventPayloadCodec[WorldStateSnapshotQuarantined]):
+    """Encode and decode the version-1 snapshot-quarantine event.
+
+    Payloads contain exactly original_path, quarantined_path, and reason. The
+    paths describe the source and destination of an already completed move;
+    replay preserves their text without accessing or moving files. Reasons use
+    WorldStateCorruptionReason values, not operation-level failure categories.
+    Encoding trusts typed event fields; decoding validates serialized values.
+    """
+
+    @property
+    def event_class(self) -> type[WorldStateSnapshotQuarantined]:
+        """Return the concrete snapshot-quarantined application event class."""
+        return WorldStateSnapshotQuarantined
+
+    @property
+    def event_type(self) -> str:
+        """Return the stable persisted identity ``world_state_snapshot_quarantined``."""
+        return "world_state_snapshot_quarantined"
+
+    @property
+    def event_version(self) -> int:
+        """Return version 1 of the snapshot-quarantine payload contract."""
+        return 1
+
+    def encode(self, event: WorldStateSnapshotQuarantined) -> JSONObject:
+        """Serialize the completed quarantine into a fresh JSON object.
+
+        Args:
+            event: Version-1 event with correctly typed paths and reason.
+
+        Returns:
+            The unchanged original and quarantined paths and the corruption
+            reason string. Universal event metadata is not included.
+        """
+        return {
+            "original_path": event.original_path,
+            "quarantined_path": event.quarantined_path,
+            "reason": event.reason.value,
+        }
+
+    def decode(
+        self,
+        payload: JSONObject,
+        *,
+        event_id: UUID,
+        occurred_at: datetime,
+        recorded_at: datetime,
+    ) -> WorldStateSnapshotQuarantined:
+        """Validate a quarantine payload and restore its original event metadata.
+
+        Args:
+            payload: JSON object containing exactly the three version-1 keys.
+            event_id: Original event UUID.
+            occurred_at: Original naive app-local business timestamp.
+            recorded_at: Original UTC-aware recording timestamp.
+
+        Returns:
+            A new event preserving both paths and containing a typed
+            WorldStateCorruptionReason. Paths are not normalized or checked
+            for existence. The payload is neither mutated nor retained.
+
+        Raises:
+            TypeError: If either path or the reason is not a string, or metadata
+                has an invalid runtime type.
+            ValueError: If keys are missing or unexpected, the reason is not a
+                supported corruption value, or timestamps use the wrong time
+                domain.
+        """
+        expected_payload_keys: Final[frozenset[str]] = frozenset([
+            "original_path",
+            "quarantined_path",
+            "reason",
+        ])
+
+        require_json_object_keys(payload, expected_payload_keys)
+
+        original_path = require_str(payload["original_path"], "original_path")
+        quarantined_path = require_str(payload["quarantined_path"], "quarantined_path")
+        reason = WorldStateCorruptionReason(require_str(payload["reason"], "reason"))
+
+        return WorldStateSnapshotQuarantined(
+            event_id=event_id,
+            occurred_at=occurred_at,
+            recorded_at=recorded_at,
+            original_path=original_path,
+            quarantined_path=quarantined_path,
             reason=reason,
         )
