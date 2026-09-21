@@ -21,6 +21,7 @@ from src.application.events.world_state_events import (
     WorldStateRuntimeSwapped,
     WorldStateSnapshotQuarantined,
     WorldStateStartupRestored,
+    WorldStateStartupRestoreFailed,
     WorldStateStartupRestoreSkipped,
 )
 from src.application.value_objects.world_state_entity_counts import WorldStateEntityCounts
@@ -973,5 +974,100 @@ class WorldStateStartupRestoreSkippedEventPayloadCodec(EventPayloadCodec[WorldSt
             event_id=event_id,
             occurred_at=occurred_at,
             recorded_at=recorded_at,
+            reason=reason,
+        )
+
+
+class WorldStateStartupRestoreFailedEventPayloadCodec(EventPayloadCodec[WorldStateStartupRestoreFailed]):
+    """Encode and decode the version-1 failed startup-restore event.
+
+    Payloads contain exactly snapshot_path, schema_version, and reason. An
+    unknown snapshot schema version is represented by JSON null, not an omitted
+    key. Known schema versions are positive integers, independent of the codec
+    version. Reasons use operation-level WorldStateFailureReason values, not
+    startup skip or snapshot corruption classifications.
+
+    Path text is preserved verbatim; decoding neither accesses the filesystem
+    nor retries startup restoration. Encoding trusts typed event fields, while
+    decoding validates serialized values.
+    """
+
+    @property
+    def event_class(self) -> type[WorldStateStartupRestoreFailed]:
+        """Return the concrete startup-restore-failed application event class."""
+        return WorldStateStartupRestoreFailed
+
+    @property
+    def event_type(self) -> str:
+        """Return the stable persisted identity ``world_state_startup_restore_failed``."""
+        return "world_state_startup_restore_failed"
+
+    @property
+    def event_version(self) -> int:
+        """Return the payload contract version, not the snapshot schema version."""
+        return 1
+
+    def encode(self, event: WorldStateStartupRestoreFailed) -> JSONObject:
+        """Serialize the failed startup restore into a fresh JSON object.
+
+        Args:
+            event: Version-1 event with correctly typed failure fields.
+
+        Returns:
+            The unchanged path, optional integer snapshot schema version, and
+            failure reason string. Universal event metadata is not included.
+        """
+        return {
+            "snapshot_path": event.snapshot_path,
+            "schema_version": event.schema_version,
+            "reason": event.reason.value,
+        }
+
+    def decode(
+        self,
+        payload: JSONObject,
+        *,
+        event_id: UUID,
+        occurred_at: datetime,
+        recorded_at: datetime,
+    ) -> WorldStateStartupRestoreFailed:
+        """Validate a startup failure payload and restore its original metadata.
+
+        Args:
+            payload: JSON object containing exactly the three version-1 keys.
+            event_id: Original event UUID.
+            occurred_at: Original naive app-local business timestamp.
+            recorded_at: Original UTC-aware recording timestamp.
+
+        Returns:
+            A new event with a typed WorldStateFailureReason and the supplied
+            metadata. The payload is neither mutated nor retained.
+
+        Raises:
+            TypeError: If the path or reason is not a string, schema_version
+                is neither None nor an integer (excluding bool), or metadata
+                has an invalid runtime type.
+            ValueError: If keys are missing or unexpected, a supplied schema
+                version is non-positive, the reason is unknown, or timestamps
+                use the wrong time domain.
+        """
+        expected_payload_keys: Final[frozenset[str]] = frozenset([
+            "snapshot_path",
+            "schema_version",
+            "reason",
+        ])
+
+        require_json_object_keys(payload, expected_payload_keys)
+
+        snapshot_path = require_str(payload["snapshot_path"], "snapshot_path")
+        schema_version = require_optional_positive_int(payload["schema_version"], "schema_version")
+        reason = WorldStateFailureReason(require_str(payload["reason"], "reason"))
+
+        return WorldStateStartupRestoreFailed(
+            event_id=event_id,
+            occurred_at=occurred_at,
+            recorded_at=recorded_at,
+            snapshot_path=snapshot_path,
+            schema_version=schema_version,
             reason=reason,
         )
