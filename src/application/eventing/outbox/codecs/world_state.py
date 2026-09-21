@@ -1,4 +1,4 @@
-"""Outbox payload codecs for world-state persistence events.
+"""Outbox payload codecs for world-state persistence and advancement events.
 
 Payloads preserve event-specific snapshots. Universal event metadata is supplied
 separately on decoding; replay does not read or write the referenced snapshot file.
@@ -13,6 +13,7 @@ from src.application.enums.world_state_failure_reasons import WorldStateFailureR
 from src.application.enums.world_state_startup_skip_reasons import WorldStateStartupSkipReason
 from src.application.eventing.outbox.codec import EventPayloadCodec
 from src.application.events.world_state_events import (
+    WorldStateAdvanced,
     WorldStateCorruptionDetected,
     WorldStateExported,
     WorldStateExportFailed,
@@ -1070,4 +1071,102 @@ class WorldStateStartupRestoreFailedEventPayloadCodec(EventPayloadCodec[WorldSta
             snapshot_path=snapshot_path,
             schema_version=schema_version,
             reason=reason,
+        )
+
+
+class WorldStateAdvancedEventPayloadCodec(EventPayloadCodec[WorldStateAdvanced]):
+    """Encode and decode the version-2 heartbeat advancement summary.
+
+    Payloads contain exactly routes_updated, packages_updated, trucks_moved,
+    trucks_released, and trucks_reconciled. Each is a non-negative integer
+    counter, including zero when no corresponding change occurred. Encoding
+    trusts typed event fields; decoding validates each counter independently.
+    Replay reconstructs the summary without advancing the world. Version-1
+    payloads are not upgraded here.
+    """
+
+    @property
+    def event_class(self) -> type[WorldStateAdvanced]:
+        """Return the concrete world-state-advanced application event class."""
+        return WorldStateAdvanced
+
+    @property
+    def event_type(self) -> str:
+        """Return the stable persisted identity ``world_state_advanced``."""
+        return "world_state_advanced"
+
+    @property
+    def event_version(self) -> int:
+        """Return version 2 of the five-counter advancement payload contract."""
+        return 2
+
+    def encode(self, event: WorldStateAdvanced) -> JSONObject:
+        """Serialize the heartbeat counters into a fresh JSON object.
+
+        Args:
+            event: Version-2 event with correctly typed advancement counters.
+
+        Returns:
+            Five integer counters, without universal event metadata or snapshot
+            persistence fields.
+        """
+        return {
+            "routes_updated": event.routes_updated,
+            "packages_updated": event.packages_updated,
+            "trucks_moved": event.trucks_moved,
+            "trucks_released": event.trucks_released,
+            "trucks_reconciled": event.trucks_reconciled,
+        }
+
+    def decode(
+        self,
+        payload: JSONObject,
+        *,
+        event_id: UUID,
+        occurred_at: datetime,
+        recorded_at: datetime,
+    ) -> WorldStateAdvanced:
+        """Validate an advancement payload and restore its original metadata.
+
+        Args:
+            payload: JSON object containing exactly the five version-2 keys.
+            event_id: Original event UUID.
+            occurred_at: Original naive app-local business timestamp.
+            recorded_at: Original UTC-aware recording timestamp.
+
+        Returns:
+            A new summary event with the supplied counters and metadata. The
+            input payload is neither mutated nor retained.
+
+        Raises:
+            TypeError: If a counter is not an integer (excluding bool), or
+                metadata has an invalid runtime type. Values are not coerced.
+            ValueError: If keys are missing or unexpected, any counter is
+                negative, or timestamps use the wrong time domain.
+        """
+        expected_payload_keys: Final[frozenset[str]] = frozenset([
+            "routes_updated",
+            "packages_updated",
+            "trucks_moved",
+            "trucks_released",
+            "trucks_reconciled",
+        ])
+
+        require_json_object_keys(payload, expected_payload_keys)
+
+        routes_updated = require_non_negative_int(payload["routes_updated"], "routes_updated")
+        packages_updated = require_non_negative_int(payload["packages_updated"], "packages_updated")
+        trucks_moved = require_non_negative_int(payload["trucks_moved"], "trucks_moved")
+        trucks_released = require_non_negative_int(payload["trucks_released"], "trucks_released")
+        trucks_reconciled = require_non_negative_int(payload["trucks_reconciled"], "trucks_reconciled")
+
+        return WorldStateAdvanced(
+            event_id=event_id,
+            occurred_at=occurred_at,
+            recorded_at=recorded_at,
+            routes_updated=routes_updated,
+            packages_updated=packages_updated,
+            trucks_moved=trucks_moved,
+            trucks_released=trucks_released,
+            trucks_reconciled=trucks_reconciled,
         )
