@@ -12,6 +12,7 @@ from src.application.enums.world_state_corruption_reasons import WorldStateCorru
 from src.application.enums.world_state_failure_reasons import WorldStateFailureReason
 from src.application.enums.world_state_startup_skip_reasons import WorldStateStartupSkipReason
 from src.application.eventing.outbox.codec import EventPayloadCodec
+from src.application.eventing.outbox.codecs.entity_counts import decode_entity_counts, encode_entity_counts
 from src.application.events.world_state_events import (
     WorldStateAdvanced,
     WorldStateCorruptionDetected,
@@ -25,7 +26,6 @@ from src.application.events.world_state_events import (
     WorldStateStartupRestoreFailed,
     WorldStateStartupRestoreSkipped,
 )
-from src.application.value_objects.world_state_entity_counts import WorldStateEntityCounts
 from src.shared.json_types import JSONObject
 from src.shared.json_validation import require_json_object_keys
 from src.shared.validation import (
@@ -76,10 +76,7 @@ class WorldStateExportedEventPayloadCodec(EventPayloadCodec[WorldStateExported])
         return {
             "snapshot_path": event.snapshot_path,
             "schema_version": event.schema_version,
-            "customer_count": event.entity_counts.customers,
-            "package_count": event.entity_counts.packages,
-            "route_count": event.entity_counts.routes,
-            "truck_count": event.entity_counts.trucks,
+            **encode_entity_counts(event.entity_counts),
         }
 
     def decode(
@@ -124,10 +121,7 @@ class WorldStateExportedEventPayloadCodec(EventPayloadCodec[WorldStateExported])
 
         snapshot_path = require_str(payload["snapshot_path"], "snapshot_path")
         schema_version = require_positive_int(payload["schema_version"], "schema_version")
-        customer_count = require_non_negative_int(payload["customer_count"], "customer_count")
-        package_count = require_non_negative_int(payload["package_count"], "package_count")
-        route_count = require_non_negative_int(payload["route_count"], "route_count")
-        truck_count = require_non_negative_int(payload["truck_count"], "truck_count")
+        entity_counts = decode_entity_counts(payload)
 
         return WorldStateExported(
             event_id=event_id,
@@ -135,12 +129,7 @@ class WorldStateExportedEventPayloadCodec(EventPayloadCodec[WorldStateExported])
             recorded_at=recorded_at,
             snapshot_path=snapshot_path,
             schema_version=schema_version,
-            entity_counts=WorldStateEntityCounts(
-                customers=customer_count,
-                packages=package_count,
-                routes=route_count,
-                trucks=truck_count,
-            ),
+            entity_counts=entity_counts,
         )
 
 
@@ -279,14 +268,8 @@ class WorldStateImportedEventPayloadCodec(EventPayloadCodec[WorldStateImported])
         return {
             "snapshot_path": event.snapshot_path,
             "schema_version": event.schema_version,
-            "previous_customer_count": event.previous_entity_counts.customers,
-            "previous_package_count": event.previous_entity_counts.packages,
-            "previous_route_count": event.previous_entity_counts.routes,
-            "previous_truck_count": event.previous_entity_counts.trucks,
-            "new_customer_count": event.new_entity_counts.customers,
-            "new_package_count": event.new_entity_counts.packages,
-            "new_route_count": event.new_entity_counts.routes,
-            "new_truck_count": event.new_entity_counts.trucks,
+            **encode_entity_counts(event.previous_entity_counts, prefix="previous_"),
+            **encode_entity_counts(event.new_entity_counts, prefix="new_"),
         }
 
     def decode(
@@ -335,18 +318,8 @@ class WorldStateImportedEventPayloadCodec(EventPayloadCodec[WorldStateImported])
 
         snapshot_path = require_str(payload["snapshot_path"], "snapshot_path")
         schema_version = require_positive_int(payload["schema_version"], "schema_version")
-        previous_customer_count = require_non_negative_int(
-            payload["previous_customer_count"], "previous_customer_count"
-        )
-        previous_package_count = require_non_negative_int(
-            payload["previous_package_count"], "previous_package_count"
-        )
-        previous_route_count = require_non_negative_int(payload["previous_route_count"], "previous_route_count")
-        previous_truck_count = require_non_negative_int(payload["previous_truck_count"], "previous_truck_count")
-        new_customer_count = require_non_negative_int(payload["new_customer_count"], "new_customer_count")
-        new_package_count = require_non_negative_int(payload["new_package_count"], "new_package_count")
-        new_route_count = require_non_negative_int(payload["new_route_count"], "new_route_count")
-        new_truck_count = require_non_negative_int(payload["new_truck_count"], "new_truck_count")
+        previous_entity_counts = decode_entity_counts(payload, prefix="previous_")
+        new_entity_counts = decode_entity_counts(payload, prefix="new_")
 
         return WorldStateImported(
             event_id=event_id,
@@ -354,18 +327,8 @@ class WorldStateImportedEventPayloadCodec(EventPayloadCodec[WorldStateImported])
             recorded_at=recorded_at,
             snapshot_path=snapshot_path,
             schema_version=schema_version,
-            previous_entity_counts=WorldStateEntityCounts(
-                customers=previous_customer_count,
-                packages=previous_package_count,
-                routes=previous_route_count,
-                trucks=previous_truck_count,
-            ),
-            new_entity_counts=WorldStateEntityCounts(
-                customers=new_customer_count,
-                packages=new_package_count,
-                routes=new_route_count,
-                trucks=new_truck_count,
-            ),
+            previous_entity_counts=previous_entity_counts,
+            new_entity_counts=new_entity_counts,
         )
 
 
@@ -679,14 +642,8 @@ class WorldStateRuntimeSwappedEventPayloadCodec(EventPayloadCodec[WorldStateRunt
         return {
             "snapshot_path": event.snapshot_path,
             "schema_version": event.schema_version,
-            "previous_customer_count": event.previous_entity_counts.customers,
-            "previous_package_count": event.previous_entity_counts.packages,
-            "previous_route_count": event.previous_entity_counts.routes,
-            "previous_truck_count": event.previous_entity_counts.trucks,
-            "new_customer_count": event.new_entity_counts.customers,
-            "new_package_count": event.new_entity_counts.packages,
-            "new_route_count": event.new_entity_counts.routes,
-            "new_truck_count": event.new_entity_counts.trucks,
+            **encode_entity_counts(event.previous_entity_counts, prefix="previous_"),
+            **encode_entity_counts(event.new_entity_counts, prefix="new_"),
         }
 
     def decode(
@@ -735,18 +692,8 @@ class WorldStateRuntimeSwappedEventPayloadCodec(EventPayloadCodec[WorldStateRunt
 
         snapshot_path = require_str(payload["snapshot_path"], "snapshot_path")
         schema_version = require_positive_int(payload["schema_version"], "schema_version")
-        previous_customer_count = require_non_negative_int(
-            payload["previous_customer_count"], "previous_customer_count"
-        )
-        previous_package_count = require_non_negative_int(
-            payload["previous_package_count"], "previous_package_count"
-        )
-        previous_route_count = require_non_negative_int(payload["previous_route_count"], "previous_route_count")
-        previous_truck_count = require_non_negative_int(payload["previous_truck_count"], "previous_truck_count")
-        new_customer_count = require_non_negative_int(payload["new_customer_count"], "new_customer_count")
-        new_package_count = require_non_negative_int(payload["new_package_count"], "new_package_count")
-        new_route_count = require_non_negative_int(payload["new_route_count"], "new_route_count")
-        new_truck_count = require_non_negative_int(payload["new_truck_count"], "new_truck_count")
+        previous_entity_counts = decode_entity_counts(payload, prefix="previous_")
+        new_entity_counts = decode_entity_counts(payload, prefix="new_")
 
         return WorldStateRuntimeSwapped(
             event_id=event_id,
@@ -754,18 +701,8 @@ class WorldStateRuntimeSwappedEventPayloadCodec(EventPayloadCodec[WorldStateRunt
             recorded_at=recorded_at,
             snapshot_path=snapshot_path,
             schema_version=schema_version,
-            previous_entity_counts=WorldStateEntityCounts(
-                customers=previous_customer_count,
-                packages=previous_package_count,
-                routes=previous_route_count,
-                trucks=previous_truck_count,
-            ),
-            new_entity_counts=WorldStateEntityCounts(
-                customers=new_customer_count,
-                packages=new_package_count,
-                routes=new_route_count,
-                trucks=new_truck_count,
-            ),
+            previous_entity_counts=previous_entity_counts,
+            new_entity_counts=new_entity_counts,
         )
 
 
@@ -812,14 +749,8 @@ class WorldStateStartupRestoredEventPayloadCodec(EventPayloadCodec[WorldStateSta
         return {
             "snapshot_path": event.snapshot_path,
             "schema_version": event.schema_version,
-            "previous_customer_count": event.previous_entity_counts.customers,
-            "previous_package_count": event.previous_entity_counts.packages,
-            "previous_route_count": event.previous_entity_counts.routes,
-            "previous_truck_count": event.previous_entity_counts.trucks,
-            "new_customer_count": event.new_entity_counts.customers,
-            "new_package_count": event.new_entity_counts.packages,
-            "new_route_count": event.new_entity_counts.routes,
-            "new_truck_count": event.new_entity_counts.trucks,
+            **encode_entity_counts(event.previous_entity_counts, prefix="previous_"),
+            **encode_entity_counts(event.new_entity_counts, prefix="new_"),
         }
 
     def decode(
@@ -868,18 +799,8 @@ class WorldStateStartupRestoredEventPayloadCodec(EventPayloadCodec[WorldStateSta
 
         snapshot_path = require_str(payload["snapshot_path"], "snapshot_path")
         schema_version = require_positive_int(payload["schema_version"], "schema_version")
-        previous_customer_count = require_non_negative_int(
-            payload["previous_customer_count"], "previous_customer_count"
-        )
-        previous_package_count = require_non_negative_int(
-            payload["previous_package_count"], "previous_package_count"
-        )
-        previous_route_count = require_non_negative_int(payload["previous_route_count"], "previous_route_count")
-        previous_truck_count = require_non_negative_int(payload["previous_truck_count"], "previous_truck_count")
-        new_customer_count = require_non_negative_int(payload["new_customer_count"], "new_customer_count")
-        new_package_count = require_non_negative_int(payload["new_package_count"], "new_package_count")
-        new_route_count = require_non_negative_int(payload["new_route_count"], "new_route_count")
-        new_truck_count = require_non_negative_int(payload["new_truck_count"], "new_truck_count")
+        previous_entity_counts = decode_entity_counts(payload, prefix="previous_")
+        new_entity_counts = decode_entity_counts(payload, prefix="new_")
 
         return WorldStateStartupRestored(
             event_id=event_id,
@@ -887,18 +808,8 @@ class WorldStateStartupRestoredEventPayloadCodec(EventPayloadCodec[WorldStateSta
             recorded_at=recorded_at,
             snapshot_path=snapshot_path,
             schema_version=schema_version,
-            previous_entity_counts=WorldStateEntityCounts(
-                customers=previous_customer_count,
-                packages=previous_package_count,
-                routes=previous_route_count,
-                trucks=previous_truck_count,
-            ),
-            new_entity_counts=WorldStateEntityCounts(
-                customers=new_customer_count,
-                packages=new_package_count,
-                routes=new_route_count,
-                trucks=new_truck_count,
-            ),
+            previous_entity_counts=previous_entity_counts,
+            new_entity_counts=new_entity_counts,
         )
 
 
