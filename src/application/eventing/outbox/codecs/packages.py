@@ -12,11 +12,11 @@ from src.application.eventing.outbox.codec import EventPayloadCodec
 from src.domain.enums.item_status import ItemStatus
 from src.domain.events.package_events import PackageCreated, PackageDelivered, PackagePickedUp, PackageRemoved
 from src.domain.value_objects.location_code import LocationCode
+from src.shared.json_deserialization import parse_optional_naive_datetime
 from src.shared.json_serialization import optional_isoformat
 from src.shared.json_types import JSONObject
 from src.shared.json_validation import require_json_object_keys
 from src.shared.validation import (
-    require_naive_datetime,
     require_optional_positive_int,
     require_positive_finite_float,
     require_positive_int,
@@ -119,14 +119,7 @@ class PackageCreatedEventPayloadCodec(EventPayloadCodec[PackageCreated]):
         weight = require_positive_finite_float(payload["weight"], "weight")
         initial_status = ItemStatus(require_str(payload["initial_status"], "initial_status"))
         initial_location = LocationCode(require_str(payload["initial_location"], "initial_location"))
-        expected_arrival = None
-        if payload["expected_arrival"] is not None:
-            arrival_text = require_str(payload["expected_arrival"], "expected_arrival")
-            try:
-                parsed_arrival = datetime.fromisoformat(arrival_text)
-            except ValueError as exc:
-                raise ValueError("expected_arrival: expected ISO-formatted datetime.") from exc
-            expected_arrival = require_naive_datetime(parsed_arrival, "expected_arrival")
+        expected_arrival = parse_optional_naive_datetime(payload["expected_arrival"], "expected_arrival")
 
         return PackageCreated(
             event_id=event_id,
@@ -245,14 +238,9 @@ class PackageRemovedEventPayloadCodec(EventPayloadCodec[PackageRemoved]):
         start_location = LocationCode(require_str(payload["start_location"], "start_location"))
         end_location = LocationCode(require_str(payload["end_location"], "end_location"))
         weight = require_positive_finite_float(payload["weight"], "weight")
-        previous_expected_arrival = None
-        if payload["previous_expected_arrival"] is not None:
-            arrival_text = require_str(payload["previous_expected_arrival"], "previous_expected_arrival")
-            try:
-                parsed_arrival = datetime.fromisoformat(arrival_text)
-            except ValueError as exc:
-                raise ValueError("previous_expected_arrival: expected ISO-formatted datetime.") from exc
-            previous_expected_arrival = require_naive_datetime(parsed_arrival, "previous_expected_arrival")
+        previous_expected_arrival = parse_optional_naive_datetime(
+            payload["previous_expected_arrival"], "previous_expected_arrival"
+        )
 
         return PackageRemoved(
             event_id=event_id,
@@ -366,14 +354,7 @@ class PackagePickedUpEventPayloadCodec(EventPayloadCodec[PackagePickedUp]):
         new_status = ItemStatus(require_str(payload["new_status"], "new_status"))
         previous_location = LocationCode(require_str(payload["previous_location"], "previous_location"))
         new_location = LocationCode(require_str(payload["new_location"], "new_location"))
-        scheduled_arrival = None
-        if payload["scheduled_arrival"] is not None:
-            arrival_text = require_str(payload["scheduled_arrival"], "scheduled_arrival")
-            try:
-                parsed_arrival = datetime.fromisoformat(arrival_text)
-            except ValueError as exc:
-                raise ValueError("scheduled_arrival: expected ISO-formatted datetime.") from exc
-            scheduled_arrival = require_naive_datetime(parsed_arrival, "scheduled_arrival")
+        scheduled_arrival = parse_optional_naive_datetime(payload["scheduled_arrival"], "scheduled_arrival")
 
         return PackagePickedUp(
             event_id=event_id,
@@ -485,14 +466,7 @@ class PackageDeliveredEventPayloadCodec(EventPayloadCodec[PackageDelivered]):
         new_status = ItemStatus(require_str(payload["new_status"], "new_status"))
         previous_location = LocationCode(require_str(payload["previous_location"], "previous_location"))
         new_location = LocationCode(require_str(payload["new_location"], "new_location"))
-        scheduled_arrival = None
-        if payload["scheduled_arrival"] is not None:
-            arrival_text = require_str(payload["scheduled_arrival"], "scheduled_arrival")
-            try:
-                parsed_arrival = datetime.fromisoformat(arrival_text)
-            except ValueError as exc:
-                raise ValueError("scheduled_arrival: expected ISO-formatted datetime.") from exc
-            scheduled_arrival = require_naive_datetime(parsed_arrival, "scheduled_arrival")
+        scheduled_arrival = parse_optional_naive_datetime(payload["scheduled_arrival"], "scheduled_arrival")
 
         return PackageDelivered(
             event_id=event_id,

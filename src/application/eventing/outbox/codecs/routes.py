@@ -26,12 +26,12 @@ from src.domain.events.route_events import (
     TruckReleasedFromRoute,
 )
 from src.domain.value_objects.location_code import LocationCode
+from src.shared.json_deserialization import parse_naive_datetime, parse_optional_naive_datetime
 from src.shared.json_serialization import optional_isoformat
 from src.shared.json_types import JSONObject
 from src.shared.json_validation import require_json_object_keys
 from src.shared.validation import (
     require_list,
-    require_naive_datetime,
     require_optional_positive_int,
     require_positive_int,
     require_str,
@@ -133,25 +133,13 @@ class RouteCreatedEventPayloadCodec(EventPayloadCodec[RouteCreated]):
             name = require_str(item, field_name)
             locations.append(LocationCode(name))
 
-        departure_time = None
-        if payload["departure_time"] is not None:
-            departure_text = require_str(payload["departure_time"], "departure_time")
-            try:
-                parsed_departure = datetime.fromisoformat(departure_text)
-            except ValueError as exc:
-                raise ValueError("departure_time: expected ISO-formatted datetime.") from exc
-            departure_time = require_naive_datetime(parsed_departure, "departure_time")
+        departure_time = parse_optional_naive_datetime(payload["departure_time"], "departure_time")
 
         initial_status = RouteStatus(require_str(payload["initial_status"], "initial_status"))
 
-        expected_completion_time = None
-        if payload["expected_completion_time"] is not None:
-            completion_text = require_str(payload["expected_completion_time"], "expected_completion_time")
-            try:
-                parsed_completion = datetime.fromisoformat(completion_text)
-            except ValueError as exc:
-                raise ValueError("expected_completion_time: expected ISO-formatted datetime.") from exc
-            expected_completion_time = require_naive_datetime(parsed_completion, "expected_completion_time")
+        expected_completion_time = parse_optional_naive_datetime(
+            payload["expected_completion_time"], "expected_completion_time"
+        )
 
         return RouteCreated(
             event_id=event_id,
@@ -257,43 +245,19 @@ class RouteScheduledEventPayloadCodec(EventPayloadCodec[RouteScheduled]):
         previous_status = RouteStatus(require_str(payload["previous_status"], "previous_status"))
         new_status = RouteStatus(require_str(payload["new_status"], "new_status"))
 
-        previous_departure_time = None
-        if payload["previous_departure_time"] is not None:
-            departure_text = require_str(payload["previous_departure_time"], "previous_departure_time")
-            try:
-                parsed_departure = datetime.fromisoformat(departure_text)
-            except ValueError as exc:
-                raise ValueError("previous_departure_time: expected ISO-formatted datetime.") from exc
-            previous_departure_time = require_naive_datetime(parsed_departure, "previous_departure_time")
+        previous_departure_time = parse_optional_naive_datetime(
+            payload["previous_departure_time"], "previous_departure_time"
+        )
 
-        new_departure_text = require_str(payload["new_departure_time"], "new_departure_time")
-        try:
-            parsed_departure = datetime.fromisoformat(new_departure_text)
-        except ValueError as exc:
-            raise ValueError("new_departure_time: expected ISO-formatted datetime.") from exc
-        new_departure_time = require_naive_datetime(parsed_departure, "new_departure_time")
+        new_departure_time = parse_naive_datetime(payload["new_departure_time"], "new_departure_time")
 
-        previous_expected_completion_time = None
-        if payload["previous_expected_completion_time"] is not None:
-            completion_text = require_str(
-                payload["previous_expected_completion_time"], "previous_expected_completion_time"
-            )
-            try:
-                parsed_completion = datetime.fromisoformat(completion_text)
-            except ValueError as exc:
-                raise ValueError("previous_expected_completion_time: expected ISO-formatted datetime.") from exc
-            previous_expected_completion_time = require_naive_datetime(
-                parsed_completion, "previous_expected_completion_time"
-            )
+        previous_expected_completion_time = parse_optional_naive_datetime(
+            payload["previous_expected_completion_time"], "previous_expected_completion_time"
+        )
 
-        new_completion_text = require_str(
+        new_expected_completion_time = parse_naive_datetime(
             payload["new_expected_completion_time"], "new_expected_completion_time"
         )
-        try:
-            parsed_completion = datetime.fromisoformat(new_completion_text)
-        except ValueError as exc:
-            raise ValueError("new_expected_completion_time: expected ISO-formatted datetime.") from exc
-        new_expected_completion_time = require_naive_datetime(parsed_completion, "new_expected_completion_time")
 
         return RouteScheduled(
             event_id=event_id,
@@ -394,22 +358,12 @@ class PackageAssignedToRouteEventPayloadCodec(EventPayloadCodec[PackageAssignedT
         package_id = require_positive_int(payload["package_id"], "package_id")
         previous_route_id = require_optional_positive_int(payload["previous_route_id"], "previous_route_id")
         new_route_id = require_positive_int(payload["new_route_id"], "new_route_id")
-        previous_expected_arrival = None
-        if payload["previous_expected_arrival"] is not None:
-            arrival_text = require_str(payload["previous_expected_arrival"], "previous_expected_arrival")
-            try:
-                parsed_arrival = datetime.fromisoformat(arrival_text)
-            except ValueError as exc:
-                raise ValueError("previous_expected_arrival: expected ISO-formatted datetime.") from exc
-            previous_expected_arrival = require_naive_datetime(parsed_arrival, "previous_expected_arrival")
-        new_expected_arrival = None
-        if payload["new_expected_arrival"] is not None:
-            arrival_text = require_str(payload["new_expected_arrival"], "new_expected_arrival")
-            try:
-                parsed_arrival = datetime.fromisoformat(arrival_text)
-            except ValueError as exc:
-                raise ValueError("new_expected_arrival: expected ISO-formatted datetime.") from exc
-            new_expected_arrival = require_naive_datetime(parsed_arrival, "new_expected_arrival")
+        previous_expected_arrival = parse_optional_naive_datetime(
+            payload["previous_expected_arrival"], "previous_expected_arrival"
+        )
+        new_expected_arrival = parse_optional_naive_datetime(
+            payload["new_expected_arrival"], "new_expected_arrival"
+        )
 
         return PackageAssignedToRoute(
             event_id=event_id,
@@ -525,22 +479,12 @@ class PackageDetachedFromRouteEventPayloadCodec(EventPayloadCodec[PackageDetache
         new_status = ItemStatus(require_str(payload["new_status"], "new_status"))
         previous_location = LocationCode(require_str(payload["previous_location"], "previous_location"))
         new_location = LocationCode(require_str(payload["new_location"], "new_location"))
-        previous_expected_arrival = None
-        if payload["previous_expected_arrival"] is not None:
-            arrival_text = require_str(payload["previous_expected_arrival"], "previous_expected_arrival")
-            try:
-                parsed_arrival = datetime.fromisoformat(arrival_text)
-            except ValueError as exc:
-                raise ValueError("previous_expected_arrival: expected ISO-formatted datetime.") from exc
-            previous_expected_arrival = require_naive_datetime(parsed_arrival, "previous_expected_arrival")
-        new_expected_arrival = None
-        if payload["new_expected_arrival"] is not None:
-            arrival_text = require_str(payload["new_expected_arrival"], "new_expected_arrival")
-            try:
-                parsed_arrival = datetime.fromisoformat(arrival_text)
-            except ValueError as exc:
-                raise ValueError("new_expected_arrival: expected ISO-formatted datetime.") from exc
-            new_expected_arrival = require_naive_datetime(parsed_arrival, "new_expected_arrival")
+        previous_expected_arrival = parse_optional_naive_datetime(
+            payload["previous_expected_arrival"], "previous_expected_arrival"
+        )
+        new_expected_arrival = parse_optional_naive_datetime(
+            payload["new_expected_arrival"], "new_expected_arrival"
+        )
         reason = PackageDetachmentReason(require_str(payload["reason"], "reason"))
 
         return PackageDetachedFromRoute(
@@ -665,38 +609,12 @@ class TruckAssignedToRouteEventPayloadCodec(EventPayloadCodec[TruckAssignedToRou
         new_status = TruckStatus(require_str(payload["new_status"], "new_status"))
         previous_location = LocationCode(require_str(payload["previous_location"], "previous_location"))
         new_location = LocationCode(require_str(payload["new_location"], "new_location"))
-        previous_busy_from = None
-        if payload["previous_busy_from"] is not None:
-            busy_from_text = require_str(payload["previous_busy_from"], "previous_busy_from")
-            try:
-                parsed_busy_from = datetime.fromisoformat(busy_from_text)
-            except ValueError as exc:
-                raise ValueError("previous_busy_from: expected ISO-formatted datetime.") from exc
-            previous_busy_from = require_naive_datetime(parsed_busy_from, "previous_busy_from")
-        new_busy_from = None
-        if payload["new_busy_from"] is not None:
-            busy_from_text = require_str(payload["new_busy_from"], "new_busy_from")
-            try:
-                parsed_busy_from = datetime.fromisoformat(busy_from_text)
-            except ValueError as exc:
-                raise ValueError("new_busy_from: expected ISO-formatted datetime.") from exc
-            new_busy_from = require_naive_datetime(parsed_busy_from, "new_busy_from")
-        previous_busy_until = None
-        if payload["previous_busy_until"] is not None:
-            busy_until_text = require_str(payload["previous_busy_until"], "previous_busy_until")
-            try:
-                parsed_busy_until = datetime.fromisoformat(busy_until_text)
-            except ValueError as exc:
-                raise ValueError("previous_busy_until: expected ISO-formatted datetime.") from exc
-            previous_busy_until = require_naive_datetime(parsed_busy_until, "previous_busy_until")
-        new_busy_until = None
-        if payload["new_busy_until"] is not None:
-            busy_until_text = require_str(payload["new_busy_until"], "new_busy_until")
-            try:
-                parsed_busy_until = datetime.fromisoformat(busy_until_text)
-            except ValueError as exc:
-                raise ValueError("new_busy_until: expected ISO-formatted datetime.") from exc
-            new_busy_until = require_naive_datetime(parsed_busy_until, "new_busy_until")
+        previous_busy_from = parse_optional_naive_datetime(payload["previous_busy_from"], "previous_busy_from")
+        new_busy_from = parse_optional_naive_datetime(payload["new_busy_from"], "new_busy_from")
+        previous_busy_until = parse_optional_naive_datetime(
+            payload["previous_busy_until"], "previous_busy_until"
+        )
+        new_busy_until = parse_optional_naive_datetime(payload["new_busy_until"], "new_busy_until")
 
         return TruckAssignedToRoute(
             event_id=event_id,
@@ -824,38 +742,12 @@ class TruckReleasedFromRouteEventPayloadCodec(EventPayloadCodec[TruckReleasedFro
         new_status = TruckStatus(require_str(payload["new_status"], "new_status"))
         previous_location = LocationCode(require_str(payload["previous_location"], "previous_location"))
         new_location = LocationCode(require_str(payload["new_location"], "new_location"))
-        previous_busy_from = None
-        if payload["previous_busy_from"] is not None:
-            busy_from_text = require_str(payload["previous_busy_from"], "previous_busy_from")
-            try:
-                parsed_busy_from = datetime.fromisoformat(busy_from_text)
-            except ValueError as exc:
-                raise ValueError("previous_busy_from: expected ISO-formatted datetime.") from exc
-            previous_busy_from = require_naive_datetime(parsed_busy_from, "previous_busy_from")
-        new_busy_from = None
-        if payload["new_busy_from"] is not None:
-            busy_from_text = require_str(payload["new_busy_from"], "new_busy_from")
-            try:
-                parsed_busy_from = datetime.fromisoformat(busy_from_text)
-            except ValueError as exc:
-                raise ValueError("new_busy_from: expected ISO-formatted datetime.") from exc
-            new_busy_from = require_naive_datetime(parsed_busy_from, "new_busy_from")
-        previous_busy_until = None
-        if payload["previous_busy_until"] is not None:
-            busy_until_text = require_str(payload["previous_busy_until"], "previous_busy_until")
-            try:
-                parsed_busy_until = datetime.fromisoformat(busy_until_text)
-            except ValueError as exc:
-                raise ValueError("previous_busy_until: expected ISO-formatted datetime.") from exc
-            previous_busy_until = require_naive_datetime(parsed_busy_until, "previous_busy_until")
-        new_busy_until = None
-        if payload["new_busy_until"] is not None:
-            busy_until_text = require_str(payload["new_busy_until"], "new_busy_until")
-            try:
-                parsed_busy_until = datetime.fromisoformat(busy_until_text)
-            except ValueError as exc:
-                raise ValueError("new_busy_until: expected ISO-formatted datetime.") from exc
-            new_busy_until = require_naive_datetime(parsed_busy_until, "new_busy_until")
+        previous_busy_from = parse_optional_naive_datetime(payload["previous_busy_from"], "previous_busy_from")
+        new_busy_from = parse_optional_naive_datetime(payload["new_busy_from"], "new_busy_from")
+        previous_busy_until = parse_optional_naive_datetime(
+            payload["previous_busy_until"], "previous_busy_until"
+        )
+        new_busy_until = parse_optional_naive_datetime(payload["new_busy_until"], "new_busy_until")
         reason = TruckReleaseReason(require_str(payload["reason"], "reason"))
 
         return TruckReleasedFromRoute(
@@ -1054,18 +946,10 @@ class RouteCompletedEventPayloadCodec(EventPayloadCodec[RouteCompleted]):
         route_id = require_positive_int(payload["route_id"], "route_id")
         previous_status = RouteStatus(require_str(payload["previous_status"], "previous_status"))
         new_status = RouteStatus(require_str(payload["new_status"], "new_status"))
-        departure_text = require_str(payload["departure_time"], "departure_time")
-        try:
-            parsed_departure = datetime.fromisoformat(departure_text)
-        except ValueError as exc:
-            raise ValueError("departure_time: expected ISO-formatted datetime.") from exc
-        departure_time = require_naive_datetime(parsed_departure, "departure_time")
-        expected_completion_text = require_str(payload["expected_completion_time"], "expected_completion_time")
-        try:
-            parsed_completion = datetime.fromisoformat(expected_completion_text)
-        except ValueError as exc:
-            raise ValueError("expected_completion_time: expected ISO-formatted datetime.") from exc
-        expected_completion_time = require_naive_datetime(parsed_completion, "expected_completion_time")
+        departure_time = parse_naive_datetime(payload["departure_time"], "departure_time")
+        expected_completion_time = parse_naive_datetime(
+            payload["expected_completion_time"], "expected_completion_time"
+        )
 
         return RouteCompleted(
             event_id=event_id,
@@ -1179,26 +1063,12 @@ class RouteRemovedEventPayloadCodec(EventPayloadCodec[RouteRemoved]):
             field_name = f"previous_locations[{index}]"
             name = require_str(item, field_name)
             previous_locations.append(LocationCode(name))
-        previous_departure_time = None
-        if payload["previous_departure_time"] is not None:
-            departure_text = require_str(payload["previous_departure_time"], "previous_departure_time")
-            try:
-                parsed_departure = datetime.fromisoformat(departure_text)
-            except ValueError as exc:
-                raise ValueError("previous_departure_time: expected ISO-formatted datetime.") from exc
-            previous_departure_time = require_naive_datetime(parsed_departure, "previous_departure_time")
-        previous_expected_completion_time = None
-        if payload["previous_expected_completion_time"] is not None:
-            completion_text = require_str(
-                payload["previous_expected_completion_time"], "previous_expected_completion_time"
-            )
-            try:
-                parsed_completion = datetime.fromisoformat(completion_text)
-            except ValueError as exc:
-                raise ValueError("previous_expected_completion_time: expected ISO-formatted datetime.") from exc
-            previous_expected_completion_time = require_naive_datetime(
-                parsed_completion, "previous_expected_completion_time"
-            )
+        previous_departure_time = parse_optional_naive_datetime(
+            payload["previous_departure_time"], "previous_departure_time"
+        )
+        previous_expected_completion_time = parse_optional_naive_datetime(
+            payload["previous_expected_completion_time"], "previous_expected_completion_time"
+        )
         raw_detached_package_ids = require_list(payload["detached_package_ids"], "detached_package_ids")
         detached_package_ids: list[int] = []
         for index, package_id in enumerate(raw_detached_package_ids):
