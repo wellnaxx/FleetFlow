@@ -145,7 +145,10 @@ class WorldStateAdvancedCodecShould(unittest.TestCase):
         self.assertIs(adapter.event_class, WorldStateAdvanced)
         self.assertEqual(adapter.event_version, WorldStateAdvanced.event_version)
         restored = adapter.decode(
-            adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+            registry.for_event(event).encode(event),
+            event_id=EVENT_ID,
+            occurred_at=OCCURRED_AT,
+            recorded_at=RECORDED_AT,
         )
         self.assertIs(type(restored), WorldStateAdvanced)
         self.assertEqual(restored, event)
@@ -299,7 +302,10 @@ class WorldStateStartupRestoreFailedCodecShould(unittest.TestCase):
                 event = self.decode({**self.payload, "schema_version": version})
                 self.assertIs(adapter, registry.for_event(event))
                 restored = adapter.decode(
-                    adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+                    registry.for_event(event).encode(event),
+                    event_id=EVENT_ID,
+                    occurred_at=OCCURRED_AT,
+                    recorded_at=RECORDED_AT,
                 )
                 self.assertIs(type(restored), WorldStateStartupRestoreFailed)
                 self.assertEqual(restored, event)
@@ -432,7 +438,10 @@ class WorldStateStartupRestoreSkippedCodecShould(unittest.TestCase):
                 event = self.decode({"reason": reason.value})
                 self.assertIs(adapter, registry.for_event(event))
                 restored = adapter.decode(
-                    adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+                    registry.for_event(event).encode(event),
+                    event_id=EVENT_ID,
+                    occurred_at=OCCURRED_AT,
+                    recorded_at=RECORDED_AT,
                 )
                 self.assertIs(type(restored), WorldStateStartupRestoreSkipped)
                 self.assertEqual(restored, event)
@@ -641,7 +650,10 @@ class WorldStateStartupRestoredCodecShould(unittest.TestCase):
         self.assertIsNot(adapter, registry.for_identity("world_state_imported", 2))
         self.assertIsNot(adapter, registry.for_identity("world_state_runtime_swapped", 2))
         restored = adapter.decode(
-            adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+            registry.for_event(event).encode(event),
+            event_id=EVENT_ID,
+            occurred_at=OCCURRED_AT,
+            recorded_at=RECORDED_AT,
         )
         self.assertIs(type(restored), WorldStateStartupRestored)
         self.assertEqual(restored, event)
@@ -848,7 +860,10 @@ class WorldStateRuntimeSwappedCodecShould(unittest.TestCase):
         self.assertEqual(adapter.event_version, WorldStateRuntimeSwapped.event_version)
         self.assertIsNot(adapter, registry.for_identity("world_state_imported", 2))
         restored = adapter.decode(
-            adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+            registry.for_event(event).encode(event),
+            event_id=EVENT_ID,
+            occurred_at=OCCURRED_AT,
+            recorded_at=RECORDED_AT,
         )
         self.assertIs(type(restored), WorldStateRuntimeSwapped)
         self.assertEqual(restored, event)
@@ -999,7 +1014,10 @@ class WorldStateSnapshotQuarantinedCodecShould(unittest.TestCase):
         self.assertEqual(adapter.event_version, WorldStateSnapshotQuarantined.event_version)
         self.assertIsNot(adapter, registry.for_identity("world_state_corruption_detected", 1))
         restored = adapter.decode(
-            adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+            registry.for_event(event).encode(event),
+            event_id=EVENT_ID,
+            occurred_at=OCCURRED_AT,
+            recorded_at=RECORDED_AT,
         )
         self.assertIs(type(restored), WorldStateSnapshotQuarantined)
         self.assertEqual(restored, event)
@@ -1140,7 +1158,10 @@ class WorldStateCorruptionDetectedCodecShould(unittest.TestCase):
         self.assertEqual(adapter.event_version, WorldStateCorruptionDetected.event_version)
         self.assertIsNot(adapter, registry.for_identity("world_state_import_failed", 1))
         restored = adapter.decode(
-            adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+            registry.for_event(event).encode(event),
+            event_id=EVENT_ID,
+            occurred_at=OCCURRED_AT,
+            recorded_at=RECORDED_AT,
         )
         self.assertIs(type(restored), WorldStateCorruptionDetected)
         self.assertEqual(restored, event)
@@ -1316,7 +1337,10 @@ class WorldStateExportedCodecShould(unittest.TestCase):
         self.assertEqual(adapter.event_version, WorldStateExported.event_version)
         self.assertEqual(
             adapter.decode(
-                adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+                registry.for_event(event).encode(event),
+                event_id=EVENT_ID,
+                occurred_at=OCCURRED_AT,
+                recorded_at=RECORDED_AT,
             ),
             event,
         )
@@ -1522,7 +1546,10 @@ class WorldStateImportedCodecShould(unittest.TestCase):
         self.assertEqual(adapter.event_version, WorldStateImported.event_version)
         self.assertEqual(
             adapter.decode(
-                adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+                registry.for_event(event).encode(event),
+                event_id=EVENT_ID,
+                occurred_at=OCCURRED_AT,
+                recorded_at=RECORDED_AT,
             ),
             event,
         )
@@ -1676,7 +1703,10 @@ class WorldStateImportFailedCodecShould(unittest.TestCase):
                 event = self.decode({**self.payload, "schema_version": version})
                 self.assertIs(adapter, registry.for_event(event))
                 restored = adapter.decode(
-                    adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+                    registry.for_event(event).encode(event),
+                    event_id=EVENT_ID,
+                    occurred_at=OCCURRED_AT,
+                    recorded_at=RECORDED_AT,
                 )
                 self.assertIs(type(restored), WorldStateImportFailed)
                 self.assertEqual(restored, event)
@@ -1825,7 +1855,7 @@ class WorldStateExportFailedCodecShould(unittest.TestCase):
                 self.assertIs(adapter, registry.for_event(event))
                 self.assertEqual(
                     adapter.decode(
-                        adapter.encode(event),
+                        registry.for_event(event).encode(event),
                         event_id=EVENT_ID,
                         occurred_at=OCCURRED_AT,
                         recorded_at=RECORDED_AT,

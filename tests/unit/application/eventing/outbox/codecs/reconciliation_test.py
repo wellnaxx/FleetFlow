@@ -139,7 +139,10 @@ class TruckRouteReferenceReconciledCodecShould(unittest.TestCase):
             self.assertIsNot(adapter, registry.for_identity(name, 1))
         self.assertEqual(
             adapter.decode(
-                adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+                registry.for_event(event).encode(event),
+                event_id=EVENT_ID,
+                occurred_at=OCCURRED_AT,
+                recorded_at=RECORDED_AT,
             ),
             event,
         )
@@ -341,7 +344,10 @@ class TruckPositionReconciledCodecShould(unittest.TestCase):
             self.assertIsNot(adapter, registry.for_identity(name, 1))
         self.assertEqual(
             adapter.decode(
-                adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+                registry.for_event(event).encode(event),
+                event_id=EVENT_ID,
+                occurred_at=OCCURRED_AT,
+                recorded_at=RECORDED_AT,
             ),
             event,
         )
@@ -623,7 +629,10 @@ class PackageStateReconciledCodecShould(unittest.TestCase):
         self.assertIsNot(adapter, registry.for_identity("route_state_reconciled", 1))
         self.assertEqual(
             adapter.decode(
-                adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+                registry.for_event(event).encode(event),
+                event_id=EVENT_ID,
+                occurred_at=OCCURRED_AT,
+                recorded_at=RECORDED_AT,
             ),
             event,
         )
@@ -821,7 +830,10 @@ class RouteStateReconciledCodecShould(unittest.TestCase):
         self.assertEqual(adapter.event_version, RouteStateReconciled.event_version)
         self.assertEqual(
             adapter.decode(
-                adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+                registry.for_event(event).encode(event),
+                event_id=EVENT_ID,
+                occurred_at=OCCURRED_AT,
+                recorded_at=RECORDED_AT,
             ),
             event,
         )

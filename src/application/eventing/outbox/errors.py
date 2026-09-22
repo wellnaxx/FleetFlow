@@ -1,8 +1,8 @@
-"""Failures raised by outbox codec registration and resolution."""
+"""Failures raised by outbox codec configuration, lookup, and contract checks."""
 
 
 class EventCodecRegistryError(RuntimeError):
-    """Base class for outbox codec configuration and lookup defects."""
+    """Base class for outbox codec configuration, lookup, and contract defects."""
 
 
 class DuplicateEventCodecError(EventCodecRegistryError):
@@ -15,3 +15,11 @@ class EventCodecNotFoundError(EventCodecRegistryError):
 
 class EventCodecTypeMismatchError(EventCodecRegistryError, TypeError):
     """Raised when a codec receives or reconstructs the wrong event type."""
+
+
+class EventCodecVersionMismatchError(EventCodecRegistryError):
+    """Raised when a codec version is incompatible with its registration role."""
+
+
+class EventCodecContractError(EventCodecRegistryError):
+    """Raised when serialization loses event data or changes supplied metadata."""

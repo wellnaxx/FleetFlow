@@ -190,7 +190,10 @@ class PackageDeliveredCodecShould(unittest.TestCase):
             self.assertIsNot(adapter, registry.for_identity(name, 2))
         self.assertEqual(
             adapter.decode(
-                adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+                registry.for_event(event).encode(event),
+                event_id=EVENT_ID,
+                occurred_at=OCCURRED_AT,
+                recorded_at=RECORDED_AT,
             ),
             event,
         )
@@ -390,7 +393,10 @@ class PackagePickedUpCodecShould(unittest.TestCase):
             self.assertIsNot(adapter, registry.for_identity(name, 2))
         self.assertEqual(
             adapter.decode(
-                adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+                registry.for_event(event).encode(event),
+                event_id=EVENT_ID,
+                occurred_at=OCCURRED_AT,
+                recorded_at=RECORDED_AT,
             ),
             event,
         )
@@ -601,7 +607,10 @@ class PackageRemovedCodecShould(unittest.TestCase):
         self.assertIsNot(adapter, registry.for_identity("package_created", 2))
         self.assertEqual(
             adapter.decode(
-                adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+                registry.for_event(event).encode(event),
+                event_id=EVENT_ID,
+                occurred_at=OCCURRED_AT,
+                recorded_at=RECORDED_AT,
             ),
             event,
         )
@@ -797,7 +806,10 @@ class PackageCreatedCodecShould(unittest.TestCase):
         self.assertEqual(adapter.event_version, PackageCreated.event_version)
         self.assertEqual(
             adapter.decode(
-                adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+                registry.for_event(event).encode(event),
+                event_id=EVENT_ID,
+                occurred_at=OCCURRED_AT,
+                recorded_at=RECORDED_AT,
             ),
             event,
         )

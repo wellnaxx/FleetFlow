@@ -171,7 +171,10 @@ class UserTokensRevokedCodecShould(unittest.TestCase):
         self.assertIsNot(adapter, registry.for_identity("user_session_ended", 1))
         self.assertEqual(
             adapter.decode(
-                adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+                registry.for_event(event).encode(event),
+                event_id=EVENT_ID,
+                occurred_at=OCCURRED_AT,
+                recorded_at=RECORDED_AT,
             ),
             event,
         )
@@ -298,7 +301,10 @@ class UserSessionEndedCodecShould(unittest.TestCase):
         self.assertIsNot(adapter, registry.for_identity("user_password_changed", 1))
         self.assertEqual(
             adapter.decode(
-                adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+                registry.for_event(event).encode(event),
+                event_id=EVENT_ID,
+                occurred_at=OCCURRED_AT,
+                recorded_at=RECORDED_AT,
             ),
             event,
         )
@@ -430,7 +436,10 @@ class UserRegistrationRejectedCodecShould(unittest.TestCase):
         self.assertIsNot(adapter, registry.for_identity("user_login_rejected", 1))
         self.assertEqual(
             adapter.decode(
-                adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+                registry.for_event(event).encode(event),
+                event_id=EVENT_ID,
+                occurred_at=OCCURRED_AT,
+                recorded_at=RECORDED_AT,
             ),
             event,
         )
@@ -568,7 +577,10 @@ class UserRegisteredCodecShould(unittest.TestCase):
         self.assertIsNot(adapter, registry.for_identity("user_authenticated", 1))
         self.assertEqual(
             adapter.decode(
-                adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+                registry.for_event(event).encode(event),
+                event_id=EVENT_ID,
+                occurred_at=OCCURRED_AT,
+                recorded_at=RECORDED_AT,
             ),
             event,
         )
@@ -711,7 +723,10 @@ class UserPasswordResetRejectedCodecShould(unittest.TestCase):
         self.assertIsNot(adapter, registry.for_identity("user_password_change_rejected", 1))
         self.assertEqual(
             adapter.decode(
-                adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+                registry.for_event(event).encode(event),
+                event_id=EVENT_ID,
+                occurred_at=OCCURRED_AT,
+                recorded_at=RECORDED_AT,
             ),
             event,
         )
@@ -839,7 +854,10 @@ class UserPasswordResetCodecShould(unittest.TestCase):
         self.assertIsNot(adapter, registry.for_identity("user_password_changed", 1))
         self.assertEqual(
             adapter.decode(
-                adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+                registry.for_event(event).encode(event),
+                event_id=EVENT_ID,
+                occurred_at=OCCURRED_AT,
+                recorded_at=RECORDED_AT,
             ),
             event,
         )
@@ -975,7 +993,10 @@ class UserPasswordChangeRejectedCodecShould(unittest.TestCase):
         self.assertEqual(adapter.event_version, 1)
         self.assertEqual(
             adapter.decode(
-                adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+                registry.for_event(event).encode(event),
+                event_id=EVENT_ID,
+                occurred_at=OCCURRED_AT,
+                recorded_at=RECORDED_AT,
             ),
             event,
         )
@@ -1104,7 +1125,10 @@ class UserPasswordChangedCodecShould(unittest.TestCase):
         self.assertIs(adapter.event_class, UserPasswordChanged)
         self.assertEqual(adapter.event_version, 1)
         restored = adapter.decode(
-            adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+            registry.for_event(event).encode(event),
+            event_id=EVENT_ID,
+            occurred_at=OCCURRED_AT,
+            recorded_at=RECORDED_AT,
         )
         self.assertEqual(restored, event)
         with self.assertRaises(EventCodecNotFoundError):
@@ -1249,7 +1273,10 @@ class UserLoginRejectedCodecShould(unittest.TestCase):
         self.assertIs(adapter.event_class, UserLoginRejected)
         self.assertEqual(adapter.event_version, 1)
         restored = adapter.decode(
-            adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+            registry.for_event(event).encode(event),
+            event_id=EVENT_ID,
+            occurred_at=OCCURRED_AT,
+            recorded_at=RECORDED_AT,
         )
         self.assertEqual(restored, event)
         with self.assertRaises(EventCodecNotFoundError):
@@ -1384,7 +1411,10 @@ class UserAuthenticatedCodecShould(unittest.TestCase):
         self.assertIs(adapter, registry.for_event(event))
         self.assertIs(adapter.event_class, UserAuthenticated)
         restored = adapter.decode(
-            adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+            registry.for_event(event).encode(event),
+            event_id=EVENT_ID,
+            occurred_at=OCCURRED_AT,
+            recorded_at=RECORDED_AT,
         )
         self.assertEqual(restored, event)
         with self.assertRaises(EventCodecNotFoundError):
@@ -1479,7 +1509,7 @@ class AuthorizationDeniedCodecShould(unittest.TestCase):
         adapter = registry.for_identity("authorization_denied", 2)
         self.assertIs(adapter, registry.for_event(event))
         self.assertIs(adapter.event_class, AuthorizationDenied)
-        self.assertEqual(adapter.encode(event), make_payload())
+        self.assertEqual(registry.for_event(event).encode(event), make_payload())
         for version in (1, 3):
             with self.subTest(version=version), self.assertRaises(EventCodecNotFoundError):
                 registry.for_identity("authorization_denied", version)

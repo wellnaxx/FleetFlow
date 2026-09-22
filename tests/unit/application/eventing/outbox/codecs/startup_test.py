@@ -144,7 +144,10 @@ class FleetSeededCodecShould(unittest.TestCase):
         self.assertEqual(adapter.event_version, FleetSeeded.event_version)
         self.assertEqual(
             adapter.decode(
-                adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+                registry.for_event(event).encode(event),
+                event_id=EVENT_ID,
+                occurred_at=OCCURRED_AT,
+                recorded_at=RECORDED_AT,
             ),
             event,
         )

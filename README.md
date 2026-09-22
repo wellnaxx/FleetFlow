@@ -891,8 +891,22 @@ machine-readable failure policy from free-text operational diagnostics.
 Two output-port boundaries are defined: `UnitOfWorkOutboxRepositoryPort` inserts drafts through an existing
 business transaction without committing independently, while `OutboxRepositoryPort` atomically claims leased
 batches and supports ownership-checked publication, retry scheduling, expired-claim release, and bounded retention
-cleanup. These are contracts only; no schema migration, repository adapter, event codec, transactional capture
-integration, dispatcher worker, or composition/runtime wiring exists yet.
+cleanup. Repository adapters, schema migrations, transactional capture, dispatcher workers, and outbox runtime
+wiring are not implemented yet.
+
+Payload codecs cover the published event types. `EventOutboxCodecRegistry.register()` accepts only a current
+codec whose version matches its event class. `register_decoder()` adds an explicit older-version reader without
+replacing the current encoder. Readers are resolved by the exact persisted `(event_type, event_version)` pair;
+unknown versions fail rather than falling back to a newer codec. Historical readers must explicitly transform old
+payloads into the current event class while preserving the original event ID and timestamps. No historical
+readers are provided yet, and old outbox rows must not be relabeled with a new version.
+
+For durable writes, use `registry.for_event(event).encode(event)`: the adapter validates JSON safety and decodes
+the payload once to enforce field validation and a lossless event round trip. Direct concrete `encode()` methods
+remain projections of typed fields. `for_identity()` exposes decoding only; it validates JSON and metadata before
+delegating field validation to the versioned decoder. This extra decode per write is intentional, and codecs must
+remain deterministic and side-effect free. Payload containers remain mutable; callers must not modify validated
+payloads before persistence.
 
 The next implementation steps are to define the event-envelope codec and outbox table, implement PostgreSQL and
 in-memory adapters, expose outbox insertion through active unit-of-work implementations, persist captured events in

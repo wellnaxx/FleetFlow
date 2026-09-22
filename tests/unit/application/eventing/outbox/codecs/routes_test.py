@@ -266,7 +266,10 @@ class RouteRemovedCodecShould(unittest.TestCase):
             self.assertIsNot(adapter, registry.for_identity(name, 2))
         self.assertEqual(
             adapter.decode(
-                adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+                registry.for_event(event).encode(event),
+                event_id=EVENT_ID,
+                occurred_at=OCCURRED_AT,
+                recorded_at=RECORDED_AT,
             ),
             event,
         )
@@ -454,7 +457,10 @@ class RouteCompletedCodecShould(unittest.TestCase):
             self.assertIsNot(adapter, registry.for_identity(name, 2))
         self.assertEqual(
             adapter.decode(
-                adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+                registry.for_event(event).encode(event),
+                event_id=EVENT_ID,
+                occurred_at=OCCURRED_AT,
+                recorded_at=RECORDED_AT,
             ),
             event,
         )
@@ -600,7 +606,10 @@ class RouteStartedCodecShould(unittest.TestCase):
             self.assertIsNot(adapter, registry.for_identity(name, 2))
         self.assertEqual(
             adapter.decode(
-                adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+                registry.for_event(event).encode(event),
+                event_id=EVENT_ID,
+                occurred_at=OCCURRED_AT,
+                recorded_at=RECORDED_AT,
             ),
             event,
         )
@@ -857,7 +866,10 @@ class TruckReleasedFromRouteCodecShould(unittest.TestCase):
         self.assertIsNot(adapter, registry.for_identity("truck_assigned_to_route", 2))
         self.assertEqual(
             adapter.decode(
-                adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+                registry.for_event(event).encode(event),
+                event_id=EVENT_ID,
+                occurred_at=OCCURRED_AT,
+                recorded_at=RECORDED_AT,
             ),
             event,
         )
@@ -1107,7 +1119,10 @@ class TruckAssignedToRouteCodecShould(unittest.TestCase):
             self.assertIsNot(adapter, registry.for_identity(name, 2))
         self.assertEqual(
             adapter.decode(
-                adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+                registry.for_event(event).encode(event),
+                event_id=EVENT_ID,
+                occurred_at=OCCURRED_AT,
+                recorded_at=RECORDED_AT,
             ),
             event,
         )
@@ -1352,7 +1367,10 @@ class PackageDetachedFromRouteCodecShould(unittest.TestCase):
             self.assertIsNot(adapter, registry.for_identity(name, 2))
         self.assertEqual(
             adapter.decode(
-                adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+                registry.for_event(event).encode(event),
+                event_id=EVENT_ID,
+                occurred_at=OCCURRED_AT,
+                recorded_at=RECORDED_AT,
             ),
             event,
         )
@@ -1534,7 +1552,10 @@ class PackageAssignedToRouteCodecShould(unittest.TestCase):
             self.assertIsNot(adapter, registry.for_identity(name, 2))
         self.assertEqual(
             adapter.decode(
-                adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+                registry.for_event(event).encode(event),
+                event_id=EVENT_ID,
+                occurred_at=OCCURRED_AT,
+                recorded_at=RECORDED_AT,
             ),
             event,
         )
@@ -1734,7 +1755,10 @@ class RouteScheduledCodecShould(unittest.TestCase):
         self.assertIsNot(adapter, registry.for_identity("route_created", 2))
         self.assertEqual(
             adapter.decode(
-                adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+                registry.for_event(event).encode(event),
+                event_id=EVENT_ID,
+                occurred_at=OCCURRED_AT,
+                recorded_at=RECORDED_AT,
             ),
             event,
         )
@@ -1944,7 +1968,10 @@ class RouteCreatedCodecShould(unittest.TestCase):
         self.assertEqual(adapter.event_version, RouteCreated.event_version)
         self.assertEqual(
             adapter.decode(
-                adapter.encode(event), event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+                registry.for_event(event).encode(event),
+                event_id=EVENT_ID,
+                occurred_at=OCCURRED_AT,
+                recorded_at=RECORDED_AT,
             ),
             event,
         )

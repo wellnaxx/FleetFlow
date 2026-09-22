@@ -46,7 +46,7 @@ class OutboxMessageDraft:
     Attributes:
         event_id: Unique identity of the event being published.
         event_version: Positive version of the concrete event contract.
-        event_type: Non-empty concrete event class name.
+        event_type: Stable wire name declared by the registered payload codec.
         occurred_at: Naive app-local time when the represented fact occurred.
         recorded_at: UTC time when FleetFlow recorded the event.
         envelope_id: Unique identity of the publication envelope.
