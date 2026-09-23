@@ -21,7 +21,7 @@ from src.domain.enums.item_status import ItemStatus
 from src.domain.enums.route_status import RouteStatus
 from src.domain.value_objects.location_code import LocationCode
 from src.domain.value_objects.route_schedule import RoutePositionKind
-from src.shared.json_deserialization import parse_optional_naive_datetime
+from src.shared.json_deserialization import parse_enum_value, parse_optional_naive_datetime
 from src.shared.json_serialization import optional_isoformat, optional_str
 from src.shared.json_types import JSONObject
 from src.shared.json_validation import require_json_object_keys
@@ -31,6 +31,15 @@ from src.shared.validation import (
     require_positive_int,
     require_str,
 )
+
+_ROUTE_STATE_RECONCILED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset([
+    "route_id",
+    "previous_status",
+    "new_status",
+    "departure_time",
+    "expected_completion_time",
+    "reason",
+])
 
 
 class RouteStateReconciledEventPayloadCodec(EventPayloadCodec[RouteStateReconciled]):
@@ -108,25 +117,16 @@ class RouteStateReconciledEventPayloadCodec(EventPayloadCodec[RouteStateReconcil
                 non-positive, a status or reason is unknown, timestamp text
                 is invalid, or timestamps use the wrong time domain.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset([
-            "route_id",
-            "previous_status",
-            "new_status",
-            "departure_time",
-            "expected_completion_time",
-            "reason",
-        ])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _ROUTE_STATE_RECONCILED_PAYLOAD_KEYS)
 
         route_id = require_positive_int(payload["route_id"], "route_id")
-        previous_status = RouteStatus(require_str(payload["previous_status"], "previous_status"))
-        new_status = RouteStatus(require_str(payload["new_status"], "new_status"))
+        previous_status = parse_enum_value(payload["previous_status"], "previous_status", RouteStatus)
+        new_status = parse_enum_value(payload["new_status"], "new_status", RouteStatus)
         departure_time = parse_optional_naive_datetime(payload["departure_time"], "departure_time")
         expected_completion_time = parse_optional_naive_datetime(
             payload["expected_completion_time"], "expected_completion_time"
         )
-        reason = RouteReconciliationReason(require_str(payload["reason"], "reason"))
+        reason = parse_enum_value(payload["reason"], "reason", RouteReconciliationReason)
 
         return RouteStateReconciled(
             event_id=event_id,
@@ -139,6 +139,21 @@ class RouteStateReconciledEventPayloadCodec(EventPayloadCodec[RouteStateReconcil
             expected_completion_time=expected_completion_time,
             reason=reason,
         )
+
+
+_PACKAGE_STATE_RECONCILED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset([
+    "package_id",
+    "route_id",
+    "previous_status",
+    "new_status",
+    "previous_location",
+    "new_location",
+    "previous_expected_arrival",
+    "new_expected_arrival",
+    "scheduled_pickup_time",
+    "scheduled_delivery_time",
+    "reasons",
+])
 
 
 class PackageStateReconciledEventPayloadCodec(EventPayloadCodec[PackageStateReconciled]):
@@ -224,26 +239,12 @@ class PackageStateReconciledEventPayloadCodec(EventPayloadCodec[PackageStateReco
                 timestamp text is invalid, or timestamps use the wrong time domain.
             DomainValidationError: If either location is blank after normalization.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset([
-            "package_id",
-            "route_id",
-            "previous_status",
-            "new_status",
-            "previous_location",
-            "new_location",
-            "previous_expected_arrival",
-            "new_expected_arrival",
-            "scheduled_pickup_time",
-            "scheduled_delivery_time",
-            "reasons",
-        ])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _PACKAGE_STATE_RECONCILED_PAYLOAD_KEYS)
 
         package_id = require_positive_int(payload["package_id"], "package_id")
         route_id = require_optional_positive_int(payload["route_id"], "route_id")
-        previous_status = ItemStatus(require_str(payload["previous_status"], "previous_status"))
-        new_status = ItemStatus(require_str(payload["new_status"], "new_status"))
+        previous_status = parse_enum_value(payload["previous_status"], "previous_status", ItemStatus)
+        new_status = parse_enum_value(payload["new_status"], "new_status", ItemStatus)
         previous_location = LocationCode(require_str(payload["previous_location"], "previous_location"))
         new_location = LocationCode(require_str(payload["new_location"], "new_location"))
         previous_expected_arrival = parse_optional_naive_datetime(
@@ -262,8 +263,7 @@ class PackageStateReconciledEventPayloadCodec(EventPayloadCodec[PackageStateReco
         reasons: list[PackageReconciliationReason] = []
         for index, item in enumerate(raw_reasons):
             field_name = f"reasons[{index}]"
-            name = require_str(item, field_name)
-            reasons.append(PackageReconciliationReason(name))
+            reasons.append(parse_enum_value(item, field_name, PackageReconciliationReason))
 
         return PackageStateReconciled(
             event_id=event_id,
@@ -281,6 +281,17 @@ class PackageStateReconciledEventPayloadCodec(EventPayloadCodec[PackageStateReco
             scheduled_delivery_time=scheduled_delivery_time,
             reasons=tuple(reasons),
         )
+
+
+_TRUCK_POSITION_RECONCILED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset([
+    "truck_id",
+    "route_id",
+    "previous_location",
+    "new_location",
+    "previous_in_transit_to",
+    "new_in_transit_to",
+    "position_kind",
+])
 
 
 class TruckPositionReconciledEventPayloadCodec(EventPayloadCodec[TruckPositionReconciled]):
@@ -359,17 +370,7 @@ class TruckPositionReconciledEventPayloadCodec(EventPayloadCodec[TruckPositionRe
                 position kind is unknown, or timestamps use the wrong time domain.
             DomainValidationError: If a non-null location is blank after normalization.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset([
-            "truck_id",
-            "route_id",
-            "previous_location",
-            "new_location",
-            "previous_in_transit_to",
-            "new_in_transit_to",
-            "position_kind",
-        ])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _TRUCK_POSITION_RECONCILED_PAYLOAD_KEYS)
 
         truck_id = require_positive_int(payload["truck_id"], "truck_id")
         route_id = require_optional_positive_int(payload["route_id"], "route_id")
@@ -393,7 +394,7 @@ class TruckPositionReconciledEventPayloadCodec(EventPayloadCodec[TruckPositionRe
             if payload["new_in_transit_to"] is not None
             else None
         )
-        position_kind = RoutePositionKind(require_str(payload["position_kind"], "position_kind"))
+        position_kind = parse_enum_value(payload["position_kind"], "position_kind", RoutePositionKind)
 
         return TruckPositionReconciled(
             event_id=event_id,
@@ -407,6 +408,13 @@ class TruckPositionReconciledEventPayloadCodec(EventPayloadCodec[TruckPositionRe
             new_in_transit_to=new_in_transit_to,
             position_kind=position_kind,
         )
+
+
+_TRUCK_ROUTE_REFERENCE_RECONCILED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset([
+    "truck_id",
+    "previous_route_id",
+    "new_route_id",
+])
 
 
 class TruckRouteReferenceReconciledEventPayloadCodec(EventPayloadCodec[TruckRouteReferenceReconciled]):
@@ -478,13 +486,7 @@ class TruckRouteReferenceReconciledEventPayloadCodec(EventPayloadCodec[TruckRout
             ValueError: If keys are missing or unexpected, an ID is non-positive,
                 or timestamps use the wrong time domain.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset([
-            "truck_id",
-            "previous_route_id",
-            "new_route_id",
-        ])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _TRUCK_ROUTE_REFERENCE_RECONCILED_PAYLOAD_KEYS)
 
         truck_id = require_positive_int(payload["truck_id"], "truck_id")
         previous_route_id = require_optional_positive_int(payload["previous_route_id"], "previous_route_id")

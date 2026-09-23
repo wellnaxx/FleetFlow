@@ -4,6 +4,7 @@ import json
 import unittest
 from datetime import UTC, datetime, timedelta, timezone
 from typing import cast
+from unittest.mock import patch
 from uuid import UUID
 
 from src.application.eventing.outbox.codecs.customers import CustomerCreatedEventPayloadCodec
@@ -11,6 +12,7 @@ from src.application.eventing.outbox.errors import EventCodecNotFoundError
 from src.application.eventing.outbox.registry import EventOutboxCodecRegistry
 from src.domain.events.customer_events import CustomerCreated
 from src.shared.json_types import JSONObject, JSONValue
+from src.shared.json_validation import require_json_object_keys
 
 EVENT_ID = UUID("12345678-1234-4678-9234-567812345678")
 OCCURRED_AT = datetime(2030, 1, 2, 3, 4, 5, 123456)
@@ -45,6 +47,28 @@ class CustomerCreatedCodecShould(unittest.TestCase):
     def test_requires_customer_id(self) -> None:
         with self.assertRaisesRegex(ValueError, "Missing fields:.*customer_id"):
             self.decode({})
+
+    def test_reuses_immutable_payload_keys_across_calls_and_codec_instances(self) -> None:
+        captured: list[frozenset[str]] = []
+
+        def validate(payload: JSONObject, expected_keys: frozenset[str]) -> None:
+            captured.append(expected_keys)
+            require_json_object_keys(payload, expected_keys)
+
+        with patch(
+            "src.application.eventing.outbox.codecs.customers.require_json_object_keys", side_effect=validate
+        ):
+            self.decode({"customer_id": 7})
+            with self.assertRaisesRegex(ValueError, "Missing fields:.*customer_id"):
+                self.decode({})
+            CustomerCreatedEventPayloadCodec().decode(
+                {"customer_id": 8}, event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
+            )
+
+        self.assertEqual(len(captured), 3)
+        self.assertIsInstance(captured[0], frozenset)
+        self.assertEqual(captured[0], frozenset({"customer_id"}))
+        self.assertTrue(all(keys is captured[0] for keys in captured))
 
     def test_rejects_extra_contact_details_and_metadata(self) -> None:
         for field in ("name", "email", "phone", "event_id", "actor_user_id", "user_id"):

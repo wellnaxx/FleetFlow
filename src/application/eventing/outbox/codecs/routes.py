@@ -26,7 +26,11 @@ from src.domain.events.route_events import (
     TruckReleasedFromRoute,
 )
 from src.domain.value_objects.location_code import LocationCode
-from src.shared.json_deserialization import parse_naive_datetime, parse_optional_naive_datetime
+from src.shared.json_deserialization import (
+    parse_enum_value,
+    parse_naive_datetime,
+    parse_optional_naive_datetime,
+)
 from src.shared.json_serialization import optional_isoformat
 from src.shared.json_types import JSONObject
 from src.shared.json_validation import require_json_object_keys
@@ -36,6 +40,14 @@ from src.shared.validation import (
     require_positive_int,
     require_str,
 )
+
+_ROUTE_CREATED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset([
+    "route_id",
+    "locations",
+    "departure_time",
+    "initial_status",
+    "expected_completion_time",
+])
 
 
 class RouteCreatedEventPayloadCodec(EventPayloadCodec[RouteCreated]):
@@ -114,15 +126,7 @@ class RouteCreatedEventPayloadCodec(EventPayloadCodec[RouteCreated]):
                 or timestamps use the wrong time domain.
             DomainValidationError: If any location is blank after normalization.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset([
-            "route_id",
-            "locations",
-            "departure_time",
-            "initial_status",
-            "expected_completion_time",
-        ])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _ROUTE_CREATED_PAYLOAD_KEYS)
 
         route_id = require_positive_int(payload["route_id"], "route_id")
 
@@ -135,7 +139,7 @@ class RouteCreatedEventPayloadCodec(EventPayloadCodec[RouteCreated]):
 
         departure_time = parse_optional_naive_datetime(payload["departure_time"], "departure_time")
 
-        initial_status = RouteStatus(require_str(payload["initial_status"], "initial_status"))
+        initial_status = parse_enum_value(payload["initial_status"], "initial_status", RouteStatus)
 
         expected_completion_time = parse_optional_naive_datetime(
             payload["expected_completion_time"], "expected_completion_time"
@@ -151,6 +155,17 @@ class RouteCreatedEventPayloadCodec(EventPayloadCodec[RouteCreated]):
             initial_status=initial_status,
             expected_completion_time=expected_completion_time,
         )
+
+
+_ROUTE_SCHEDULED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset([
+    "route_id",
+    "previous_status",
+    "new_status",
+    "previous_departure_time",
+    "new_departure_time",
+    "previous_expected_completion_time",
+    "new_expected_completion_time",
+])
 
 
 class RouteScheduledEventPayloadCodec(EventPayloadCodec[RouteScheduled]):
@@ -229,21 +244,11 @@ class RouteScheduledEventPayloadCodec(EventPayloadCodec[RouteScheduled]):
                 non-positive, a status is unknown, timestamp text is invalid,
                 or timestamps use the wrong time domain.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset([
-            "route_id",
-            "previous_status",
-            "new_status",
-            "previous_departure_time",
-            "new_departure_time",
-            "previous_expected_completion_time",
-            "new_expected_completion_time",
-        ])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _ROUTE_SCHEDULED_PAYLOAD_KEYS)
 
         route_id = require_positive_int(payload["route_id"], "route_id")
-        previous_status = RouteStatus(require_str(payload["previous_status"], "previous_status"))
-        new_status = RouteStatus(require_str(payload["new_status"], "new_status"))
+        previous_status = parse_enum_value(payload["previous_status"], "previous_status", RouteStatus)
+        new_status = parse_enum_value(payload["new_status"], "new_status", RouteStatus)
 
         previous_departure_time = parse_optional_naive_datetime(
             payload["previous_departure_time"], "previous_departure_time"
@@ -271,6 +276,15 @@ class RouteScheduledEventPayloadCodec(EventPayloadCodec[RouteScheduled]):
             previous_expected_completion_time=previous_expected_completion_time,
             new_expected_completion_time=new_expected_completion_time,
         )
+
+
+_PACKAGE_ASSIGNED_TO_ROUTE_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset([
+    "package_id",
+    "previous_route_id",
+    "new_route_id",
+    "previous_expected_arrival",
+    "new_expected_arrival",
+])
 
 
 class PackageAssignedToRouteEventPayloadCodec(EventPayloadCodec[PackageAssignedToRoute]):
@@ -345,15 +359,7 @@ class PackageAssignedToRouteEventPayloadCodec(EventPayloadCodec[PackageAssignedT
             ValueError: If keys are missing or unexpected, an ID is non-positive,
                 arrival text is invalid, or timestamps use the wrong time domain.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset([
-            "package_id",
-            "previous_route_id",
-            "new_route_id",
-            "previous_expected_arrival",
-            "new_expected_arrival",
-        ])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _PACKAGE_ASSIGNED_TO_ROUTE_PAYLOAD_KEYS)
 
         package_id = require_positive_int(payload["package_id"], "package_id")
         previous_route_id = require_optional_positive_int(payload["previous_route_id"], "previous_route_id")
@@ -375,6 +381,20 @@ class PackageAssignedToRouteEventPayloadCodec(EventPayloadCodec[PackageAssignedT
             previous_expected_arrival=previous_expected_arrival,
             new_expected_arrival=new_expected_arrival,
         )
+
+
+_PACKAGE_DETACHED_FROM_ROUTE_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset([
+    "package_id",
+    "previous_route_id",
+    "new_route_id",
+    "previous_status",
+    "new_status",
+    "previous_location",
+    "new_location",
+    "previous_expected_arrival",
+    "new_expected_arrival",
+    "reason",
+])
 
 
 class PackageDetachedFromRouteEventPayloadCodec(EventPayloadCodec[PackageDetachedFromRoute]):
@@ -457,26 +477,13 @@ class PackageDetachedFromRouteEventPayloadCodec(EventPayloadCodec[PackageDetache
                 timestamps use the wrong time domain.
             DomainValidationError: If either location is blank after normalization.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset([
-            "package_id",
-            "previous_route_id",
-            "new_route_id",
-            "previous_status",
-            "new_status",
-            "previous_location",
-            "new_location",
-            "previous_expected_arrival",
-            "new_expected_arrival",
-            "reason",
-        ])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _PACKAGE_DETACHED_FROM_ROUTE_PAYLOAD_KEYS)
 
         package_id = require_positive_int(payload["package_id"], "package_id")
         previous_route_id = require_positive_int(payload["previous_route_id"], "previous_route_id")
         new_route_id = require_optional_positive_int(payload["new_route_id"], "new_route_id")
-        previous_status = ItemStatus(require_str(payload["previous_status"], "previous_status"))
-        new_status = ItemStatus(require_str(payload["new_status"], "new_status"))
+        previous_status = parse_enum_value(payload["previous_status"], "previous_status", ItemStatus)
+        new_status = parse_enum_value(payload["new_status"], "new_status", ItemStatus)
         previous_location = LocationCode(require_str(payload["previous_location"], "previous_location"))
         new_location = LocationCode(require_str(payload["new_location"], "new_location"))
         previous_expected_arrival = parse_optional_naive_datetime(
@@ -485,7 +492,7 @@ class PackageDetachedFromRouteEventPayloadCodec(EventPayloadCodec[PackageDetache
         new_expected_arrival = parse_optional_naive_datetime(
             payload["new_expected_arrival"], "new_expected_arrival"
         )
-        reason = PackageDetachmentReason(require_str(payload["reason"], "reason"))
+        reason = parse_enum_value(payload["reason"], "reason", PackageDetachmentReason)
 
         return PackageDetachedFromRoute(
             event_id=event_id,
@@ -502,6 +509,21 @@ class PackageDetachedFromRouteEventPayloadCodec(EventPayloadCodec[PackageDetache
             new_expected_arrival=new_expected_arrival,
             reason=reason,
         )
+
+
+_TRUCK_ASSIGNED_TO_ROUTE_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset([
+    "truck_id",
+    "previous_route_id",
+    "new_route_id",
+    "previous_status",
+    "new_status",
+    "previous_location",
+    "new_location",
+    "previous_busy_from",
+    "new_busy_from",
+    "previous_busy_until",
+    "new_busy_until",
+])
 
 
 class TruckAssignedToRouteEventPayloadCodec(EventPayloadCodec[TruckAssignedToRoute]):
@@ -586,27 +608,13 @@ class TruckAssignedToRouteEventPayloadCodec(EventPayloadCodec[TruckAssignedToRou
                 use the wrong time domain.
             DomainValidationError: If either location is blank after normalization.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset([
-            "truck_id",
-            "previous_route_id",
-            "new_route_id",
-            "previous_status",
-            "new_status",
-            "previous_location",
-            "new_location",
-            "previous_busy_from",
-            "new_busy_from",
-            "previous_busy_until",
-            "new_busy_until",
-        ])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _TRUCK_ASSIGNED_TO_ROUTE_PAYLOAD_KEYS)
 
         truck_id = require_positive_int(payload["truck_id"], "truck_id")
         previous_route_id = require_optional_positive_int(payload["previous_route_id"], "previous_route_id")
         new_route_id = require_positive_int(payload["new_route_id"], "new_route_id")
-        previous_status = TruckStatus(require_str(payload["previous_status"], "previous_status"))
-        new_status = TruckStatus(require_str(payload["new_status"], "new_status"))
+        previous_status = parse_enum_value(payload["previous_status"], "previous_status", TruckStatus)
+        new_status = parse_enum_value(payload["new_status"], "new_status", TruckStatus)
         previous_location = LocationCode(require_str(payload["previous_location"], "previous_location"))
         new_location = LocationCode(require_str(payload["new_location"], "new_location"))
         previous_busy_from = parse_optional_naive_datetime(payload["previous_busy_from"], "previous_busy_from")
@@ -632,6 +640,22 @@ class TruckAssignedToRouteEventPayloadCodec(EventPayloadCodec[TruckAssignedToRou
             previous_busy_until=previous_busy_until,
             new_busy_until=new_busy_until,
         )
+
+
+_TRUCK_RELEASED_FROM_ROUTE_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset([
+    "truck_id",
+    "previous_route_id",
+    "new_route_id",
+    "previous_status",
+    "new_status",
+    "previous_location",
+    "new_location",
+    "previous_busy_from",
+    "new_busy_from",
+    "previous_busy_until",
+    "new_busy_until",
+    "reason",
+])
 
 
 class TruckReleasedFromRouteEventPayloadCodec(EventPayloadCodec[TruckReleasedFromRoute]):
@@ -718,28 +742,13 @@ class TruckReleasedFromRouteEventPayloadCodec(EventPayloadCodec[TruckReleasedFro
                 timestamps use the wrong time domain.
             DomainValidationError: If either location is blank after normalization.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset([
-            "truck_id",
-            "previous_route_id",
-            "new_route_id",
-            "previous_status",
-            "new_status",
-            "previous_location",
-            "new_location",
-            "previous_busy_from",
-            "new_busy_from",
-            "previous_busy_until",
-            "new_busy_until",
-            "reason",
-        ])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _TRUCK_RELEASED_FROM_ROUTE_PAYLOAD_KEYS)
 
         truck_id = require_positive_int(payload["truck_id"], "truck_id")
         previous_route_id = require_positive_int(payload["previous_route_id"], "previous_route_id")
         new_route_id = require_optional_positive_int(payload["new_route_id"], "new_route_id")
-        previous_status = TruckStatus(require_str(payload["previous_status"], "previous_status"))
-        new_status = TruckStatus(require_str(payload["new_status"], "new_status"))
+        previous_status = parse_enum_value(payload["previous_status"], "previous_status", TruckStatus)
+        new_status = parse_enum_value(payload["new_status"], "new_status", TruckStatus)
         previous_location = LocationCode(require_str(payload["previous_location"], "previous_location"))
         new_location = LocationCode(require_str(payload["new_location"], "new_location"))
         previous_busy_from = parse_optional_naive_datetime(payload["previous_busy_from"], "previous_busy_from")
@@ -748,7 +757,7 @@ class TruckReleasedFromRouteEventPayloadCodec(EventPayloadCodec[TruckReleasedFro
             payload["previous_busy_until"], "previous_busy_until"
         )
         new_busy_until = parse_optional_naive_datetime(payload["new_busy_until"], "new_busy_until")
-        reason = TruckReleaseReason(require_str(payload["reason"], "reason"))
+        reason = parse_enum_value(payload["reason"], "reason", TruckReleaseReason)
 
         return TruckReleasedFromRoute(
             event_id=event_id,
@@ -767,6 +776,13 @@ class TruckReleasedFromRouteEventPayloadCodec(EventPayloadCodec[TruckReleasedFro
             new_busy_until=new_busy_until,
             reason=reason,
         )
+
+
+_ROUTE_STARTED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset([
+    "route_id",
+    "previous_status",
+    "new_status",
+])
 
 
 class RouteStartedEventPayloadCodec(EventPayloadCodec[RouteStarted]):
@@ -837,17 +853,11 @@ class RouteStartedEventPayloadCodec(EventPayloadCodec[RouteStarted]):
                 non-positive, a status is unknown, or timestamps use the wrong
                 time domain.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset([
-            "route_id",
-            "previous_status",
-            "new_status",
-        ])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _ROUTE_STARTED_PAYLOAD_KEYS)
 
         route_id = require_positive_int(payload["route_id"], "route_id")
-        previous_status = RouteStatus(require_str(payload["previous_status"], "previous_status"))
-        new_status = RouteStatus(require_str(payload["new_status"], "new_status"))
+        previous_status = parse_enum_value(payload["previous_status"], "previous_status", RouteStatus)
+        new_status = parse_enum_value(payload["new_status"], "new_status", RouteStatus)
 
         return RouteStarted(
             event_id=event_id,
@@ -857,6 +867,15 @@ class RouteStartedEventPayloadCodec(EventPayloadCodec[RouteStarted]):
             previous_status=previous_status,
             new_status=new_status,
         )
+
+
+_ROUTE_COMPLETED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset([
+    "route_id",
+    "previous_status",
+    "new_status",
+    "departure_time",
+    "expected_completion_time",
+])
 
 
 class RouteCompletedEventPayloadCodec(EventPayloadCodec[RouteCompleted]):
@@ -933,19 +952,11 @@ class RouteCompletedEventPayloadCodec(EventPayloadCodec[RouteCompleted]):
                 non-positive, a status is unknown, timestamp text is invalid,
                 or timestamps use the wrong time domain.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset([
-            "route_id",
-            "previous_status",
-            "new_status",
-            "departure_time",
-            "expected_completion_time",
-        ])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _ROUTE_COMPLETED_PAYLOAD_KEYS)
 
         route_id = require_positive_int(payload["route_id"], "route_id")
-        previous_status = RouteStatus(require_str(payload["previous_status"], "previous_status"))
-        new_status = RouteStatus(require_str(payload["new_status"], "new_status"))
+        previous_status = parse_enum_value(payload["previous_status"], "previous_status", RouteStatus)
+        new_status = parse_enum_value(payload["new_status"], "new_status", RouteStatus)
         departure_time = parse_naive_datetime(payload["departure_time"], "departure_time")
         expected_completion_time = parse_naive_datetime(
             payload["expected_completion_time"], "expected_completion_time"
@@ -961,6 +972,17 @@ class RouteCompletedEventPayloadCodec(EventPayloadCodec[RouteCompleted]):
             departure_time=departure_time,
             expected_completion_time=expected_completion_time,
         )
+
+
+_ROUTE_REMOVED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset([
+    "route_id",
+    "previous_status",
+    "previous_locations",
+    "previous_departure_time",
+    "previous_expected_completion_time",
+    "detached_package_ids",
+    "released_truck_id",
+])
 
 
 class RouteRemovedEventPayloadCodec(EventPayloadCodec[RouteRemoved]):
@@ -1043,20 +1065,10 @@ class RouteRemovedEventPayloadCodec(EventPayloadCodec[RouteRemoved]):
                 the wrong time domain.
             DomainValidationError: If any location is blank after normalization.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset([
-            "route_id",
-            "previous_status",
-            "previous_locations",
-            "previous_departure_time",
-            "previous_expected_completion_time",
-            "detached_package_ids",
-            "released_truck_id",
-        ])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _ROUTE_REMOVED_PAYLOAD_KEYS)
 
         route_id = require_positive_int(payload["route_id"], "route_id")
-        previous_status = RouteStatus(require_str(payload["previous_status"], "previous_status"))
+        previous_status = parse_enum_value(payload["previous_status"], "previous_status", RouteStatus)
         raw_previous_locations = require_list(payload["previous_locations"], "previous_locations")
         previous_locations: list[LocationCode] = []
         for index, item in enumerate(raw_previous_locations):

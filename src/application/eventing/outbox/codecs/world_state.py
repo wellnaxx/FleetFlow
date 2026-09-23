@@ -26,6 +26,7 @@ from src.application.events.world_state_events import (
     WorldStateStartupRestoreFailed,
     WorldStateStartupRestoreSkipped,
 )
+from src.shared.json_deserialization import parse_enum_value
 from src.shared.json_types import JSONObject
 from src.shared.json_validation import require_json_object_keys
 from src.shared.validation import (
@@ -34,6 +35,15 @@ from src.shared.validation import (
     require_positive_int,
     require_str,
 )
+
+_WORLD_STATE_EXPORTED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset([
+    "snapshot_path",
+    "schema_version",
+    "customer_count",
+    "package_count",
+    "route_count",
+    "truck_count",
+])
 
 
 class WorldStateExportedEventPayloadCodec(EventPayloadCodec[WorldStateExported]):
@@ -108,16 +118,7 @@ class WorldStateExportedEventPayloadCodec(EventPayloadCodec[WorldStateExported])
                 non-positive, any count is negative, or timestamps use the
                 wrong time domain.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset([
-            "snapshot_path",
-            "schema_version",
-            "customer_count",
-            "package_count",
-            "route_count",
-            "truck_count",
-        ])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _WORLD_STATE_EXPORTED_PAYLOAD_KEYS)
 
         snapshot_path = require_str(payload["snapshot_path"], "snapshot_path")
         schema_version = require_positive_int(payload["schema_version"], "schema_version")
@@ -131,6 +132,13 @@ class WorldStateExportedEventPayloadCodec(EventPayloadCodec[WorldStateExported])
             schema_version=schema_version,
             entity_counts=entity_counts,
         )
+
+
+_WORLD_STATE_EXPORT_FAILED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset([
+    "snapshot_path",
+    "schema_version",
+    "reason",
+])
 
 
 class WorldStateExportFailedEventPayloadCodec(EventPayloadCodec[WorldStateExportFailed]):
@@ -203,17 +211,11 @@ class WorldStateExportFailedEventPayloadCodec(EventPayloadCodec[WorldStateExport
                 version is non-positive, the reason is unknown, or timestamps
                 use the wrong time domain.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset([
-            "snapshot_path",
-            "schema_version",
-            "reason",
-        ])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _WORLD_STATE_EXPORT_FAILED_PAYLOAD_KEYS)
 
         snapshot_path = require_str(payload["snapshot_path"], "snapshot_path")
         schema_version = require_optional_positive_int(payload["schema_version"], "schema_version")
-        reason = WorldStateFailureReason(require_str(payload["reason"], "reason"))
+        reason = parse_enum_value(payload["reason"], "reason", WorldStateFailureReason)
 
         return WorldStateExportFailed(
             event_id=event_id,
@@ -223,6 +225,20 @@ class WorldStateExportFailedEventPayloadCodec(EventPayloadCodec[WorldStateExport
             schema_version=schema_version,
             reason=reason,
         )
+
+
+_WORLD_STATE_IMPORTED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset([
+    "snapshot_path",
+    "schema_version",
+    "previous_customer_count",
+    "previous_package_count",
+    "previous_route_count",
+    "previous_truck_count",
+    "new_customer_count",
+    "new_package_count",
+    "new_route_count",
+    "new_truck_count",
+])
 
 
 class WorldStateImportedEventPayloadCodec(EventPayloadCodec[WorldStateImported]):
@@ -301,20 +317,7 @@ class WorldStateImportedEventPayloadCodec(EventPayloadCodec[WorldStateImported])
                 non-positive, any count is negative, or timestamps use the
                 wrong time domain.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset([
-            "snapshot_path",
-            "schema_version",
-            "previous_customer_count",
-            "previous_package_count",
-            "previous_route_count",
-            "previous_truck_count",
-            "new_customer_count",
-            "new_package_count",
-            "new_route_count",
-            "new_truck_count",
-        ])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _WORLD_STATE_IMPORTED_PAYLOAD_KEYS)
 
         snapshot_path = require_str(payload["snapshot_path"], "snapshot_path")
         schema_version = require_positive_int(payload["schema_version"], "schema_version")
@@ -330,6 +333,13 @@ class WorldStateImportedEventPayloadCodec(EventPayloadCodec[WorldStateImported])
             previous_entity_counts=previous_entity_counts,
             new_entity_counts=new_entity_counts,
         )
+
+
+_WORLD_STATE_IMPORT_FAILED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset([
+    "snapshot_path",
+    "schema_version",
+    "reason",
+])
 
 
 class WorldStateImportFailedEventPayloadCodec(EventPayloadCodec[WorldStateImportFailed]):
@@ -402,17 +412,11 @@ class WorldStateImportFailedEventPayloadCodec(EventPayloadCodec[WorldStateImport
                 version is non-positive, the reason is unknown, or timestamps
                 use the wrong time domain.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset([
-            "snapshot_path",
-            "schema_version",
-            "reason",
-        ])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _WORLD_STATE_IMPORT_FAILED_PAYLOAD_KEYS)
 
         snapshot_path = require_str(payload["snapshot_path"], "snapshot_path")
         schema_version = require_optional_positive_int(payload["schema_version"], "schema_version")
-        reason = WorldStateFailureReason(require_str(payload["reason"], "reason"))
+        reason = parse_enum_value(payload["reason"], "reason", WorldStateFailureReason)
 
         return WorldStateImportFailed(
             event_id=event_id,
@@ -422,6 +426,9 @@ class WorldStateImportFailedEventPayloadCodec(EventPayloadCodec[WorldStateImport
             schema_version=schema_version,
             reason=reason,
         )
+
+
+_WORLD_STATE_CORRUPTION_DETECTED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset(["snapshot_path", "reason"])
 
 
 class WorldStateCorruptionDetectedEventPayloadCodec(EventPayloadCodec[WorldStateCorruptionDetected]):
@@ -492,12 +499,10 @@ class WorldStateCorruptionDetectedEventPayloadCodec(EventPayloadCodec[WorldState
                 supported corruption value, or timestamps use the wrong time
                 domain.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset(["snapshot_path", "reason"])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _WORLD_STATE_CORRUPTION_DETECTED_PAYLOAD_KEYS)
 
         snapshot_path = require_str(payload["snapshot_path"], "snapshot_path")
-        reason = WorldStateCorruptionReason(require_str(payload["reason"], "reason"))
+        reason = parse_enum_value(payload["reason"], "reason", WorldStateCorruptionReason)
 
         return WorldStateCorruptionDetected(
             event_id=event_id,
@@ -506,6 +511,13 @@ class WorldStateCorruptionDetectedEventPayloadCodec(EventPayloadCodec[WorldState
             snapshot_path=snapshot_path,
             reason=reason,
         )
+
+
+_WORLD_STATE_SNAPSHOT_QUARANTINED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset([
+    "original_path",
+    "quarantined_path",
+    "reason",
+])
 
 
 class WorldStateSnapshotQuarantinedEventPayloadCodec(EventPayloadCodec[WorldStateSnapshotQuarantined]):
@@ -577,17 +589,11 @@ class WorldStateSnapshotQuarantinedEventPayloadCodec(EventPayloadCodec[WorldStat
                 supported corruption value, or timestamps use the wrong time
                 domain.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset([
-            "original_path",
-            "quarantined_path",
-            "reason",
-        ])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _WORLD_STATE_SNAPSHOT_QUARANTINED_PAYLOAD_KEYS)
 
         original_path = require_str(payload["original_path"], "original_path")
         quarantined_path = require_str(payload["quarantined_path"], "quarantined_path")
-        reason = WorldStateCorruptionReason(require_str(payload["reason"], "reason"))
+        reason = parse_enum_value(payload["reason"], "reason", WorldStateCorruptionReason)
 
         return WorldStateSnapshotQuarantined(
             event_id=event_id,
@@ -597,6 +603,20 @@ class WorldStateSnapshotQuarantinedEventPayloadCodec(EventPayloadCodec[WorldStat
             quarantined_path=quarantined_path,
             reason=reason,
         )
+
+
+_WORLD_STATE_RUNTIME_SWAPPED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset([
+    "snapshot_path",
+    "schema_version",
+    "previous_customer_count",
+    "previous_package_count",
+    "previous_route_count",
+    "previous_truck_count",
+    "new_customer_count",
+    "new_package_count",
+    "new_route_count",
+    "new_truck_count",
+])
 
 
 class WorldStateRuntimeSwappedEventPayloadCodec(EventPayloadCodec[WorldStateRuntimeSwapped]):
@@ -675,20 +695,7 @@ class WorldStateRuntimeSwappedEventPayloadCodec(EventPayloadCodec[WorldStateRunt
                 non-positive, any count is negative, or timestamps use the
                 wrong time domain.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset([
-            "snapshot_path",
-            "schema_version",
-            "previous_customer_count",
-            "previous_package_count",
-            "previous_route_count",
-            "previous_truck_count",
-            "new_customer_count",
-            "new_package_count",
-            "new_route_count",
-            "new_truck_count",
-        ])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _WORLD_STATE_RUNTIME_SWAPPED_PAYLOAD_KEYS)
 
         snapshot_path = require_str(payload["snapshot_path"], "snapshot_path")
         schema_version = require_positive_int(payload["schema_version"], "schema_version")
@@ -704,6 +711,20 @@ class WorldStateRuntimeSwappedEventPayloadCodec(EventPayloadCodec[WorldStateRunt
             previous_entity_counts=previous_entity_counts,
             new_entity_counts=new_entity_counts,
         )
+
+
+_WORLD_STATE_STARTUP_RESTORED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset([
+    "snapshot_path",
+    "schema_version",
+    "previous_customer_count",
+    "previous_package_count",
+    "previous_route_count",
+    "previous_truck_count",
+    "new_customer_count",
+    "new_package_count",
+    "new_route_count",
+    "new_truck_count",
+])
 
 
 class WorldStateStartupRestoredEventPayloadCodec(EventPayloadCodec[WorldStateStartupRestored]):
@@ -782,20 +803,7 @@ class WorldStateStartupRestoredEventPayloadCodec(EventPayloadCodec[WorldStateSta
                 non-positive, any count is negative, or timestamps use the
                 wrong time domain.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset([
-            "snapshot_path",
-            "schema_version",
-            "previous_customer_count",
-            "previous_package_count",
-            "previous_route_count",
-            "previous_truck_count",
-            "new_customer_count",
-            "new_package_count",
-            "new_route_count",
-            "new_truck_count",
-        ])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _WORLD_STATE_STARTUP_RESTORED_PAYLOAD_KEYS)
 
         snapshot_path = require_str(payload["snapshot_path"], "snapshot_path")
         schema_version = require_positive_int(payload["schema_version"], "schema_version")
@@ -811,6 +819,9 @@ class WorldStateStartupRestoredEventPayloadCodec(EventPayloadCodec[WorldStateSta
             previous_entity_counts=previous_entity_counts,
             new_entity_counts=new_entity_counts,
         )
+
+
+_WORLD_STATE_STARTUP_RESTORE_SKIPPED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset(["reason"])
 
 
 class WorldStateStartupRestoreSkippedEventPayloadCodec(EventPayloadCodec[WorldStateStartupRestoreSkipped]):
@@ -876,11 +887,9 @@ class WorldStateStartupRestoreSkippedEventPayloadCodec(EventPayloadCodec[WorldSt
             ValueError: If keys are missing or unexpected, reason is not a
                 supported skip value, or timestamps use the wrong time domain.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset(["reason"])
+        require_json_object_keys(payload, _WORLD_STATE_STARTUP_RESTORE_SKIPPED_PAYLOAD_KEYS)
 
-        require_json_object_keys(payload, expected_payload_keys)
-
-        reason = WorldStateStartupSkipReason(require_str(payload["reason"], "reason"))
+        reason = parse_enum_value(payload["reason"], "reason", WorldStateStartupSkipReason)
 
         return WorldStateStartupRestoreSkipped(
             event_id=event_id,
@@ -888,6 +897,13 @@ class WorldStateStartupRestoreSkippedEventPayloadCodec(EventPayloadCodec[WorldSt
             recorded_at=recorded_at,
             reason=reason,
         )
+
+
+_WORLD_STATE_STARTUP_RESTORE_FAILED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset([
+    "snapshot_path",
+    "schema_version",
+    "reason",
+])
 
 
 class WorldStateStartupRestoreFailedEventPayloadCodec(EventPayloadCodec[WorldStateStartupRestoreFailed]):
@@ -963,17 +979,11 @@ class WorldStateStartupRestoreFailedEventPayloadCodec(EventPayloadCodec[WorldSta
                 version is non-positive, the reason is unknown, or timestamps
                 use the wrong time domain.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset([
-            "snapshot_path",
-            "schema_version",
-            "reason",
-        ])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _WORLD_STATE_STARTUP_RESTORE_FAILED_PAYLOAD_KEYS)
 
         snapshot_path = require_str(payload["snapshot_path"], "snapshot_path")
         schema_version = require_optional_positive_int(payload["schema_version"], "schema_version")
-        reason = WorldStateFailureReason(require_str(payload["reason"], "reason"))
+        reason = parse_enum_value(payload["reason"], "reason", WorldStateFailureReason)
 
         return WorldStateStartupRestoreFailed(
             event_id=event_id,
@@ -983,6 +993,15 @@ class WorldStateStartupRestoreFailedEventPayloadCodec(EventPayloadCodec[WorldSta
             schema_version=schema_version,
             reason=reason,
         )
+
+
+_WORLD_STATE_ADVANCED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset([
+    "routes_updated",
+    "packages_updated",
+    "trucks_moved",
+    "trucks_released",
+    "trucks_reconciled",
+])
 
 
 class WorldStateAdvancedEventPayloadCodec(EventPayloadCodec[WorldStateAdvanced]):
@@ -1055,15 +1074,7 @@ class WorldStateAdvancedEventPayloadCodec(EventPayloadCodec[WorldStateAdvanced])
             ValueError: If keys are missing or unexpected, any counter is
                 negative, or timestamps use the wrong time domain.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset([
-            "routes_updated",
-            "packages_updated",
-            "trucks_moved",
-            "trucks_released",
-            "trucks_reconciled",
-        ])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _WORLD_STATE_ADVANCED_PAYLOAD_KEYS)
 
         routes_updated = require_non_negative_int(payload["routes_updated"], "routes_updated")
         packages_updated = require_non_negative_int(payload["packages_updated"], "packages_updated")

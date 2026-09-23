@@ -18,6 +18,8 @@ from src.shared.validation import (
     require_str,
 )
 
+_FLEET_SEEDED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset(["seeded_truck_ids", "backend"])
+
 
 class FleetSeededEventPayloadCodec(EventPayloadCodec[FleetSeeded]):
     """Encode and decode the version-2 fleet-seeding snapshot.
@@ -88,9 +90,7 @@ class FleetSeededEventPayloadCodec(EventPayloadCodec[FleetSeeded]):
             ValueError: If keys are missing or unexpected, an ID is non-positive,
                 or timestamps use the wrong time domain.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset(["seeded_truck_ids", "backend"])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _FLEET_SEEDED_PAYLOAD_KEYS)
 
         raw_seeded_truck_ids = require_list(payload["seeded_truck_ids"], "seeded_truck_ids")
         seeded_truck_ids: list[int] = []

@@ -31,6 +31,7 @@ from src.application.events.auth_events import (
     UserTokensRevoked,
 )
 from src.domain.enums.auth import Permission, Role
+from src.shared.json_deserialization import parse_enum_name, parse_enum_value
 from src.shared.json_types import JSONObject
 from src.shared.json_validation import require_json_object_keys
 from src.shared.validation import (
@@ -40,6 +41,13 @@ from src.shared.validation import (
     require_positive_int,
     require_str,
 )
+
+_AUTHORIZATION_DENIED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset([
+    "attempted_operation",
+    "target_resource_type",
+    "target_resource_id",
+    "required_permissions",
+])
 
 
 class AuthorizationDeniedEventPayloadCodec(EventPayloadCodec[AuthorizationDenied]):
@@ -116,20 +124,13 @@ class AuthorizationDeniedEventPayloadCodec(EventPayloadCodec[AuthorizationDenied
                 domain. Unknown permission errors include the entry index and
                 retain the original ``KeyError`` as their cause.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset([
-            "attempted_operation",
-            "target_resource_type",
-            "target_resource_id",
-            "required_permissions",
-        ])
+        require_json_object_keys(payload, _AUTHORIZATION_DENIED_PAYLOAD_KEYS)
 
-        require_json_object_keys(payload, expected_payload_keys)
-
-        attempted_operation = AuthorizationOperation(
-            require_str(payload["attempted_operation"], "attempted_operation")
+        attempted_operation = parse_enum_value(
+            payload["attempted_operation"], "attempted_operation", AuthorizationOperation
         )
-        target_resource_type = AuditResourceType(
-            require_str(payload["target_resource_type"], "target_resource_type")
+        target_resource_type = parse_enum_value(
+            payload["target_resource_type"], "target_resource_type", AuditResourceType
         )
         target_resource_id = require_optional_str(payload["target_resource_id"], "target_resource_id")
         raw_permissions = require_list(payload["required_permissions"], "required_permissions")
@@ -137,14 +138,7 @@ class AuthorizationDeniedEventPayloadCodec(EventPayloadCodec[AuthorizationDenied
         permissions: list[Permission] = []
         for index, item in enumerate(raw_permissions):
             field_name = f"required_permissions[{index}]"
-            name = require_str(item, field_name)
-
-            try:
-                permission = Permission[name]
-            except KeyError as exc:
-                raise ValueError(f"{field_name}: unknown permission name {name!r}") from exc
-
-            permissions.append(permission)
+            permissions.append(parse_enum_name(item, field_name, Permission))
 
         return AuthorizationDenied(
             event_id=event_id,
@@ -155,6 +149,13 @@ class AuthorizationDeniedEventPayloadCodec(EventPayloadCodec[AuthorizationDenied
             target_resource_id=target_resource_id,
             required_permissions=tuple(permissions),
         )
+
+
+_USER_AUTHENTICATED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset([
+    "user_id",
+    "username",
+    "role",
+])
 
 
 class UserAuthenticatedEventPayloadCodec(EventPayloadCodec[UserAuthenticated]):
@@ -227,17 +228,11 @@ class UserAuthenticatedEventPayloadCodec(EventPayloadCodec[UserAuthenticated]):
                 positive, role is unknown, or timestamps use the wrong time
                 domain.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset([
-            "user_id",
-            "username",
-            "role",
-        ])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _USER_AUTHENTICATED_PAYLOAD_KEYS)
 
         user_id = require_positive_int(payload["user_id"], "user_id")
         username = require_str(payload["username"], "username")
-        role = Role(require_str(payload["role"], "role"))
+        role = parse_enum_value(payload["role"], "role", Role)
 
         return UserAuthenticated(
             event_id=event_id,
@@ -247,6 +242,9 @@ class UserAuthenticatedEventPayloadCodec(EventPayloadCodec[UserAuthenticated]):
             username=username,
             role=role,
         )
+
+
+_USER_LOGIN_REJECTED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset(["user_id", "username", "reason"])
 
 
 class UserLoginRejectedEventPayloadCodec(EventPayloadCodec[UserLoginRejected]):
@@ -321,13 +319,11 @@ class UserLoginRejectedEventPayloadCodec(EventPayloadCodec[UserLoginRejected]):
                 is not positive, reason is unknown, or timestamps use the
                 wrong time domain.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset(["user_id", "username", "reason"])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _USER_LOGIN_REJECTED_PAYLOAD_KEYS)
 
         user_id = require_optional_positive_int(payload["user_id"], "user_id")
         username = require_optional_str(payload["username"], "username")
-        reason = UserLoginRejectionReason(require_str(payload["reason"], "reason"))
+        reason = parse_enum_value(payload["reason"], "reason", UserLoginRejectionReason)
 
         return UserLoginRejected(
             event_id=event_id,
@@ -337,6 +333,9 @@ class UserLoginRejectedEventPayloadCodec(EventPayloadCodec[UserLoginRejected]):
             username=username,
             reason=reason,
         )
+
+
+_USER_PASSWORD_CHANGED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset(["user_id", "username"])
 
 
 class UserPasswordChangedEventPayloadCodec(EventPayloadCodec[UserPasswordChanged]):
@@ -408,9 +407,7 @@ class UserPasswordChangedEventPayloadCodec(EventPayloadCodec[UserPasswordChanged
             ValueError: If keys are missing or unexpected, the user ID is not
                 positive, or timestamps use the wrong time domain.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset(["user_id", "username"])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _USER_PASSWORD_CHANGED_PAYLOAD_KEYS)
 
         user_id = require_positive_int(payload["user_id"], "user_id")
         username = require_str(payload["username"], "username")
@@ -422,6 +419,13 @@ class UserPasswordChangedEventPayloadCodec(EventPayloadCodec[UserPasswordChanged
             user_id=user_id,
             username=username,
         )
+
+
+_USER_PASSWORD_CHANGE_REJECTED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset([
+    "user_id",
+    "username",
+    "reason",
+])
 
 
 class UserPasswordChangeRejectedEventPayloadCodec(EventPayloadCodec[UserPasswordChangeRejected]):
@@ -497,17 +501,11 @@ class UserPasswordChangeRejectedEventPayloadCodec(EventPayloadCodec[UserPassword
                 is not positive, reason is unknown, or timestamps use the
                 wrong time domain.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset([
-            "user_id",
-            "username",
-            "reason",
-        ])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _USER_PASSWORD_CHANGE_REJECTED_PAYLOAD_KEYS)
 
         user_id = require_optional_positive_int(payload["user_id"], "user_id")
         username = require_optional_str(payload["username"], "username")
-        reason = UserPasswordChangeRejectionReason(require_str(payload["reason"], "reason"))
+        reason = parse_enum_value(payload["reason"], "reason", UserPasswordChangeRejectionReason)
 
         return UserPasswordChangeRejected(
             event_id=event_id,
@@ -517,6 +515,9 @@ class UserPasswordChangeRejectedEventPayloadCodec(EventPayloadCodec[UserPassword
             username=username,
             reason=reason,
         )
+
+
+_USER_PASSWORD_RESET_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset(["user_id", "username"])
 
 
 class UserPasswordResetEventPayloadCodec(EventPayloadCodec[UserPasswordReset]):
@@ -589,9 +590,7 @@ class UserPasswordResetEventPayloadCodec(EventPayloadCodec[UserPasswordReset]):
             ValueError: If keys are missing or unexpected, the user ID is not
                 positive, or timestamps use the wrong time domain.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset(["user_id", "username"])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _USER_PASSWORD_RESET_PAYLOAD_KEYS)
 
         user_id = require_positive_int(payload["user_id"], "user_id")
         username = require_str(payload["username"], "username")
@@ -603,6 +602,13 @@ class UserPasswordResetEventPayloadCodec(EventPayloadCodec[UserPasswordReset]):
             user_id=user_id,
             username=username,
         )
+
+
+_USER_PASSWORD_RESET_REJECTED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset([
+    "user_id",
+    "username",
+    "reason",
+])
 
 
 class UserPasswordResetRejectedEventPayloadCodec(EventPayloadCodec[UserPasswordResetRejected]):
@@ -679,17 +685,11 @@ class UserPasswordResetRejectedEventPayloadCodec(EventPayloadCodec[UserPasswordR
                 is not positive, reason is unknown, or timestamps use the
                 wrong time domain.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset([
-            "user_id",
-            "username",
-            "reason",
-        ])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _USER_PASSWORD_RESET_REJECTED_PAYLOAD_KEYS)
 
         user_id = require_optional_positive_int(payload["user_id"], "user_id")
         username = require_optional_str(payload["username"], "username")
-        reason = UserPasswordResetRejectionReason(require_str(payload["reason"], "reason"))
+        reason = parse_enum_value(payload["reason"], "reason", UserPasswordResetRejectionReason)
 
         return UserPasswordResetRejected(
             event_id=event_id,
@@ -699,6 +699,9 @@ class UserPasswordResetRejectedEventPayloadCodec(EventPayloadCodec[UserPasswordR
             username=username,
             reason=reason,
         )
+
+
+_USER_REGISTERED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset(["user_id", "username", "role"])
 
 
 class UserRegisteredEventPayloadCodec(EventPayloadCodec[UserRegistered]):
@@ -773,13 +776,11 @@ class UserRegisteredEventPayloadCodec(EventPayloadCodec[UserRegistered]):
                 positive, role is unknown, or timestamps use the wrong time
                 domain.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset(["user_id", "username", "role"])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _USER_REGISTERED_PAYLOAD_KEYS)
 
         user_id = require_positive_int(payload["user_id"], "user_id")
         username = require_str(payload["username"], "username")
-        role = Role(require_str(payload["role"], "role"))
+        role = parse_enum_value(payload["role"], "role", Role)
 
         return UserRegistered(
             event_id=event_id,
@@ -789,6 +790,9 @@ class UserRegisteredEventPayloadCodec(EventPayloadCodec[UserRegistered]):
             username=username,
             role=role,
         )
+
+
+_USER_REGISTRATION_REJECTED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset(["username", "reason"])
 
 
 class UserRegistrationRejectedEventPayloadCodec(EventPayloadCodec[UserRegistrationRejected]):
@@ -861,12 +865,10 @@ class UserRegistrationRejectedEventPayloadCodec(EventPayloadCodec[UserRegistrati
             ValueError: If keys are missing or unexpected, reason is unknown,
                 or timestamps use the wrong time domain.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset(["username", "reason"])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _USER_REGISTRATION_REJECTED_PAYLOAD_KEYS)
 
         username = require_optional_str(payload["username"], "username")
-        reason = UserRegistrationRejectionReason(require_str(payload["reason"], "reason"))
+        reason = parse_enum_value(payload["reason"], "reason", UserRegistrationRejectionReason)
 
         return UserRegistrationRejected(
             event_id=event_id,
@@ -875,6 +877,9 @@ class UserRegistrationRejectedEventPayloadCodec(EventPayloadCodec[UserRegistrati
             username=username,
             reason=reason,
         )
+
+
+_USER_SESSION_ENDED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset(["user_id", "username"])
 
 
 class UserSessionEndedEventPayloadCodec(EventPayloadCodec[UserSessionEnded]):
@@ -948,9 +953,7 @@ class UserSessionEndedEventPayloadCodec(EventPayloadCodec[UserSessionEnded]):
             ValueError: If keys are missing or unexpected, user ID is not
                 positive, or timestamps use the wrong time domain.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset(["user_id", "username"])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _USER_SESSION_ENDED_PAYLOAD_KEYS)
 
         user_id = require_positive_int(payload["user_id"], "user_id")
         username = require_str(payload["username"], "username")
@@ -962,6 +965,9 @@ class UserSessionEndedEventPayloadCodec(EventPayloadCodec[UserSessionEnded]):
             user_id=user_id,
             username=username,
         )
+
+
+_USER_TOKENS_REVOKED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset(["user_id", "username", "reason"])
 
 
 class UserTokensRevokedEventPayloadCodec(EventPayloadCodec[UserTokensRevoked]):
@@ -1037,13 +1043,11 @@ class UserTokensRevokedEventPayloadCodec(EventPayloadCodec[UserTokensRevoked]):
                 positive, reason is unknown, or timestamps use the wrong time
                 domain.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset(["user_id", "username", "reason"])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _USER_TOKENS_REVOKED_PAYLOAD_KEYS)
 
         user_id = require_positive_int(payload["user_id"], "user_id")
         username = require_str(payload["username"], "username")
-        reason = TokenRevocationReason(require_str(payload["reason"], "reason"))
+        reason = parse_enum_value(payload["reason"], "reason", TokenRevocationReason)
 
         return UserTokensRevoked(
             event_id=event_id,

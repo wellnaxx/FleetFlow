@@ -15,6 +15,8 @@ from src.shared.json_types import JSONObject
 from src.shared.json_validation import require_json_object_keys
 from src.shared.validation import require_positive_int
 
+_CUSTOMER_CREATED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset(["customer_id"])
+
 
 class CustomerCreatedEventPayloadCodec(EventPayloadCodec[CustomerCreated]):
     """Encode and decode version-1 customer-creation payloads.
@@ -79,9 +81,7 @@ class CustomerCreatedEventPayloadCodec(EventPayloadCodec[CustomerCreated]):
             ValueError: If keys are missing or unexpected, customer_id is not
                 positive, or timestamps use the wrong time domain.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset(["customer_id"])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _CUSTOMER_CREATED_PAYLOAD_KEYS)
 
         customer_id = require_positive_int(payload["customer_id"], "customer_id")
 

@@ -1550,8 +1550,9 @@ class AuthorizationDeniedCodecShould(unittest.TestCase):
                 with self.subTest(field=field, value=value):
                     payload = make_payload()
                     payload[field] = value
-                    with self.assertRaises(ValueError):
+                    with self.assertRaisesRegex(ValueError, f"^{field}: unknown") as raised:
                         self.decode(payload)
+                    self.assertIsInstance(raised.exception.__cause__, ValueError)
 
     def test_requires_permission_list(self) -> None:
         values: tuple[object, ...] = (None, "PACKAGE_VIEW", {}, 1, True, ("PACKAGE_VIEW",))
@@ -1579,7 +1580,7 @@ class AuthorizationDeniedCodecShould(unittest.TestCase):
                 with self.assertRaises(ValueError) as ctx:
                     self.decode(payload)
                 self.assertEqual(
-                    str(ctx.exception), f"required_permissions[1]: unknown permission name {name!r}"
+                    str(ctx.exception), f"required_permissions[1]: unknown Permission name {name!r}."
                 )
                 self.assertIsInstance(ctx.exception.__cause__, KeyError)
 

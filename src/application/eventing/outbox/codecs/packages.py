@@ -12,7 +12,7 @@ from src.application.eventing.outbox.codec import EventPayloadCodec
 from src.domain.enums.item_status import ItemStatus
 from src.domain.events.package_events import PackageCreated, PackageDelivered, PackagePickedUp, PackageRemoved
 from src.domain.value_objects.location_code import LocationCode
-from src.shared.json_deserialization import parse_optional_naive_datetime
+from src.shared.json_deserialization import parse_enum_value, parse_optional_naive_datetime
 from src.shared.json_serialization import optional_isoformat
 from src.shared.json_types import JSONObject
 from src.shared.json_validation import require_json_object_keys
@@ -22,6 +22,17 @@ from src.shared.validation import (
     require_positive_int,
     require_str,
 )
+
+_PACKAGE_CREATED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset([
+    "package_id",
+    "customer_id",
+    "start_location",
+    "end_location",
+    "weight",
+    "initial_status",
+    "initial_location",
+    "expected_arrival",
+])
 
 
 class PackageCreatedEventPayloadCodec(EventPayloadCodec[PackageCreated]):
@@ -99,25 +110,14 @@ class PackageCreatedEventPayloadCodec(EventPayloadCodec[PackageCreated]):
                 text is invalid, or a timestamp uses the wrong time domain.
             DomainValidationError: If a location is blank after normalization.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset([
-            "package_id",
-            "customer_id",
-            "start_location",
-            "end_location",
-            "weight",
-            "initial_status",
-            "initial_location",
-            "expected_arrival",
-        ])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _PACKAGE_CREATED_PAYLOAD_KEYS)
 
         package_id = require_positive_int(payload["package_id"], "package_id")
         customer_id = require_positive_int(payload["customer_id"], "customer_id")
         start_location = LocationCode(require_str(payload["start_location"], "start_location"))
         end_location = LocationCode(require_str(payload["end_location"], "end_location"))
         weight = require_positive_finite_float(payload["weight"], "weight")
-        initial_status = ItemStatus(require_str(payload["initial_status"], "initial_status"))
+        initial_status = parse_enum_value(payload["initial_status"], "initial_status", ItemStatus)
         initial_location = LocationCode(require_str(payload["initial_location"], "initial_location"))
         expected_arrival = parse_optional_naive_datetime(payload["expected_arrival"], "expected_arrival")
 
@@ -134,6 +134,19 @@ class PackageCreatedEventPayloadCodec(EventPayloadCodec[PackageCreated]):
             initial_location=initial_location,
             expected_arrival=expected_arrival,
         )
+
+
+_PACKAGE_REMOVED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset([
+    "package_id",
+    "customer_id",
+    "previous_route_id",
+    "previous_status",
+    "previous_location",
+    "start_location",
+    "end_location",
+    "weight",
+    "previous_expected_arrival",
+])
 
 
 class PackageRemovedEventPayloadCodec(EventPayloadCodec[PackageRemoved]):
@@ -216,24 +229,12 @@ class PackageRemovedEventPayloadCodec(EventPayloadCodec[PackageRemoved]):
                 text is invalid, or a timestamp uses the wrong time domain.
             DomainValidationError: If any location is blank after normalization.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset([
-            "package_id",
-            "customer_id",
-            "previous_route_id",
-            "previous_status",
-            "previous_location",
-            "start_location",
-            "end_location",
-            "weight",
-            "previous_expected_arrival",
-        ])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _PACKAGE_REMOVED_PAYLOAD_KEYS)
 
         package_id = require_positive_int(payload["package_id"], "package_id")
         customer_id = require_positive_int(payload["customer_id"], "customer_id")
         previous_route_id = require_optional_positive_int(payload["previous_route_id"], "previous_route_id")
-        previous_status = ItemStatus(require_str(payload["previous_status"], "previous_status"))
+        previous_status = parse_enum_value(payload["previous_status"], "previous_status", ItemStatus)
         previous_location = LocationCode(require_str(payload["previous_location"], "previous_location"))
         start_location = LocationCode(require_str(payload["start_location"], "start_location"))
         end_location = LocationCode(require_str(payload["end_location"], "end_location"))
@@ -256,6 +257,17 @@ class PackageRemovedEventPayloadCodec(EventPayloadCodec[PackageRemoved]):
             weight=weight,
             previous_expected_arrival=previous_expected_arrival,
         )
+
+
+_PACKAGE_PICKED_UP_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset([
+    "package_id",
+    "route_id",
+    "previous_status",
+    "new_status",
+    "previous_location",
+    "new_location",
+    "scheduled_arrival",
+])
 
 
 class PackagePickedUpEventPayloadCodec(EventPayloadCodec[PackagePickedUp]):
@@ -336,22 +348,12 @@ class PackagePickedUpEventPayloadCodec(EventPayloadCodec[PackagePickedUp]):
                 use the wrong time domain.
             DomainValidationError: If either location is blank after normalization.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset([
-            "package_id",
-            "route_id",
-            "previous_status",
-            "new_status",
-            "previous_location",
-            "new_location",
-            "scheduled_arrival",
-        ])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _PACKAGE_PICKED_UP_PAYLOAD_KEYS)
 
         package_id = require_positive_int(payload["package_id"], "package_id")
         route_id = require_positive_int(payload["route_id"], "route_id")
-        previous_status = ItemStatus(require_str(payload["previous_status"], "previous_status"))
-        new_status = ItemStatus(require_str(payload["new_status"], "new_status"))
+        previous_status = parse_enum_value(payload["previous_status"], "previous_status", ItemStatus)
+        new_status = parse_enum_value(payload["new_status"], "new_status", ItemStatus)
         previous_location = LocationCode(require_str(payload["previous_location"], "previous_location"))
         new_location = LocationCode(require_str(payload["new_location"], "new_location"))
         scheduled_arrival = parse_optional_naive_datetime(payload["scheduled_arrival"], "scheduled_arrival")
@@ -368,6 +370,17 @@ class PackagePickedUpEventPayloadCodec(EventPayloadCodec[PackagePickedUp]):
             new_location=new_location,
             scheduled_arrival=scheduled_arrival,
         )
+
+
+_PACKAGE_DELIVERED_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset([
+    "package_id",
+    "route_id",
+    "previous_status",
+    "new_status",
+    "previous_location",
+    "new_location",
+    "scheduled_arrival",
+])
 
 
 class PackageDeliveredEventPayloadCodec(EventPayloadCodec[PackageDelivered]):
@@ -448,22 +461,12 @@ class PackageDeliveredEventPayloadCodec(EventPayloadCodec[PackageDelivered]):
                 use the wrong time domain.
             DomainValidationError: If either location is blank after normalization.
         """
-        expected_payload_keys: Final[frozenset[str]] = frozenset([
-            "package_id",
-            "route_id",
-            "previous_status",
-            "new_status",
-            "previous_location",
-            "new_location",
-            "scheduled_arrival",
-        ])
-
-        require_json_object_keys(payload, expected_payload_keys)
+        require_json_object_keys(payload, _PACKAGE_DELIVERED_PAYLOAD_KEYS)
 
         package_id = require_positive_int(payload["package_id"], "package_id")
         route_id = require_positive_int(payload["route_id"], "route_id")
-        previous_status = ItemStatus(require_str(payload["previous_status"], "previous_status"))
-        new_status = ItemStatus(require_str(payload["new_status"], "new_status"))
+        previous_status = parse_enum_value(payload["previous_status"], "previous_status", ItemStatus)
+        new_status = parse_enum_value(payload["new_status"], "new_status", ItemStatus)
         previous_location = LocationCode(require_str(payload["previous_location"], "previous_location"))
         new_location = LocationCode(require_str(payload["new_location"], "new_location"))
         scheduled_arrival = parse_optional_naive_datetime(payload["scheduled_arrival"], "scheduled_arrival")

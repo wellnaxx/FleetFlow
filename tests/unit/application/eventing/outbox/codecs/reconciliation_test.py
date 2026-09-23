@@ -579,8 +579,14 @@ class PackageStateReconciledCodecShould(unittest.TestCase):
             for value in values:
                 reasons: list[JSONValue] = [reason.value for reason in self.reasons]
                 reasons[index] = value
-                with self.subTest(index=index, value=value), self.assertRaises(ValueError):
-                    self.decode({**self.payload, "reasons": reasons})
+                with self.subTest(index=index, value=value):
+                    with self.assertRaises(ValueError) as raised:
+                        self.decode({**self.payload, "reasons": reasons})
+                    self.assertEqual(
+                        str(raised.exception),
+                        f"reasons[{index}]: unknown PackageReconciliationReason value {value!r}.",
+                    )
+                    self.assertIsInstance(raised.exception.__cause__, ValueError)
 
     def test_rejects_non_string_timestamps_including_datetime_objects(self) -> None:
         values: tuple[object, ...] = (True, False, 1, 1.5, [], {}, COMPLETION)
