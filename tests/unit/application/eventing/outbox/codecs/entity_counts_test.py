@@ -1,12 +1,14 @@
 """Contracts for flat outbox world-state count serialization and decoding."""
 
-import json
 import unittest
-from typing import cast
+from typing import TYPE_CHECKING
 
 from src.application.eventing.outbox.codecs.entity_counts import decode_entity_counts, encode_entity_counts
 from src.application.value_objects.world_state_entity_counts import WorldStateEntityCounts
-from src.shared.json_types import JSONObject, JSONValue
+from tests.unit.application.eventing.outbox.codecs.helpers import json_round_trip
+
+if TYPE_CHECKING:
+    from src.shared.json_types import JSONObject, JSONValue
 
 PREFIXES = ("", "previous_", "new_")
 FIELDS = ("customer_count", "package_count", "route_count", "truck_count")
@@ -27,7 +29,7 @@ class EntityCountsCodecHelpersShould(unittest.TestCase):
                 self.assertEqual(encoded, expected)
                 for value in encoded.values():
                     self.assertIs(type(value), int)
-                payload = cast(JSONObject, json.loads(json.dumps(encoded)))
+                payload = json_round_trip(encoded)
                 decoded = decode_entity_counts(payload, prefix=prefix)
                 self.assertIs(type(decoded), WorldStateEntityCounts)
                 self.assertEqual(decoded, counts)

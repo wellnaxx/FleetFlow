@@ -1,11 +1,9 @@
 """Reconciliation outbox payload serialization and validation contracts."""
 
-import json
 import unittest
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from itertools import product
 from typing import cast
-from uuid import UUID
 
 from src.application.enums.package_reconciliation_reasons import PackageReconciliationReason
 from src.application.enums.route_reconciliation_reasons import RouteReconciliationReason
@@ -29,10 +27,16 @@ from src.domain.exceptions import DomainValidationError
 from src.domain.value_objects.location_code import LocationCode
 from src.domain.value_objects.route_schedule import RoutePositionKind
 from src.shared.json_types import JSONObject, JSONValue
+from tests.unit.application.eventing.outbox.codecs.helpers import (
+    EVENT_ID,
+    OCCURRED_AT,
+    RECORDED_AT,
+    assert_invalid_metadata,
+    assert_required_keys,
+    decode_payload,
+    json_round_trip,
+)
 
-EVENT_ID = UUID("12345678-1234-4678-9234-567812345678")
-OCCURRED_AT = datetime(2030, 1, 2, 3, 4, 5, 123456)
-RECORDED_AT = datetime(2030, 1, 2, 1, 4, 5, 654321, tzinfo=UTC)
 DEPARTURE = datetime(2030, 1, 3, 6, 30, 45, 123456)
 COMPLETION = datetime(2030, 1, 4, 18, 45, 30, 654321)
 
@@ -43,9 +47,7 @@ class TruckRouteReferenceReconciledCodecShould(unittest.TestCase):
         self.payload: JSONObject = {"truck_id": 1001, "previous_route_id": 12, "new_route_id": 19}
 
     def decode(self, payload: JSONObject) -> TruckRouteReferenceReconciled:
-        return self.codec.decode(
-            payload, event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
-        )
+        return decode_payload(self.codec, payload)
 
     def test_exact_wire_contract_round_trips_null_and_populated_previous_references(self) -> None:
         for previous_route_id in (None, 12):
@@ -64,19 +66,12 @@ class TruckRouteReferenceReconciledCodecShould(unittest.TestCase):
                 self.assertIs(type(encoded["truck_id"]), int)
                 self.assertIs(type(encoded["new_route_id"]), int)
                 self.assertIs(type(encoded["previous_route_id"]), type(previous_route_id))
-                restored = self.decode(cast(JSONObject, json.loads(json.dumps(encoded, allow_nan=False))))
+                restored = self.decode(json_round_trip(encoded))
                 self.assertIs(type(restored), TruckRouteReferenceReconciled)
                 self.assertEqual(restored, event)
 
     def test_requires_every_key_including_nullable_previous_reference(self) -> None:
-        for field in self.payload:
-            with self.subTest(field=field):
-                payload = dict(self.payload)
-                del payload[field]
-                with self.assertRaisesRegex(ValueError, f"Missing fields:.*{field}"):
-                    self.decode(payload)
-        with self.assertRaisesRegex(ValueError, "Missing fields"):
-            self.decode({})
+        assert_required_keys(self, self.decode, dict(self.payload))
 
     def test_rejects_unknown_and_metadata_keys(self) -> None:
         for field in (
@@ -151,30 +146,7 @@ class TruckRouteReferenceReconciledCodecShould(unittest.TestCase):
                 registry.for_identity("truck_route_reference_reconciled", version)
 
     def test_event_constructor_rejects_invalid_metadata(self) -> None:
-        cases: tuple[tuple[str, object, type[Exception]], ...] = (
-            ("event_id", None, TypeError),
-            ("event_id", str(EVENT_ID), TypeError),
-            ("occurred_at", None, TypeError),
-            ("occurred_at", "2030-01-02", TypeError),
-            ("recorded_at", None, TypeError),
-            ("recorded_at", "2030-01-02", TypeError),
-            ("occurred_at", OCCURRED_AT.replace(tzinfo=UTC), ValueError),
-            ("recorded_at", RECORDED_AT.replace(tzinfo=None), ValueError),
-            ("recorded_at", RECORDED_AT.astimezone(timezone(timedelta(hours=2))), ValueError),
-        )
-        for field, value, error in cases:
-            with self.subTest(field=field, value=value):
-                metadata: dict[str, object] = {
-                    "event_id": EVENT_ID, "occurred_at": OCCURRED_AT, "recorded_at": RECORDED_AT,
-                }
-                metadata[field] = value
-                with self.assertRaisesRegex(error, field):
-                    self.codec.decode(
-                        self.payload,
-                        event_id=cast(UUID, metadata["event_id"]),
-                        occurred_at=cast(datetime, metadata["occurred_at"]),
-                        recorded_at=cast(datetime, metadata["recorded_at"]),
-                    )
+        assert_invalid_metadata(self, self.codec, self.payload)
 
 
 class TruckPositionReconciledCodecShould(unittest.TestCase):
@@ -194,9 +166,7 @@ class TruckPositionReconciledCodecShould(unittest.TestCase):
         )
 
     def decode(self, payload: JSONObject) -> TruckPositionReconciled:
-        return self.codec.decode(
-            payload, event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
-        )
+        return decode_payload(self.codec, payload)
 
     def test_exact_wire_contract_round_trips_all_position_kinds_and_nullable_combinations(self) -> None:
         for kind, route_id, previous, new, previous_target, new_target in product(
@@ -235,7 +205,7 @@ class TruckPositionReconciledCodecShould(unittest.TestCase):
                         self.assertIsNone(encoded[field])
                     else:
                         self.assertIs(type(encoded[field]), str)
-                restored = self.decode(cast(JSONObject, json.loads(json.dumps(encoded, allow_nan=False))))
+                restored = self.decode(json_round_trip(encoded))
                 self.assertIs(type(restored), TruckPositionReconciled)
                 self.assertEqual(restored, event)
                 self.assertIs(restored.position_kind, kind)
@@ -245,14 +215,7 @@ class TruckPositionReconciledCodecShould(unittest.TestCase):
                         self.assertIsInstance(value, LocationCode)
 
     def test_requires_every_key_including_new_location_and_nullable_fields(self) -> None:
-        for field in self.payload:
-            with self.subTest(field=field):
-                payload = dict(self.payload)
-                del payload[field]
-                with self.assertRaisesRegex(ValueError, f"Missing fields:.*{field}"):
-                    self.decode(payload)
-        with self.assertRaisesRegex(ValueError, "Missing fields"):
-            self.decode({})
+        assert_required_keys(self, self.decode, dict(self.payload))
 
     def test_rejects_unknown_and_metadata_keys(self) -> None:
         for field in ("unknown", "event_id", "event_version", "occurred_at", "recorded_at", "envelope_id"):
@@ -356,30 +319,7 @@ class TruckPositionReconciledCodecShould(unittest.TestCase):
                 registry.for_identity("truck_position_reconciled", version)
 
     def test_event_constructor_rejects_invalid_metadata(self) -> None:
-        cases: tuple[tuple[str, object, type[Exception]], ...] = (
-            ("event_id", None, TypeError),
-            ("event_id", str(EVENT_ID), TypeError),
-            ("occurred_at", None, TypeError),
-            ("occurred_at", "2030-01-02", TypeError),
-            ("recorded_at", None, TypeError),
-            ("recorded_at", "2030-01-02", TypeError),
-            ("occurred_at", OCCURRED_AT.replace(tzinfo=UTC), ValueError),
-            ("recorded_at", RECORDED_AT.replace(tzinfo=None), ValueError),
-            ("recorded_at", RECORDED_AT.astimezone(timezone(timedelta(hours=2))), ValueError),
-        )
-        for field, value, error in cases:
-            with self.subTest(field=field, value=value):
-                metadata: dict[str, object] = {
-                    "event_id": EVENT_ID, "occurred_at": OCCURRED_AT, "recorded_at": RECORDED_AT,
-                }
-                metadata[field] = value
-                with self.assertRaisesRegex(error, field):
-                    self.codec.decode(
-                        self.payload,
-                        event_id=cast(UUID, metadata["event_id"]),
-                        occurred_at=cast(datetime, metadata["occurred_at"]),
-                        recorded_at=cast(datetime, metadata["recorded_at"]),
-                    )
+        assert_invalid_metadata(self, self.codec, self.payload)
 
 
 class PackageStateReconciledCodecShould(unittest.TestCase):
@@ -410,9 +350,7 @@ class PackageStateReconciledCodecShould(unittest.TestCase):
         )
 
     def decode(self, payload: JSONObject) -> PackageStateReconciled:
-        return self.codec.decode(
-            payload, event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
-        )
+        return decode_payload(self.codec, payload)
 
     def test_exact_wire_contract_round_trips_all_nullable_combinations(self) -> None:
         for route_id, previous_arrival, new_arrival, pickup, delivery in product(
@@ -456,7 +394,7 @@ class PackageStateReconciledCodecShould(unittest.TestCase):
                 self.assertIs(type(encoded["reasons"]), list)
                 for reason in cast(list[JSONValue], encoded["reasons"]):
                     self.assertIs(type(reason), str)
-                restored = self.decode(cast(JSONObject, json.loads(json.dumps(encoded, allow_nan=False))))
+                restored = self.decode(json_round_trip(encoded))
                 self.assertIs(type(restored), PackageStateReconciled)
                 self.assertEqual(restored, event)
                 self.assertIs(restored.previous_status, ItemStatus.DONE)
@@ -489,14 +427,7 @@ class PackageStateReconciledCodecShould(unittest.TestCase):
             self.decode({**self.payload, "reasons": [r.value for r in (*self.reasons, self.reasons[0])]})
 
     def test_requires_every_key_including_nullable_fields(self) -> None:
-        for field in self.payload:
-            with self.subTest(field=field):
-                payload = dict(self.payload)
-                del payload[field]
-                with self.assertRaisesRegex(ValueError, f"Missing fields:.*{field}"):
-                    self.decode(payload)
-        with self.assertRaisesRegex(ValueError, "Missing fields"):
-            self.decode({})
+        assert_required_keys(self, self.decode, dict(self.payload))
 
     def test_rejects_unknown_singular_reason_and_metadata_keys(self) -> None:
         for field in (
@@ -613,7 +544,7 @@ class PackageStateReconciledCodecShould(unittest.TestCase):
                 self.assertIsInstance(raised.exception.__cause__, ValueError)
 
     def test_payload_and_reasons_list_are_not_mutated_or_retained(self) -> None:
-        original = cast(JSONObject, json.loads(json.dumps(self.payload)))
+        original = json_round_trip(self.payload)
         event = self.decode(self.payload)
         self.assertEqual(self.payload, original)
         cast(list[JSONValue], self.payload["reasons"]).clear()
@@ -647,30 +578,7 @@ class PackageStateReconciledCodecShould(unittest.TestCase):
                 registry.for_identity("package_state_reconciled", version)
 
     def test_event_constructor_rejects_invalid_metadata(self) -> None:
-        cases: tuple[tuple[str, object, type[Exception]], ...] = (
-            ("event_id", None, TypeError),
-            ("event_id", str(EVENT_ID), TypeError),
-            ("occurred_at", None, TypeError),
-            ("occurred_at", "2030-01-02", TypeError),
-            ("recorded_at", None, TypeError),
-            ("recorded_at", "2030-01-02", TypeError),
-            ("occurred_at", OCCURRED_AT.replace(tzinfo=UTC), ValueError),
-            ("recorded_at", RECORDED_AT.replace(tzinfo=None), ValueError),
-            ("recorded_at", RECORDED_AT.astimezone(timezone(timedelta(hours=2))), ValueError),
-        )
-        for field, value, error in cases:
-            with self.subTest(field=field, value=value):
-                metadata: dict[str, object] = {
-                    "event_id": EVENT_ID, "occurred_at": OCCURRED_AT, "recorded_at": RECORDED_AT,
-                }
-                metadata[field] = value
-                with self.assertRaisesRegex(error, field):
-                    self.codec.decode(
-                        self.payload,
-                        event_id=cast(UUID, metadata["event_id"]),
-                        occurred_at=cast(datetime, metadata["occurred_at"]),
-                        recorded_at=cast(datetime, metadata["recorded_at"]),
-                    )
+        assert_invalid_metadata(self, self.codec, self.payload)
 
 
 class RouteStateReconciledCodecShould(unittest.TestCase):
@@ -687,9 +595,7 @@ class RouteStateReconciledCodecShould(unittest.TestCase):
         self.timestamp_fields = ("departure_time", "expected_completion_time")
 
     def decode(self, payload: JSONObject) -> RouteStateReconciled:
-        return self.codec.decode(
-            payload, event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
-        )
+        return decode_payload(self.codec, payload)
 
     def test_exact_wire_contract_round_trips_every_reason_and_nullable_combination(self) -> None:
         for reason, departure, completion in product(
@@ -719,7 +625,7 @@ class RouteStateReconciledCodecShould(unittest.TestCase):
                 for field in ("previous_status", "new_status", "reason", *self.timestamp_fields):
                     if encoded[field] is not None:
                         self.assertIs(type(encoded[field]), str)
-                restored = self.decode(cast(JSONObject, json.loads(json.dumps(encoded, allow_nan=False))))
+                restored = self.decode(json_round_trip(encoded))
                 self.assertIs(type(restored), RouteStateReconciled)
                 self.assertEqual(restored, event)
                 self.assertIs(restored.reason, reason)
@@ -738,14 +644,7 @@ class RouteStateReconciledCodecShould(unittest.TestCase):
                 self.assertEqual(self.codec.encode(event), payload)
 
     def test_requires_every_key_including_nullable_timestamps(self) -> None:
-        for field in self.payload:
-            with self.subTest(field=field):
-                payload = dict(self.payload)
-                del payload[field]
-                with self.assertRaisesRegex(ValueError, f"Missing fields:.*{field}"):
-                    self.decode(payload)
-        with self.assertRaisesRegex(ValueError, "Missing fields"):
-            self.decode({})
+        assert_required_keys(self, self.decode, dict(self.payload))
 
     def test_rejects_unknown_plural_reason_and_metadata_keys(self) -> None:
         for field in (
@@ -848,29 +747,4 @@ class RouteStateReconciledCodecShould(unittest.TestCase):
                 registry.for_identity("route_state_reconciled", version)
 
     def test_event_constructor_rejects_invalid_metadata(self) -> None:
-        cases: tuple[tuple[str, object, type[Exception]], ...] = (
-            ("event_id", None, TypeError),
-            ("event_id", str(EVENT_ID), TypeError),
-            ("occurred_at", None, TypeError),
-            ("occurred_at", "2030-01-02", TypeError),
-            ("recorded_at", None, TypeError),
-            ("recorded_at", "2030-01-02", TypeError),
-            ("occurred_at", OCCURRED_AT.replace(tzinfo=UTC), ValueError),
-            ("recorded_at", RECORDED_AT.replace(tzinfo=None), ValueError),
-            ("recorded_at", RECORDED_AT.astimezone(timezone(timedelta(hours=2))), ValueError),
-        )
-        for field, value, error in cases:
-            with self.subTest(field=field, value=value):
-                metadata: dict[str, object] = {
-                    "event_id": EVENT_ID,
-                    "occurred_at": OCCURRED_AT,
-                    "recorded_at": RECORDED_AT,
-                }
-                metadata[field] = value
-                with self.assertRaisesRegex(error, field):
-                    self.codec.decode(
-                        self.payload,
-                        event_id=cast(UUID, metadata["event_id"]),
-                        occurred_at=cast(datetime, metadata["occurred_at"]),
-                        recorded_at=cast(datetime, metadata["recorded_at"]),
-                    )
+        assert_invalid_metadata(self, self.codec, self.payload)

@@ -1,11 +1,7 @@
 """Customer-created outbox payload contract tests."""
 
-import json
 import unittest
-from datetime import UTC, datetime, timedelta, timezone
-from typing import cast
 from unittest.mock import patch
-from uuid import UUID
 
 from src.application.eventing.outbox.codecs.customers import CustomerCreatedEventPayloadCodec
 from src.application.eventing.outbox.errors import EventCodecNotFoundError
@@ -13,10 +9,14 @@ from src.application.eventing.outbox.registry import EventOutboxCodecRegistry
 from src.domain.events.customer_events import CustomerCreated
 from src.shared.json_types import JSONObject, JSONValue
 from src.shared.json_validation import require_json_object_keys
-
-EVENT_ID = UUID("12345678-1234-4678-9234-567812345678")
-OCCURRED_AT = datetime(2030, 1, 2, 3, 4, 5, 123456)
-RECORDED_AT = datetime(2030, 1, 2, 1, 4, 5, 654321, tzinfo=UTC)
+from tests.unit.application.eventing.outbox.codecs.helpers import (
+    EVENT_ID,
+    OCCURRED_AT,
+    RECORDED_AT,
+    assert_invalid_metadata,
+    decode_payload,
+    json_round_trip,
+)
 
 
 class CustomerCreatedCodecShould(unittest.TestCase):
@@ -24,9 +24,7 @@ class CustomerCreatedCodecShould(unittest.TestCase):
         self.codec = CustomerCreatedEventPayloadCodec()
 
     def decode(self, payload: JSONObject) -> CustomerCreated:
-        return self.codec.decode(
-            payload, event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
-        )
+        return decode_payload(self.codec, payload)
 
     def test_exact_wire_contract_and_json_round_trip_preserve_identity_and_metadata(self) -> None:
         for customer_id in (1, 7, 2**63):
@@ -40,7 +38,7 @@ class CustomerCreatedCodecShould(unittest.TestCase):
                 encoded = self.codec.encode(event)
                 self.assertEqual(encoded, {"customer_id": customer_id})
                 self.assertIs(type(encoded["customer_id"]), int)
-                restored = self.decode(cast(JSONObject, json.loads(json.dumps(encoded))))
+                restored = self.decode(json_round_trip(encoded))
                 self.assertIs(type(restored), CustomerCreated)
                 self.assertEqual(restored, event)
 
@@ -122,29 +120,4 @@ class CustomerCreatedCodecShould(unittest.TestCase):
             registry.for_identity("customer_created", 2)
 
     def test_event_constructor_rejects_invalid_metadata(self) -> None:
-        cases: tuple[tuple[str, object, type[Exception]], ...] = (
-            ("event_id", None, TypeError),
-            ("event_id", str(EVENT_ID), TypeError),
-            ("occurred_at", None, TypeError),
-            ("occurred_at", "2030-01-02", TypeError),
-            ("recorded_at", None, TypeError),
-            ("recorded_at", "2030-01-02", TypeError),
-            ("occurred_at", OCCURRED_AT.replace(tzinfo=UTC), ValueError),
-            ("recorded_at", RECORDED_AT.replace(tzinfo=None), ValueError),
-            ("recorded_at", RECORDED_AT.astimezone(timezone(timedelta(hours=2))), ValueError),
-        )
-        for field, value, error in cases:
-            with self.subTest(field=field, value=value):
-                metadata: dict[str, object] = {
-                    "event_id": EVENT_ID,
-                    "occurred_at": OCCURRED_AT,
-                    "recorded_at": RECORDED_AT,
-                }
-                metadata[field] = value
-                with self.assertRaisesRegex(error, field):
-                    self.codec.decode(
-                        {"customer_id": 7},
-                        event_id=cast(UUID, metadata["event_id"]),
-                        occurred_at=cast(datetime, metadata["occurred_at"]),
-                        recorded_at=cast(datetime, metadata["recorded_at"]),
-                    )
+        assert_invalid_metadata(self, self.codec, {"customer_id": 7})

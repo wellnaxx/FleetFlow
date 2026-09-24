@@ -1,10 +1,6 @@
 """World-state runtime replacement and advancement outbox payload contract tests."""
 
-import json
 import unittest
-from datetime import UTC, datetime, timedelta, timezone
-from typing import cast
-from uuid import UUID
 
 from src.application.eventing.outbox.codecs.world_state_runtime import (
     WorldStateAdvancedEventPayloadCodec,
@@ -20,14 +16,15 @@ from src.application.events.world_state_events import (
 )
 from src.application.value_objects.world_state_entity_counts import WorldStateEntityCounts
 from src.shared.json_types import JSONObject, JSONValue
-
-EVENT_ID = UUID("12345678-1234-4678-9234-567812345678")
-
-
-OCCURRED_AT = datetime(2030, 1, 2, 3, 4, 5, 123456)
-
-
-RECORDED_AT = datetime(2030, 1, 2, 1, 4, 5, 654321, tzinfo=UTC)
+from tests.unit.application.eventing.outbox.codecs.helpers import (
+    EVENT_ID,
+    OCCURRED_AT,
+    RECORDED_AT,
+    assert_invalid_metadata,
+    assert_required_keys,
+    decode_payload,
+    json_round_trip,
+)
 
 
 class WorldStateAdvancedCodecShould(unittest.TestCase):
@@ -42,9 +39,7 @@ class WorldStateAdvancedCodecShould(unittest.TestCase):
         }
 
     def decode(self, payload: JSONObject) -> WorldStateAdvanced:
-        return self.codec.decode(
-            payload, event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
-        )
+        return decode_payload(self.codec, payload)
 
     def test_exact_wire_contract_and_json_round_trip(self) -> None:
         for counters in ((2, 7, 4, 3, 5), (0, 0, 0, 0, 0)):
@@ -64,21 +59,14 @@ class WorldStateAdvancedCodecShould(unittest.TestCase):
                 self.assertEqual(encoded, expected)
                 for value in encoded.values():
                     self.assertIs(type(value), int)
-                restored = self.decode(cast(JSONObject, json.loads(json.dumps(encoded, allow_nan=False))))
+                restored = self.decode(json_round_trip(encoded))
                 self.assertIs(type(restored), WorldStateAdvanced)
                 self.assertEqual(restored, event)
                 self.assertEqual(restored.event_version, 2)
                 self.assertEqual(self.codec.event_version, 2)
 
     def test_requires_every_counter(self) -> None:
-        for field in self.payload:
-            with self.subTest(field=field):
-                payload = dict(self.payload)
-                del payload[field]
-                with self.assertRaisesRegex(ValueError, f"Missing fields:.*{field}"):
-                    self.decode(payload)
-        with self.assertRaisesRegex(ValueError, "Missing fields"):
-            self.decode({})
+        assert_required_keys(self, self.decode, dict(self.payload))
 
     def test_rejects_unknown_snapshot_and_metadata_keys(self) -> None:
         for field in (
@@ -142,30 +130,7 @@ class WorldStateAdvancedCodecShould(unittest.TestCase):
                 registry.for_identity("world_state_advanced", version)
 
     def test_event_constructor_rejects_invalid_metadata(self) -> None:
-        cases: tuple[tuple[str, object, type[Exception]], ...] = (
-            ("event_id", None, TypeError),
-            ("event_id", str(EVENT_ID), TypeError),
-            ("occurred_at", None, TypeError),
-            ("occurred_at", "2030-01-02", TypeError),
-            ("recorded_at", None, TypeError),
-            ("recorded_at", "2030-01-02", TypeError),
-            ("occurred_at", OCCURRED_AT.replace(tzinfo=UTC), ValueError),
-            ("recorded_at", RECORDED_AT.replace(tzinfo=None), ValueError),
-            ("recorded_at", RECORDED_AT.astimezone(timezone(timedelta(hours=2))), ValueError),
-        )
-        for field, value, error in cases:
-            with self.subTest(field=field, value=value):
-                metadata: dict[str, object] = {
-                    "event_id": EVENT_ID, "occurred_at": OCCURRED_AT, "recorded_at": RECORDED_AT,
-                }
-                metadata[field] = value
-                with self.assertRaisesRegex(error, field):
-                    self.codec.decode(
-                        self.payload,
-                        event_id=cast(UUID, metadata["event_id"]),
-                        occurred_at=cast(datetime, metadata["occurred_at"]),
-                        recorded_at=cast(datetime, metadata["recorded_at"]),
-                    )
+        assert_invalid_metadata(self, self.codec, self.payload)
 
 
 class WorldStateRuntimeSwappedCodecShould(unittest.TestCase):
@@ -189,9 +154,7 @@ class WorldStateRuntimeSwappedCodecShould(unittest.TestCase):
         )
 
     def decode(self, payload: JSONObject) -> WorldStateRuntimeSwapped:
-        return self.codec.decode(
-            payload, event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
-        )
+        return decode_payload(self.codec, payload)
 
     def test_exact_flat_wire_contract_and_json_round_trip(self) -> None:
         previous = WorldStateEntityCounts(customers=2, packages=7, routes=4, trucks=40)
@@ -210,7 +173,7 @@ class WorldStateRuntimeSwappedCodecShould(unittest.TestCase):
         self.assertIs(type(encoded["snapshot_path"]), str)
         for field in ("schema_version", *self.count_fields):
             self.assertIs(type(encoded[field]), int)
-        restored = self.decode(cast(JSONObject, json.loads(json.dumps(encoded, allow_nan=False))))
+        restored = self.decode(json_round_trip(encoded))
         self.assertIs(type(restored), WorldStateRuntimeSwapped)
         self.assertEqual(restored, event)
         self.assertIs(type(restored.previous_entity_counts), WorldStateEntityCounts)
@@ -220,14 +183,7 @@ class WorldStateRuntimeSwappedCodecShould(unittest.TestCase):
         self.assertIsNot(restored.previous_entity_counts, restored.new_entity_counts)
 
     def test_requires_every_key(self) -> None:
-        for field in self.payload:
-            with self.subTest(field=field):
-                payload = dict(self.payload)
-                del payload[field]
-                with self.assertRaisesRegex(ValueError, f"Missing fields:.*{field}"):
-                    self.decode(payload)
-        with self.assertRaisesRegex(ValueError, "Missing fields"):
-            self.decode({})
+        assert_required_keys(self, self.decode, dict(self.payload))
 
     def test_rejects_unknown_nested_counts_and_metadata_keys(self) -> None:
         for field in (
@@ -352,27 +308,4 @@ class WorldStateRuntimeSwappedCodecShould(unittest.TestCase):
                 registry.for_identity("world_state_runtime_swapped", version)
 
     def test_event_constructor_rejects_invalid_metadata(self) -> None:
-        cases: tuple[tuple[str, object, type[Exception]], ...] = (
-            ("event_id", None, TypeError),
-            ("event_id", str(EVENT_ID), TypeError),
-            ("occurred_at", None, TypeError),
-            ("occurred_at", "2030-01-02", TypeError),
-            ("recorded_at", None, TypeError),
-            ("recorded_at", "2030-01-02", TypeError),
-            ("occurred_at", OCCURRED_AT.replace(tzinfo=UTC), ValueError),
-            ("recorded_at", RECORDED_AT.replace(tzinfo=None), ValueError),
-            ("recorded_at", RECORDED_AT.astimezone(timezone(timedelta(hours=2))), ValueError),
-        )
-        for field, value, error in cases:
-            with self.subTest(field=field, value=value):
-                metadata: dict[str, object] = {
-                    "event_id": EVENT_ID, "occurred_at": OCCURRED_AT, "recorded_at": RECORDED_AT,
-                }
-                metadata[field] = value
-                with self.assertRaisesRegex(error, field):
-                    self.codec.decode(
-                        self.payload,
-                        event_id=cast(UUID, metadata["event_id"]),
-                        occurred_at=cast(datetime, metadata["occurred_at"]),
-                        recorded_at=cast(datetime, metadata["recorded_at"]),
-                    )
+        assert_invalid_metadata(self, self.codec, self.payload)

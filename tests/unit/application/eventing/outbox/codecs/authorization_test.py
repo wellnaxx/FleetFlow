@@ -1,10 +1,7 @@
 """Authorization-denial outbox payload contract tests."""
 
-import json
 import unittest
-from datetime import UTC, datetime, timedelta, timezone
 from typing import cast
-from uuid import UUID
 
 from src.application.enums.audit_resource_types import AuditResourceType
 from src.application.enums.authorization_operations import AuthorizationOperation
@@ -14,14 +11,14 @@ from src.application.eventing.outbox.registry import EventOutboxCodecRegistry
 from src.application.events.auth_events import AuthorizationDenied
 from src.domain.enums.auth import Permission
 from src.shared.json_types import JSONObject, JSONValue
-
-EVENT_ID = UUID("12345678-1234-4678-9234-567812345678")
-
-
-OCCURRED_AT = datetime(2030, 1, 2, 3, 4, 5, 123456)
-
-
-RECORDED_AT = datetime(2030, 1, 2, 1, 4, 5, 654321, tzinfo=UTC)
+from tests.unit.application.eventing.outbox.codecs.helpers import (
+    EVENT_ID,
+    OCCURRED_AT,
+    RECORDED_AT,
+    assert_invalid_metadata,
+    decode_payload,
+    json_round_trip,
+)
 
 
 def make_payload() -> JSONObject:
@@ -38,7 +35,7 @@ class AuthorizationDeniedCodecShould(unittest.TestCase):
         self.codec = AuthorizationDeniedEventPayloadCodec()
 
     def decode(self, payload: JSONObject) -> AuthorizationDenied:
-        return self.codec.decode(payload, event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT)
+        return decode_payload(self.codec, payload)
 
     def test_encodes_exact_wire_contract_without_metadata(self) -> None:
         event = AuthorizationDenied(
@@ -71,7 +68,7 @@ class AuthorizationDeniedCodecShould(unittest.TestCase):
                         target_resource_id=target,
                         required_permissions=permissions,
                     )
-                    payload = cast(JSONObject, json.loads(json.dumps(self.codec.encode(original))))
+                    payload = json_round_trip(self.codec.encode(original))
                     restored = self.decode(payload)
                     self.assertEqual(restored, original)
                     self.assertIsInstance(restored.required_permissions, tuple)
@@ -181,26 +178,4 @@ class AuthorizationDeniedCodecShould(unittest.TestCase):
         self.assertEqual(self.codec.encode(event), make_payload())
 
     def test_event_constructor_validates_supplied_metadata(self) -> None:
-        cases: tuple[tuple[str, object, type[Exception]], ...] = (
-            ("event_id", str(EVENT_ID), TypeError),
-            ("occurred_at", "2030-01-02", TypeError),
-            ("recorded_at", None, TypeError),
-            ("occurred_at", OCCURRED_AT.replace(tzinfo=UTC), ValueError),
-            ("recorded_at", RECORDED_AT.replace(tzinfo=None), ValueError),
-            ("recorded_at", RECORDED_AT.astimezone(timezone(timedelta(hours=2))), ValueError),
-        )
-        for field, value, error in cases:
-            with self.subTest(field=field, value=value):
-                metadata: dict[str, object] = {
-                    "event_id": EVENT_ID,
-                    "occurred_at": OCCURRED_AT,
-                    "recorded_at": RECORDED_AT,
-                }
-                metadata[field] = value
-                with self.assertRaisesRegex(error, field):
-                    self.codec.decode(
-                        make_payload(),
-                        event_id=cast(UUID, metadata["event_id"]),
-                        occurred_at=cast(datetime, metadata["occurred_at"]),
-                        recorded_at=cast(datetime, metadata["recorded_at"]),
-                    )
+        assert_invalid_metadata(self, self.codec, make_payload())

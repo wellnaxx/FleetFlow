@@ -1,10 +1,6 @@
 """Own-password changes and administrative password resets outbox payload contract tests."""
 
-import json
 import unittest
-from datetime import UTC, datetime, timedelta, timezone
-from typing import cast
-from uuid import UUID
 
 from src.application.enums.user_password_change_rejection_reasons import UserPasswordChangeRejectionReason
 from src.application.enums.user_password_reset_rejection_reasons import UserPasswordResetRejectionReason
@@ -23,14 +19,15 @@ from src.application.events.auth_events import (
     UserPasswordResetRejected,
 )
 from src.shared.json_types import JSONObject, JSONValue
-
-EVENT_ID = UUID("12345678-1234-4678-9234-567812345678")
-
-
-OCCURRED_AT = datetime(2030, 1, 2, 3, 4, 5, 123456)
-
-
-RECORDED_AT = datetime(2030, 1, 2, 1, 4, 5, 654321, tzinfo=UTC)
+from tests.unit.application.eventing.outbox.codecs.helpers import (
+    EVENT_ID,
+    OCCURRED_AT,
+    RECORDED_AT,
+    assert_invalid_metadata,
+    assert_required_keys,
+    decode_payload,
+    json_round_trip,
+)
 
 
 class UserPasswordResetRejectedCodecShould(unittest.TestCase):
@@ -41,9 +38,7 @@ class UserPasswordResetRejectedCodecShould(unittest.TestCase):
         return {"user_id": 7, "username": "alice", "reason": "CANNOT_RESET_OWN_PASSWORD"}
 
     def decode(self, payload: JSONObject) -> UserPasswordResetRejected:
-        return self.codec.decode(
-            payload, event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
-        )
+        return decode_payload(self.codec, payload)
 
     def test_exact_wire_contract_and_json_round_trip_for_every_reason(self) -> None:
         for reason in UserPasswordResetRejectionReason:
@@ -62,20 +57,15 @@ class UserPasswordResetRejectedCodecShould(unittest.TestCase):
                         self.assertEqual(
                             encoded, {"user_id": user_id, "username": username, "reason": reason.value}
                         )
-                        restored = self.decode(cast(JSONObject, json.loads(json.dumps(encoded))))
+                        restored = self.decode(json_round_trip(encoded))
                         self.assertIs(type(restored), UserPasswordResetRejected)
                         self.assertEqual(restored, event)
                         self.assertIs(restored.reason, reason)
 
     def test_requires_every_key_even_when_identity_values_are_null(self) -> None:
-        for field in self.make_payload():
-            with self.subTest(field=field):
-                payload: JSONObject = {"user_id": None, "username": None, "reason": "INVALID_USERNAME"}
-                del payload[field]
-                with self.assertRaisesRegex(ValueError, f"Missing fields:.*{field}"):
-                    self.decode(payload)
-        with self.assertRaisesRegex(ValueError, "Missing fields"):
-            self.decode({})
+        assert_required_keys(
+            self, self.decode, {"user_id": None, "username": None, "reason": "INVALID_USERNAME"}
+        )
 
     def test_rejects_extra_credentials_actor_and_event_metadata(self) -> None:
         for field in ("new_password", "password_hash", "actor_user_id", "event_id"):
@@ -151,32 +141,7 @@ class UserPasswordResetRejectedCodecShould(unittest.TestCase):
             registry.for_identity("user_password_reset_rejected", 2)
 
     def test_event_constructor_rejects_invalid_metadata(self) -> None:
-        cases: tuple[tuple[str, object, type[Exception]], ...] = (
-            ("event_id", None, TypeError),
-            ("event_id", str(EVENT_ID), TypeError),
-            ("occurred_at", None, TypeError),
-            ("occurred_at", "2030-01-02", TypeError),
-            ("recorded_at", None, TypeError),
-            ("recorded_at", "2030-01-02", TypeError),
-            ("occurred_at", OCCURRED_AT.replace(tzinfo=UTC), ValueError),
-            ("recorded_at", RECORDED_AT.replace(tzinfo=None), ValueError),
-            ("recorded_at", RECORDED_AT.astimezone(timezone(timedelta(hours=2))), ValueError),
-        )
-        for field, value, error in cases:
-            with self.subTest(field=field, value=value):
-                metadata: dict[str, object] = {
-                    "event_id": EVENT_ID,
-                    "occurred_at": OCCURRED_AT,
-                    "recorded_at": RECORDED_AT,
-                }
-                metadata[field] = value
-                with self.assertRaisesRegex(error, field):
-                    self.codec.decode(
-                        self.make_payload(),
-                        event_id=cast(UUID, metadata["event_id"]),
-                        occurred_at=cast(datetime, metadata["occurred_at"]),
-                        recorded_at=cast(datetime, metadata["recorded_at"]),
-                    )
+        assert_invalid_metadata(self, self.codec, self.make_payload())
 
 
 class UserPasswordResetCodecShould(unittest.TestCase):
@@ -187,9 +152,7 @@ class UserPasswordResetCodecShould(unittest.TestCase):
         return {"user_id": 7, "username": "alice"}
 
     def decode(self, payload: JSONObject) -> UserPasswordReset:
-        return self.codec.decode(
-            payload, event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
-        )
+        return decode_payload(self.codec, payload)
 
     def test_exact_wire_contract_and_json_round_trip_preserve_account_and_metadata(self) -> None:
         for user_id in (1, 7, 2**63):
@@ -205,20 +168,13 @@ class UserPasswordResetCodecShould(unittest.TestCase):
                     encoded = self.codec.encode(event)
                     self.assertEqual(encoded, {"user_id": user_id, "username": username})
                     self.assertIs(type(encoded["user_id"]), int)
-                    payload = cast(JSONObject, json.loads(json.dumps(encoded)))
+                    payload = json_round_trip(encoded)
                     restored = self.decode(payload)
                     self.assertIs(type(restored), UserPasswordReset)
                     self.assertEqual(restored, event)
 
     def test_requires_every_key_and_rejects_empty_payload(self) -> None:
-        for field in self.make_payload():
-            with self.subTest(field=field):
-                payload = self.make_payload()
-                del payload[field]
-                with self.assertRaisesRegex(ValueError, f"Missing fields:.*{field}"):
-                    self.decode(payload)
-        with self.assertRaisesRegex(ValueError, "Missing fields"):
-            self.decode({})
+        assert_required_keys(self, self.decode, self.make_payload())
 
     def test_rejects_extra_fields_including_credentials_actor_and_metadata(self) -> None:
         for field in ("new_password", "password_hash", "actor_user_id", "event_id", "reason"):
@@ -282,32 +238,7 @@ class UserPasswordResetCodecShould(unittest.TestCase):
             registry.for_identity("user_password_reset", 2)
 
     def test_event_constructor_validates_supplied_metadata(self) -> None:
-        cases: tuple[tuple[str, object, type[Exception]], ...] = (
-            ("event_id", None, TypeError),
-            ("event_id", str(EVENT_ID), TypeError),
-            ("occurred_at", None, TypeError),
-            ("occurred_at", "2030-01-02", TypeError),
-            ("recorded_at", None, TypeError),
-            ("recorded_at", "2030-01-02", TypeError),
-            ("occurred_at", OCCURRED_AT.replace(tzinfo=UTC), ValueError),
-            ("recorded_at", RECORDED_AT.replace(tzinfo=None), ValueError),
-            ("recorded_at", RECORDED_AT.astimezone(timezone(timedelta(hours=2))), ValueError),
-        )
-        for field, value, error in cases:
-            with self.subTest(field=field, value=value):
-                metadata: dict[str, object] = {
-                    "event_id": EVENT_ID,
-                    "occurred_at": OCCURRED_AT,
-                    "recorded_at": RECORDED_AT,
-                }
-                metadata[field] = value
-                with self.assertRaisesRegex(error, field):
-                    self.codec.decode(
-                        self.make_payload(),
-                        event_id=cast(UUID, metadata["event_id"]),
-                        occurred_at=cast(datetime, metadata["occurred_at"]),
-                        recorded_at=cast(datetime, metadata["recorded_at"]),
-                    )
+        assert_invalid_metadata(self, self.codec, self.make_payload())
 
 
 class UserPasswordChangeRejectedCodecShould(unittest.TestCase):
@@ -318,7 +249,7 @@ class UserPasswordChangeRejectedCodecShould(unittest.TestCase):
         return {"user_id": 7, "username": "alice", "reason": "CURRENT_PASSWORD_INCORRECT"}
 
     def decode(self, payload: JSONObject) -> UserPasswordChangeRejected:
-        return self.codec.decode(payload, event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT)
+        return decode_payload(self.codec, payload)
 
     def test_exact_wire_contract_and_json_round_trip_for_every_reason(self) -> None:
         for reason in UserPasswordChangeRejectionReason:
@@ -337,20 +268,15 @@ class UserPasswordChangeRejectedCodecShould(unittest.TestCase):
                         self.assertEqual(
                             encoded, {"user_id": user_id, "username": username, "reason": reason.value}
                         )
-                        payload = cast(JSONObject, json.loads(json.dumps(encoded)))
+                        payload = json_round_trip(encoded)
                         restored = self.decode(payload)
                         self.assertEqual(restored, event)
                         self.assertIs(restored.reason, reason)
 
     def test_requires_all_keys_even_when_identity_is_null(self) -> None:
-        for field in self.make_payload():
-            with self.subTest(field=field):
-                payload: JSONObject = {"user_id": None, "username": None, "reason": "INVALID_USERNAME"}
-                del payload[field]
-                with self.assertRaisesRegex(ValueError, f"Missing fields:.*{field}"):
-                    self.decode(payload)
-        with self.assertRaisesRegex(ValueError, "Missing fields"):
-            self.decode({})
+        assert_required_keys(
+            self, self.decode, {"user_id": None, "username": None, "reason": "INVALID_USERNAME"}
+        )
 
     def test_rejects_extra_fields_including_credentials_and_metadata(self) -> None:
         for field in ("current_password", "new_password", "password_hash", "event_id"):
@@ -421,32 +347,7 @@ class UserPasswordChangeRejectedCodecShould(unittest.TestCase):
             registry.for_identity("user_password_change_rejected", 2)
 
     def test_event_constructor_rejects_invalid_metadata(self) -> None:
-        cases: tuple[tuple[str, object, type[Exception]], ...] = (
-            ("event_id", None, TypeError),
-            ("event_id", str(EVENT_ID), TypeError),
-            ("occurred_at", None, TypeError),
-            ("occurred_at", "2030-01-02", TypeError),
-            ("recorded_at", None, TypeError),
-            ("recorded_at", "2030-01-02", TypeError),
-            ("occurred_at", OCCURRED_AT.replace(tzinfo=UTC), ValueError),
-            ("recorded_at", RECORDED_AT.replace(tzinfo=None), ValueError),
-            ("recorded_at", RECORDED_AT.astimezone(timezone(timedelta(hours=2))), ValueError),
-        )
-        for field, value, error in cases:
-            with self.subTest(field=field, value=value):
-                metadata: dict[str, object] = {
-                    "event_id": EVENT_ID,
-                    "occurred_at": OCCURRED_AT,
-                    "recorded_at": RECORDED_AT,
-                }
-                metadata[field] = value
-                with self.assertRaisesRegex(error, field):
-                    self.codec.decode(
-                        self.make_payload(),
-                        event_id=cast(UUID, metadata["event_id"]),
-                        occurred_at=cast(datetime, metadata["occurred_at"]),
-                        recorded_at=cast(datetime, metadata["recorded_at"]),
-                    )
+        assert_invalid_metadata(self, self.codec, self.make_payload())
 
 
 class UserPasswordChangedCodecShould(unittest.TestCase):
@@ -457,7 +358,7 @@ class UserPasswordChangedCodecShould(unittest.TestCase):
         return {"user_id": 7, "username": "alice"}
 
     def decode(self, payload: JSONObject) -> UserPasswordChanged:
-        return self.codec.decode(payload, event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT)
+        return decode_payload(self.codec, payload)
 
     def test_encodes_exact_identity_fields_without_credentials_or_metadata(self) -> None:
         event = UserPasswordChanged(
@@ -481,18 +382,11 @@ class UserPasswordChangedCodecShould(unittest.TestCase):
                         user_id=user_id,
                         username=username,
                     )
-                    payload = cast(JSONObject, json.loads(json.dumps(self.codec.encode(event))))
+                    payload = json_round_trip(self.codec.encode(event))
                     self.assertEqual(self.decode(payload), event)
 
     def test_requires_every_key_and_rejects_empty_payload(self) -> None:
-        for field in self.make_payload():
-            with self.subTest(field=field):
-                payload = self.make_payload()
-                del payload[field]
-                with self.assertRaisesRegex(ValueError, f"Missing fields:.*{field}"):
-                    self.decode(payload)
-        with self.assertRaisesRegex(ValueError, "Missing fields"):
-            self.decode({})
+        assert_required_keys(self, self.decode, self.make_payload())
 
     def test_rejects_extra_fields_including_credentials_and_metadata(self) -> None:
         for field in ("password", "password_hash", "event_id", "reason"):
@@ -552,29 +446,4 @@ class UserPasswordChangedCodecShould(unittest.TestCase):
             registry.for_identity("user_password_changed", 2)
 
     def test_event_constructor_validates_supplied_metadata(self) -> None:
-        cases: tuple[tuple[str, object, type[Exception]], ...] = (
-            ("event_id", None, TypeError),
-            ("event_id", str(EVENT_ID), TypeError),
-            ("occurred_at", None, TypeError),
-            ("occurred_at", "2030-01-02", TypeError),
-            ("recorded_at", None, TypeError),
-            ("recorded_at", "2030-01-02", TypeError),
-            ("occurred_at", OCCURRED_AT.replace(tzinfo=UTC), ValueError),
-            ("recorded_at", RECORDED_AT.replace(tzinfo=None), ValueError),
-            ("recorded_at", RECORDED_AT.astimezone(timezone(timedelta(hours=2))), ValueError),
-        )
-        for field, value, error in cases:
-            with self.subTest(field=field, value=value):
-                metadata: dict[str, object] = {
-                    "event_id": EVENT_ID,
-                    "occurred_at": OCCURRED_AT,
-                    "recorded_at": RECORDED_AT,
-                }
-                metadata[field] = value
-                with self.assertRaisesRegex(error, field):
-                    self.codec.decode(
-                        self.make_payload(),
-                        event_id=cast(UUID, metadata["event_id"]),
-                        occurred_at=cast(datetime, metadata["occurred_at"]),
-                        recorded_at=cast(datetime, metadata["recorded_at"]),
-                    )
+        assert_invalid_metadata(self, self.codec, self.make_payload())

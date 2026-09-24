@@ -1,10 +1,6 @@
 """World-state snapshot corruption and quarantine outbox payload contract tests."""
 
-import json
 import unittest
-from datetime import UTC, datetime, timedelta, timezone
-from typing import cast
-from uuid import UUID
 
 from src.application.enums.world_state_corruption_reasons import WorldStateCorruptionReason
 from src.application.enums.world_state_failure_reasons import WorldStateFailureReason
@@ -21,14 +17,15 @@ from src.application.events.world_state_events import (
     WorldStateSnapshotQuarantined,
 )
 from src.shared.json_types import JSONObject, JSONValue
-
-EVENT_ID = UUID("12345678-1234-4678-9234-567812345678")
-
-
-OCCURRED_AT = datetime(2030, 1, 2, 3, 4, 5, 123456)
-
-
-RECORDED_AT = datetime(2030, 1, 2, 1, 4, 5, 654321, tzinfo=UTC)
+from tests.unit.application.eventing.outbox.codecs.helpers import (
+    EVENT_ID,
+    OCCURRED_AT,
+    RECORDED_AT,
+    assert_invalid_metadata,
+    assert_required_keys,
+    decode_payload,
+    json_round_trip,
+)
 
 
 class WorldStateSnapshotQuarantinedCodecShould(unittest.TestCase):
@@ -41,9 +38,7 @@ class WorldStateSnapshotQuarantinedCodecShould(unittest.TestCase):
         }
 
     def decode(self, payload: JSONObject) -> WorldStateSnapshotQuarantined:
-        return self.codec.decode(
-            payload, event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
-        )
+        return decode_payload(self.codec, payload)
 
     def test_exact_wire_contract_and_json_round_trip_for_all_corruption_reasons(self) -> None:
         for reason in WorldStateCorruptionReason:
@@ -65,7 +60,7 @@ class WorldStateSnapshotQuarantinedCodecShould(unittest.TestCase):
                 self.assertEqual(encoded, expected)
                 for field in expected:
                     self.assertIs(type(encoded[field]), str)
-                restored = self.decode(cast(JSONObject, json.loads(json.dumps(encoded, allow_nan=False))))
+                restored = self.decode(json_round_trip(encoded))
                 self.assertIs(type(restored), WorldStateSnapshotQuarantined)
                 self.assertEqual(restored, event)
                 self.assertIs(restored.reason, reason)
@@ -73,14 +68,7 @@ class WorldStateSnapshotQuarantinedCodecShould(unittest.TestCase):
                 self.assertEqual(self.codec.event_version, 1)
 
     def test_requires_every_key(self) -> None:
-        for field in self.payload:
-            with self.subTest(field=field):
-                payload = dict(self.payload)
-                del payload[field]
-                with self.assertRaisesRegex(ValueError, f"Missing fields:.*{field}"):
-                    self.decode(payload)
-        with self.assertRaisesRegex(ValueError, "Missing fields"):
-            self.decode({})
+        assert_required_keys(self, self.decode, dict(self.payload))
 
     def test_rejects_unknown_snapshot_and_metadata_keys(self) -> None:
         for field in (
@@ -159,30 +147,7 @@ class WorldStateSnapshotQuarantinedCodecShould(unittest.TestCase):
                 registry.for_identity("world_state_snapshot_quarantined", version)
 
     def test_event_constructor_rejects_invalid_metadata(self) -> None:
-        cases: tuple[tuple[str, object, type[Exception]], ...] = (
-            ("event_id", None, TypeError),
-            ("event_id", str(EVENT_ID), TypeError),
-            ("occurred_at", None, TypeError),
-            ("occurred_at", "2030-01-02", TypeError),
-            ("recorded_at", None, TypeError),
-            ("recorded_at", "2030-01-02", TypeError),
-            ("occurred_at", OCCURRED_AT.replace(tzinfo=UTC), ValueError),
-            ("recorded_at", RECORDED_AT.replace(tzinfo=None), ValueError),
-            ("recorded_at", RECORDED_AT.astimezone(timezone(timedelta(hours=2))), ValueError),
-        )
-        for field, value, error in cases:
-            with self.subTest(field=field, value=value):
-                metadata: dict[str, object] = {
-                    "event_id": EVENT_ID, "occurred_at": OCCURRED_AT, "recorded_at": RECORDED_AT,
-                }
-                metadata[field] = value
-                with self.assertRaisesRegex(error, field):
-                    self.codec.decode(
-                        self.payload,
-                        event_id=cast(UUID, metadata["event_id"]),
-                        occurred_at=cast(datetime, metadata["occurred_at"]),
-                        recorded_at=cast(datetime, metadata["recorded_at"]),
-                    )
+        assert_invalid_metadata(self, self.codec, self.payload)
 
 
 class WorldStateCorruptionDetectedCodecShould(unittest.TestCase):
@@ -194,9 +159,7 @@ class WorldStateCorruptionDetectedCodecShould(unittest.TestCase):
         }
 
     def decode(self, payload: JSONObject) -> WorldStateCorruptionDetected:
-        return self.codec.decode(
-            payload, event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
-        )
+        return decode_payload(self.codec, payload)
 
     def test_exact_wire_contract_and_json_round_trip_for_all_corruption_reasons(self) -> None:
         for reason in WorldStateCorruptionReason:
@@ -213,7 +176,7 @@ class WorldStateCorruptionDetectedCodecShould(unittest.TestCase):
                 self.assertEqual(encoded, expected)
                 self.assertIs(type(encoded["reason"]), str)
                 self.assertIs(type(encoded["snapshot_path"]), str)
-                restored = self.decode(cast(JSONObject, json.loads(json.dumps(encoded, allow_nan=False))))
+                restored = self.decode(json_round_trip(encoded))
                 self.assertIs(type(restored), WorldStateCorruptionDetected)
                 self.assertEqual(restored, event)
                 self.assertIs(restored.reason, reason)
@@ -221,14 +184,7 @@ class WorldStateCorruptionDetectedCodecShould(unittest.TestCase):
                 self.assertEqual(self.codec.event_version, 1)
 
     def test_requires_every_key(self) -> None:
-        for field in self.payload:
-            with self.subTest(field=field):
-                payload = dict(self.payload)
-                del payload[field]
-                with self.assertRaisesRegex(ValueError, f"Missing fields:.*{field}"):
-                    self.decode(payload)
-        with self.assertRaisesRegex(ValueError, "Missing fields"):
-            self.decode({})
+        assert_required_keys(self, self.decode, dict(self.payload))
 
     def test_rejects_unknown_schema_and_metadata_keys(self) -> None:
         for field in (
@@ -303,27 +259,4 @@ class WorldStateCorruptionDetectedCodecShould(unittest.TestCase):
                 registry.for_identity("world_state_corruption_detected", version)
 
     def test_event_constructor_rejects_invalid_metadata(self) -> None:
-        cases: tuple[tuple[str, object, type[Exception]], ...] = (
-            ("event_id", None, TypeError),
-            ("event_id", str(EVENT_ID), TypeError),
-            ("occurred_at", None, TypeError),
-            ("occurred_at", "2030-01-02", TypeError),
-            ("recorded_at", None, TypeError),
-            ("recorded_at", "2030-01-02", TypeError),
-            ("occurred_at", OCCURRED_AT.replace(tzinfo=UTC), ValueError),
-            ("recorded_at", RECORDED_AT.replace(tzinfo=None), ValueError),
-            ("recorded_at", RECORDED_AT.astimezone(timezone(timedelta(hours=2))), ValueError),
-        )
-        for field, value, error in cases:
-            with self.subTest(field=field, value=value):
-                metadata: dict[str, object] = {
-                    "event_id": EVENT_ID, "occurred_at": OCCURRED_AT, "recorded_at": RECORDED_AT,
-                }
-                metadata[field] = value
-                with self.assertRaisesRegex(error, field):
-                    self.codec.decode(
-                        self.payload,
-                        event_id=cast(UUID, metadata["event_id"]),
-                        occurred_at=cast(datetime, metadata["occurred_at"]),
-                        recorded_at=cast(datetime, metadata["recorded_at"]),
-                    )
+        assert_invalid_metadata(self, self.codec, self.payload)

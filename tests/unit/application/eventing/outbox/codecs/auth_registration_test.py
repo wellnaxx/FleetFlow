@@ -1,10 +1,6 @@
 """User registration successes and rejections outbox payload contract tests."""
 
-import json
 import unittest
-from datetime import UTC, datetime, timedelta, timezone
-from typing import cast
-from uuid import UUID
 
 from src.application.enums.user_registration_rejection_reasons import UserRegistrationRejectionReason
 from src.application.eventing.outbox.codecs.auth_registration import (
@@ -25,14 +21,15 @@ from src.application.events.auth_events import (
 )
 from src.domain.enums.auth import Role
 from src.shared.json_types import JSONObject, JSONValue
-
-EVENT_ID = UUID("12345678-1234-4678-9234-567812345678")
-
-
-OCCURRED_AT = datetime(2030, 1, 2, 3, 4, 5, 123456)
-
-
-RECORDED_AT = datetime(2030, 1, 2, 1, 4, 5, 654321, tzinfo=UTC)
+from tests.unit.application.eventing.outbox.codecs.helpers import (
+    EVENT_ID,
+    OCCURRED_AT,
+    RECORDED_AT,
+    assert_invalid_metadata,
+    assert_required_keys,
+    decode_payload,
+    json_round_trip,
+)
 
 
 def make_authenticated_payload() -> JSONObject:
@@ -47,9 +44,7 @@ class UserRegistrationRejectedCodecShould(unittest.TestCase):
         return {"username": "alice", "reason": "USERNAME_ALREADY_EXISTS"}
 
     def decode(self, payload: JSONObject) -> UserRegistrationRejected:
-        return self.codec.decode(
-            payload, event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
-        )
+        return decode_payload(self.codec, payload)
 
     def test_exact_wire_contract_and_json_round_trip_for_every_reason(self) -> None:
         for reason in UserRegistrationRejectionReason:
@@ -64,20 +59,13 @@ class UserRegistrationRejectedCodecShould(unittest.TestCase):
                     )
                     encoded = self.codec.encode(event)
                     self.assertEqual(encoded, {"username": username, "reason": reason.value})
-                    restored = self.decode(cast(JSONObject, json.loads(json.dumps(encoded))))
+                    restored = self.decode(json_round_trip(encoded))
                     self.assertIs(type(restored), UserRegistrationRejected)
                     self.assertEqual(restored, event)
                     self.assertIs(restored.reason, reason)
 
     def test_requires_every_key_including_nullable_username(self) -> None:
-        for field in self.make_payload():
-            with self.subTest(field=field):
-                payload: JSONObject = {"username": None, "reason": "INVALID_USERNAME"}
-                del payload[field]
-                with self.assertRaisesRegex(ValueError, f"Missing fields:.*{field}"):
-                    self.decode(payload)
-        with self.assertRaisesRegex(ValueError, "Missing fields"):
-            self.decode({})
+        assert_required_keys(self, self.decode, {"username": None, "reason": "INVALID_USERNAME"})
 
     def test_rejects_extra_account_credentials_and_metadata_fields(self) -> None:
         for field in ("user_id", "role", "password", "password_hash", "actor_user_id", "event_id"):
@@ -146,32 +134,7 @@ class UserRegistrationRejectedCodecShould(unittest.TestCase):
             registry.for_identity("user_registration_rejected", 2)
 
     def test_event_constructor_rejects_invalid_metadata(self) -> None:
-        cases: tuple[tuple[str, object, type[Exception]], ...] = (
-            ("event_id", None, TypeError),
-            ("event_id", str(EVENT_ID), TypeError),
-            ("occurred_at", None, TypeError),
-            ("occurred_at", "2030-01-02", TypeError),
-            ("recorded_at", None, TypeError),
-            ("recorded_at", "2030-01-02", TypeError),
-            ("occurred_at", OCCURRED_AT.replace(tzinfo=UTC), ValueError),
-            ("recorded_at", RECORDED_AT.replace(tzinfo=None), ValueError),
-            ("recorded_at", RECORDED_AT.astimezone(timezone(timedelta(hours=2))), ValueError),
-        )
-        for field, value, error in cases:
-            with self.subTest(field=field, value=value):
-                metadata: dict[str, object] = {
-                    "event_id": EVENT_ID,
-                    "occurred_at": OCCURRED_AT,
-                    "recorded_at": RECORDED_AT,
-                }
-                metadata[field] = value
-                with self.assertRaisesRegex(error, field):
-                    self.codec.decode(
-                        self.make_payload(),
-                        event_id=cast(UUID, metadata["event_id"]),
-                        occurred_at=cast(datetime, metadata["occurred_at"]),
-                        recorded_at=cast(datetime, metadata["recorded_at"]),
-                    )
+        assert_invalid_metadata(self, self.codec, self.make_payload())
 
 
 class UserRegisteredCodecShould(unittest.TestCase):
@@ -179,9 +142,7 @@ class UserRegisteredCodecShould(unittest.TestCase):
         self.codec = UserRegisteredEventPayloadCodec()
 
     def decode(self, payload: JSONObject) -> UserRegistered:
-        return self.codec.decode(
-            payload, event_id=EVENT_ID, occurred_at=OCCURRED_AT, recorded_at=RECORDED_AT
-        )
+        return decode_payload(self.codec, payload)
 
     def test_exact_wire_contract_and_json_round_trip_for_all_roles(self) -> None:
         for role in Role:
@@ -201,20 +162,13 @@ class UserRegisteredCodecShould(unittest.TestCase):
                             encoded, {"user_id": user_id, "username": username, "role": role.value}
                         )
                         self.assertIs(type(encoded["user_id"]), int)
-                        restored = self.decode(cast(JSONObject, json.loads(json.dumps(encoded))))
+                        restored = self.decode(json_round_trip(encoded))
                         self.assertIs(type(restored), UserRegistered)
                         self.assertEqual(restored, event)
                         self.assertIs(restored.role, role)
 
     def test_requires_all_keys_and_rejects_empty_payload(self) -> None:
-        for field in make_authenticated_payload():
-            with self.subTest(field=field):
-                payload = make_authenticated_payload()
-                del payload[field]
-                with self.assertRaisesRegex(ValueError, f"Missing fields:.*{field}"):
-                    self.decode(payload)
-        with self.assertRaisesRegex(ValueError, "Missing fields"):
-            self.decode({})
+        assert_required_keys(self, self.decode, make_authenticated_payload())
 
     def test_rejects_extra_credentials_actor_and_metadata_fields(self) -> None:
         for field in ("password", "password_hash", "actor_user_id", "event_id"):
@@ -287,29 +241,4 @@ class UserRegisteredCodecShould(unittest.TestCase):
             registry.for_identity("user_registered", 2)
 
     def test_event_constructor_rejects_invalid_metadata(self) -> None:
-        cases: tuple[tuple[str, object, type[Exception]], ...] = (
-            ("event_id", None, TypeError),
-            ("event_id", str(EVENT_ID), TypeError),
-            ("occurred_at", None, TypeError),
-            ("occurred_at", "2030-01-02", TypeError),
-            ("recorded_at", None, TypeError),
-            ("recorded_at", "2030-01-02", TypeError),
-            ("occurred_at", OCCURRED_AT.replace(tzinfo=UTC), ValueError),
-            ("recorded_at", RECORDED_AT.replace(tzinfo=None), ValueError),
-            ("recorded_at", RECORDED_AT.astimezone(timezone(timedelta(hours=2))), ValueError),
-        )
-        for field, value, error in cases:
-            with self.subTest(field=field, value=value):
-                metadata: dict[str, object] = {
-                    "event_id": EVENT_ID,
-                    "occurred_at": OCCURRED_AT,
-                    "recorded_at": RECORDED_AT,
-                }
-                metadata[field] = value
-                with self.assertRaisesRegex(error, field):
-                    self.codec.decode(
-                        make_authenticated_payload(),
-                        event_id=cast(UUID, metadata["event_id"]),
-                        occurred_at=cast(datetime, metadata["occurred_at"]),
-                        recorded_at=cast(datetime, metadata["recorded_at"]),
-                    )
+        assert_invalid_metadata(self, self.codec, make_authenticated_payload())
