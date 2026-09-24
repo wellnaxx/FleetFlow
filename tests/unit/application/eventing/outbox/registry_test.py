@@ -8,8 +8,8 @@ from unittest.mock import patch
 from uuid import UUID, uuid4
 
 from src.application.eventing.outbox.codec import EventPayloadCodec, EventPayloadDecoder
-from src.application.eventing.outbox.codecs.routes import RouteCreatedEventPayloadCodec
-from src.application.eventing.outbox.codecs.world_state import WorldStateAdvancedEventPayloadCodec
+from src.application.eventing.outbox.codecs.route_lifecycle import RouteCreatedEventPayloadCodec
+from src.application.eventing.outbox.codecs.world_state_runtime import WorldStateAdvancedEventPayloadCodec
 from src.application.eventing.outbox.errors import (
     DuplicateEventCodecError,
     EventCodecContractError,

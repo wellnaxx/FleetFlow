@@ -894,7 +894,13 @@ batches and supports ownership-checked publication, retry scheduling, expired-cl
 cleanup. Repository adapters, schema migrations, transactional capture, dispatcher workers, and outbox runtime
 wiring are not implemented yet.
 
-Payload codecs cover the published event types. `EventOutboxCodecRegistry.register()` accepts only a current
+Payload codecs cover the published event types. The largest codec and test modules are split by event family:
+auth sessions, passwords, registration, and authorization; route lifecycle, package assignments, and truck
+assignments; and world-state transfers, startup restore, integrity, and runtime changes. Import codecs directly
+from their family modules under `application/eventing/outbox/codecs`; the former `auth`, `routes`, and
+`world_state` umbrella modules are removed.
+
+`EventOutboxCodecRegistry.register()` accepts only a current
 codec whose version matches its event class. `register_decoder()` adds an explicit older-version reader without
 replacing the current encoder. Readers are resolved by the exact persisted `(event_type, event_version)` pair;
 unknown versions fail rather than falling back to a newer codec. Historical readers must explicitly transform old
