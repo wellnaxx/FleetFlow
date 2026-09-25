@@ -77,7 +77,7 @@ FleetFlow/
 |   |   |-- dto/                  # persisted snapshot and runtime transfer objects
 |   |   |-- enums/                # application-level classifications and reasons
 |   |   |-- event_handlers/       # audit and other event consumers
-|   |   |-- eventing/             # collector, recorder scope, envelopes, handlers, and outbox message models
+|   |   |-- eventing/             # collector, recorder scope, envelopes, handlers, outbox models, codec registry/codecs
 |   |   |-- events/               # immutable application event definitions
 |   |   |-- exceptions/           # application and world-state exception hierarchy
 |   |   |-- messaging/            # message contracts, typed keys, scoped executors, and in-process buses
@@ -721,8 +721,9 @@ GET /api/audit/?resource_type=package&resource_id=4&action=created
 GET /api/audit/?actor_user_id=2&source=HTTP&occurred_from=2025-01-01T00:00:00
 ```
 
-Managers with `AUDIT_VIEW` may browse all matching records. Employees are restricted by the application use
-case to records attributed to their own user id and username.
+Managers with `AUDIT_VIEW` may browse all matching records. Employees are always restricted by the application
+use case to records attributed to their own user id. An explicitly supplied actor user id or username must match
+the current principal; mismatches are rejected. No username filter is added when it is omitted.
 
 Fleet overview accepts one bounded query parameter and returns a nested operational projection:
 
