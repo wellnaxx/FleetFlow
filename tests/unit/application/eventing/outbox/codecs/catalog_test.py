@@ -10,10 +10,13 @@ import unittest
 from importlib import import_module
 from pkgutil import walk_packages
 from typing import cast
+from unittest.mock import patch
 
 from src.application.eventing.outbox.codec import EventPayloadCodec
+from src.application.eventing.outbox.errors import DuplicateEventCodecError
 from src.application.eventing.outbox.registry import EventOutboxCodecRegistry
 from src.composition.event_catalog import PUBLISHED_EVENT_TYPES
+from src.composition.outbox_codecs import build_event_payload_codec_registry, register_event_payload_codecs
 from src.shared.event import Event
 
 
@@ -68,8 +71,18 @@ class CurrentCodecCatalogShould(unittest.TestCase):
 
     def test_all_current_codecs_register_together_and_resolve_by_identity(self) -> None:
         registry = EventOutboxCodecRegistry()
-        for codec in self.codecs:
-            registry.register(codec.event_class, codec)
+        with patch.object(registry, "register", wraps=registry.register) as register:
+            result = register_event_payload_codecs(registry)
+
+        self.assertIsNone(result)
+        self.assertEqual(
+            [call.args[0] for call in register.call_args_list],
+            list(PUBLISHED_EVENT_TYPES),
+        )
+        self.assertCountEqual(
+            [(call.args[0], type(call.args[1])) for call in register.call_args_list],
+            [(codec.event_class, type(codec)) for codec in self.codecs],
+        )
 
         for codec in self.codecs:
             with self.subTest(codec=type(codec).__name__):
@@ -77,3 +90,59 @@ class CurrentCodecCatalogShould(unittest.TestCase):
                 self.assertIs(adapter.event_class, codec.event_class)
                 self.assertEqual(adapter.event_type, codec.event_type)
                 self.assertEqual(adapter.event_version, codec.event_version)
+
+    def test_repeated_registration_rejects_duplicates_without_replacing_adapters(self) -> None:
+        registry = EventOutboxCodecRegistry()
+        register_event_payload_codecs(registry)
+        adapters = [registry.for_identity(codec.event_type, codec.event_version) for codec in self.codecs]
+
+        with self.assertRaises(DuplicateEventCodecError):
+            register_event_payload_codecs(registry)
+
+        for codec, adapter in zip(self.codecs, adapters, strict=True):
+            with self.subTest(codec=type(codec).__name__):
+                self.assertIs(registry.for_identity(codec.event_type, codec.event_version), adapter)
+
+    def test_builder_populates_and_returns_the_registry_passed_to_registration(self) -> None:
+        with patch(
+            "src.composition.outbox_codecs.register_event_payload_codecs",
+            wraps=register_event_payload_codecs,
+        ) as register:
+            registry = build_event_payload_codec_registry()
+
+        register.assert_called_once_with(registry)
+        registered_events: list[type[Event]] = []
+        for codec in self.codecs:
+            with self.subTest(codec=type(codec).__name__):
+                adapter = registry.for_identity(codec.event_type, codec.event_version)
+                self.assertIs(adapter.event_class, codec.event_class)
+                self.assertEqual(adapter.event_type, codec.event_type)
+                self.assertEqual(adapter.event_version, codec.event_version)
+                registered_events.append(adapter.event_class)
+        self.assertCountEqual(registered_events, PUBLISHED_EVENT_TYPES)
+
+    def test_builder_creates_independent_registries_and_adapters_on_every_call(self) -> None:
+        first = build_event_payload_codec_registry()
+        first_adapters = [first.for_identity(codec.event_type, codec.event_version) for codec in self.codecs]
+
+        second = build_event_payload_codec_registry()
+
+        self.assertIsNot(first, second)
+        for codec, original in zip(self.codecs, first_adapters, strict=True):
+            with self.subTest(codec=type(codec).__name__):
+                self.assertIs(first.for_identity(codec.event_type, codec.event_version), original)
+                self.assertIsNot(second.for_identity(codec.event_type, codec.event_version), original)
+
+    def test_builder_propagates_registration_errors_unchanged(self) -> None:
+        failure = DuplicateEventCodecError("Conflicting codec identity")
+        with (
+            patch(
+                "src.composition.outbox_codecs.register_event_payload_codecs",
+                side_effect=failure,
+            ) as register,
+            self.assertRaises(DuplicateEventCodecError) as raised,
+        ):
+            build_event_payload_codec_registry()
+
+        self.assertIs(raised.exception, failure)
+        register.assert_called_once()
