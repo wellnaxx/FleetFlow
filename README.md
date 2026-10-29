@@ -5,56 +5,25 @@
 ![Architecture](https://img.shields.io/badge/Architecture-Hexagonal--style-8B5CF6)
 ![Tests](https://img.shields.io/badge/Tests-pytest%20%2B%20unittest-2563EB)
 
-FleetFlow is a logistics management system for packages, delivery routes, trucks, customers, and authenticated users across Australian freight hub locations. It currently exposes an interactive CLI and a FastAPI HTTP adapter. The internals are structured around domain entities, application use cases, typed messaging contracts, services, ports, adapters, and a composition root so workflows can be reused by multiple driving adapters.
+FleetFlow manages packages, delivery routes, trucks, and customers across Australian freight hubs.
+An interactive CLI and FastAPI API share application workflows, with in-memory or PostgreSQL persistence.
 
 ## Capabilities
 
-FleetFlow currently supports:
-
-- Interactive menu-driven operation and command-mode workflows.
-- FastAPI HTTP adapter with authentication plus customer, package, route, truck, fleet-overview,
-  audit-log, and world-state workflows.
-- Package creation, lookup, removal, unassigned-package listing, and route assignment.
-- Route creation, lookup, removal, in-progress tracking, package assignment, and truck assignment.
-- Truck fleet management with deterministic city dispersion.
-- Authorized point-in-time fleet overviews containing package, route, and truck counts; overdue and
-  unassigned work; and ordered active-route details with schedule-derived positions, segment loads,
-  assigned trucks, and capacity utilization.
-- Pure package and truck assignment policies with structured acceptance/rejection decisions.
-- Truck suitability checks for start-location compatibility, route range, time-window availability, availability-location transitions, and carrying capacity.
-- A reusable route-load calculator for segment-based capacity validation and fleet reporting, so truck
-  capacity is evaluated against the maximum simultaneous load on a route leg rather than total package
-  weight across the whole route.
-- Immutable, validated route paths and schedules with indexed location and arrival lookups.
-- Customer records derived from package creation, including email and phone lookup indexes.
-- User authentication with manager and employee roles.
-- JWT access/refresh tokens for HTTP authentication, with token-version revocation.
-- Typed domain, application, and repository errors for expected validation, not-found, conflict, authentication, and persistence failures.
-- Centralized layer-neutral runtime validation with domain and adapter wrappers that preserve boundary-specific errors.
-- Typed command/query messages, result-aware routing keys, dispatch-only input ports, synchronous in-process
-  buses, exhaustive message catalogs, and composition-owned registration. CLI and HTTP adapters dispatch every
-  application workflow through these buses, and use cases directly implement `execute(command_or_query)`.
-- Global FastAPI exception handlers that map expected application/domain failures to stable, sanitized HTTP responses.
-- Immutable domain and application event types with per-entity pending events, execution-scoped application
-  events, rollback checkpoints, context-local envelope metadata, synchronous dispatch, and structured logging.
-- Browsable audit log with normalized descriptors, versioned event payloads, subscribed persistence handlers, in-memory and PostgreSQL repositories, and actor-scoped CLI/HTTP queries.
-- Role-based authorization around CLI commands and application use cases.
-- Password hashing with PBKDF2-HMAC and strict persisted password-hash validation.
-- Configurable application logging to stdout and optional rotating log files, including HTTP request duration/status logging.
-- Environment-selected in-memory or PostgreSQL logistics persistence backend.
-- Manual save/load plus autosave after mutating commands when autosave is enabled.
-- Versioned JSON world-state snapshots containing customers, packages, routes, repository counters, and truck runtime state.
-- Reasoned world-state corruption handling that distinguishes malformed JSON, invalid structure, unsupported schema, invalid references, and invariant violations.
-- PostgreSQL world-state export/import through the same JSON snapshot format.
-- Startup recovery for default saved state: missing state is ignored, corrupt state is quarantined, and unexpected runtime errors still fail loudly.
-- A Postman/Newman collection covering authentication, authorization, logistics workflows, state import/export, validation, and token revocation.
-- A large automated test suite covering domain behavior, application services, message buses and executors,
-  direct-message use cases, CLI commands, HTTP routers/dependencies, fleet-overview projections, JSON and
-  database persistence, runtime swaps, snapshot import/export, and startup behavior.
+- Package creation, lookup, removal, route assignment, and unassigned-package listing.
+- Route scheduling, package/truck assignment, suitability checks, and progress tracking.
+- Fixed truck fleet with deterministic city dispersion and segment-based capacity checks.
+- Customer records created with packages, with email and phone lookup indexes.
+- Fleet overview with status counts, overdue work, active-route positions, and truck utilization.
+- Manager/employee authorization, password hashing, and HTTP JWT authentication with token revocation.
+- Actor-scoped audit browsing through both interfaces.
+- Versioned JSON save/load, startup recovery, and CLI heartbeat/autosave.
+- Structured event and request logging, with optional rotating files.
 
 ## Architecture Overview
 
-FleetFlow uses a hexagonal-style layered architecture. The CLI and HTTP API are driving adapters. JSON world-state persistence, in-memory repositories, PostgreSQL repositories, security, and runtime state management are driven adapters behind application-level ports and services.
+FleetFlow uses a hexagonal-style architecture. CLI and HTTP adapters invoke application workflows;
+persistence, security, and event delivery sit behind ports. Domain rules are independent of these adapters.
 
 ```text
 FleetFlow/
@@ -65,9 +34,9 @@ FleetFlow/
 |   |   |-- driven/
 |   |   |   |-- events/           # in-process event dispatcher and structured event logging handler
 |   |   |   |-- logging/          # stdout/file logging configuration
-|   |   |   |-- persistence/database/ # PostgreSQL repositories, overview queries, SQL, graph loaders, UoW, snapshots
+|   |   |   |-- persistence/database/ # PostgreSQL repositories, SQL, UoW, snapshots
 |   |   |   |-- persistence/json/ # JSON world-state and user persistence
-|   |   |   |-- persistence/memory/# in-memory repositories, overview query, and runtime state gateway
+|   |   |   |-- persistence/memory/ # in-memory repositories, overview query, and runtime state gateway
 |   |   |   `-- security/         # password hashing and JWT token services/configuration
 |   |   `-- driving/
 |   |       |-- cli/              # engine, menus, command factory, CLI commands
@@ -77,16 +46,16 @@ FleetFlow/
 |   |   |-- dto/                  # persisted snapshot and runtime transfer objects
 |   |   |-- enums/                # application-level classifications and reasons
 |   |   |-- event_handlers/       # audit and other event consumers
-|   |   |-- eventing/             # collector, recorder scope, envelopes, handlers, outbox models, codec registry/codecs
+|   |   |-- eventing/             # scopes, envelopes, collector, outbox contracts/codecs
 |   |   |-- events/               # immutable application event definitions
 |   |   |-- exceptions/           # application and world-state exception hierarchy
 |   |   |-- messaging/            # message contracts, typed keys, scoped executors, and in-process buses
 |   |   |-- models/               # persisted/query models such as UserRecord, AuditRecord, AuditLogQuery
 |   |   |-- queries/              # immutable read messages and typed routing keys
 |   |   |-- results/              # use-case/service result objects
-|   |   |-- services/             # auth, authorization, fleet orchestration, heartbeat, reconciliation, snapshot services
-|   |   |   |-- audit_mapping/    # typed event-to-audit registry and mappings grouped by event family
-|   |   |   `-- validators/       # focused world-state schema, identity, reference, truck, and compatibility validators
+|   |   |-- services/             # auth, fleet, heartbeat, reconciliation, snapshots
+|   |   |   |-- audit_mapping/    # event-family audit mappings
+|   |   |   `-- validators/       # world-state validation
 |   |   `-- use_cases/            # auth, package, route, truck, customer, fleet, audit, and state workflows
 |   |-- composition/              # container, event/message catalogs, subscriptions, and bus registration
 |   |-- domain/
@@ -107,321 +76,184 @@ FleetFlow/
 `-- pyproject.toml
 ```
 
-The CLI runtime flow is:
+Both interfaces follow the same execution path:
 
 ```text
-CLI Menu / Command Mode
-  -> Bind CLI EventContext
-  -> CLI Command builds a Command or Query
-  -> CommandBus or QueryBus
-  -> Registered use case or scoped message executor
-  -> Application Use Case.execute(message)
-  -> Application Service / Port
-  -> Domain Entity / Domain Service
-  -> In-memory/PostgreSQL Repository or JSON Persistence Adapter
-  -> EventCollector drains execution-scoped and tracked domain events
-  -> In-process EventDispatcher invokes subscribers
+CLI command / HTTP router
+  -> Bind actor and EventContext; build Command or Query
+  -> CommandBus / QueryBus
+  -> Registered use case, optionally wrapped in a scoped executor
+  -> UseCase.execute(message)
+  -> Application services, domain rules, and persistence ports
+  -> EventCollector drains scoped application and tracked domain events
+  -> InProcessEventDispatcher invokes subscribers
 ```
 
-The HTTP runtime flow is:
+Buses use result-typed keys, enforce exact message types, and reject duplicate registrations or missing
+handlers. Use cases implement `execute(message)` directly; there is no argument-adapting handler layer.
 
-```text
-FastAPI Router
-  -> Request Dependency / Authenticated Principal / EventContext
-  -> CommandBus or QueryBus
-  -> Registered use case or scoped message executor
-  -> Application Use Case.execute(message)
-  -> Application Service / Port
-  -> Domain Entity / Domain Service
-  -> In-memory/PostgreSQL Repository or JSON Persistence Adapter
-  -> EventCollector drains execution-scoped and tracked domain events
-  -> In-process EventDispatcher invokes subscribers
-```
+`EventDrainingExecutor` manages event-aware workflows. `WorldStateAdvancementExecutor` preserves heartbeat
+domain-event-before-summary ordering. `WhoAmI` needs no event executor.
 
-These diagrams describe the currently wired runtime. All public CLI and HTTP workflows use immutable messages,
-result-typed routing keys, structural `execute(message)` contracts, and dispatch-only input ports. The buses route
-by stable key name while enforcing exact message types, reject duplicate registrations, report missing handlers,
-and propagate executor results and failures unchanged.
+Composition entry points:
 
-Use cases are registered directly. Event-aware registrations are decorated with `EventDrainingExecutor`, which
-binds an execution-local `EventRecorderScope`, attempts denial/failure-event publication on exceptional paths, and
-drains application events plus tracked domain recorders after successful execution. Internal heartbeat advancement uses
-`WorldStateAdvancementExecutor` to preserve its required domain-event-before-summary ordering. `WhoAmI` is
-registered without event draining because it emits no events. Composition tests verify every key, use-case
-delegate, executor, catalog entry, and registration order.
-
-The composition root is `src/composition/container.py`. It wires repositories, domain services, application services, world-state persistence, runtime state management, the event collector, use-case registries, and the in-process command/query buses. `src/composition/message_buses.py` owns the complete registration builders, while `src/composition/command_catalog.py` and `src/composition/query_catalog.py` provide authoritative completeness catalogs. The container exposes the built buses through the dispatch-only input-port protocols. `src/composition/runtime.py` provides cached runtime dependencies shared by the CLI and HTTP adapters. Event subscriptions are centralized in `src/composition/event_subscriptions.py`.
+- `src/composition/container.py`: dependencies and backend selection.
+- `src/composition/message_buses.py`: command/query registration.
+- `src/composition/command_catalog.py` and `query_catalog.py`: message completeness catalogs.
+- `src/composition/event_subscriptions.py`: logging and audit subscriptions.
+- `src/composition/outbox_codecs.py`: current payload codec registration and registry builder.
+- `src/composition/runtime.py`: cached dependencies shared by CLI and HTTP.
 
 ## Domain Model
 
-FleetFlow models:
+- Entities: `Customer`, `DeliveryPackage`, `DeliveryRoute`, `Truck`.
+- Values: `ContactInfo`, `LocationCode`, `RoutePath`, `RouteSchedule`, `RouteSegment`, `ScheduledStop`,
+  `RoutePosition`, and package/truck assignment decisions.
+- Services: `Map`, `RouteScheduler`, `RouteLoadCalculator`, `PackageAssignmentPolicy`, `TruckAssignmentPolicy`.
 
-- `Customer`
-- `DeliveryPackage`
-- `DeliveryRoute`
-- `Truck`
-- `ContactInfo`
-- `LocationCode`
-- `RoutePath`
-- `RouteSchedule`, `RouteSegment`, `ScheduledStop`, and `RoutePosition`
-- `PackageAssignmentDecision` and `TruckAssignmentDecision`
-- `Map`
-- `RouteScheduler`
-- `RouteLoadCalculator`
-- `PackageAssignmentPolicy` and `TruckAssignmentPolicy`
-
-The application layer also provides `VehicleManager`, which coordinates truck
-repository access and runtime route/truck binding replacement while delegating
-suitability decisions to the pure domain policy.
-
-Supported hub codes are:
+Supported hub codes:
 
 ```text
 SYD, MEL, ADL, ASP, BRI, DAR, PER
 ```
 
-`LocationCode` normalizes location text to uppercase. `RoutePath` owns the
-ordered, unique set of supported stops and its immutable position index. `Map`
-owns the supported location set and intercity distances.
+`LocationCode` normalizes text to uppercase. `RoutePath` owns ordered, unique supported stops and their
+position index; `Map` owns supported locations and intercity distances. Application `VehicleManager`
+coordinates repository access and route/truck bindings, delegating suitability to the domain policy.
 
 ## Route, Truck, and Package Rules
 
-FleetFlow enforces the main logistics invariants in the domain and application layers:
+- A route requires at least two unique supported stops. Its immutable schedule contains segments,
+  arrival times, final ETA, total distance, and position lookups.
+- A package's pickup and delivery stops must occur in that order. Assignment checks pickup progress,
+  truck range, and capacity, then updates links and expected arrival. Reassignment to the same route is a no-op.
+- Truck assignment checks range, capacity, schedule overlap, and location at availability time.
+- Capacity means maximum simultaneous load on any route leg, not total package weight across the route.
+- Detachment clears active package assignment state. Heartbeat reconciles statuses, locations, arrivals,
+  and truck releases.
 
-- `RoutePath` normalizes raw route stops and requires at least two unique,
-  supported locations.
-- Packages can only be assigned to routes that contain their start and end locations in the correct order.
-- `RouteScheduler` builds an immutable `RouteSchedule` from a validated path, containing ordered segments, stop times, final ETA,
-  total distance, and indexed arrival/position lookups.
-- `PackageAssignmentPolicy` returns a structured acceptance or rejection decision for route compatibility,
-  pickup progress, truck range, and maximum segment load.
-- `RouteLoadCalculator` derives per-segment package loads and the maximum simultaneous route load without
-  requiring route hydration solely for reporting calculations.
-- Package assignment updates package-route links and expected arrival when possible, while reassignment to the
-  same route remains idempotent.
-- Removing a package from a route clears its active assignment state.
-- `TruckAssignmentPolicy` returns a structured decision for range, maximum
-  segment load, immediate location, schedule overlap, and the location where an
-  already assigned truck becomes available.
-- Application `VehicleManager` performs fleet repository access and binding
-  replacement without owning assignment policy rules.
-- Carrying capacity is checked by maximum segment load rather than total assigned package weight.
-- Heartbeat/reconciliation updates route statuses, truck positions, truck releases, package statuses, package current locations, and expected arrivals.
-
-Expected domain failures use typed exceptions. Reusable primitive validation for
-integers, strings, datetimes, UUIDs, and finite positive numbers lives in
-`src/shared/validation.py`; domain adapters translate those failures into
-`DomainValidationError`, while persistence and application boundaries retain
-their own error contracts. Validation problems, missing domain entities, and
-conflict/business-rule failures are translated by application use cases and
-global HTTP exception handlers into stable CLI/API-facing messages instead of
-relying on raw `ValueError` text.
+Shared validators live in `src/shared/validation.py`. Domain wrappers raise `DomainValidationError`;
+application and persistence boundaries retain their own typed validation, not-found, and conflict errors.
 
 ## Events And Observability
 
-FleetFlow has an in-process event pipeline for business facts and application workflows.
+Domain events describe customer, package, and route changes. Application events cover authentication,
+authorization denial, reconciliation, and world-state operations. Each event has an ID, contract version,
+naive app-local `occurred_at`, and UTC-aware `recorded_at`.
 
-- Domain entities record pending events for customer, package, and route lifecycle changes, including creation, assignment, detachment, pickup, delivery, scheduling, truck assignment/release, route start/completion, and removal.
-- Event-aware use cases record authentication, authorization denial, heartbeat, world-state import/export, and world-state corruption events. Authorization denials retain the attempted operation, target resource, target id, and missing permissions.
-- Events are immutable and share an event id, positive per-event contract version, business `occurred_at` timestamp, and UTC `recorded_at` timestamp. Audit records preserve the version used to serialize each event.
-- Event checkpoints allow pending events to be rolled back with failed in-memory mutations.
-- `EventContext`, `EventActor`, and `EventEnvelope` provide correlation, source, actor, and causation metadata through `ContextVar`-local workflow context.
-- CLI and HTTP boundaries bind event context before bus dispatch. The CLI engine dispatches heartbeat and autosave
-  commands through the same bus under the surrounding command context.
-- `EventDrainingExecutor` binds a fresh `EventRecorderScope` for each dispatch. Application events are recorded in
-  that scope, while mutated domain entities register their own pending-event recorders with it.
-- `EventCollector` snapshots events from the scope and tracked entities, wraps them with the current envelope
-  context, publishes them, and clears recorders only after the publisher accepts the batch.
-- `InProcessEventDispatcher` routes envelopes by exact event type to subscribed handlers.
-- `PUBLISHED_EVENT_TYPES` is the exhaustive composition-level event catalog used to subscribe structured logging independently of audit coverage.
-- `StructuredEventLoggingHandler` is subscribed to every cataloged event type and writes event metadata to the configured application logger.
-- `AuditDescriptorMapper` performs exact-type lookup through an immutable typed registry. Explicit descriptor factories are grouped by auth, customer, package, route, startup, world-state, and reconciliation event families.
-- `AuditEventHandler` receives that mapper through composition, combines an event envelope with its normalized descriptor, and persists an `AuditRecordDraft` through `AuditRepositoryPort`.
-- In-memory and PostgreSQL audit repositories implement the audit repository contract, including idempotency by event id, filtering, stable ordering, pagination, and page-total queries. The CLI and HTTP API expose those queries with manager-wide and employee self-only authorization.
-- The transactional-outbox foundation defines validated write-side and persisted message models, UTC-aware
-  delivery lifecycle state, claim-token lease ownership, retry failure categories, a worker-facing repository
-  port, and a transaction-bound insertion port.
+`EventContext` and `EventEnvelope` carry actor, source, correlation, and causation metadata. Each dispatch
+has an `EventRecorderScope` for application events and tracked domain recorders. Domain checkpoints support
+rollback of pending events. The collector clears recorders only after the publisher accepts the batch.
 
-Events are currently dispatched synchronously in process after workflow persistence completes. The runtime
-subscription graph wires structured logging from the independent published-event catalog and audit persistence
-from registered audit mappings. Publication failures after successful workflow execution propagate to the caller;
-when a workflow itself fails, pending denial/failure events are published best-effort without replacing the
-original exception. The outbox contracts are not yet connected to persistence or dispatch, so the running
-application is still not resilient to process crashes between business-state commit and subscriber execution.
+Subscribers are wired independently:
+
+- Structured logging covers every type in `PUBLISHED_EVENT_TYPES`.
+- Audit persistence covers events registered with `AuditDescriptorMapper`. Family-specific factories
+  produce normalized descriptors; `AuditEventHandler` combines them with envelope metadata.
+- Memory and PostgreSQL audit repositories support event-ID idempotency, filtering, stable ordering,
+  pagination, and totals.
+
+Publication is synchronous, after workflow persistence. Subscriber failures propagate after a successful
+workflow; denial/failure events are published best-effort when the workflow itself raises, preserving the
+original exception. A process crash between commit and publication can still lose events. The
+[transactional outbox](#transactional-outbox) is not yet connected to runtime delivery.
 
 ## World-State Persistence
 
-FleetFlow stores local JSON files under the repository's `data/` directory by default:
+Default local paths:
 
-- `data/users.json`: persisted user records and password hashes.
-- `data/state.json`: default world-state save/load target.
-- `data/exports/`: default HTTP snapshot export/import boundary.
+| Path | Purpose | Override |
+| --- | --- | --- |
+| `data/users.json` | User records and password hashes | `JSON_USER_STORE_PATH` |
+| `data/state.json` | Default save/load target | `JSON_STATE_PATH` |
+| `data/exports/` | HTTP snapshot export/import boundary | `JSON_EXPORT_DIR` |
 
-These paths can be overridden with:
+Bare filenames resolve under `data/`; relative paths with separators resolve from the project root.
+Absolute paths remain absolute.
 
-```text
-JSON_USER_STORE_PATH=<path>
-JSON_STATE_PATH=<path>
-JSON_EXPORT_DIR=<path>
-```
-
-Bare filenames such as `state.json` and `users.json` resolve under `data/`. Relative paths containing directory separators resolve from the project root, and absolute paths remain absolute.
-
-World-state saves are versioned snapshots. The current canonical schema version is `2` and includes:
-
-- repository id counters,
-- customers,
-- packages,
-- routes,
-- truck runtime snapshots.
-
-The application-level snapshot preparation pipeline is shared by the in-memory and PostgreSQL backends:
+Snapshot schema version `2` contains repository ID counters, customers, packages, routes, and truck
+runtime state. Both backends share this preparation pipeline:
 
 ```text
 WorldStateSnapshot
-  -> schema, identity, reference, truck, compatibility, and customer validation
-  -> rebuild detached candidate world
-  -> link package/route/truck relationships
-  -> reconcile route, package, and truck runtime state
-  -> produce ReconciledWorld
+  -> Validate schema, identities, references, compatibility, and customer contacts
+  -> Rebuild and link a detached candidate world
+  -> Reconcile route, package, and truck state
+  -> ReconciledWorld
 ```
 
-Snapshot corruption is represented by `WorldStateCorruptionError` with one stable reason:
+`WorldStateCorruptionError` preserves a reason through validation and event reporting:
 
-- `MALFORMED_JSON`: the source is not valid JSON.
-- `INVALID_STRUCTURE`: the JSON or versioned snapshot shape is invalid.
-- `UNSUPPORTED_SCHEMA`: the snapshot declares a schema version FleetFlow does not support.
-- `INVALID_REFERENCES`: ids or bidirectional links between snapshot records do not agree.
-- `INVARIANT_VIOLATION`: structurally valid data violates domain or runtime-state rules.
+- `MALFORMED_JSON`: invalid JSON.
+- `INVALID_STRUCTURE`: invalid snapshot shape.
+- `UNSUPPORTED_SCHEMA`: unsupported schema version.
+- `INVALID_REFERENCES`: inconsistent IDs or links.
+- `INVARIANT_VIOLATION`: invalid domain or runtime state.
 
-`WorldStateSnapshotValidator` orchestrates focused validators for schema, identity/counters, references, truck runtime state, route/package and truck/route compatibility, and customer contact uniqueness. The same reason is preserved through rebuilding, linking, and reconciliation so `LoadWorldStateUseCase` can record `WorldStateCorruptionDetected` and `WorldStateImportFailed` pending application events without parsing error text.
+In memory mode, saves serialize runtime repositories and the fleet. Loads prepare a candidate world and
+swap repositories and truck state together. A failed swap restores the previous state and raises
+`WorldStateRuntimeSwapError`.
 
-For the in-memory backend:
+Startup recovery runs when autosave is enabled. Missing state is ignored; corrupt state is quarantined
+with a `.corrupt.<timestamp>` suffix. Other runtime errors propagate.
 
-```text
-Save:
-In-memory runtime repositories + truck fleet
-  -> WorldStateSnapshotService.build_snapshot()
-  -> JsonWorldStatePersistence.write()
+In PostgreSQL mode, exports load the world graph and sequence counters into the same snapshot format.
+Imports prepare the candidate world, replace live logistics rows, update the fixed fleet, and reset ID
+sequences. Autosave and default startup JSON loading are disabled; explicit save/load remains available.
 
-Load:
-JsonWorldStatePersistence.read()
-  -> WorldStateSnapshotService.apply_snapshot()
-  -> validate snapshot schema and graph invariants
-  -> rebuild candidate world
-  -> reconcile candidate world
-  -> InMemoryWorldStateRuntime.replace_world_state()
-```
-
-Runtime replacement is performed through a single world-state swap boundary so repositories and truck runtime state are committed together. If a valid snapshot cannot be committed to runtime, the previous runtime state is restored and a `WorldStateRuntimeSwapError` is raised.
-
-At startup, FleetFlow attempts to load the default state file when autosave is enabled. Missing default state is treated as a no-op. Corrupt world-state JSON is quarantined with a `.corrupt.<timestamp>` suffix and the application starts with empty runtime state. Non-corruption runtime errors are not swallowed.
-
-For the PostgreSQL backend:
-
-```text
-Save:
-PostgreSQL world graph loader + sequence counter loader
-  -> WorldStateSnapshotBuilder
-  -> JsonWorldStatePersistence.write()
-
-Load:
-JsonWorldStatePersistence.read()
-  -> PostgresWorldStateGateway.apply_snapshot()
-  -> shared snapshot preparation pipeline
-  -> PostgresWorldStateImporter.import_world()
-  -> clear live world tables, insert customers/routes/packages, update fixed fleet trucks, reset id sequences
-```
-
-When `PERSISTENCE_BACKEND=postgres`, package, route, truck, customer, user, authentication, audit,
-fleet-overview query, and unit-of-work operations have PostgreSQL adapters. Autosave and default startup
-JSON loading are disabled for this backend, but explicit `save` and `load` commands are available as
-snapshot export/import operations. PostgreSQL snapshot import/export is covered by unit tests and a
-gateway-level round-trip integration test with injected database boundaries; a live PostgreSQL test
-harness is still future infrastructure work.
-
-The PostgreSQL schema also includes `audit_records` plus indexes for event idempotency, resource history, actor history, event type, action, source, occurrence time, creation time, and correlation id. Audit timestamps intentionally distinguish app-local business time (`occurred_at`) from UTC system timestamps (`recorded_at` and `created_at`).
-
-Audit records are written by the in-process event subscription graph and can be browsed through the `viewauditlogs` CLI command or the HTTP audit endpoint. Managers with `AUDIT_VIEW` can query the full history; employees are restricted to records attributed to their own actor identity.
+Audit history uses a separate `audit_records` table with filtering and history indexes. Its `occurred_at`
+remains app-local business time; `recorded_at` and `created_at` are UTC-aware system timestamps.
 
 ## Fleet Overview
 
-FleetFlow exposes a read-only, cross-aggregate fleet overview through both persistence backends. The
-application use case obtains one app-local business timestamp from the injected container clock and passes
-that timestamp to the active `FleetOverviewQueryPort`, ensuring package deadlines, route deadlines, and
-active-route positions are evaluated against the same point in time.
+`FleetOverviewQueryPort` uses one injected business timestamp for all deadline and position calculations.
+The result includes:
 
-The overview contains:
+- Package counts by `TODO`, `IN_PROGRESS`, and `DONE`, plus unassigned and past-due work.
+- Route counts by `PLANNED`, `SCHEDULED`, `IN_PROGRESS`, and `COMPLETED`, plus past-due work.
+- Free, assigned, and unknown-location truck counts.
+- Active routes with positions, package counts, maximum segment loads, trucks, and capacity utilization.
 
-- package counts by `TODO`, `IN_PROGRESS`, and `DONE`, plus unassigned and past-due counts;
-- route counts by `PLANNED`, `SCHEDULED`, `IN_PROGRESS`, and `COMPLETED`, plus past-due counts;
-- free, assigned, and unknown-location truck counts;
-- a bounded, ordered collection of active routes;
-- each active route's persisted status, start/end locations, schedule-derived at-stop or in-transit
-  position, assigned package count, maximum segment load, assigned truck, and capacity utilization.
+The memory adapter materializes each entity collection once. PostgreSQL uses a read-only `REPEATABLE READ`
+transaction and paginates candidates before fetching their packages. Both reconstruct schedule positions
+and order active routes by next ETA, then route ID, with missing ETAs last.
 
-The in-memory adapter materializes each repository collection once and calculates all metrics for that
-entity family from the same collection. The PostgreSQL adapter runs aggregate and active-route queries in a
-read-only `REPEATABLE READ` transaction, validates returned rows, bounds active-route candidates before
-loading package rows, reconstructs schedule-dependent positions in the domain layer, and retains the same
-next-ETA/route-id ordering as the memory adapter.
-
-Both employees and managers currently receive `FLEET_OVERVIEW_VIEW`. Authorization failures are recorded
-through the normal `AuthorizationDenied` event path. The driving-adapter entry points are:
+Managers and employees have `FLEET_OVERVIEW_VIEW`. The active-route limit defaults to `10`, with bounds `1..100`:
 
 ```text
 getfleetoverview [active_route_limit]
 GET /api/fleet/overview?active_route_limit=10
 ```
 
-The active-route limit defaults to `10` and must be from `1` through `100`.
-
 ## Authentication and Authorization
 
-FleetFlow has two roles:
+`MANAGER` has full access; `EMPLOYEE` has day-to-day logistics access without unrestricted administrative
+or state-management permissions. Denial events record the attempted operation and target; actor identity
+comes from the envelope.
 
-- `MANAGER`
-- `EMPLOYEE`
+If the active user repository has no `admin`, startup prompts for an initial manager password and
+confirmation. There is no default password. Non-interactive startup without an admin fails.
 
-Managers have full access. Employees can perform day-to-day logistics operations but do not have unrestricted administrative/state-management access.
+The memory backend uses `users.json`; PostgreSQL uses its `users` table. Switching backends does not
+migrate accounts, so each store needs its own admin bootstrap or existing account.
 
-Denied authorization decisions are recorded as application events with normalized operation and target metadata. Actor identity remains envelope context, avoiding duplication inside the event payload.
+Passwords use PBKDF2-HMAC. HTTP uses access and refresh JWTs signed with separate secrets. Password
+changes, manager resets, and HTTP logout increment the persisted token version to revoke existing tokens.
+Refresh tokens are not stored server-side, and the `jti` claim alone does not provide revocation.
 
-On first startup, if no `admin` user exists in the active user repository, FleetFlow creates the initial manager interactively. In memory mode this checks the configured JSON user store. In PostgreSQL mode this checks the PostgreSQL users table. It prompts for a password and confirmation:
-
-```text
-Create initial manager password:
-Confirm initial manager password:
-```
-
-There is no hardcoded default admin password in the current version.
-
-If the application is started non-interactively and no admin user exists, startup fails with a clear error telling you to run it interactively once.
-
-User repositories are selected by `PERSISTENCE_BACKEND`. Existing `users.json` users are not visible when `PERSISTENCE_BACKEND=postgres`; switching to PostgreSQL requires existing rows in the PostgreSQL users table or one interactive startup to bootstrap the initial `admin` user into PostgreSQL. Switching back to memory mode uses `users.json` again.
-
-HTTP authentication uses JWT access and refresh tokens signed with separate secrets. Tokens include the persisted user id, username, role, token version, and a `jti` claim. Password changes and manager password resets update the password hash and increment the user's token version atomically, so existing access and refresh tokens are rejected. HTTP logout also increments the user's token version. Refresh tokens are not stored server-side in this version, and `jti` values are reserved for future denylist or rotation support; `jti` does not provide revocation by itself.
-
-Authentication failures are intentionally reported with safe messages. Invalid credentials return `401`, malformed persisted auth data returns `400`, duplicate usernames return `409`, and database failures return generic `500` responses without leaking adapter details.
-
-Application use cases use typed error boundaries for expected failures:
-
-- `ValidationError` and `DomainValidationError` for invalid command/request data or invalid domain state.
-- `NotFoundError` and `EntityNotFoundError` for missing requested resources.
-- `ConflictError` and `DomainConflictError` for operations that conflict with current state.
-- `AuthenticationError` for failed authentication.
-
-Global HTTP exception handlers map those errors to stable status codes and safe response details.
+Typed validation, authentication, not-found, conflict, and persistence errors are mapped centrally to
+HTTP responses. Invalid credentials return `401`, malformed persisted auth data returns `400`, duplicate
+usernames return `409`, and database failures return sanitized `500` responses.
 
 ## Running the App
 
 ### Prerequisite
 
-- Python 3.13
+- Python 3.13 or later.
 
 ### Optional virtual environment
 
-Create and activate a virtual environment before installing the project.
+Run from the repository root. Create and activate a virtual environment:
 
 Windows PowerShell:
 
@@ -437,19 +269,19 @@ python -m venv .venv
 source .venv/bin/activate
 ```
 
-Install the project runtime dependencies before running the CLI or API:
+Install runtime dependencies:
 
 ```bash
 python -m pip install -e .
 ```
 
-For development, static analysis, and the full automated suite, install the optional development tools:
+For development and testing, install the optional tools instead:
 
 ```bash
 python -m pip install -e ".[dev]"
 ```
 
-Create local configuration from the checked-in example:
+Copy the example configuration:
 
 ```powershell
 Copy-Item .env.example .env
@@ -459,12 +291,10 @@ Copy-Item .env.example .env
 cp .env.example .env
 ```
 
-Update `.env` with the selected persistence backend, database credentials, JWT secrets, and optional logging settings. The local `.env` file is ignored by Git.
+Edit the ignored `.env` file for your backend, database, JWT secrets, and logging settings.
 
-When `PERSISTENCE_BACKEND` is absent, the application defaults to in-memory logistics repositories plus
-JSON world-state persistence. The checked-in `.env.example` currently selects PostgreSQL; change its copied
-value to `memory` for local in-memory operation, or configure the required database settings before using
-the example's `postgres` value:
+Without `PERSISTENCE_BACKEND`, the default is `memory`. The example selects `postgres`; change it to
+`memory` for local operation without a database, or supply PostgreSQL settings:
 
 ```text
 PERSISTENCE_BACKEND=postgres
@@ -475,9 +305,11 @@ DB_USER=<username>
 DB_PASSWORD=<password>
 ```
 
-Apply `src/adapters/driven/persistence/database/schema.sql` to a new database before using the PostgreSQL backend. For existing databases, apply the SQL scripts under `src/adapters/driven/persistence/database/migrations/` in numeric order. The composition root seeds the fixed fleet if the trucks table is empty.
+For a new database, apply `src/adapters/driven/persistence/database/schema.sql`. For an existing database,
+apply pending scripts in `src/adapters/driven/persistence/database/migrations/` in numeric order.
+Startup seeds the fixed fleet when the trucks table is empty.
 
-HTTP JWT issuance requires a secret before login or refresh tokens can be created:
+HTTP token issuance requires two different random secrets, each at least 32 characters:
 
 ```text
 # Generate each secret independently with: openssl rand -hex 32
@@ -488,20 +320,21 @@ JWT_ACCESS_TOKEN_EXPIRE_MINUTES=15
 JWT_REFRESH_TOKEN_EXPIRE_DAYS=7
 ```
 
-`JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` are required, must be different, and should be randomly generated rather than human-chosen phrases. The other JWT settings use the defaults shown above when omitted.
+Do not use human-chosen phrases. Algorithm and expiry settings default to the values shown.
 
 ### Logging
 
-Both `cli_main.py` and `api_main.py` configure standard Python logging at startup. Logs are always written to stdout. Set `LOG_FILE` to also write rotating log files:
+Both entrypoints configure stdout logging. Set `LOG_FILE` to also write rotating files:
 
 ```text
 LOG_LEVEL=INFO
 LOG_FILE=logs/fleetflow.log
 ```
 
-Supported levels are `CRITICAL`, `ERROR`, `WARNING`, `INFO`, `DEBUG`, and `NOTSET`. File logs rotate at 10 MiB with five retained backups. Omit `LOG_FILE` to log only to stdout.
+Levels: `CRITICAL`, `ERROR`, `WARNING`, `INFO`, `DEBUG`, `NOTSET`. Files rotate at 10 MiB with five backups.
 
-Logging covers startup/composition, selected mutating use cases, CLI command execution, persistence operations, global HTTP failures, HTTP request method/path/status/duration, and published event-envelope metadata. Event logs include event type, event id, occurred/recorded timestamps, envelope id, correlation id, source, causation id, and actor identity when available. Passwords, JWTs, and database query parameters are not intentionally logged.
+Logs cover startup, workflows, persistence, HTTP method/path/status/duration, and event-envelope metadata.
+Passwords, JWTs, and database query parameters are not intentionally logged.
 
 ### Windows PowerShell
 
@@ -546,64 +379,30 @@ The API is mounted under `/api`. Interactive OpenAPI docs are available at:
 http://127.0.0.1:8000/docs
 ```
 
-Every HTTP request is logged with its method, path, response status, and duration. Expected application/domain failures are handled centrally; persistence failures return generic details rather than exposing adapter or database errors.
-
 ## CLI Surface
 
 ### Menu-driven flows
 
-The main menu exposes:
-
-- Packages
-- Routes
-- Trucks
-- Customers
-- State
-- Audit Logs
-- Fleet Overview
-- Command mode via `cmd`
-- Login
-- Logout
-- Who am I
-- Register user
-- Change password
+The menu groups Packages, Routes, Trucks, Customers, State, Audit Logs, and Fleet Overview.
+Authentication actions include Login, Logout, Who am I, Register user, and Change password.
+Enter `cmd` for command mode.
 
 ### Command mode
 
-The command registry currently supports:
-
-- `createpackage`
-- `viewpackage`
-- `viewallpackages`
-- `viewunassignedpackages`
-- `removepackage`
-- `createroute`
-- `viewroute`
-- `viewallroutes`
-- `viewroutesinprogress`
-- `removeroute`
-- `assignpackagestoroute`
-- `findsuitableroutesforpackage`
-- `assigntrucktoroute`
-- `findsuitabletrucksforroute`
-- `viewalltrucks`
-- `viewallcustomers`
-- `login`
-- `logout`
-- `whoami`
-- `registeruser`
-- `changepassword`
-- `resetpassword`
-- `save`
-- `load`
-- `viewauditlogs`
-- `getfleetoverview`
+| Area | Commands |
+| --- | --- |
+| Packages | `createpackage`, `viewpackage`, `viewallpackages`, `viewunassignedpackages`, `removepackage` |
+| Routes | `createroute`, `viewroute`, `viewallroutes`, `viewroutesinprogress`, `removeroute` |
+| Assignment | `assignpackagestoroute`, `findsuitableroutesforpackage`, `assigntrucktoroute`, `findsuitabletrucksforroute` |
+| Fleet/customers | `viewalltrucks`, `viewallcustomers`, `getfleetoverview` |
+| Authentication | `login`, `logout`, `whoami`, `registeruser`, `changepassword`, `resetpassword` |
+| State/audit | `save`, `load`, `viewauditlogs` |
 
 Examples:
 
 ```text
 createpackage SYD MEL 10 "Jane Doe" jane@example.com 0412345678
-createroute SYD MEL 2025-09-12 06:00
+createroute SYD MEL 2030-09-12 06:00
 createroute SYD MEL ADL
 assignpackagestoroute 1 4 5 6
 assigntrucktoroute 1001 1
@@ -611,28 +410,19 @@ findsuitableroutesforpackage 4
 findsuitabletrucksforroute 1
 viewpackage 4
 viewroute 1
-viewallpackages
-viewunassignedpackages
-viewallroutes
-viewroutesinprogress
-viewalltrucks
-viewallcustomers
 viewauditlogs --limit 50 --total
 getfleetoverview 10
 save state.json
 load state.json
 login admin
-whoami
 changepassword
 resetpassword employee
 logout
 ```
 
-Quoted arguments are supported in command mode through shell-style parsing, so names with spaces should be quoted.
+Command mode uses shell-style parsing; quote arguments containing spaces.
 
 ## HTTP API Surface
-
-The FastAPI adapter currently exposes:
 
 - `POST /api/auth/login`
 - `POST /api/auth/register`
@@ -662,14 +452,14 @@ The FastAPI adapter currently exposes:
 - `GET /api/audit/`
 - `GET /api/fleet/overview`
 
-Login uses OAuth2-style form data with content type `application/x-www-form-urlencoded`; it does not accept a JSON login body:
+Login accepts OAuth2 form data (`application/x-www-form-urlencoded`), not JSON:
 
 ```text
 username=<username>
 password=<password>
 ```
 
-Successful login and refresh responses return:
+Login and refresh return:
 
 ```json
 {
@@ -679,121 +469,77 @@ Successful login and refresh responses return:
 }
 ```
 
-Authenticated requests use:
+Send authenticated requests with `Authorization: Bearer <access_token>`.
 
-```text
-Authorization: Bearer <access_token>
-```
-
-Customer listing is paginated:
+Customer, package, unassigned-package, and all-route lists accept `limit`, `offset`, and `include_total`:
 
 ```text
 GET /api/customers/?limit=50&offset=0
-GET /api/customers/?limit=50&offset=0&include_total=true
-```
-
-Package listing uses the same pagination shape:
-
-```text
-GET /api/packages?limit=50&offset=0
-GET /api/packages?limit=50&offset=0&include_total=true
-GET /api/packages/unassigned?limit=50&offset=0
 GET /api/packages/unassigned?limit=50&offset=0&include_total=true
 ```
 
-Route listing also supports the same `limit`, `offset`, and `include_total` query parameters.
+`include_total` defaults to `false`, avoiding the count query and returning `"total": null`.
+Routes in progress remain unpaginated and include computed positions.
 
-List-style use cases for customers, packages, unassigned packages, and all routes share the same `PageQuery` / `PageResult` pagination model and `execute_page_query` orchestration helper. `include_total` defaults to `false` so normal list requests do not run a count query. When omitted, the response contains `"total": null`. When requested, customer, package, and route page totals are loaded with the page from one repository operation.
-
-Routes in progress intentionally remain unpaginated because the result is bounded by active truck assignments and includes computed route-position data:
-
-```text
-GET /api/routes/in-progress
-```
-
-Audit-log browsing supports pagination plus exact resource, action, actor, source, and event-type filters,
-along with inclusive occurrence and creation-time bounds:
+Audit queries support pagination, exact event/resource/action/actor/source filters, and inclusive
+occurrence and creation-time bounds:
 
 ```text
-GET /api/audit/?limit=50&offset=0
 GET /api/audit/?limit=50&offset=0&include_total=true
 GET /api/audit/?resource_type=package&resource_id=4&action=created
 GET /api/audit/?actor_user_id=2&source=HTTP&occurred_from=2025-01-01T00:00:00
 ```
 
-Managers with `AUDIT_VIEW` may browse all matching records. Employees are always restricted by the application
-use case to records attributed to their own user id. An explicitly supplied actor user id or username must match
-the current principal; mismatches are rejected. No username filter is added when it is omitted.
+Managers with `AUDIT_VIEW` can browse all matching records. Employees are always scoped to their own user
+ID. For employees, an explicitly supplied actor ID or username must match the current principal; no username
+filter is added when omitted.
 
-Fleet overview accepts one bounded query parameter and returns a nested operational projection:
+Fleet overview accepts `active_route_limit` (default `10`, range `1..100`) and returns nested summaries and
+active routes with `at_stop` or `in_transit` positions. State save/load endpoints export/import JSON snapshots
+for either backend.
 
-```text
-GET /api/fleet/overview
-GET /api/fleet/overview?active_route_limit=25
-```
+HTTP error mappings:
 
-`active_route_limit` defaults to `10` and accepts values from `1` through `100`. The response contains a
-single generation timestamp, package/route/truck summaries, computed category totals, and ordered active
-routes with discriminated `at_stop` or `in_transit` position objects.
-
-World-state endpoints act as JSON snapshot export/import operations. With the in-memory backend they save/load runtime state; with the PostgreSQL backend they export/import the database-backed world graph through the same snapshot format:
-
-```text
-POST /api/state/save
-POST /api/state/load
-```
-
-Common HTTP error mappings are:
-
-- `400 Bad Request` for application or domain validation failures.
-- `401 Unauthorized` for invalid, expired, revoked, or malformed tokens and invalid login credentials.
-- `403 Forbidden` for missing permissions.
-- `404 Not Found` for requested resources that do not exist.
-- `409 Conflict` for duplicate usernames or inconsistent domain state.
-- `422 Unprocessable Entity` for FastAPI request-body, form-field, path, and query-parameter validation.
-- `500 Internal Server Error` for persistence failures, reported with generic details.
+| Status | Meaning |
+| --- | --- |
+| `400` | Application/domain validation failure |
+| `401` | Invalid credentials or invalid, expired, revoked, or malformed token |
+| `403` | Missing permission |
+| `404` | Resource not found |
+| `409` | Duplicate username or conflicting domain state |
+| `422` | FastAPI body, form, path, or query validation failure |
+| `500` | Persistence failure, with sanitized details |
 
 ## Autosave and Heartbeat
 
-The CLI engine performs heartbeat/reconciliation around command execution. Reconciliation may update route status, truck position, truck release state, package status, package current location, and expected arrival.
+The CLI runs heartbeat/reconciliation around command execution. Mutating commands trigger autosave in
+memory mode; PostgreSQL mutations persist directly, with explicit save/load reserved for snapshots.
 
-Mutating commands are autosaved to the default world-state path when autosave is enabled. Autosave is enabled for the in-memory backend and disabled for the PostgreSQL backend. With PostgreSQL, `save` and `load` remain explicit snapshot export/import commands, but normal command mutations are persisted directly through database repositories and units of work.
-
-Heartbeat and autosave are internal command-bus dispatches inside the current CLI command event context, so their
-application events share the command correlation id and actor when triggered by user-entered CLI work.
+Heartbeat and autosave dispatch through the command bus under the surrounding CLI event context,
+preserving the user's actor and correlation ID.
 
 ## Testing
 
-The project supports both `pytest` and `unittest` discovery.
-
-Recommended test command:
+Tests cover domain rules, application workflows, bus composition, codecs, CLI/HTTP adapters, persistence,
+snapshots, and runtime swaps. Run with pytest:
 
 ```bash
 python -m pytest -q
 ```
 
-The tests use the `*_test.py` naming convention, so plain `python -m unittest discover` will not find everything. Use:
+Or use unittest with the project's `*_test.py` naming convention:
 
 ```bash
 python -m unittest discover -v -s ./tests -t . -p "*_test.py"
 ```
 
-Windows PowerShell uses the same commands:
-
-```powershell
-python -m pytest -q
-python -m unittest discover -v -s ./tests -t . -p "*_test.py"
-```
+Both commands work in PowerShell. Database tests use injected boundaries; a live PostgreSQL integration
+harness is still pending.
 
 ### Postman / Newman
 
-The `postman/` directory contains:
-
-- `FleetFlow API.postman_collection.json`
-- `FleetFlow local.postman_environment.json`
-- setup and execution notes in `postman/README.md`
-
-Start the API, configure `adminPassword` in the Postman environment, and run the collection in order so generated tokens and resource identifiers are retained. With Newman available through `npx`, run:
+The `postman/` directory contains the API collection, local environment, and [runner notes](postman/README.md).
+Start the API, set `adminPassword` in the environment, and run the collection in order to retain tokens and IDs:
 
 ```powershell
 npx newman run "postman/FleetFlow API.postman_collection.json" `
@@ -805,22 +551,12 @@ npx newman run "postman/FleetFlow API.postman_collection.json" \
   -e "postman/FleetFlow local.postman_environment.json"
 ```
 
-The collection covers authentication, authorization, token revocation, customers, packages, routes, trucks, world-state import/export, and validation/error paths. Controlled database-failure paths remain unit-test responsibilities.
+Coverage includes authentication, authorization, revocation, logistics, state import/export, and validation.
+Controlled database-failure paths are tested in the unit suite.
 
 ## Tooling
 
-
-Static-analysis and formatting/lint configuration live in `pyproject.toml`.
-
-Configured tools:
-
-- Ruff
-- Pyright
-- Mypy
-- Pytest
-
-These are development tools and are not required to run the application.
-Example commands, assuming the tools are installed:
+`pyproject.toml` configures Ruff, Pyright, Mypy, and Pytest. Install the development dependencies before running:
 
 ```bash
 python -m ruff check .
@@ -830,117 +566,67 @@ python -m mypy .
 
 ## Roadmap
 
-FleetFlow is currently a logistics backend with CLI and HTTP driving adapters, a layered/hexagonal
-architecture, domain entities, immutable route path/schedule values, pure package/truck assignment
-policies, use cases, ports, in-memory repositories, PostgreSQL repository/query adapters, a point-in-time
-fleet overview, JSON world-state persistence, authentication, autosave/load support, heartbeat
-reconciliation, segment-aware route capacity checks, audit browsing, and synchronous in-process event
-publication. Transactional-outbox message and repository contracts are under development but are not yet
-part of the running publication path.
-
-The current architecture leaves several possible paths for future development. These are not required for the core project to work, but they are natural extensions if the project continues growing.
+The CLI/API, both persistence backends, fleet overview, and audit browsing are implemented.
+The main unfinished infrastructure is durable event delivery through the transactional outbox.
 
 ### Backend hardening
 
-The existing backend can be tightened further by hardening PostgreSQL setup/migration workflows and adding a real PostgreSQL integration-test harness.
+Add a live PostgreSQL integration-test harness and repeatable setup/migration workflows.
 
 ### Typed messaging and execution
 
-FleetFlow has immutable command/query messages for every application workflow, typed routing keys, structural
-`execute(message)` protocols, dispatch-only `CommandBus` and `QueryBus` input ports, synchronous in-process buses,
-and authoritative message catalogs. CLI and HTTP adapters use typed dispatch exclusively; use cases accept their
-messages directly, so no argument-adapting handler layer remains.
-
-Composition explicitly registers 14 commands, including internal world-state advancement, and 13 queries. Tests
-verify every key, direct use-case delegate, executor type, catalog entry, registration order, and absence of
-duplicate catalog types. Bus tests also cover routing-name identity, exact message-type checks, duplicate
-registration, missing handlers, and unchanged result/error propagation.
-
-Event publication is already centralized in scoped executors. The generic executor owns application/domain event
-draining for normal commands and queries, while the dedicated world-state advancement executor preserves heartbeat
-causal ordering. Possible future pipeline work includes structured dispatch metrics, tracing, explicit transaction
-coordination, and narrower retry policies. Those additions should remain small decorators around message execution
-rather than logic duplicated across CLI commands and HTTP routers.
+Typed buses and scoped executors are implemented. Further work could add dispatch metrics, tracing,
+transaction coordination, and targeted retries without duplicating logic in adapters.
 
 ### HTTP API expansion
 
-The current FastAPI adapter covers authentication, customer listing, package workflows, route workflows,
-truck listing, fleet overview, world-state import/export, and actor-scoped audit-log browsing. Remaining
-HTTP work is general hardening, broader integration coverage, and further response-contract consistency.
+Broaden integration coverage and tighten response-contract consistency.
 
 ### PostgreSQL persistence adapter
 
-The current PostgreSQL adapter sits behind repository/query ports for package, route, truck, customer,
-user, audit, fleet-overview, and unit-of-work persistence. It gives FleetFlow a more realistic long-running
-backend while preserving the CLI and application use-case boundaries.
-
-Remaining work includes operational migration tooling, stronger integration coverage against a real database, and production hardening for snapshot import/export workflows such as backup/restore procedures and operational safeguards.
+Add operational migration tooling and snapshot backup/restore safeguards.
 
 ### Audit log and domain events
 
-FleetFlow already defines and records pending domain and application events for important actions such as package assignment, route scheduling, truck dispatch/release, package delivery, authentication, authorization denial, heartbeat advancement, and world-state import/export. Event envelopes and context metadata are available for correlation and actor attribution, and the in-process dispatcher currently publishes those envelopes to structured logging and audit handlers.
-
-The audit-log model, typed exact-event descriptor registry, family-specific descriptor factories, audit handler, repository port, in-memory repository, PostgreSQL repository, SQL queries, schema migrations, composition wiring, query use case, CLI command, and HTTP endpoint are implemented. Logging subscriptions are driven by an independent exhaustive event catalog, while audit subscriptions are driven by registered mappings. The active repository follows the configured persistence backend. Manager-wide and employee self-only filtering is enforced in the application use case. After successful workflow execution, the failure policy is strict: audit handler or repository failures propagate to the caller through the publisher.
+Audit capture and browsing are implemented. Durable publication must preserve actor attribution,
+causal ordering where required, and subscriber idempotency.
 
 ### Transactional outbox
 
-The outbox foundation now includes validated `OutboxMessageDraft` and `OutboxMessage` models. They preserve
-versioned event payload and envelope metadata while enforcing UTC lifecycle timestamps, retry counts, paired
-failure state, publication state, and claim-token/lease ownership. Stable `OutboxFailureCategory` values separate
-machine-readable failure policy from free-text operational diagnostics.
+Implemented:
 
-Two output-port boundaries are defined: `UnitOfWorkOutboxRepositoryPort` inserts drafts through an existing
-business transaction without committing independently, while `OutboxRepositoryPort` atomically claims leased
-batches and supports ownership-checked publication, retry scheduling, expired-claim release, and bounded retention
-cleanup. Repository adapters, schema migrations, transactional capture, dispatcher workers, and outbox runtime
-wiring are not implemented yet.
+- Validated draft/message models with UTC lifecycle timestamps, retry state, and claim-token leases.
+- Transaction-bound insertion and worker-facing delivery repository ports.
+- Current payload codecs for all 41 published events, grouped by event family.
+- Explicit composition registration, a fresh-registry builder, and catalog-completeness tests.
 
-Payload codecs cover the published event types. The largest codec and test modules are split by event family:
-auth sessions, passwords, registration, and authorization; route lifecycle, package assignments, and truck
-assignments; and world-state transfers, startup restore, integrity, and runtime changes. Import codecs directly
-from their family modules under `application/eventing/outbox/codecs`; the former `auth`, `routes`, and
-`world_state` umbrella modules are removed.
+`EventOutboxCodecRegistry` separates current encoders from historical readers. Writes use
+`registry.for_event(event).encode(event)` to validate JSON and a lossless decode round trip. Reads resolve
+the exact `(event_type, event_version)` through `for_identity()`; unknown versions never fall back.
+Historical readers are not implemented, and old rows must not be relabeled with newer versions.
+Payload containers remain mutable and must not be modified after validation and before persistence.
 
-`EventOutboxCodecRegistry.register()` accepts only a current
-codec whose version matches its event class. `register_decoder()` adds an explicit older-version reader without
-replacing the current encoder. Readers are resolved by the exact persisted `(event_type, event_version)` pair;
-unknown versions fail rather than falling back to a newer codec. Historical readers must explicitly transform old
-payloads into the current event class while preserving the original event ID and timestamps. No historical
-readers are provided yet, and old outbox rows must not be relabeled with a new version.
+Remaining work:
 
-For durable writes, use `registry.for_event(event).encode(event)`: the adapter validates JSON safety and decodes
-the payload once to enforce field validation and a lossless event round trip. Direct concrete `encode()` methods
-remain projections of typed fields. `for_identity()` exposes decoding only; it validates JSON and metadata before
-delegating field validation to the versioned decoder. This extra decode per write is intentional, and codecs must
-remain deterministic and side-effect free. Payload containers remain mutable; callers must not modify validated
-payloads before persistence.
-
-The next implementation steps are to define the event-envelope codec and outbox table, implement PostgreSQL and
-in-memory adapters, expose outbox insertion through active unit-of-work implementations, persist captured events in
-the same commit as business state, and add a worker that publishes claimed messages with bounded retries. Live
-PostgreSQL concurrency and crash-recovery tests should verify the lease and idempotency behavior before the runtime
-switches away from direct synchronous publication. External brokers such as Kafka or Redis Streams would only make
-sense later if the project needed cross-service delivery or substantially higher event volume.
+1. Implement envelope serialization and the outbox table/migration.
+2. Implement PostgreSQL and memory repository adapters.
+3. Persist captured events in the same transaction as business state.
+4. Add a worker with leased claims, retries, and ownership-checked acknowledgements.
+5. Verify concurrency, duplicate delivery, and crash recovery against PostgreSQL before switching runtime publication.
 
 ### Background jobs
 
-Some future operations may not belong directly inside a CLI command or HTTP request. Examples include route optimisation, bulk imports, report generation, scheduled reconciliation, or delayed notification processing.
-
-A lightweight PostgreSQL-backed job table could support this before introducing external queue infrastructure.
+Consider a PostgreSQL-backed job table for bulk imports, reports, or scheduled work before adding an external queue.
 
 ### Fleet overview and reporting
 
-The first read-focused operational projection is implemented: `FleetOverviewQueryPort` has memory and
-PostgreSQL adapters and exposes status totals, delayed work, truck availability, route progress, segment
-load, and truck utilization through CLI and HTTP.
-
-Future reporting can build on this boundary with historical trends, SLA summaries, depot-level grouping,
-throughput metrics, or a visual dashboard. Materialized views, caching, or live WebSocket updates would
-only be useful if those projections became expensive or needed near-real-time browser updates.
+Build on the overview query port for historical trends, SLA summaries, depot grouping, and dashboards.
+Add caching or materialized views only when query costs justify them.
 
 ### Advanced logistics features
 
-Once the core backend, persistence, and query layers are stable, FleetFlow could support more advanced logistics behavior, such as route optimisation, delay prediction, SLA monitoring, customer notifications, driver/depot management, proof-of-delivery records, real-time tracking, and richer reporting.
+Possible extensions: route optimisation, delay prediction, notifications, driver/depot management,
+proof of delivery, and real-time tracking.
 
 ## License
 
