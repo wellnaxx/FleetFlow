@@ -571,25 +571,23 @@ The main unfinished infrastructure is durable event delivery through the transac
 
 ### Backend hardening
 
-Add a live PostgreSQL integration-test harness and repeatable setup/migration workflows.
+Adding a live PostgreSQL integration-test harness and repeatable setup/migration workflows.
 
 ### Typed messaging and execution
 
-Typed buses and scoped executors are implemented. Further work could add dispatch metrics, tracing,
-transaction coordination, and targeted retries without duplicating logic in adapters.
+Typed buses and scoped executors are implemented. Further work could add dispatch metrics, tracing, transaction coordination, and targeted retries without duplicating logic in adapters.
 
 ### HTTP API expansion
 
-Broaden integration coverage and tighten response-contract consistency.
+Broadening integration coverage and tighten response-contract consistency.
 
 ### PostgreSQL persistence adapter
 
-Add operational migration tooling and snapshot backup/restore safeguards.
+Adding operational migration tooling and snapshot backup/restore safeguards.
 
 ### Audit log and domain events
 
-Audit capture and browsing are implemented. Durable publication must preserve actor attribution,
-causal ordering where required, and subscriber idempotency.
+Audit capture and browsing are implemented. Durable publication must preserve actor attribution, causal ordering where required, and subscriber idempotency.
 
 ### Transactional outbox
 
@@ -601,8 +599,7 @@ Implemented:
 - Explicit composition registration, a fresh-registry builder, and catalog-completeness tests.
 
 `EventOutboxCodecRegistry` separates current encoders from historical readers. Writes use
-`registry.for_event(event).encode(event)` to validate JSON and a lossless decode round trip. Reads resolve
-the exact `(event_type, event_version)` through `for_identity()`; unknown versions never fall back.
+`registry.for_event(event).encode(event)` to validate JSON and a lossless decode round trip. Reads resolve the exact `(event_type, event_version)` through `for_identity()`; unknown versions never fall back.
 Historical readers are not implemented, and old rows must not be relabeled with newer versions.
 Payload containers remain mutable and must not be modified after validation and before persistence.
 
@@ -616,7 +613,7 @@ Remaining work:
 
 ### Background jobs
 
-Consider a PostgreSQL-backed job table for bulk imports, reports, or scheduled work before adding an external queue.
+Considering a PostgreSQL-backed job table for bulk imports, reports, or scheduled work before adding an external queue.
 
 ### Fleet overview and reporting
 
